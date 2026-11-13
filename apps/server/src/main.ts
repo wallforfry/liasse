@@ -3,6 +3,7 @@ import { loadConfig } from '@liasse/core/config';
 import { createDb, migrate } from '@liasse/core/db';
 import { StartupError } from '@liasse/core/domain';
 import { createApp } from './app.ts';
+import { installShutdown } from './shutdown.ts';
 
 const start = async (): Promise<void> => {
   const config = loadConfig();
@@ -18,13 +19,7 @@ const start = async (): Promise<void> => {
       process.stdout.write(`Liasse is listening on http://${address}:${String(port)}\n`);
     },
   );
-  const shutdown = (): void => {
-    server.close(() => {
-      void database.close();
-    });
-  };
-  process.once('SIGTERM', shutdown);
-  process.once('SIGINT', shutdown);
+  installShutdown({ signals: process, server, database });
 };
 
 try {
