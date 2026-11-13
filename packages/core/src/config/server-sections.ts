@@ -79,7 +79,7 @@ export const authSection = z
         .min(1, 'expected at least one token')
         .readonly(),
     ),
-    UI_PASSWORD: text.optional(),
+    UI_PASSWORD: z.string().min(1).optional(),
     UI_SESSION_TTL: duration.prefault('7d'),
     FILE_URL_SECRET: z
       .string()

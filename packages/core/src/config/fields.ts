@@ -3,7 +3,21 @@ import { parseDuration } from './duration.ts';
 
 export const text = z.string().trim().min(1);
 
-export const integer = (min: number, max: number) => z.coerce.number().int().min(min).max(max);
+// `Number()` also reads '0x10', '1e3' and ' ' (as 16, 1000 and 0); only plain decimal
+// notation is accepted, so a typo never becomes a silently different value.
+export const integer = (min: number, max: number) =>
+  z
+    .string()
+    .regex(/^(0|[1-9]\d*)$/, 'expected a decimal integer such as 42')
+    .transform(Number)
+    .pipe(z.number().int().min(min).max(max));
+
+export const decimal = (min: number, max: number) =>
+  z
+    .string()
+    .regex(/^(0|[1-9]\d*)(\.\d+)?$/, 'expected a decimal number such as 0.7')
+    .transform(Number)
+    .pipe(z.number().min(min).max(max));
 
 export const list = z.string().transform((value) =>
   Object.freeze(

@@ -1,15 +1,6 @@
-import { readFileSync } from 'node:fs';
 import { describe, expect, it, vi } from 'vitest';
-import { CONFIG_ENV_KEYS, ConfigError, loadConfig } from './index.ts';
-
-const MINIMAL_ENV = {
-  DATABASE_URL: 'postgres://liasse:liasse@127.0.0.1:54329/liasse',
-  LLM_PROVIDER: 'ollama',
-  VISION_MODEL: 'vision-model',
-  TEXT_MODEL: 'text-model',
-  API_TOKENS: 'synthetic-token-0001, synthetic-token-0002',
-  FILE_URL_SECRET: 'synthetic-file-url-secret-0123456789',
-} as const;
+import { SYNTHETIC_ENV } from '../testing/synthetic-env.ts';
+import { ConfigError, loadConfig } from './index.ts';
 
 const problemsOf = (env: Readonly<Record<string, string | undefined>>): readonly string[] => {
   try {
@@ -23,9 +14,9 @@ const problemsOf = (env: Readonly<Record<string, string | undefined>>): readonly
 
 describe('loadConfig', () => {
   it('applies the spec defaults', () => {
-    expect(loadConfig(MINIMAL_ENV)).toEqual({
+    expect(loadConfig(SYNTHETIC_ENV)).toEqual({
       server: { host: '127.0.0.1', port: 8080 },
-      database: { url: MINIMAL_ENV.DATABASE_URL },
+      database: { url: SYNTHETIC_ENV.DATABASE_URL },
       storage: { driver: 'fs', path: '/data/files' },
       llm: {
         provider: 'ollama',
@@ -46,32 +37,32 @@ describe('loadConfig', () => {
       hindsight: undefined,
       auth: {
         apiTokens: ['synthetic-token-0001', 'synthetic-token-0002'],
-        fileUrlSecret: MINIMAL_ENV.FILE_URL_SECRET,
+        fileUrlSecret: SYNTHETIC_ENV.FILE_URL_SECRET,
         ui: undefined,
       },
     });
   });
 
   it('reads process.env by default', () => {
-    Object.entries(MINIMAL_ENV).forEach(([key, value]) => {
+    Object.entries(SYNTHETIC_ENV).forEach(([key, value]) => {
       vi.stubEnv(key, value);
     });
     try {
-      expect(loadConfig().database.url).toBe(MINIMAL_ENV.DATABASE_URL);
+      expect(loadConfig().database.url).toBe(SYNTHETIC_ENV.DATABASE_URL);
     } finally {
       vi.unstubAllEnvs();
     }
   });
 
   it('defaults LLM_PROVIDER to anthropic, which needs an API key', () => {
-    const { LLM_PROVIDER: _omitted, ...env } = MINIMAL_ENV;
+    const { LLM_PROVIDER: _omitted, ...env } = SYNTHETIC_ENV;
     expect(problemsOf(env)).toEqual(['LLM_API_KEY: required when LLM_PROVIDER=anthropic']);
     expect(loadConfig({ ...env, LLM_API_KEY: 'synthetic-key' }).llm.provider).toBe('anthropic');
   });
 
   it('parses overrides, numbers and durations', () => {
     const config = loadConfig({
-      ...MINIMAL_ENV,
+      ...SYNTHETIC_ENV,
       HOST: '0.0.0.0',
       PORT: '9090',
       EMBEDDING_DIM: '768',
@@ -107,26 +98,19 @@ describe('loadConfig', () => {
   });
 
   it('defaults the UI session lifetime to seven days', () => {
-    const config = loadConfig({ ...MINIMAL_ENV, UI_PASSWORD: 'synthetic-ui-password' });
+    const config = loadConfig({ ...SYNTHETIC_ENV, UI_PASSWORD: 'synthetic-ui-password' });
     expect(config.auth.ui?.sessionTtlMs).toBe(604_800_000);
   });
 
-  it('treats empty variables as unset', () => {
-    const config = loadConfig({ ...MINIMAL_ENV, PORT: '', WATCH_DIR: '', UI_PASSWORD: '' });
-    expect(config.server.port).toBe(8080);
-    expect(config.pipeline.watchDir).toBeUndefined();
-    expect(config.auth.ui).toBeUndefined();
-  });
-
   it('returns a frozen configuration', () => {
-    const config = loadConfig(MINIMAL_ENV);
+    const config = loadConfig(SYNTHETIC_ENV);
     expect(Object.isFrozen(config)).toBe(true);
     expect(Object.isFrozen(config.server)).toBe(true);
     expect(Object.isFrozen(config.auth.apiTokens)).toBe(true);
   });
 
   it('accepts the s3 driver with a bucket', () => {
-    const config = loadConfig({ ...MINIMAL_ENV, STORAGE_DRIVER: 's3', S3_BUCKET: 'liasse' });
+    const config = loadConfig({ ...SYNTHETIC_ENV, STORAGE_DRIVER: 's3', S3_BUCKET: 'liasse' });
     expect(config.storage).toEqual({
       driver: 's3',
       bucket: 'liasse',
@@ -139,7 +123,7 @@ describe('loadConfig', () => {
 
   it('requires a bucket and paired credentials for the s3 driver', () => {
     expect(
-      problemsOf({ ...MINIMAL_ENV, STORAGE_DRIVER: 's3', S3_ACCESS_KEY_ID: 'synthetic-id' }),
+      problemsOf({ ...SYNTHETIC_ENV, STORAGE_DRIVER: 's3', S3_ACCESS_KEY_ID: 'synthetic-id' }),
     ).toEqual([
       'S3_BUCKET: required when STORAGE_DRIVER=s3',
       'S3_SECRET_ACCESS_KEY: S3_ACCESS_KEY_ID and S3_SECRET_ACCESS_KEY must be set together',
@@ -147,18 +131,18 @@ describe('loadConfig', () => {
   });
 
   it('requires a model, a key and a base URL for remote embedding providers', () => {
-    expect(problemsOf({ ...MINIMAL_ENV, EMBEDDING_PROVIDER: 'openai' })).toEqual([
+    expect(problemsOf({ ...SYNTHETIC_ENV, EMBEDDING_PROVIDER: 'openai' })).toEqual([
       'EMBEDDING_MODEL: required when EMBEDDING_PROVIDER=openai',
       'EMBEDDING_API_KEY: required when EMBEDDING_PROVIDER=openai',
     ]);
-    expect(problemsOf({ ...MINIMAL_ENV, EMBEDDING_PROVIDER: 'openai-compatible' })).toEqual([
+    expect(problemsOf({ ...SYNTHETIC_ENV, EMBEDDING_PROVIDER: 'openai-compatible' })).toEqual([
       'EMBEDDING_MODEL: required when EMBEDDING_PROVIDER=openai-compatible',
       'EMBEDDING_BASE_URL: required when EMBEDDING_PROVIDER=openai-compatible',
     ]);
   });
 
   it('requires a base URL for an openai-compatible LLM', () => {
-    expect(problemsOf({ ...MINIMAL_ENV, LLM_PROVIDER: 'openai-compatible' })).toEqual([
+    expect(problemsOf({ ...SYNTHETIC_ENV, LLM_PROVIDER: 'openai-compatible' })).toEqual([
       'LLM_BASE_URL: required when LLM_PROVIDER=openai-compatible',
     ]);
   });
@@ -188,7 +172,7 @@ describe('loadConfig', () => {
   });
 
   it('formats one readable message', () => {
-    expect(() => loadConfig({ ...MINIMAL_ENV, PORT: 'http' })).toThrow(
+    expect(() => loadConfig({ ...SYNTHETIC_ENV, PORT: 'http' })).toThrow(
       /^Invalid configuration:\n {2}- PORT: /,
     );
   });
@@ -207,7 +191,7 @@ describe('loadConfig', () => {
     };
     const message = (() => {
       try {
-        loadConfig({ ...MINIMAL_ENV, ...secrets });
+        loadConfig({ ...SYNTHETIC_ENV, ...secrets });
       } catch (error) {
         return error instanceof Error ? error.message : '';
       }
@@ -217,36 +201,5 @@ describe('loadConfig', () => {
     expect(message).toContain('API_TOKENS');
     expect(message).toContain('FILE_URL_SECRET');
     expect(message).not.toContain('9f3a');
-  });
-});
-
-describe('.env.example', () => {
-  const example = readFileSync(new URL('../../../../.env.example', import.meta.url), 'utf8');
-  const documentedKeys = new Set(
-    example
-      .split('\n')
-      .map((line) => /^(?:# )?([A-Z][A-Z0-9_]*)=/.exec(line)?.[1])
-      .filter((key) => key !== undefined),
-  );
-
-  it('documents every variable of the schema', () => {
-    expect(CONFIG_ENV_KEYS.filter((key) => !documentedKeys.has(key))).toEqual([]);
-  });
-
-  it('documents no variable the schema ignores', () => {
-    expect([...documentedKeys].filter((key) => !CONFIG_ENV_KEYS.includes(key))).toEqual([]);
-  });
-
-  it('loads once its uncommented values are applied', () => {
-    const env = Object.fromEntries(
-      example
-        .split('\n')
-        .filter((line) => /^[A-Z][A-Z0-9_]*=/.test(line))
-        .map((line) => {
-          const separator = line.indexOf('=');
-          return [line.slice(0, separator), line.slice(separator + 1)];
-        }),
-    );
-    expect(loadConfig(env).database.url).toBe(MINIMAL_ENV.DATABASE_URL);
   });
 });

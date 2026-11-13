@@ -1,14 +1,17 @@
 import { z } from 'zod';
+import type { EmbeddingProvider, LlmProvider } from '../domain/enums.ts';
 import { MAX_EMBEDDING_DIM } from '../domain/limits.ts';
 import { embeddingProviderSchema, llmProviderSchema } from '../domain/schemas.ts';
 import { type CrossFieldProblem, integer, reportProblems, text } from './fields.ts';
 
-const KEYLESS_PROVIDERS: readonly string[] = ['local', 'ollama', 'openai-compatible'];
-const BASE_URL_PROVIDERS: readonly string[] = ['openai-compatible'];
+type ModelProvider = LlmProvider | EmbeddingProvider;
+
+const KEYLESS_PROVIDERS: readonly ModelProvider[] = ['local', 'ollama', 'openai-compatible'];
+const BASE_URL_PROVIDERS: readonly ModelProvider[] = ['openai-compatible'];
 
 interface ProviderAccess {
   readonly prefix: 'LLM' | 'EMBEDDING';
-  readonly provider: string;
+  readonly provider: ModelProvider;
   readonly apiKey: string | undefined;
   readonly baseUrl: string | undefined;
 }

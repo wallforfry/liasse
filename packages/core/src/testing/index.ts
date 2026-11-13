@@ -12,6 +12,7 @@ export {
   type FakeVisionModel,
 } from './fake-vision-model.ts';
 export { type DocumentRow, insertSyntheticDocument, type NewDocumentRow } from './fixtures.ts';
+export { SYNTHETIC_ENV } from './synthetic-env.ts';
 export {
   createTestDatabase,
   DEFAULT_TEST_DATABASE_URL,

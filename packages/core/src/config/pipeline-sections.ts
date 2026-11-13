@@ -1,12 +1,12 @@
 import { z } from 'zod';
 import { autoApplyModeSchema } from '../domain/schemas.ts';
-import { integer, text } from './fields.ts';
+import { decimal, integer, text } from './fields.ts';
 
 export const pipelineSection = z
   .object({
     WATCH_DIR: text.optional(),
     AUTO_APPLY: autoApplyModeSchema.default('safe'),
-    CONFIDENCE_THRESHOLD: z.coerce.number().min(0).max(1).default(0.7),
+    CONFIDENCE_THRESHOLD: decimal(0, 1).default(0.7),
     MAX_NEW_TYPES_PER_DAY: integer(0, 1000).default(5),
     SCHEMA_LANGUAGE: z
       .string()
