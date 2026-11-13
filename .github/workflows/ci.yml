@@ -34,14 +34,8 @@ jobs:
         run: pnpm exec commitlint --from "$BASE_SHA" --to "$HEAD_SHA" --verbose
       - name: Developer Certificate of Origin
         run: |
-          unsigned=$(git log --no-merges \
-            --format='%H %(trailers:key=Signed-off-by,valueonly,separator=%x2C)' \
-            "$BASE_SHA..$HEAD_SHA" | awk 'NF < 2 { print $1 }')
-          if [ -n "$unsigned" ]; then
-            echo "These commits have no Signed-off-by trailer (use git commit -s):"
-            echo "$unsigned"
-            exit 1
-          fi
+          scripts/check-dco.test.sh
+          scripts/check-dco.sh "$BASE_SHA" "$HEAD_SHA"
 
   check:
     name: Lint, typecheck, test, build

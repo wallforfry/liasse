@@ -16,7 +16,12 @@ git commit -s -m "feat: add something"
 
 This adds a `Signed-off-by: Your Name <you@example.com>` trailer certifying that you wrote the change or have the right to submit it under the project's license (AGPL-3.0).
 
-Commit messages follow [Conventional Commits](https://www.conventionalcommits.org/); CI checks both the format and the sign-off.
+Commit messages follow [Conventional Commits](https://www.conventionalcommits.org/); CI checks both the format and the sign-off. The sign-off must carry the email of the commit author. To check a branch before pushing:
+
+```sh
+scripts/check-dco.sh main
+pnpm exec commitlint --from main
+```
 
 ## Development
 
