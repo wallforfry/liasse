@@ -1,5 +1,5 @@
 import { sql } from 'drizzle-orm';
-import { customType, jsonb, text, timestamp } from 'drizzle-orm/pg-core';
+import { customType, integer, jsonb, real, text, timestamp } from 'drizzle-orm/pg-core';
 
 // The migration runner replaces this token with EMBEDDING_DIM, so generated SQL
 // never hard-codes a dimension.
@@ -34,7 +34,17 @@ export const textArray = (name: string) =>
     .notNull()
     .default(sql`'{}'::text[]`);
 
-export const instant = (name: string) => timestamp(name, { withTimezone: true, mode: 'date' });
+// Where an extracted value comes from. All nullable: a value computed by Liasse,
+// such as a notice deadline, has no model and no quote.
+export const traceColumns = () => ({
+  model: text('model'),
+  schemaVersion: integer('schema_version'),
+  page: integer('page'),
+  quote: text('quote'),
+  confidence: real('confidence'),
+});
+
+export const instant =(name: string) => timestamp(name, { withTimezone: true, mode: 'date' });
 
 export const createdAt = () => instant('created_at').notNull().defaultNow();
 

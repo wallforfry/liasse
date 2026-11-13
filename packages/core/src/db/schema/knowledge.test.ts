@@ -6,6 +6,14 @@ import { documentDates, documentLinks, facts, subjects } from './knowledge.ts';
 
 const EMBEDDING = [0.5, 0.25, 0.125];
 
+const TRACE = {
+  model: 'fake-text-model',
+  schemaVersion: 3,
+  page: 2,
+  quote: 'renews automatically every March 1st; 2-month notice period',
+  confidence: 0.75,
+} as const;
+
 describe('document_dates, document_links, subjects and facts', () => {
   let database: TestDatabase;
 
@@ -26,8 +34,7 @@ describe('document_dates, document_links, subjects and facts', () => {
         kind: 'notice_deadline',
         date: '2027-01-01',
         label: 'Last day to give notice',
-        confidence: 0.75,
-        quote: '2-month notice period',
+        ...TRACE,
       })
       .returning();
     const [selected] = await database.db
@@ -39,11 +46,40 @@ describe('document_dates, document_links, subjects and facts', () => {
       kind: 'notice_deadline',
       date: '2027-01-01',
       label: 'Last day to give notice',
-      confidence: 0.75,
-      quote: '2-month notice period',
+      ...TRACE,
     });
     expect(selected?.id).toMatch(/^dat_/);
   });
+
+  it('accepts a computed date and a fact without a trace', async () => {
+    const { id } = await insertSyntheticDocument(database.db);
+    const untraced = { model: null, schemaVersion: null, page: null, quote: null, confidence: null };
+    const [date] = await database.db
+      .insert(documentDates)
+      .values({ documentId: id, kind: 'notice_deadline', date: '2027-01-01', label: 'Computed' })
+      .returning();
+    const [fact] = await database.db
+      .insert(facts)
+      .values({ documentId: id, text: 'An untraced fact.' })
+      .returning();
+    expect(date).toMatchObject(untraced);
+    expect(fact).toMatchObject(untraced);
+  });
+
+  it.each([{ page: 0 }, { confidence: 1.5 }, { confidence: -0.1 }])(
+    'rejects the trace %j on a date and on a fact',
+    async (trace) => {
+      const { id } = await insertSyntheticDocument(database.db);
+      await expect(
+        database.db
+          .insert(documentDates)
+          .values({ documentId: id, kind: 'due', date: '2027-01-01', label: 'Due', ...trace }),
+      ).rejects.toThrow();
+      await expect(
+        database.db.insert(facts).values({ documentId: id, text: 'A fact.', ...trace }),
+      ).rejects.toThrow();
+    },
+  );
 
   it('round-trips document_links', async () => {
     const from = await insertSyntheticDocument(database.db);
@@ -108,6 +144,7 @@ describe('document_dates, document_links, subjects and facts', () => {
         entityIds: ['ent_synthetic'],
         subjectIds: ['sub_synthetic'],
         embedding: EMBEDDING,
+        ...TRACE,
       })
       .returning();
     const [selected] = await database.db.select().from(facts).where(eq(facts.documentId, id));
@@ -119,6 +156,7 @@ describe('document_dates, document_links, subjects and facts', () => {
       entityIds: ['ent_synthetic'],
       subjectIds: ['sub_synthetic'],
       embedding: EMBEDDING,
+      ...TRACE,
     });
     expect(selected?.id).toMatch(/^fct_/);
     expect(selected?.tsv).toContain("'insurance'");

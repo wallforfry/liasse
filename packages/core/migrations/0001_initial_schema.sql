@@ -76,9 +76,14 @@ CREATE TABLE "document_dates" (
 	"kind" "key_date_kind" NOT NULL,
 	"date" date NOT NULL,
 	"label" text NOT NULL,
-	"confidence" real,
+	"model" text,
+	"schema_version" integer,
+	"page" integer,
 	"quote" text,
-	"created_at" timestamp with time zone DEFAULT now() NOT NULL
+	"confidence" real,
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
+	CONSTRAINT "document_dates_page_positive" CHECK ("document_dates"."page" IS NULL OR "document_dates"."page" >= 1),
+	CONSTRAINT "document_dates_confidence_range" CHECK ("document_dates"."confidence" IS NULL OR "document_dates"."confidence" BETWEEN 0 AND 1)
 );
 --> statement-breakpoint
 CREATE TABLE "document_links" (
@@ -99,9 +104,16 @@ CREATE TABLE "facts" (
 	"valid_to" date,
 	"entity_ids" text[] DEFAULT '{}'::text[] NOT NULL,
 	"subject_ids" text[] DEFAULT '{}'::text[] NOT NULL,
+	"model" text,
+	"schema_version" integer,
+	"page" integer,
+	"quote" text,
+	"confidence" real,
 	"embedding" vector(__EMBEDDING_DIM__),
 	"tsv" "tsvector" GENERATED ALWAYS AS (liasse_tsvector("text")) STORED,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
+	CONSTRAINT "facts_page_positive" CHECK ("facts"."page" IS NULL OR "facts"."page" >= 1),
+	CONSTRAINT "facts_confidence_range" CHECK ("facts"."confidence" IS NULL OR "facts"."confidence" BETWEEN 0 AND 1),
 	CONSTRAINT "facts_validity_range" CHECK ("facts"."valid_from" IS NULL OR "facts"."valid_to" IS NULL OR "facts"."valid_to" >= "facts"."valid_from")
 );
 --> statement-breakpoint

@@ -1,5 +1,5 @@
 {
-  "id": "b860fb81-4238-4d2f-b6e3-ca1ac34a03ad",
+  "id": "da58e3c3-098f-465d-97ce-972a82bdada1",
   "prevId": "17833c70-6f8e-447e-964b-8edaa6598dbe",
   "version": "7",
   "dialect": "postgresql",
@@ -583,15 +583,33 @@
           "primaryKey": false,
           "notNull": true
         },
-        "confidence": {
-          "name": "confidence",
-          "type": "real",
+        "model": {
+          "name": "model",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "schema_version": {
+          "name": "schema_version",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "page": {
+          "name": "page",
+          "type": "integer",
           "primaryKey": false,
           "notNull": false
         },
         "quote": {
           "name": "quote",
           "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "confidence": {
+          "name": "confidence",
+          "type": "real",
           "primaryKey": false,
           "notNull": false
         },
@@ -653,7 +671,16 @@
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "policies": {},
-      "checkConstraints": {},
+      "checkConstraints": {
+        "document_dates_page_positive": {
+          "name": "document_dates_page_positive",
+          "value": "\"document_dates\".\"page\" IS NULL OR \"document_dates\".\"page\" >= 1"
+        },
+        "document_dates_confidence_range": {
+          "name": "document_dates_confidence_range",
+          "value": "\"document_dates\".\"confidence\" IS NULL OR \"document_dates\".\"confidence\" BETWEEN 0 AND 1"
+        }
+      },
       "isRLSEnabled": false
     },
     "public.document_links": {
@@ -830,6 +857,36 @@
           "notNull": true,
           "default": "'{}'::text[]"
         },
+        "model": {
+          "name": "model",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "schema_version": {
+          "name": "schema_version",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "page": {
+          "name": "page",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "quote": {
+          "name": "quote",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "confidence": {
+          "name": "confidence",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false
+        },
         "embedding": {
           "name": "embedding",
           "type": "vector(__EMBEDDING_DIM__)",
@@ -951,6 +1008,14 @@
       "uniqueConstraints": {},
       "policies": {},
       "checkConstraints": {
+        "facts_page_positive": {
+          "name": "facts_page_positive",
+          "value": "\"facts\".\"page\" IS NULL OR \"facts\".\"page\" >= 1"
+        },
+        "facts_confidence_range": {
+          "name": "facts_confidence_range",
+          "value": "\"facts\".\"confidence\" IS NULL OR \"facts\".\"confidence\" BETWEEN 0 AND 1"
+        },
         "facts_validity_range": {
           "name": "facts_validity_range",
           "value": "\"facts\".\"valid_from\" IS NULL OR \"facts\".\"valid_to\" IS NULL OR \"facts\".\"valid_to\" >= \"facts\".\"valid_from\""

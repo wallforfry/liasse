@@ -7,6 +7,7 @@ import {
   jsonObject,
   searchVector,
   textArray,
+  traceColumns,
   updatedAt,
 } from '../columns.ts';
 import { documents } from './documents.ts';
@@ -24,13 +25,17 @@ export const documentDates = pgTable(
     kind: keyDateKind('kind').notNull(),
     date: date('date', { mode: 'string' }).notNull(),
     label: text('label').notNull(),
-    confidence: real('confidence'),
-    quote: text('quote'),
+    ...traceColumns(),
     createdAt: createdAt(),
   },
   (table) => [
     index('document_dates_date_idx').on(table.date),
     index('document_dates_document_id_idx').on(table.documentId),
+    check('document_dates_page_positive', sql`${table.page} IS NULL OR ${table.page} >= 1`),
+    check(
+      'document_dates_confidence_range',
+      sql`${table.confidence} IS NULL OR ${table.confidence} BETWEEN 0 AND 1`,
+    ),
   ],
 );
 
@@ -88,11 +93,17 @@ export const facts = pgTable(
     validTo: date('valid_to', { mode: 'string' }),
     entityIds: textArray('entity_ids'),
     subjectIds: textArray('subject_ids'),
+    ...traceColumns(),
     embedding: embeddingVector('embedding'),
     tsv: searchVector('tsv', 'text'),
     createdAt: createdAt(),
   },
   (table) => [
+    check('facts_page_positive', sql`${table.page} IS NULL OR ${table.page} >= 1`),
+    check(
+      'facts_confidence_range',
+      sql`${table.confidence} IS NULL OR ${table.confidence} BETWEEN 0 AND 1`,
+    ),
     index('facts_document_id_idx').on(table.documentId),
     index('facts_entity_ids_idx').using('gin', table.entityIds),
     index('facts_subject_ids_idx').using('gin', table.subjectIds),
