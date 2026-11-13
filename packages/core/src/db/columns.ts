@@ -44,7 +44,7 @@ export const traceColumns = () => ({
   confidence: real('confidence'),
 });
 
-export const instant =(name: string) => timestamp(name, { withTimezone: true, mode: 'date' });
+export const instant = (name: string) => timestamp(name, { withTimezone: true, mode: 'date' });
 
 export const createdAt = () => instant('created_at').notNull().defaultNow();
 

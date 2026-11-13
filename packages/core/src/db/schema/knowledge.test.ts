@@ -53,7 +53,13 @@ describe('document_dates, document_links, subjects and facts', () => {
 
   it('accepts a computed date and a fact without a trace', async () => {
     const { id } = await insertSyntheticDocument(database.db);
-    const untraced = { model: null, schemaVersion: null, page: null, quote: null, confidence: null };
+    const untraced = {
+      model: null,
+      schemaVersion: null,
+      page: null,
+      quote: null,
+      confidence: null,
+    };
     const [date] = await database.db
       .insert(documentDates)
       .values({ documentId: id, kind: 'notice_deadline', date: '2027-01-01', label: 'Computed' })
