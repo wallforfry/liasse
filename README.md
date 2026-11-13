@@ -2,7 +2,7 @@
 
 **Lightweight, agent-first document management.** Hand Liasse your documents; it reads them, files them into types it evolves on its own, tracks key dates and links between documents, and exposes everything to your agents over MCP.
 
-> **Status:** specification phase — no code yet. See [`docs/spec.md`](docs/spec.md).
+> **Status:** early development, not usable yet. The foundation is in place (monorepo, configuration, database schema and migrations, model ports, a server that only answers `GET /health`); ingestion, search, MCP and the UI are in progress. See [`docs/spec.md`](docs/spec.md).
 
 ## Why
 
@@ -10,7 +10,7 @@ Self-hosted document managers rely on classic OCR, manual tags and a UI built fo
 
 - **Agent first** — MCP is the primary interface (search, structured queries, upcoming deadlines, timelines, ingestion).
 - **Emergent types** — a small fixed core of fields, plus document types and schemas proposed by an LLM and consolidated over time.
-- **Knowledge layer** — key dates, links between documents, subjects and sourced facts, so questions like *"which contracts expire this quarter?"* get a direct answer.
+- **Knowledge layer** — key dates, links between documents, subjects and sourced facts, so questions like _"which contracts expire this quarter?"_ get a direct answer.
 - **Lightweight** — one Node container and one Postgres (with pgvector). No broker, no separate worker.
 - **Private by default** — any LLM provider, including fully local; local embeddings by default; no telemetry.
 

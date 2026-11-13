@@ -1,0 +1,68 @@
+{
+  "name": "@liasse/core",
+  "version": "0.0.0",
+  "description": "Liasse core: configuration, database, domain and model ports",
+  "license": "AGPL-3.0-only",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/wallforfry/liasse.git",
+    "directory": "packages/core"
+  },
+  "type": "module",
+  "engines": {
+    "node": ">=22.12.0"
+  },
+  "files": [
+    "dist",
+    "migrations"
+  ],
+  "exports": {
+    "./config": {
+      "@liasse/source": "./src/config/index.ts",
+      "types": "./dist/config/index.d.ts",
+      "default": "./dist/config/index.js"
+    },
+    "./db": {
+      "@liasse/source": "./src/db/index.ts",
+      "types": "./dist/db/index.d.ts",
+      "default": "./dist/db/index.js"
+    },
+    "./domain": {
+      "@liasse/source": "./src/domain/index.ts",
+      "types": "./dist/domain/index.d.ts",
+      "default": "./dist/domain/index.js"
+    },
+    "./models": {
+      "@liasse/source": "./src/models/index.ts",
+      "types": "./dist/models/index.d.ts",
+      "default": "./dist/models/index.js"
+    },
+    "./prompt": {
+      "@liasse/source": "./src/prompt/index.ts",
+      "types": "./dist/prompt/index.d.ts",
+      "default": "./dist/prompt/index.js"
+    },
+    "./testing": {
+      "@liasse/source": "./src/testing/index.ts",
+      "types": "./dist/testing/index.d.ts",
+      "default": "./dist/testing/index.js"
+    }
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "node --env-file-if-exists=../../.env --experimental-strip-types src/db/cli.ts",
+    "typecheck": "tsc --noEmit -p tsconfig.json"
+  },
+  "dependencies": {
+    "drizzle-orm": "^0.45.4",
+    "postgres": "^4.1.1",
+    "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "drizzle-kit": "^0.31.11"
+  }
+}
