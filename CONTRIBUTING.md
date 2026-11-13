@@ -1,0 +1,22 @@
+# Contributing to Liasse
+
+Thanks for your interest in Liasse!
+
+## Language
+
+Everything in this repository is written in English: code, identifiers, comments, commit messages, issues, pull requests, documentation and prompts.
+
+## Developer Certificate of Origin
+
+Liasse uses the [Developer Certificate of Origin](https://developercertificate.org/) (DCO) instead of a CLA. Every commit must be signed off:
+
+```sh
+git commit -s -m "feat: add something"
+```
+
+This adds a `Signed-off-by: Your Name <you@example.com>` trailer certifying that you wrote the change or have the right to submit it under the project's license (AGPL-3.0).
+
+## Before you start
+
+- The design lives in [`docs/spec.md`](docs/spec.md). For anything beyond a small fix, open an issue first so we can agree on the approach.
+- Never commit real personal documents. Tests and fixtures use synthetic documents only.
