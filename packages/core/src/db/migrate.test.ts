@@ -154,20 +154,23 @@ describe('migrate', () => {
     ).toEqual(["'aout':3 'bills':4 'electricite':1 'the':2"]);
   });
 
-  it('indexes search vectors, embeddings and the dequeue query', async () => {
-    const definitions = await database.db.execute(sql`
-      SELECT indexname AS name, indexdef AS definition FROM pg_indexes WHERE schemaname = 'public'
-    `);
-    const definitionOf = (name: string) => definitions.find((row) => row.name === name)?.definition;
-    expect(definitionOf('document_pages_tsv_idx')).toContain('USING gin (tsv)');
-    expect(definitionOf('chunks_tsv_idx')).toContain('USING gin (tsv)');
-    expect(definitionOf('chunks_embedding_idx')).toContain(
-      'USING hnsw (embedding vector_cosine_ops)',
-    );
-    expect(definitionOf('facts_embedding_idx')).toContain(
-      'USING hnsw (embedding vector_cosine_ops)',
-    );
-    expect(definitionOf('jobs_dequeue_idx')).toMatch(/\(run_after\) WHERE \(status = 'queued'/);
+  it.each([
+    ['document_pages_tsv_idx', 'USING gin (tsv)'],
+    ['chunks_tsv_idx', 'USING gin (tsv)'],
+    ['facts_tsv_idx', 'USING gin (tsv)'],
+    ['chunks_embedding_idx', 'USING hnsw (embedding vector_cosine_ops)'],
+    ['facts_embedding_idx', 'USING hnsw (embedding vector_cosine_ops)'],
+    ['facts_entity_ids_idx', 'USING gin (entity_ids)'],
+    ['facts_subject_ids_idx', 'USING gin (subject_ids)'],
+    ['documents_subject_ids_idx', 'USING gin (subject_ids)'],
+    ['jobs_dequeue_idx', "USING btree (run_after) WHERE (status = 'queued'::job_status)"],
+  ])('creates the index %s', async (name, definition) => {
+    expect(
+      await column(
+        database,
+        sql`SELECT indexdef AS value FROM pg_indexes WHERE schemaname = 'public' AND indexname = ${name}`,
+      ),
+    ).toEqual([expect.stringContaining(definition)]);
   });
 });
 
@@ -176,6 +179,20 @@ describe('migrate with another dimension', () => {
     const database = await createTestDatabase({ embeddingDim: 8 });
     try {
       expect(await withClient(database.url, installedEmbeddingDimensions)).toEqual([8]);
+    } finally {
+      await database.dispose();
+    }
+  });
+});
+
+describe('migrate beside a vector column that is not ours', () => {
+  it('installs without mistaking it for the installed dimension', async () => {
+    const database = await createTestDatabase({ migrate: false });
+    try {
+      await database.db.execute(sql`CREATE EXTENSION vector`);
+      await database.db.execute(sql`CREATE TABLE foreign_vectors (embedding vector(3))`);
+      await migrate(database.url, { embeddingDim: 384 });
+      expect(await withClient(database.url, installedEmbeddingDimensions)).toEqual([384]);
     } finally {
       await database.dispose();
     }
