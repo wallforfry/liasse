@@ -76,7 +76,10 @@ Tests sit next to the code they cover, as `*.test.ts`.
 
 ## Database changes
 
-- Edit the Drizzle schema in `packages/core/src/db/schema/`, then run `pnpm db:generate` and commit the generated SQL and snapshot. Never edit an applied migration.
+- Edit the Drizzle schema in `packages/core/src/db/schema/`, then run `pnpm db:generate` and commit the generated SQL and snapshot.
+- Never edit a migration that is on `main`: `migrate` compares the recorded content hashes with the files and refuses to run on a database where one changed. Add a new migration instead.
+- Migrations from parallel branches are all applied, whatever their timestamps: a migration is pending when its hash is not recorded, and pending ones run in journal order. When two branches both add a migration, rebase, delete yours and generate it again, so the journal and the snapshot stay consistent.
+- Extracted values keep their trace: spread `traceColumns()` (`model`, `schema_version`, `page`, `quote`, `confidence`) into a table that stores them.
 - Vector columns use `embeddingVector`. The generated SQL contains the token `__EMBEDDING_DIM__`, which the migration runner replaces with `EMBEDDING_DIM`. The installed dimension is read back from the Postgres catalog, and `migrate` refuses to run when `EMBEDDING_DIM` differs from it.
-- Full-text columns use `searchVector`, which calls the SQL function `liasse_tsvector`. Change the text search configuration there and nowhere else.
+- Full-text columns use `searchVector`, which calls the SQL function `liasse_tsvector`. The configuration is decided there and nowhere else, but stored generated columns are not rewritten when the function body changes: a change of configuration needs a migration that redefines the three `tsv` columns.
 - Ids are text, `<prefix>_<ULID>`, created by `newId` with a prefix from `ID_PREFIXES`.
