@@ -55,6 +55,19 @@ const tableExists = (database: TestDatabase, name: string) =>
 const recordedMigrationCount = (database: TestDatabase) =>
   count(database, sql`SELECT count(*)::int AS count FROM drizzle.__drizzle_migrations`);
 
+const noteColumnCount = (database: TestDatabase) =>
+  count(
+    database,
+    sql`
+      SELECT count(*)::int AS count FROM information_schema.columns
+      WHERE table_schema = 'public' AND table_name = 'jobs' AND column_name = 'note'
+    `,
+  );
+
+// Later than any real migration, so these entries sort after the shipped ones.
+const BASE = Date.now() + 60_000;
+const ADD_NOTE = 'ALTER TABLE jobs ADD COLUMN note text;';
+
 describe('migrate against the recorded history', () => {
   const cleanups: (() => Promise<void> | void)[] = [];
 
@@ -95,6 +108,66 @@ describe('migrate against the recorded history', () => {
     expect(await recordedMigrationCount(database)).toBe(3);
   });
 
+  const ADD_COLUMN = { tag: '0002_add_note', when: BASE + 1, sql: ADD_NOTE };
+  const DROP_COLUMN = {
+    tag: '0003_drop_note',
+    when: BASE + 2,
+    sql: 'ALTER TABLE jobs DROP COLUMN note;',
+  };
+  const ADD_COLUMN_AGAIN = { tag: '0004_add_note_again', when: BASE + 3, sql: ADD_NOTE };
+
+  it('applies a migration whose content repeats an applied one', async () => {
+    const database = await testDatabase({ migrate: true });
+    const migrationsFolder = copyOfMigrations();
+    addMigration(migrationsFolder, ADD_COLUMN);
+    await migrate(database.url, { embeddingDim: 384, migrationsFolder });
+    expect(await noteColumnCount(database)).toBe(1);
+
+    addMigration(migrationsFolder, DROP_COLUMN);
+    addMigration(migrationsFolder, ADD_COLUMN_AGAIN);
+    await migrate(database.url, { embeddingDim: 384, migrationsFolder });
+
+    expect(await noteColumnCount(database)).toBe(1);
+    expect(await recordedMigrationCount(database)).toBe(5);
+
+    await migrate(database.url, { embeddingDim: 384, migrationsFolder });
+    expect(await recordedMigrationCount(database)).toBe(5);
+  });
+
+  it('applies repeated content on an empty database, once per journal entry', async () => {
+    const database = await testDatabase({ migrate: false });
+    const migrationsFolder = copyOfMigrations();
+    [ADD_COLUMN, DROP_COLUMN, ADD_COLUMN_AGAIN].forEach((migration) => {
+      addMigration(migrationsFolder, migration);
+    });
+
+    await migrate(database.url, { embeddingDim: 384, migrationsFolder });
+    expect(await noteColumnCount(database)).toBe(1);
+    expect(await recordedMigrationCount(database)).toBe(5);
+
+    await migrate(database.url, { embeddingDim: 384, migrationsFolder });
+    expect(await recordedMigrationCount(database)).toBe(5);
+  });
+
+  it('refuses to run when an applied migration was given another date', async () => {
+    const database = await testDatabase({ migrate: true });
+    const migrationsFolder = copyOfMigrations();
+    const journal = readJournal(migrationsFolder);
+    writeJournal(migrationsFolder, {
+      ...journal,
+      entries: journal.entries.map((entry) =>
+        entry.tag === '0001_initial_schema' ? { ...entry, when: entry.when + 1 } : entry,
+      ),
+    });
+
+    const failure = migrate(database.url, { embeddingDim: 384, migrationsFolder });
+    await expect(failure).rejects.toBeInstanceOf(StartupError);
+    await expect(failure).rejects.toThrow(
+      /0001_initial_schema was given another date in the journal after it was applied/,
+    );
+    expect(await recordedMigrationCount(database)).toBe(2);
+  });
+
   it('refuses to run when an applied migration was edited', async () => {
     const database = await testDatabase({ migrate: true });
     const migrationsFolder = copyOfMigrations();
@@ -117,7 +190,9 @@ describe('migrate against the recorded history', () => {
 
     const failure = migrate(database.url, { embeddingDim: 384, migrationsFolder });
     await expect(failure).rejects.toBeInstanceOf(StartupError);
-    await expect(failure).rejects.toThrow(/1 applied migration that .* does not contain/);
+    await expect(failure).rejects.toThrow(
+      /1 applied migration that matches no migration of this version/,
+    );
   });
 
   it('lets concurrent runners migrate an empty database exactly once', async () => {
