@@ -3,6 +3,7 @@ import type { Embedder, Embedding, EmbeddingKind } from '../models/ports.ts';
 import {
   EmbeddingModelDimensionError,
   EmbeddingOutputError,
+  LocalModelClosedError,
   LocalModelProcessError,
   LocalModelTimeoutError,
 } from './errors.ts';
@@ -49,6 +50,9 @@ export interface LocalEmbedderOptions {
 export interface LocalEmbedder extends Embedder {
   readonly maxInputTokens: number;
   readonly countTokens: (texts: readonly string[]) => Promise<readonly number[]>;
+  // Final, unlike the unload of an idle model: it stops the model process, rejects the
+  // requests in flight and every later one with `LocalModelClosedError`, and resolves once
+  // the process has ended.
   readonly close: () => Promise<void>;
 }
 
@@ -119,16 +123,24 @@ export const createLocalEmbedder = ({
 
   // A model process that died is of no further use: it is dropped and the task runs once more
   // on a new one, so that a process lost while idle costs the caller nothing. A process that
-  // was ended for not answering is not asked the same thing again.
+  // was ended for not answering is not asked the same thing again. Once the embedder is
+  // closed nothing loads a model any more: a request that `close` interrupted would
+  // otherwise start a process that nobody is left to stop.
+  let closed = false;
+  const refuseWhenClosed = (): void => {
+    if (closed) throw new LocalModelClosedError();
+  };
   const withModel = async <R>(
     task: (loaded: LocalModel) => Promise<R>,
     retried = false,
   ): Promise<R> => {
+    refuseWhenClosed();
     try {
       return await resource.use(task);
     } catch (error) {
       if (!(error instanceof LocalModelProcessError)) throw error;
       await resource.unload().catch(onUnloadError);
+      refuseWhenClosed();
       if (retried || error instanceof LocalModelTimeoutError) throw error;
       return withModel(task, true);
     }
@@ -152,6 +164,9 @@ export const createLocalEmbedder = ({
         return embeddings;
       });
     },
-    close: resource.unload,
+    close: () => {
+      closed = true;
+      return resource.unload();
+    },
   };
 };

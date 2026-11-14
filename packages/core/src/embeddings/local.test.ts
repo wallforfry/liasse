@@ -1,8 +1,10 @@
 import { describe, expect, it, vi } from 'vitest';
 import { StartupError } from '../domain/errors.ts';
+import { createGate } from '../testing/async.ts';
 import {
   EmbeddingModelDimensionError,
   EmbeddingOutputError,
+  LocalModelClosedError,
   LocalModelProcessError,
   LocalModelTimeoutError,
 } from './errors.ts';
@@ -197,6 +199,64 @@ describe('createLocalEmbedder', () => {
     await embedder.embed(['a'], 'passage');
     await embedder.close();
     expect(disposed).toEqual([1]);
+  });
+
+  // A loader whose first models die at their first request, `deaths` of them; the next one
+  // holds every request until it is disposed of and then rejects it, as the model process
+  // does; the models after it answer.
+  const interruptible = (deaths = 0) => {
+    const asked = createGate();
+    let loads = 0;
+    const { embedder } = setup({
+      loadModel: () => {
+        loads += 1;
+        const instance = loads;
+        let stop: (error: Error) => void = () => undefined;
+        const serve = (): Promise<never> =>
+          instance <= deaths
+            ? Promise.reject(death)
+            : new Promise((_, reject) => {
+                stop = reject;
+                asked.open();
+              });
+        const holds = instance <= deaths + 1;
+        return Promise.resolve({
+          embed: holds ? serve : (texts: readonly string[]) => Promise.resolve(texts.map(byLength)),
+          countTokens: holds
+            ? serve
+            : (texts: readonly string[]) => Promise.resolve(texts.map(() => 1)),
+          dispose: () => {
+            stop(new LocalModelProcessError('the model process was stopped'));
+            return Promise.resolve();
+          },
+        });
+      },
+    });
+    return { embedder, asked: asked.opened, loadCount: () => loads };
+  };
+
+  it.each([
+    ['the request', 0],
+    ['the second attempt of a request', 1],
+  ])('rejects %s that close interrupts, without loading another model', async (_, deaths) => {
+    const { embedder, asked, loadCount } = interruptible(deaths);
+    const outcome = embedder.embed(['a'], 'passage').catch((error: unknown) => error);
+    await asked;
+    await embedder.close();
+    expect(await outcome).toBeInstanceOf(LocalModelClosedError);
+    expect(loadCount()).toBe(deaths + 1);
+  });
+
+  it('serves nothing once closed, and loads no model for it', async () => {
+    const { embedder, specs } = setup();
+    await embedder.close();
+    await expect(embedder.embed(['a'], 'passage')).rejects.toBeInstanceOf(LocalModelClosedError);
+    await expect(embedder.countTokens(['a'])).rejects.toMatchObject({
+      name: 'LocalModelClosedError',
+      retryable: true,
+    });
+    expect(specs).toEqual([]);
+    await expect(embedder.close()).resolves.toBeUndefined();
   });
 
   it('refuses at startup a dimension that the known model does not produce', () => {

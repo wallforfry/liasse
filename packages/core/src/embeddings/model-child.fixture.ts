@@ -20,6 +20,8 @@ const obey = async (command: string | undefined): Promise<void> => {
   if (command === 'crash') process.exit(3);
   if (command === 'garbage') process.send?.({ unexpected: true });
   if (command === 'hang' || command === 'garbage') await never;
+  // Holds the thread, as an inference that does not return: later requests are not read.
+  if (command === 'block') Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0);
   if (command === 'slow') await delay(400);
   if (command === 'busy') setInterval(() => undefined, 1000);
   if (command === 'busy') await never;
