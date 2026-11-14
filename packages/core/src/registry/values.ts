@@ -2,7 +2,7 @@ import { z } from 'zod';
 import { keyDateSchema, languageCodeSchema } from '../domain/values.ts';
 import { CORE_FIELDS, KEY_DATES_FIELD } from './core-fields.ts';
 import type { TypeFields } from './fields.ts';
-import { ownProperties } from './own.ts';
+import { isPlainRecord, ownProperties } from './own.ts';
 import {
   fieldValueSchema,
   untypedValueSchema,
@@ -37,5 +37,12 @@ export const coreValueSchema = (wrap: ValueWrapper = unwrapped) =>
     [KEY_DATES_FIELD]: z.array(wrap(keyDateSchema)).optional(),
   });
 
+// Zod's record schema leaves a key named `__proto__` out of its result without a word,
+// so that key is refused before the record sees it.
+const hasNoPrototypeKey = (input: unknown): boolean =>
+  !isPlainRecord(input) || !Object.hasOwn(input, '__proto__');
+
 export const extraValueSchema = (wrap: ValueWrapper = unwrapped) =>
-  z.record(z.string().min(1), untypedValueSchema(wrap));
+  z
+    .custom<unknown>(hasNoPrototypeKey, 'The key "__proto__" is not allowed')
+    .pipe(z.record(z.string().min(1), untypedValueSchema(wrap)));

@@ -161,6 +161,16 @@ describe('extraValueSchema', () => {
     expect(extra.safeParse({ '': 'value' }).success).toBe(false);
   });
 
+  it('rejects a key named __proto__ instead of dropping it', () => {
+    const parsed: unknown = JSON.parse('{"__proto__": "hidden", "note": "kept"}');
+    expect(extra.safeParse(parsed).success).toBe(false);
+    expect(extraValueSchema(traced).safeParse(parsed).success).toBe(false);
+    expect(extra.parse({ constructor: 'kept', toString: 'kept' })).toEqual({
+      constructor: 'kept',
+      toString: 'kept',
+    });
+  });
+
   it('wraps each value when given a wrapper', () => {
     const wrapped = extraValueSchema(traced);
     expect(
