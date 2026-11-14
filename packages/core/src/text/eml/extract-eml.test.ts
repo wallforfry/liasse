@@ -170,8 +170,9 @@ describe('extractText on an email', () => {
     );
   });
 
-  it('returns the body alone when the message has no known header', async () => {
-    expect((await extract(eml(['X-Synthetic: 1', '', 'Only a body.']))).pages).toEqual([
+  it('returns the body alone when no header of the block is rendered', async () => {
+    const message = eml(['X-Synthetic: 1', 'MIME-Version: 1.0', '', 'Only a body.']);
+    expect((await extract(message)).pages).toEqual([
       { page: 1, text: 'Only a body.', method: 'native' },
     ]);
   });
@@ -181,19 +182,82 @@ describe('extractText on an email', () => {
   });
 
   it.each([
-    ['an empty file', new Uint8Array(0)],
-    ['a PDF', buildSyntheticPdf([{ lines: ['Invoice 2026-001'] }])],
-    ['a PNG', buildSyntheticPng(8, 8)],
-    ['binary noise', Uint8Array.from({ length: 512 }, (_, index) => (index * 37 + 11) % 256)],
-    ['text without any header', eml(['Dear Jane Doe,', '', 'No header above.'])],
-    ['a header name with a space', eml(['Not a header: value', '', 'Body.'])],
-  ])('reports %s as not being an email', async (_, bytes) => {
+    [
+      'a byte order mark',
+      Uint8Array.from([0xef, 0xbb, 0xbf, ...eml(['Subject: Hi', '', 'Body.'])]),
+    ],
+    ['blank lines', eml(['', '', 'Subject: Hi', '', 'Body.'])],
+    [
+      'a mark then a blank line',
+      Uint8Array.from([0xef, 0xbb, 0xbf, ...eml(['', 'Subject: Hi', '', 'Body.'])]),
+    ],
+  ])('accepts a message that starts with %s', async (_, bytes) => {
+    expect((await extract(bytes)).pages[0]?.text).toBe('Subject: Hi\n\nBody.');
+  });
+
+  it.each([
+    'From',
+    'To',
+    'Date',
+    'Subject',
+    'Message-ID',
+    'Received',
+    'Return-Path',
+    'MIME-Version',
+    'content-type',
+  ])('accepts a message whose only header is %s', async (name) => {
+    const value = name === 'content-type' ? 'text/plain' : 'synthetic@example.com';
+    const result = await extract(eml([`${name}: ${value}`, '', 'Body.']));
+    expect(result.pages[0]?.text).toContain('Body.');
+  });
+
+  it.each([
+    ['an empty file', new Uint8Array(0), /does not start with a header field/],
+    [
+      'a PDF',
+      buildSyntheticPdf([{ lines: ['Invoice 2026-001'] }]),
+      /does not start with a header field/,
+    ],
+    ['a PNG', buildSyntheticPng(8, 8), /does not start with a header field/],
+    [
+      'binary noise',
+      Uint8Array.from({ length: 512 }, (_, index) => (index * 37 + 11) % 256),
+      /does not start with a header field/,
+    ],
+    [
+      'text without any header',
+      eml(['Dear Jane Doe,', '', 'No header above.']),
+      /does not start with a header field/,
+    ],
+    [
+      'a header name with a space',
+      eml(['Not a header: value', 'Subject: Hi', '', 'Body.']),
+      /does not start with a header field/,
+    ],
+    [
+      'a space before the first colon',
+      eml(['subject : Hi', '', 'Body.']),
+      /does not start with a header field/,
+    ],
+    ['a JSON document', eml(['{"a":1}']), /none of the headers of a message/],
+    [
+      'a note that starts like a header',
+      eml(['Note: call Jane Doe', '', 'Tomorrow.']),
+      /none of the headers of a message/,
+    ],
+    [
+      'a known header only in the body',
+      eml(['Note: x', '', 'Subject: not a header']),
+      /none of the headers of a message/,
+    ],
+  ])('reports %s as not being an email', async (_, bytes, message) => {
     const failure = extract(bytes);
     await expect(failure).rejects.toMatchObject({
       name: 'TextExtractionError',
       code: 'eml_corrupt',
+      retryable: false,
     });
-    await expect(failure).rejects.toThrow(/does not start with a header field/);
+    await expect(failure).rejects.toThrow(message);
   });
 
   it('reports a message nested beyond what the parser accepts', async () => {

@@ -4,6 +4,7 @@ import { normalizeText } from '../normalize.ts';
 import { toExtractedText } from '../result.ts';
 import type { ExtractedAttachment, ExtractedText } from '../types.ts';
 import { htmlToText } from './html-to-text.ts';
+import { assertLooksLikeEmail } from './email-check.ts';
 
 const loadParser = () => import('postal-mime');
 
@@ -51,24 +52,8 @@ const bodyOf = ({ text, html }: Email): string => {
   return html === undefined ? '' : htmlToText(html);
 };
 
-// A header field name is printable ASCII without a colon, directly followed by a colon
-// (RFC 5322, 2.2). The parser itself accepts any bytes and returns them as a body, so
-// without this a PDF or an image declared as an email would become a page of noise.
-const HEADER_FIELD = /^[\x21-\x39\x3b-\x7e]+:/;
-const SNIFFED_BYTES = 256;
-
-const assertStartsWithHeaderField = (bytes: Uint8Array): void => {
-  const start = Buffer.from(bytes.subarray(0, SNIFFED_BYTES)).toString('latin1');
-  if (!HEADER_FIELD.test(start)) {
-    throw new TextExtractionError(
-      'eml_corrupt',
-      'The file is not an email: it does not start with a header field',
-    );
-  }
-};
-
 export const extractEml = async (bytes: Uint8Array): Promise<ExtractedText> => {
-  assertStartsWithHeaderField(bytes);
+  assertLooksLikeEmail(bytes);
   const { default: PostalMime } = await loadParser();
   const email = await PostalMime.parse(bytes, { attachmentEncoding: 'arraybuffer' }).catch(
     (error: unknown) => {
