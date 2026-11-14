@@ -65,13 +65,37 @@ describe('slugViolations', () => {
   describe('date words', () => {
     it.each([
       ['october_bill', 'october'],
-      ['bill_oct', 'oct'],
-      ['payslip_sept', 'sept'],
+      ['bill_september', 'september'],
       ['january_statement', 'january'],
     ])('rejects %s, which carries an English month', (slug, month) => {
       const violations = slugViolations(slug, KNOWN);
       expect(violations.map(({ rule }) => rule)).toEqual(['month']);
       expect(violations[0]?.message).toContain(`"${month}"`);
+    });
+
+    it('refuses the full name of every English month but May', () => {
+      expect(MONTH_WORDS.en).toEqual([
+        ...['january', 'february', 'march', 'april', 'june', 'july'],
+        ...['august', 'september', 'october', 'november', 'december'],
+      ]);
+    });
+
+    it.each([
+      ['en', 'may'],
+      ['en', 'mar'],
+      ['en', 'dec'],
+      ['en', 'bill_oct'],
+      ['en', 'payslip_sept'],
+      ['en', 'may_day_notice'],
+      ['it', 'data_set'],
+      ['it', 'ricevuta_ott'],
+      ['es', 'seguro_mar'],
+      ['es', 'recibo_dic'],
+      ['fr', 'facture_fevr'],
+      ['fr', 'bulletin_juil'],
+      ['de', 'abrechnung_dez'],
+    ] as const)('with %s, accepts %s: a short form is an ordinary word too', (language, slug) => {
+      expect(slugRules(slug, { schemaLanguage: language })).toEqual([]);
     });
 
     it('does not take a word that merely contains a month for a month', () => {
@@ -94,33 +118,41 @@ describe('slugViolations', () => {
     it.each([
       ['fr', 'facture_janvier'],
       ['fr', 'releve_aout'],
-      ['fr', 'facture_fevr'],
-      ['fr', 'bulletin_juil'],
+      ['fr', 'facture_mai'],
       ['de', 'rechnung_oktober'],
       ['de', 'beleg_marz'],
-      ['de', 'abrechnung_dez'],
+      ['de', 'beleg_maerz'],
       ['es', 'factura_enero'],
-      ['es', 'recibo_dic'],
+      ['es', 'factura_mayo'],
       ['es', 'nomina_setiembre'],
       ['it', 'bolletta_gennaio'],
-      ['it', 'ricevuta_ott'],
       ['it', 'cedolino_dicembre'],
     ] as const)('with %s, rejects %s', (schemaLanguage, slug) => {
       expect(slugRules(slug, { schemaLanguage })).toEqual(['month']);
       expect(slugRules(slug, { schemaLanguage: 'en' })).toEqual([]);
     });
 
-    it.each(SCHEMA_LANGUAGES)(
-      'has a table of twelve months and their short forms for %s',
-      (language) => {
-        const months = MONTH_WORDS[language];
-        expect(months.length).toBeGreaterThanOrEqual(12);
-        expect(months.filter((month) => !/^[a-z]+$/.test(month))).toEqual([]);
-        months.forEach((month) => {
-          expect(slugRules(`bill_${month}`, { schemaLanguage: language })).toEqual(['month']);
-        });
-      },
-    );
+    // Twelve names, less May in English, plus the second spelling of März and of
+    // septiembre.
+    it.each([
+      ['en', 11],
+      ['fr', 12],
+      ['de', 13],
+      ['es', 13],
+      ['it', 12],
+    ] as const)('has a table of the full month names for %s', (language, count) => {
+      const months = MONTH_WORDS[language];
+      expect(months).toHaveLength(count);
+      expect(new Set(months).size).toBe(count);
+      expect(months.filter((month) => !/^[a-z]+$/.test(month))).toEqual([]);
+      months.forEach((month) => {
+        expect(slugRules(`bill_${month}`, { schemaLanguage: language })).toEqual(['month']);
+      });
+    });
+
+    it('has a table for every schema language', () => {
+      expect(Object.keys(MONTH_WORDS)).toEqual([...SCHEMA_LANGUAGES]);
+    });
   });
 
   it('rejects the example of the specification on both counts', () => {
@@ -212,11 +244,67 @@ describe('slugViolations', () => {
       });
     });
 
+    describe('of an organisation named with one word of two letters', () => {
+      it('refuses that word as a whole word', () => {
+        expect(slugRules('bp_invoice')).toEqual(['entity']);
+        expect(slugRules('invoice_bp')).toEqual(['entity']);
+        expect(slugRules('bp')).toEqual(['entity']);
+        expect(slugViolations('bp_invoice', KNOWN)[0]?.message).toContain('"bp"');
+      });
+
+      it('reads the name without its legal form', () => {
+        const withLegalForm = { entityNames: [{ kind: 'org', name: 'LG Corp.' }] } as const;
+        expect(slugRules('lg_warranty', withLegalForm)).toEqual(['entity']);
+      });
+
+      it('does not match the word inside a longer word', () => {
+        expect(slugRules('bpx_invoice')).toEqual([]);
+        expect(slugRules('abp_invoice')).toEqual([]);
+      });
+
+      it('lets the word through once a type slug uses it', () => {
+        expect(slugRules('bp_invoice', { typeSlugs: ['bp_statement'] })).toEqual([]);
+      });
+
+      it('leaves a two-letter word of a longer name insignificant', () => {
+        const longer = {
+          typeSlugs: [],
+          entityNames: [
+            { kind: 'org', name: 'HP Enterprise Services' },
+            { kind: 'org', name: 'LG Chem' },
+            { kind: 'org', name: 'BP BP' },
+          ],
+        } as const;
+        expect(slugRules('hp_invoice', longer)).toEqual([]);
+        expect(slugRules('lg_invoice', longer)).toEqual([]);
+        expect(slugRules('bp_invoice', longer)).toEqual([]);
+        expect(slugRules('chem_invoice', longer)).toEqual(['entity']);
+      });
+
+      it('does not apply to a person, to one letter or to a function word', () => {
+        const others = {
+          typeSlugs: [],
+          entityNames: [
+            { kind: 'person', name: 'Xi' },
+            { kind: 'org', name: 'X' },
+            { kind: 'org', name: 'The' },
+          ],
+        } as const;
+        expect(slugRules('xi_report', others)).toEqual([]);
+        expect(slugRules('x_report', others)).toEqual([]);
+        expect(slugRules('the_report', others)).toEqual([]);
+      });
+    });
+
     it('ignores a name without any significant word', () => {
-      expect(slugRules('bp_invoice')).toEqual([]);
-      expect(slugRules('bp')).toEqual([]);
       expect(slugRules('id_of')).toEqual([]);
       expect(slugRules('sa_filing')).toEqual([]);
+      expect(slugRules('of_the')).toEqual([]);
+    });
+
+    // A deliberate non-goal: a number spelled out is not looked for.
+    it('accepts English number words', () => {
+      expect(slugRules('bill_twenty_twenty_six')).toEqual([]);
     });
 
     it('accepts the same slug once the entity is unknown', () => {

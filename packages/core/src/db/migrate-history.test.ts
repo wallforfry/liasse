@@ -7,6 +7,7 @@ import { z } from 'zod';
 import { StartupError } from '../domain/errors.ts';
 import { createTestDatabase, type TestDatabase } from '../testing/test-database.ts';
 import { migrate, MIGRATIONS_FOLDER } from './migrate.ts';
+import { MigrationHistoryError } from './migration-history.ts';
 
 const journalSchema = z.looseObject({
   entries: z.array(z.looseObject({ idx: z.number(), when: z.number(), tag: z.string() })),
@@ -150,6 +151,51 @@ describe('migrate against the recorded history', () => {
     await migrate(database.url, { embeddingDim: 384, migrationsFolder });
     expect(await recordedMigrationCount(database)).toBe(SHIPPED + 3);
   });
+
+  it('applies two migrations that share a date and differ in content', async () => {
+    const database = await testDatabase({ migrate: true });
+    const migrationsFolder = copyOfMigrations();
+    const when = BASE + 5;
+    addMigration(migrationsFolder, {
+      tag: '0002_first',
+      when,
+      sql: 'CREATE TABLE first (id text);',
+    });
+    addMigration(migrationsFolder, {
+      tag: '0003_second',
+      when,
+      sql: 'CREATE TABLE second (id text);',
+    });
+
+    await migrate(database.url, { embeddingDim: 384, migrationsFolder });
+
+    expect(await tableExists(database, 'first')).toBe(1);
+    expect(await tableExists(database, 'second')).toBe(1);
+  });
+
+  // drizzle-kit never writes this; a hand-edited journal can. The statement can run twice,
+  // so only the check on the journal stands between it and a second application.
+  it.each([
+    ['an empty database', false],
+    ['an installed database', true],
+  ])(
+    'refuses a journal that lists the same content at the same date twice, on %s',
+    async (_case, installed) => {
+      const database = await testDatabase({ migrate: installed });
+      const migrationsFolder = copyOfMigrations();
+      const twice = { when: BASE + 4, sql: 'CREATE TABLE IF NOT EXISTS listed_twice (id text);' };
+      addMigration(migrationsFolder, { tag: '0002_listed_once', ...twice });
+      addMigration(migrationsFolder, { tag: '0003_listed_twice', ...twice });
+
+      const failure = migrate(database.url, { embeddingDim: 384, migrationsFolder });
+      await expect(failure).rejects.toBeInstanceOf(MigrationHistoryError);
+      await expect(failure).rejects.toThrow(
+        /0002_listed_once and 0003_listed_twice have the same content and the same date/,
+      );
+      expect(await tableExists(database, 'listed_twice')).toBe(0);
+      if (installed) expect(await recordedMigrationCount(database)).toBe(SHIPPED);
+    },
+  );
 
   it('refuses to run when an applied migration was given another date', async () => {
     const database = await testDatabase({ migrate: true });

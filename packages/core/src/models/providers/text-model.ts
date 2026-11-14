@@ -22,7 +22,7 @@ export const createTextModel = (config: LlmConfig): TextModel => {
         };
       });
       const parsed = await schema.safeParseAsync(value);
-      if (!parsed.success) throw new ModelOutputError(model, describeIssues(parsed.error));
+      if (!parsed.success) throw new ModelOutputError(model, describeIssues(parsed.error, schema));
       return { object: parsed.data, model };
     },
   };

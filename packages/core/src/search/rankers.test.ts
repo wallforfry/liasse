@@ -14,9 +14,11 @@ import {
   fullTextCandidates,
   rankByFullText,
   rankByVector,
+  type RankedChunk,
   type RankRequest,
   scanVectorIndex,
   vectorCandidates,
+  type VectorIndexScan,
 } from './rankers.ts';
 
 const keysOfType = (type: string): readonly string[] =>
@@ -299,12 +301,53 @@ describe('the vector ranker on an HNSW index', () => {
     });
   });
 
-  describe('beyond the tuples one scan may visit', () => {
+  // How far a scan gets is not a property a test can rely on: on 3000 chunks drawn at random
+  // and `hnsw.max_scan_tuples = 200`, twelve builds returned between 1020 and 3000 chunks and
+  // met between none and four of the five that pass the filter, and one CI run met all five.
+  // The fallback is checked on what it promises instead, through scans that fall short on
+  // purpose.
+  describe('on a filter that leaves fewer chunks than the limit', () => {
     const CHUNKS = 3000;
+    const RARE_CHUNKS = 5;
+    const BATCH = 250;
     let db: Database;
 
-    // Random vectors, five of which belong to the documents that pass the filter: a scan that stops
-    // early has no reason to have met them.
+    // The query lies on the first axis, so the distance of a chunk is set by the angle it
+    // makes with that axis and by nothing else.
+    const QUERY_VECTOR = Array.from({ length: embedder.dimension }, (_, axis) =>
+      axis === 0 ? 1 : 0,
+    );
+    const axisEmbedder: Embedder = {
+      ...embedder,
+      embed: (texts) => Promise.resolve(texts.map(() => QUERY_VECTOR)),
+    };
+
+    // Mulberry32: the same sequence on every run, unlike `random()` or `Math.random()`.
+    const seededRandom = (seed: number): (() => number) => {
+      let state = seed;
+      return () => {
+        state = (state + 0x6d2b79f5) | 0;
+        const mixed = Math.imul(state ^ (state >>> 15), 1 | state);
+        const again = (mixed + Math.imul(mixed ^ (mixed >>> 7), 61 | mixed)) ^ mixed;
+        return ((again ^ (again >>> 14)) >>> 0) / 2 ** 32;
+      };
+    };
+
+    // The chunks that pass the filter are the five farthest from the query, at distinct
+    // angles behind 2995 others between 0.2 and 1.4 radians, so their exact order is strict.
+    const angleOf = (index: number): number =>
+      index <= RARE_CHUNKS ? 1.5 + index / 1000 : 0.2 + (1.2 * (index - RARE_CHUNKS)) / CHUNKS;
+
+    const bulkVectors = (): readonly (readonly number[])[] => {
+      const random = seededRandom(20_261_114);
+      return Array.from({ length: CHUNKS }, (_, position) => {
+        const away = Array.from({ length: embedder.dimension - 1 }, () => random() - 0.5);
+        const length = Math.hypot(...away);
+        const angle = angleOf(position + 1);
+        return [Math.cos(angle), ...away.map((value) => (Math.sin(angle) * value) / length)];
+      });
+    };
+
     beforeAll(async () => {
       const database = await createTestDatabase();
       databases.push(database);
@@ -312,31 +355,29 @@ describe('the vector ranker on an HNSW index', () => {
         INSERT INTO documents (id, sha256, storage_key, mime, original_name, source, core)
         SELECT 'doc_bulk_' || i, 'synthetic-sha256-' || i, 'synthetic/' || i, 'application/pdf',
           'synthetic-' || i || '.pdf', 'api',
-          CASE WHEN i <= 5 THEN ${JSON.stringify(RARE_CORE)}::jsonb ELSE '{}'::jsonb END
+          CASE WHEN i <= ${RARE_CHUNKS} THEN ${JSON.stringify(RARE_CORE)}::jsonb ELSE '{}'::jsonb END
         FROM generate_series(1, ${CHUNKS}) AS i
       `);
-      await database.db.execute(sql`
-        INSERT INTO chunks (id, document_id, page_from, page_to, text, embedding)
-        SELECT 'chk_bulk_' || i, 'doc_bulk_' || i, 1, 1, 'synthetic',
-          (SELECT array_agg(random() - 0.5) FROM generate_series(1, 384) AS axis WHERE axis + i > 0)::vector
-        FROM generate_series(1, ${CHUNKS}) AS i
-      `);
-      const name = new URL(database.url).pathname.slice(1);
-      for (const setting of ['enable_seqscan = off', 'hnsw.max_scan_tuples = 200']) {
-        await database.db.execute(sql.raw(`ALTER DATABASE "${name}" SET ${setting}`));
+      const rows = bulkVectors().map((embedding, position) => ({
+        id: `chk_bulk_${String(position + 1)}`,
+        documentId: `doc_bulk_${String(position + 1)}`,
+        pageFrom: 1,
+        pageTo: 1,
+        text: 'synthetic',
+        embedding: [...embedding],
+      }));
+      for (let start = 0; start < rows.length; start += BATCH) {
+        await database.db.insert(chunks).values(rows.slice(start, start + BATCH));
       }
+      const name = new URL(database.url).pathname.slice(1);
+      await database.db.execute(sql.raw(`ALTER DATABASE "${name}" SET enable_seqscan = off`));
       const handle = createDb(database.url);
       handles.push(handle);
       db = handle.db;
     });
 
-    it('the index scan alone misses chunks that pass the filter', async () => {
-      expect((await scan(db, RARE, 100)).length).toBeLessThan(5);
-    });
-
-    it('falls back to an exact ordering of the filtered chunks', async () => {
-      const ranked = await rankByVector(embedder)(db, request(RARE, 100));
-      const [query = []] = await embedder.embed([QUERY], 'query');
+    // The order of the filtered chunks by their exact distance, read back from the table.
+    const exactOrder = async (): Promise<readonly string[]> => {
       const rare = await db
         .select({ id: chunks.id, embedding: chunks.embedding })
         .from(chunks)
@@ -344,13 +385,54 @@ describe('the vector ranker on an HNSW index', () => {
           sql`${chunks.documentId} IN ('doc_bulk_1', 'doc_bulk_2', 'doc_bulk_3', 'doc_bulk_4', 'doc_bulk_5')`,
         );
       const cosine = (vector: readonly number[] | null): number =>
-        (vector ?? []).reduce((sum, value, index) => sum + value * (query[index] ?? 0), 0) /
+        (vector ?? []).reduce((sum, value, index) => sum + value * (QUERY_VECTOR[index] ?? 0), 0) /
         Math.hypot(...(vector ?? []));
-      expect(ranked.map((chunk) => chunk.chunkId)).toEqual(
-        rare
-          .toSorted((left, right) => cosine(right.embedding) - cosine(left.embedding))
-          .map((chunk) => chunk.id),
+      return rare
+        .toSorted((left, right) => cosine(right.embedding) - cosine(left.embedding))
+        .map((chunk) => chunk.id);
+    };
+
+    const rankedIds = async (scan: VectorIndexScan, limit = 100): Promise<readonly string[]> =>
+      (await rankByVector(axisEmbedder, scan)(db, request(RARE, limit))).map(
+        (chunk) => chunk.chunkId,
       );
+
+    const bulkChunk = (index: number): RankedChunk => ({
+      chunkId: `chk_bulk_${String(index)}`,
+      documentId: `doc_bulk_${String(index)}`,
+    });
+
+    // Five chunks pass the filter and the limit is 100, so the scan comes back short on every
+    // run, whatever it met: the fallback is taken whatever the random levels of the graph.
+    it('returns every chunk that passes the filter, in exact order, from the real index', async () => {
+      const scanned: number[] = [];
+      const recorded: VectorIndexScan = async (...args) => {
+        const result = await scanVectorIndex(...args);
+        scanned.push(result.length);
+        return result;
+      };
+      expect(await rankedIds(recorded)).toEqual(await exactOrder());
+      expect(scanned).toHaveLength(1);
+      expect(scanned[0]).toBeLessThan(100);
+    });
+
+    it('falls back when the index scan meets none of them', async () => {
+      const ids = await rankedIds(() => Promise.resolve([]));
+      expect(ids).toEqual(await exactOrder());
+      expect(ids).toHaveLength(RARE_CHUNKS);
+    });
+
+    it('falls back when the index scan meets some of them, out of order', async () => {
+      const ids = await rankedIds(() => Promise.resolve([bulkChunk(4), bulkChunk(2)]));
+      expect(ids).toEqual(await exactOrder());
+    });
+
+    it('keeps a scan that filled the limit', async () => {
+      const filled = [bulkChunk(5), bulkChunk(3)];
+      expect(await rankedIds(() => Promise.resolve(filled), 2)).toEqual([
+        'chk_bulk_5',
+        'chk_bulk_3',
+      ]);
     });
   });
 });

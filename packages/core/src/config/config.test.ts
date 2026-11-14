@@ -241,6 +241,9 @@ describe('loadConfig', () => {
     ['a user name', 'https://secret-9f3a@llm.example.com/v1'],
     ['a password', 'https://:secret-9f3a@llm.example.com/v1'],
     ['a query string', 'https://llm.example.com/v1?api-key=secret-9f3a'],
+    ['an empty query string', 'https://llm.example.com/secret-9f3a?'],
+    ['a fragment', 'https://llm.example.com/v1#secret-9f3a'],
+    ['an empty fragment', 'https://llm.example.com/secret-9f3a#'],
     ['another scheme', 'ftp://llm.example.com/secret-9f3a'],
   ])('rejects a model base URL with %s, without echoing it', (_case, url) => {
     const problems = problemsOf({
@@ -251,10 +254,17 @@ describe('loadConfig', () => {
       EMBEDDING_BASE_URL: url,
     });
     expect(problems).toEqual([
-      'LLM_BASE_URL: expected an http or https URL without credentials or query string',
-      'EMBEDDING_BASE_URL: expected an http or https URL without credentials or query string',
+      'LLM_BASE_URL: expected an http or https URL without credentials, query string or fragment',
+      'EMBEDDING_BASE_URL: expected an http or https URL without credentials, query string or fragment',
     ]);
   });
+
+  it.each(['http://127.0.0.1:11434', 'https://llm.example.com/v1', 'https://llm.example.com/v1/'])(
+    'accepts the model base URL %s',
+    (url) => {
+      expect(loadConfig({ ...SYNTHETIC_ENV, LLM_BASE_URL: url }).llm.baseUrl).toBe(url);
+    },
+  );
 
   it('lists every problem of every section in one error', () => {
     const problems = problemsOf({

@@ -58,6 +58,8 @@ export const runLanguageCall = async <T>(
   const languageModel = await call.loadModel();
   const generation = await generate(sdk, {
     model: languageModel,
+    // The OpenAI adapter drops the setting for reasoning models, which refuse it, with a
+    // warning that is not read here: their output is not reproducible.
     temperature: 0,
     maxRetries: MAX_RETRIES,
     timeout: call.timeoutMs,

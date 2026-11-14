@@ -19,6 +19,21 @@ export const decimal = (min: number, max: number) =>
     .transform(Number)
     .pipe(z.number().min(min).max(max));
 
+// A client sends the key in a header and appends its paths to the base URL, so
+// credentials, a query string or a fragment in the URL cannot work; they would only end up
+// in logs or in broken paths. The value is searched as written: a bare `?` or `#` leaves
+// `search` and `hash` empty.
+export const baseUrl = z.string().refine((value) => {
+  if (!URL.canParse(value)) return false;
+  const { protocol, username, password } = new URL(value);
+  return (
+    (protocol === 'http:' || protocol === 'https:') &&
+    username === '' &&
+    password === '' &&
+    !/[?#]/.test(value)
+  );
+}, 'expected an http or https URL without credentials, query string or fragment');
+
 export const list = z.string().transform((value) =>
   Object.freeze(
     value

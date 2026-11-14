@@ -1,5 +1,12 @@
 import { describe, expect, it, vi } from 'vitest';
-import { type HostResolver, isLocalEndpoint, isLocalHost, isPrivateAddress } from './locality.ts';
+import {
+  endpointLocality,
+  HOST_LOOKUP_TIMEOUT_MS,
+  type HostResolver,
+  hostLocality,
+  isLocalEndpoint,
+  isPrivateAddress,
+} from './locality.ts';
 
 const PUBLIC_ADDRESS = '203.0.113.7';
 
@@ -65,11 +72,11 @@ describe('isPrivateAddress', () => {
   });
 });
 
-describe('isLocalHost', () => {
+describe('hostLocality', () => {
   it.each(['localhost', 'ollama', 'gpu-box.local'])(
-    'is true for %s, whose addresses are all private',
+    'is local for %s, whose addresses are all private',
     async (hostname) => {
-      expect(await isLocalHost(hostname, resolve)).toBe(true);
+      expect(await hostLocality(hostname, { resolve })).toBe('local');
     },
   );
 
@@ -77,22 +84,38 @@ describe('isLocalHost', () => {
     ['ai', 'a name without a dot that resolves to a public address'],
     ['evil.internal', 'a private-looking suffix that resolves to a public address'],
     ['mixed.example', 'one public address among private ones'],
+  ])('is external for %s: %s', async (hostname) => {
+    expect(await hostLocality(hostname, { resolve })).toBe('external');
+  });
+
+  it.each([
     ['empty.example', 'an empty answer'],
     ['unknown.example', 'a name that does not resolve'],
-  ])('is false for %s: %s', async (hostname) => {
-    expect(await isLocalHost(hostname, resolve)).toBe(false);
+  ])('is unresolved for %s: %s', async (hostname) => {
+    expect(await hostLocality(hostname, { resolve })).toBe('unresolved');
   });
 
   it('judges an IP literal without a lookup', async () => {
     const lookup = vi.fn(resolveEverythingToPublic);
-    expect(await isLocalHost('192.168.1.20', lookup)).toBe(true);
-    expect(await isLocalHost('[::1]', lookup)).toBe(true);
-    expect(await isLocalHost('8.8.8.8', lookup)).toBe(false);
+    expect(await hostLocality('192.168.1.20', { resolve: lookup })).toBe('local');
+    expect(await hostLocality('[::1]', { resolve: lookup })).toBe('local');
+    expect(await hostLocality('8.8.8.8', { resolve: lookup })).toBe('external');
     expect(lookup).not.toHaveBeenCalled();
   });
 
   it('resolves localhost with the system resolver by default', async () => {
-    expect(await isLocalHost('localhost')).toBe(true);
+    expect(await hostLocality('localhost')).toBe('local');
+  });
+
+  // The lookup never settles, so only the deadline can end the wait.
+  it('gives up on a lookup that does not answer before the deadline', async () => {
+    const silent: HostResolver = () => new Promise(() => undefined);
+    expect(await hostLocality('ollama', { resolve: silent, timeoutMs: 1 })).toBe('unresolved');
+  });
+
+  it('waits a few seconds for a lookup by default', () => {
+    expect(HOST_LOOKUP_TIMEOUT_MS).toBeGreaterThanOrEqual(1000);
+    expect(HOST_LOOKUP_TIMEOUT_MS).toBeLessThanOrEqual(10_000);
   });
 });
 
@@ -111,7 +134,23 @@ describe('isLocalEndpoint', () => {
     ['mistral', undefined, false],
     ['gemini', undefined, false],
   ] as const)('%s at %s is local: %j', async (provider, baseUrl, expected) => {
-    expect(await isLocalEndpoint(provider, baseUrl, resolve)).toBe(expected);
+    expect(await isLocalEndpoint(provider, baseUrl, { resolve })).toBe(expected);
+  });
+
+  it.each([
+    ['ollama', 'http://ollama:11434', 'local'],
+    ['ollama', 'https://evil.internal', 'external'],
+    ['ollama', 'http://unknown.example:11434', 'unresolved'],
+    ['openai-compatible', undefined, 'external'],
+    ['openai', 'http://unknown.example/v1', 'external'],
+  ] as const)('%s at %s is %s', async (provider, baseUrl, expected) => {
+    expect(await endpointLocality(provider, baseUrl, { resolve })).toBe(expected);
+  });
+
+  it('does not look up the host of a cloud provider', async () => {
+    const lookup = vi.fn(resolve);
+    await endpointLocality('openai', 'http://ollama:4000/v1', { resolve: lookup });
+    expect(lookup).not.toHaveBeenCalled();
   });
 
   // Every name resolves to a public address here, so only a URL whose host really is a
@@ -130,9 +169,9 @@ describe('isLocalEndpoint', () => {
     'http://127.0.0.1\\@evil.example/v1',
     'http://user@10.0.0.5/v1',
   ])('accepts %s, whose host is a private address', async (baseUrl) => {
-    expect(await isLocalEndpoint('openai-compatible', baseUrl, resolveEverythingToPublic)).toBe(
-      true,
-    );
+    expect(
+      await isLocalEndpoint('openai-compatible', baseUrl, { resolve: resolveEverythingToPublic }),
+    ).toBe(true);
   });
 
   it.each([
@@ -156,8 +195,8 @@ describe('isLocalEndpoint', () => {
     'http://internal/v1',
     'http://com./v1',
   ])('refuses %s, whose host is not a private address', async (baseUrl) => {
-    expect(await isLocalEndpoint('openai-compatible', baseUrl, resolveEverythingToPublic)).toBe(
-      false,
-    );
+    expect(
+      await isLocalEndpoint('openai-compatible', baseUrl, { resolve: resolveEverythingToPublic }),
+    ).toBe(false);
   });
 });

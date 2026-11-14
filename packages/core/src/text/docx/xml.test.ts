@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { parseXml, type XmlElement, type XmlLimits } from './xml.ts';
+import { parseAttributes, parseXml, type XmlElement, type XmlLimits } from './xml.ts';
 
 const NO_LIMITS = { maxNodes: Number.MAX_SAFE_INTEGER, maxTextChars: Number.MAX_SAFE_INTEGER };
 const withNodes = (maxNodes: number): XmlLimits => ({ ...NO_LIMITS, maxNodes });
@@ -19,21 +19,88 @@ describe('parseXml attributes', () => {
   it('stops at the first thing that is not an attribute', () => {
     expect(firstElement('<w:p w:a="1" stray w:b="2"/>')?.attributes).toEqual({ 'w:a': '1' });
   });
+});
 
-  // A run of characters without `=` used to be retried from each of its offsets: 1 s for
-  // 40 000 characters, 5 s for 80 000. A linear scan takes well under a millisecond for
-  // both, so the constant term only absorbs timer noise.
-  it('scans a tag in time proportional to its length', () => {
-    const timeOf = (length: number): number => {
-      const xml = `<w:p ${'a'.repeat(length)}/>`;
-      const start = performance.now();
-      parseXml(xml, NO_LIMITS);
-      return performance.now() - start;
-    };
-    timeOf(40_000);
-    const single = timeOf(40_000);
-    const double = timeOf(80_000);
-    expect(double).toBeLessThan(3 * single + 50);
+// What the scanner was before its steps were counted: one sticky pattern per attribute.
+const FORMER_ATTRIBUTE = /\s*([^\s=]+)\s*=\s*(?:"([^"]*)"|'([^']*)')/y;
+
+const formerAttributes = (source: string): Readonly<Record<string, string>> => {
+  const attributes: [string, string][] = [];
+  FORMER_ATTRIBUTE.lastIndex = 0;
+  for (
+    let match = FORMER_ATTRIBUTE.exec(source);
+    match !== null;
+    match = FORMER_ATTRIBUTE.exec(source)
+  ) {
+    attributes.push([match[1] ?? '', match[2] ?? match[3] ?? '']);
+  }
+  return Object.fromEntries(attributes);
+};
+
+// Well-formed attributes and everything that can go wrong between them.
+const FRAGMENTS = [
+  ' a="1"',
+  " b='2'",
+  'c = "x y"',
+  ' d=""',
+  '\n\te\n=\n"f"',
+  ` g='h"i'`,
+  ' a="again"',
+  ' stray',
+  ' =',
+  '="j"',
+  ' k=l',
+  ' m="unterminated',
+  '"',
+  "'",
+  ' ',
+  '/',
+];
+
+const sequencesOf = (length: number): readonly string[] =>
+  length === 0
+    ? ['']
+    : sequencesOf(length - 1).flatMap((start) => FRAGMENTS.map((fragment) => start + fragment));
+
+const stepsOf = (source: string): number => {
+  let steps = 0;
+  parseAttributes(source, (examined) => {
+    steps += examined;
+  });
+  return steps;
+};
+
+describe('parseAttributes', () => {
+  it('reads what the single sticky pattern read, for every sequence of three fragments', () => {
+    const sources = [0, 1, 2, 3].flatMap(sequencesOf);
+    const differing = sources.filter(
+      (source) =>
+        JSON.stringify(parseAttributes(source)) !== JSON.stringify(formerAttributes(source)),
+    );
+    expect(sources).toHaveLength(1 + 16 + 16 ** 2 + 16 ** 3);
+    expect(differing).toEqual([]);
+  });
+
+  // A run without `=` used to be retried from each of its offsets, which is quadratic:
+  // 1 s for 40 000 characters, 5 s for 80 000. The scanner reports every character it
+  // reads, so the count is the work done, whatever the load of the machine. The lower
+  // bound holds because each of these inputs has to be read to its end.
+  it.each<[string, (length: number) => string]>([
+    ['a run of characters without =', (length) => ` ${'a'.repeat(length)}`],
+    ['a run of spaces', (length) => ' '.repeat(length)],
+    ['a quoted value that never ends', (length) => ` a="${'b'.repeat(length)}`],
+    ['one long value', (length) => ` a="${'b'.repeat(length)}"`],
+    ['many attributes', (length) => ' a="1"'.repeat(length / 6)],
+    ['many names spread over lines', (length) => '\n a\n =\n "1"'.repeat(length / 12)],
+  ])('reads %s in steps proportional to its length', (_case, build) => {
+    const single = stepsOf(build(40_000));
+    const double = stepsOf(build(80_000));
+    expect(single).toBeGreaterThanOrEqual(build(40_000).length);
+    expect(double).toBeLessThanOrEqual(2 * single + 16);
+  });
+
+  it('reports nothing it does not read: a scan that stops early costs a few steps', () => {
+    expect(stepsOf(` stray ${'a="1" '.repeat(10_000)}`)).toBeLessThan(16);
   });
 });
 

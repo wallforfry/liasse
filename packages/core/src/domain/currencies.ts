@@ -1,7 +1,9 @@
 // ISO 4217, written out so that a value stored today validates the same way after any
 // runtime upgrade. It holds the codes in circulation (list one) and the withdrawn ones
 // (list three): an archive keeps documents in francs, marks and lire. `XXX` (no currency)
-// and `XTS` (testing) are left out, since neither is an amount of anything.
+// and `XTS` (testing) are left out, since neither is an amount of anything. Compared with
+// the tables of the maintenance agency (SIX) published on 2026-09-17 (list one) and
+// 2026-01-01 (list three).
 // prettier-ignore
 export const CURRENCY_CODES = [
   // In circulation.
@@ -28,13 +30,13 @@ export const CURRENCY_CODES = [
   'UAH', 'UGX', 'USD', 'USN', 'UYI', 'UYU', 'UYW', 'UZS',
   'VED', 'VES', 'VND', 'VUV',
   'WST',
-  'XAF', 'XAG', 'XAU', 'XBA', 'XBB', 'XBC', 'XBD', 'XCD', 'XCG', 'XDR', 'XOF', 'XPD', 'XPF', 'XPT', 'XSU', 'XUA',
+  'XAD', 'XAF', 'XAG', 'XAU', 'XBA', 'XBB', 'XBC', 'XBD', 'XCD', 'XCG', 'XDR', 'XOF', 'XPD', 'XPF', 'XPT', 'XSU', 'XUA',
   'YER',
   'ZAR', 'ZMW', 'ZWG',
   // Withdrawn.
   'ADP', 'AFA', 'ALK', 'ANG', 'AOK', 'AON', 'AOR', 'ARA', 'ARP', 'ARY', 'ATS', 'AYM', 'AZM',
   'BAD', 'BEC', 'BEF', 'BEL', 'BGJ', 'BGK', 'BGL', 'BGN', 'BOP', 'BRB', 'BRC', 'BRE', 'BRN', 'BRR', 'BUK', 'BYB', 'BYR',
-  'CHC', 'CNX', 'CSD', 'CSJ', 'CSK', 'CUC', 'CYP',
+  'CHC', 'CSD', 'CSJ', 'CSK', 'CUC', 'CYP',
   'DDM', 'DEM',
   'ECS', 'ECV', 'EEK', 'ESA', 'ESB', 'ESP',
   'FIM', 'FRF',

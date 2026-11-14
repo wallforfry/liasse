@@ -15,6 +15,21 @@ export class MigrationHistoryError extends StartupError {
 const identityOf = ({ hash, createdAt }: AppliedMigration): string =>
   `${hash}@${String(createdAt)}`;
 
+// Two journal entries with one identity read as one migration: the second would be applied
+// on an empty database and skipped on an installed one.
+const assertDistinctIdentities = (files: readonly MigrationFile[]): void => {
+  const [repeat] = files.flatMap((file, index) => {
+    const earlier = files.slice(0, index).find((other) => identityOf(other) === identityOf(file));
+    return earlier === undefined ? [] : [{ earlier, file }];
+  });
+  if (repeat === undefined) return;
+  throw new MigrationHistoryError(
+    `Migrations ${repeat.earlier.tag} and ${repeat.file.tag} have the same content and the ` +
+      'same date in the journal, so they cannot be told apart. Give the second one its own ' +
+      'date, or remove it.',
+  );
+};
+
 const ADD_A_NEW_ONE =
   'An applied migration is immutable: restore it and add a new migration instead.';
 
@@ -66,6 +81,7 @@ export const pendingMigrations = (
   applied: readonly AppliedMigration[],
   files: readonly MigrationFile[],
 ): readonly MigrationFile[] => {
+  assertDistinctIdentities(files);
   assertHistoryMatchesFiles(applied, files);
   const appliedIdentities = new Set(applied.map(identityOf));
   return files.filter((file) => !appliedIdentities.has(identityOf(file)));

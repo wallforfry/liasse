@@ -119,7 +119,7 @@ describe('createProviderEmbedder', () => {
     );
     const error = await failureOf(embedder.embed(['7', '8'], 'passage'));
     expect(error).toBeInstanceOf(ModelProviderError);
-    expect(error).toMatchObject({ code: 'embedding_index', retryable: true });
+    expect(error).toMatchObject({ code: 'embedding_index', retryable: false });
   });
 
   it('makes no request for an empty list', async () => {

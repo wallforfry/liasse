@@ -2,25 +2,19 @@ import { z } from 'zod';
 import type { EmbeddingProvider, LlmProvider } from '../domain/enums.ts';
 import { MAX_EMBEDDING_DIM, MIN_EMBEDDING_INPUT_TOKENS } from '../domain/limits.ts';
 import { embeddingProviderSchema, llmProviderSchema } from '../domain/schemas.ts';
-import { type CrossFieldProblem, duration, integer, reportProblems, text } from './fields.ts';
+import {
+  baseUrl,
+  type CrossFieldProblem,
+  duration,
+  integer,
+  reportProblems,
+  text,
+} from './fields.ts';
 
 type ModelProvider = LlmProvider | EmbeddingProvider;
 
 const KEYLESS_PROVIDERS: readonly ModelProvider[] = ['local', 'ollama', 'openai-compatible'];
 const BASE_URL_PROVIDERS: readonly ModelProvider[] = ['openai-compatible'];
-
-// A provider package sends the key in a header and appends its paths to the base URL, so
-// credentials or a query string in the URL cannot work; they would only end up in logs.
-const modelBaseUrl = z.string().refine((value) => {
-  if (!URL.canParse(value)) return false;
-  const { protocol, username, password, search } = new URL(value);
-  return (
-    (protocol === 'http:' || protocol === 'https:') &&
-    username === '' &&
-    password === '' &&
-    search === ''
-  );
-}, 'expected an http or https URL without credentials or query string');
 
 interface ProviderAccess {
   readonly prefix: 'LLM' | 'EMBEDDING';
@@ -47,7 +41,7 @@ export const llmSection = z
   .object({
     LLM_PROVIDER: llmProviderSchema.default('anthropic'),
     LLM_API_KEY: text.optional(),
-    LLM_BASE_URL: modelBaseUrl.optional(),
+    LLM_BASE_URL: baseUrl.optional(),
     VISION_MODEL: text,
     TEXT_MODEL: text,
     LLM_TIMEOUT: duration.prefault('5m'),
@@ -81,7 +75,7 @@ export const embeddingSection = z
     EMBEDDING_CACHE_DIR: text.default('/data/models'),
     EMBEDDING_MAX_INPUT_TOKENS: integer(MIN_EMBEDDING_INPUT_TOKENS, 1_000_000).optional(),
     EMBEDDING_API_KEY: text.optional(),
-    EMBEDDING_BASE_URL: modelBaseUrl.optional(),
+    EMBEDDING_BASE_URL: baseUrl.optional(),
     EMBEDDING_TIMEOUT: duration.prefault('1m'),
   })
   .transform((env, ctx) => {

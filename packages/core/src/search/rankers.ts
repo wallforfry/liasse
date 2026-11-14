@@ -82,17 +82,21 @@ export const scanVectorIndex = (
     return toRankedChunks(await tx.execute(vectorCandidates(embedding, request)));
   });
 
+export type VectorIndexScan = typeof scanVectorIndex;
+
 // A scan that comes back short either met every chunk that passes the filter, or gave up on a
 // filter too selective for it. Both leave few enough chunks for an exact ordering, which then
-// replaces the scan.
+// replaces the scan. Only tests pass `scan`: how far a real HNSW scan gets depends on the
+// levels pgvector draws at random when it builds the graph, so a test cannot make one fall
+// short on demand.
 export const rankByVector =
-  (embedder: Embedder): ChunkRanker =>
+  (embedder: Embedder, scan: VectorIndexScan = scanVectorIndex): ChunkRanker =>
   async (db, request) => {
     const [embedding] = await embedder.embed([request.query], 'query');
     if (embedding === undefined) {
       throw new Error(`Embedder ${embedder.model} returned no embedding for the query`);
     }
-    const scanned = await scanVectorIndex(db, embedding, request);
+    const scanned = await scan(db, embedding, request);
     return scanned.length >= request.limit
       ? scanned
       : toRankedChunks(await db.execute(exactVectorCandidates(embedding, request)));
