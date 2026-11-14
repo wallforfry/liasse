@@ -35,10 +35,11 @@ export const failure = (
   status: number,
   message: string,
   type = 'synthetic_error',
+  code?: string,
 ): StubResponse => ({
   status,
   headers: { 'retry-after-ms': '0' },
-  body: { error: { message, type } },
+  body: { error: { message, type, ...(code === undefined ? {} : { code }) } },
 });
 
 const embeddingInput = z.object({ input: z.array(z.string()) });

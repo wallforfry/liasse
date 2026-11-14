@@ -58,7 +58,8 @@ export const createProviderEmbedder = async (
       });
     const embeddings = inRequestOrder(received, responses ?? []);
     if (embeddings === undefined) {
-      throw new ModelProviderError({ provider, model, retryable: true, code: 'embedding_index' });
+      // The reply is complete and wrong: the same request would get the same indexes.
+      throw new ModelProviderError({ provider, model, retryable: false, code: 'embedding_index' });
     }
     const mismatch = embeddings.find((embedding) => embedding.length !== dimension);
     if (mismatch !== undefined) {
@@ -70,7 +71,7 @@ export const createProviderEmbedder = async (
   return {
     dimension,
     model,
-    isLocal: await isLocalEndpoint(provider, config.baseUrl, resolveHost),
+    isLocal: await isLocalEndpoint(provider, config.baseUrl, { resolve: resolveHost }),
     // The provider does not tell what its model reads: only the operator can.
     ...(config.maxInputTokens === undefined ? {} : { maxInputTokens: config.maxInputTokens }),
     embed: async (texts, kind) => {

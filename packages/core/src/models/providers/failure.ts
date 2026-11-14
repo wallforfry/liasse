@@ -28,6 +28,22 @@ export const resolvedModel = (reported: unknown, configured: string): string =>
 const isTimeout = (error: unknown): boolean =>
   error instanceof Error && error.name === 'TimeoutError';
 
+// The shape of the codes of Node and undici: `ECONNREFUSED`, `ENOTFOUND` (the name did not
+// resolve), `EAI_AGAIN`, `UND_ERR_SOCKET`.
+const NETWORK_CODE = /^[A-Z][A-Z0-9_]{2,31}$/;
+const UNNAMED_NETWORK_FAILURE = 'connection_failed';
+const MAX_CAUSE_DEPTH = 8;
+
+// A request that got no response fails with `fetch failed`; what went wrong is the `code`
+// of an error further down its chain of causes.
+const networkCode = (error: unknown, depth = 0): string => {
+  if (!(error instanceof Error) || depth >= MAX_CAUSE_DEPTH) return UNNAMED_NETWORK_FAILURE;
+  const code: unknown = 'code' in error ? error.code : undefined;
+  return typeof code === 'string' && NETWORK_CODE.test(code)
+    ? code
+    : networkCode(error.cause, depth + 1);
+};
+
 // Replaces what the SDK throws with errors that hold identifiers only: SDK errors carry
 // the request body, the response body and the provider's message.
 export const toModelError = (sdk: Sdk, error: unknown, context: CallContext): Error => {
@@ -49,12 +65,16 @@ export const toModelError = (sdk: Sdk, error: unknown, context: CallContext): Er
   }
   const failure = sdk.RetryError.isInstance(error) ? error.lastError : error;
   if (sdk.APICallError.isInstance(failure)) {
+    const { statusCode } = failure;
     return new ModelProviderError({
       provider,
       model,
       retryable: failure.isRetryable,
-      statusCode: failure.statusCode,
-      code: providerErrorCode(failure.data),
+      statusCode,
+      code:
+        statusCode === undefined
+          ? networkCode(failure.cause)
+          : providerErrorCode(failure.data, statusCode),
     });
   }
   return new ModelProviderError({

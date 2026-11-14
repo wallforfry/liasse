@@ -1,5 +1,6 @@
 import { lookup } from 'node:dns/promises';
 import { BlockList, isIP } from 'node:net';
+import { setTimeout as delay } from 'node:timers/promises';
 import { type ModelProvider, PROVIDERS } from './registry.ts';
 
 const PRIVATE_SUBNETS = [
@@ -33,17 +34,48 @@ export type HostResolver = (hostname: string) => Promise<readonly string[]>;
 const systemResolver: HostResolver = async (hostname) =>
   (await lookup(hostname, { all: true })).map(({ address }) => address);
 
+// The system resolver has no deadline of its own: a name server that does not answer
+// would hold the startup for as long as the operating system retries.
+export const HOST_LOOKUP_TIMEOUT_MS = 3000;
+
+export interface HostLookup {
+  // The system resolver by default.
+  readonly resolve?: HostResolver | undefined;
+  readonly timeoutMs?: number | undefined;
+}
+
+// `unresolved` is a name whose lookup failed, timed out or returned no address. It is not
+// local, and it is told apart from `external` only to be reported as such.
+export type Locality = 'local' | 'external' | 'unresolved';
+
+const NO_ADDRESS: readonly string[] = [];
+
+// `dns.lookup` cannot be cancelled: past the deadline it is left to finish, unobserved.
+const addressesOf = async (
+  host: string,
+  { resolve = systemResolver, timeoutMs = HOST_LOOKUP_TIMEOUT_MS }: HostLookup,
+): Promise<readonly string[]> => {
+  const settled = new AbortController();
+  const deadline = delay(timeoutMs, NO_ADDRESS, { signal: settled.signal }).catch(() => NO_ADDRESS);
+  try {
+    return await Promise.race([resolve(host).catch(() => NO_ADDRESS), deadline]);
+  } finally {
+    settled.abort();
+  }
+};
+
 // An IP literal is judged as written. A name is local only when it resolves and every
 // address it resolves to is private: a name that looks private (`ai`, `evil.internal`)
 // proves nothing, and neither does one address out of several.
-export const isLocalHost = async (
+export const hostLocality = async (
   hostname: string,
-  resolve: HostResolver = systemResolver,
-): Promise<boolean> => {
+  lookup: HostLookup = {},
+): Promise<Locality> => {
   const host = hostname.replace(/^\[|\]$/g, '');
-  if (isIP(host) !== 0) return isPrivateAddress(host);
-  const addresses = await resolve(host).catch(() => []);
-  return addresses.length > 0 && addresses.every(isPrivateAddress);
+  if (isIP(host) !== 0) return isPrivateAddress(host) ? 'local' : 'external';
+  const addresses = await addressesOf(host, lookup);
+  if (addresses.length === 0) return 'unresolved';
+  return addresses.every(isPrivateAddress) ? 'local' : 'external';
 };
 
 export const endpointHost = (
@@ -56,13 +88,20 @@ export const endpointHost = (
 
 // Local means the content stays on this machine or its private network. It decides whether
 // documents flagged `private` may be sent to the endpoint. The answer is the one of the
-// moment it is asked: a later change of the DNS is not seen.
+// moment it is asked: a later change of the DNS is not seen, and neither is a name that
+// resolves again after a failed lookup.
+export const endpointLocality = async (
+  provider: ModelProvider,
+  baseUrl: string | undefined,
+  lookup?: HostLookup,
+): Promise<Locality> => {
+  if (!PROVIDERS[provider].selfHosted) return 'external';
+  const host = endpointHost(provider, baseUrl);
+  return host === undefined ? 'external' : hostLocality(host, lookup);
+};
+
 export const isLocalEndpoint = async (
   provider: ModelProvider,
   baseUrl: string | undefined,
-  resolve?: HostResolver,
-): Promise<boolean> => {
-  if (!PROVIDERS[provider].selfHosted) return false;
-  const host = endpointHost(provider, baseUrl);
-  return host !== undefined && (await isLocalHost(host, resolve));
-};
+  lookup?: HostLookup,
+): Promise<boolean> => (await endpointLocality(provider, baseUrl, lookup)) === 'local';

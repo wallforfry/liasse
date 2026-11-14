@@ -13,14 +13,15 @@ export interface ModelProviderFailure {
   readonly model: string;
   readonly retryable: boolean;
   readonly statusCode?: number | undefined;
-  // A short identifier: the error type or code of the provider, `timeout`, or the name of
-  // the error class. Never free text.
+  // A short identifier: the error type and code of the provider (`type:code`), the code of
+  // a network failure (`ECONNREFUSED`, `ENOTFOUND`, or `connection_failed` when it has
+  // none), `timeout`, or the name of the error class. Never free text.
   readonly code?: string | undefined;
 }
 
-// Safe to log by construction: it holds identifiers only. The free-text message of a
-// provider may quote the request (document text, credentials), so it is not kept, and
-// there is no `cause`.
+// Holds short identifiers only. The free-text message of a provider may quote the request
+// (document text, credentials), so it is not kept, and there is no `cause`. Short is a
+// bound, not a proof: the provider chooses its model ids and its error codes.
 export class ModelProviderError extends Error {
   override readonly name = 'ModelProviderError';
   readonly provider: string;

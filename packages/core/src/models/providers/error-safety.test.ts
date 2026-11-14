@@ -119,13 +119,66 @@ describe('a provider that echoes the request in its error', () => {
     });
     expect(everythingIn(error)).not.toContain(MARKER);
   });
+
+  it('reports both the type and the code of the error', async () => {
+    const { text } = await start(() =>
+      failure(400, `too long: ${SENSITIVE}`, 'invalid_request_error', 'context_length_exceeded'),
+    );
+    const error = await failureOf(
+      text.generateObject({ schema, system: 'Classify.', prompt: 'An energy bill.' }),
+    );
+    expect(error).toMatchObject({
+      code: 'invalid_request_error:context_length_exceeded',
+      message:
+        'Provider openai-compatible failed for model text-model ' +
+        '(HTTP 400, invalid_request_error:context_length_exceeded)',
+    });
+    expect(everythingIn(error)).not.toContain(MARKER);
+  });
+
+  it('keeps the type and drops a code that is not a short identifier', async () => {
+    const { text } = await start(() =>
+      failure(400, 'rejected', 'invalid_request_error', SENSITIVE),
+    );
+    const error = await failureOf(
+      text.generateObject({ schema, system: 'Classify.', prompt: 'An energy bill.' }),
+    );
+    expect(error).toMatchObject({ code: 'invalid_request_error' });
+    expect(everythingIn(error)).not.toContain(MARKER);
+  });
 });
 
+describe('a provider that cannot be reached', () => {
+  // The port of a server that was just closed: nothing listens on it. The SDK retries a
+  // refused connection after its own backoff, which no response header can shorten here.
+  it('names a refused connection by its code, without the URL, the text or the key', async () => {
+    const { embedder } = await start(() => undefined);
+    const [server] = servers.splice(0);
+    await server?.close();
+    const error = await failureOf(embedder.embed([SENSITIVE], 'passage'));
+    expect(error).toBeInstanceOf(ModelProviderError);
+    expect(error).toMatchObject({
+      statusCode: undefined,
+      code: 'ECONNREFUSED',
+      retryable: true,
+      message: 'Provider openai-compatible failed for model embedding-model (ECONNREFUSED)',
+    });
+    expect(error).not.toHaveProperty('cause');
+    expect(everythingIn(error)).not.toContain(MARKER);
+    expect(everythingIn(error)).not.toContain(SYNTHETIC_API_KEY);
+    expect(everythingIn(error)).not.toContain('127.0.0.1');
+  });
+});
+
+// Both could pass for short identifiers; both are personal data.
+const COMPACT_IBAN = 'FR7630001007941234567890185';
+const EMAIL_ADDRESS = 'jane.doe@example.test';
+
 describe('a model output that does not match the schema', () => {
-  const generate = async (output: unknown): Promise<unknown> => {
+  const generate = async (output: unknown, expected: z.ZodType = schema): Promise<unknown> => {
     const { text } = await start(() => chatCompletion(JSON.stringify(output)));
     return failureOf(
-      text.generateObject({ schema, system: 'Classify.', prompt: 'An energy bill.' }),
+      text.generateObject({ schema: expected, system: 'Classify.', prompt: 'An energy bill.' }),
     );
   };
 
@@ -135,26 +188,48 @@ describe('a model output that does not match the schema', () => {
     expect(error).toHaveProperty(
       'message',
       'Model resolved-model-2026-01 returned an output that does not match the schema: ' +
-        'decision: invalid_value; confidence: too_big; extra.note: invalid_type',
+        'decision: invalid_value; confidence: too_big; extra.?: invalid_type',
     );
     expect(error).not.toHaveProperty('cause');
     expect(everythingIn(error)).not.toContain(MARKER);
   });
 
-  it('names an undeclared key only when it is a short identifier', async () => {
+  it('shows a key the model chose as ?, even when it is a short identifier', async () => {
     const error = await generate({
       decision: 'new',
       confidence: 1,
-      extra: { [SENSITIVE]: 7 },
+      extra: { [COMPACT_IBAN]: 7 },
       action: 'delete',
-      [SENSITIVE]: 'x',
+      [EMAIL_ADDRESS]: 'x',
     });
     expect(error).toHaveProperty(
       'message',
       'Model resolved-model-2026-01 returned an output that does not match the schema: ' +
-        'extra.?: invalid_type; (root): unrecognized_keys (action, ?)',
+        'extra.?: invalid_type; (root): unrecognized_keys (?, ?)',
     );
     expect(everythingIn(error)).not.toContain(MARKER);
+    expect(everythingIn(error)).not.toContain(EMAIL_ADDRESS);
+    expect(everythingIn(error)).not.toContain('action');
+  });
+
+  it('names the keys the schema declares, at any depth, and the index of an item', async () => {
+    const parties = z.object({ parties: z.array(z.strictObject({ name: z.string() })) });
+    const error = await generate({ parties: [{ name: 'x' }, { name: 7 }] }, parties);
+    expect(error).toHaveProperty(
+      'message',
+      expect.stringMatching(/: parties\.1\.name: invalid_type$/),
+    );
+  });
+
+  it('names the keys of a schema that preprocesses, pipes or transforms', async () => {
+    const amount = z.strictObject({ amount: z.number() });
+    const preprocessed = z.preprocess((value) => value, amount);
+    const piped = z.unknown().pipe(amount);
+    const transformed = amount.transform((value) => value);
+    for (const expected of [preprocessed, piped, transformed]) {
+      const error = await generate({ amount: 'x' }, expected);
+      expect(error).toHaveProperty('message', expect.stringMatching(/: amount: invalid_type$/));
+    }
   });
 
   it('lists at most ten issues', async () => {
@@ -164,7 +239,7 @@ describe('a model output that does not match the schema', () => {
     const error = await generate({ decision: 'new', confidence: 1, extra });
     expect(error).toHaveProperty(
       'message',
-      expect.stringMatching(/extra\.k9: invalid_type; and 2 more$/),
+      expect.stringMatching(/(extra\.\?: invalid_type; ){10}and 2 more$/),
     );
   });
 });
