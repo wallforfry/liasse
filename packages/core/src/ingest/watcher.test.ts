@@ -275,8 +275,10 @@ describe('startWatcher', () => {
     await writeFile(join(dir, 'b-second.pdf'), 'second');
     const entered = createGate();
     const proceed = createGate();
+    const started: string[] = [];
     const watcher = start({
       ingest: async (file) => {
+        started.push(file.filename);
         entered.open();
         await proceed.opened;
         await record(file);
@@ -291,9 +293,12 @@ describe('startWatcher', () => {
     expect(stoppedEarly).toBe(false);
     proceed.open();
     await stopping;
-    expect(names()).toEqual(['a-first.pdf']);
+    // The folder is listed in the order of the file system, which ext4 does not keep by
+    // name: whichever file came first is the one in progress, and the only one ingested.
+    expect(started).toHaveLength(1);
+    expect(names()).toEqual(started);
     await writeFile(join(dir, 'c-after-stop.pdf'), 'after');
     await sleep(4 * STABILITY_MS);
-    expect(names()).toEqual(['a-first.pdf']);
+    expect(names()).toEqual(started);
   });
 });
