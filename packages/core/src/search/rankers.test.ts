@@ -216,7 +216,11 @@ describe('rankByVector through the HNSW index', () => {
 
   beforeAll(async () => {
     database = await createTestDatabase();
-    const texts = Array.from({ length: 150 }, (_, index) => `beacon item ${String(index)}`);
+    // Each text shares seven of its eight words with the next one: distinct distances and a
+    // well-connected graph, unlike near-duplicate vectors, which HNSW may leave unreachable.
+    const window = (start: number): string =>
+      Array.from({ length: 8 }, (_, offset) => `word${String(start + offset)}`).join(' ');
+    const texts = Array.from({ length: 150 }, (_, index) => window(index));
     const embeddings = await embedder.embed(texts, 'passage');
     for (const [index, text] of texts.entries()) {
       const { id } = await insertSyntheticDocument(database.db, {
@@ -240,7 +244,7 @@ describe('rankByVector through the HNSW index', () => {
 
   const rank = (filters: SearchFilters, limit: number) =>
     rankByVector(embedder)(indexOnly.db, {
-      query: 'beacon item',
+      query: 'word0 word1 word2 word3 word4 word5 word6 word7',
       filter: documentFilter(filters, true),
       limit,
     });

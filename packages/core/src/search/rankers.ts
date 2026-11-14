@@ -71,7 +71,7 @@ export const rankByVector =
       throw new Error(`Embedder ${embedder.model} returned no embedding for the query`);
     }
     return db.transaction(async (tx) => {
-      await tx.execute(sql`SELECT set_config('hnsw.iterative_scan', 'strict_order', true)`);
+      await tx.execute(sql`SELECT set_config('hnsw.iterative_scan', 'relaxed_order', true)`);
       return toRankedChunks(await tx.execute(vectorCandidates(embedding, request)));
     });
   };
