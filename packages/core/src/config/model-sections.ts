@@ -78,6 +78,7 @@ export const embeddingSection = z
     EMBEDDING_PROVIDER: embeddingProviderSchema.default('local'),
     EMBEDDING_MODEL: text.optional(),
     EMBEDDING_DIM: integer(1, MAX_EMBEDDING_DIM).default(384),
+    EMBEDDING_CACHE_DIR: text.default('/data/models'),
     EMBEDDING_API_KEY: text.optional(),
     EMBEDDING_BASE_URL: modelBaseUrl.optional(),
     EMBEDDING_TIMEOUT: duration.prefault('1m'),
@@ -88,6 +89,7 @@ export const embeddingSection = z
         provider: env.EMBEDDING_PROVIDER,
         model: env.EMBEDDING_MODEL,
         dimension: env.EMBEDDING_DIM,
+        cacheDir: env.EMBEDDING_CACHE_DIR,
       });
     }
     const accessProblems = providerAccessProblems({

@@ -26,7 +26,12 @@ describe('loadConfig', () => {
         textModel: 'text-model',
         timeoutMs: 300_000,
       },
-      embedding: { provider: 'local', model: undefined, dimension: 384 },
+      embedding: {
+        provider: 'local',
+        model: undefined,
+        dimension: 384,
+        cacheDir: '/data/models',
+      },
       pipeline: {
         watchDir: undefined,
         maxFileSize: 52_428_800,
