@@ -1,8 +1,9 @@
-import { appendFileSync, cpSync, mkdtempSync, rmSync } from 'node:fs';
+import { appendFileSync, cpSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { sql } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { z } from 'zod';
 import { installedEmbeddingDimensions } from '../db/embedding-dimension.ts';
 import { MIGRATIONS_FOLDER } from '../db/migrate.ts';
 import { readMigrationFiles } from '../db/migration-files.ts';
@@ -13,6 +14,11 @@ import { dropIdleTemplate, templateDatabaseName } from './test-template.ts';
 // No other test file uses this dimension, so this file alone builds and drops its template.
 const OWN_DIM = 13;
 const template = templateDatabaseName(OWN_DIM);
+
+// Only the dates are rewritten; every other field of the journal is kept as it is.
+const journalSchema = z.looseObject({
+  entries: z.array(z.looseObject({ when: z.number() })),
+});
 
 const appliedHashes = async ({ db }: TestDatabase): Promise<readonly unknown[]> =>
   (await db.execute(sql`SELECT hash FROM drizzle.__drizzle_migrations ORDER BY id`)).map(
@@ -132,5 +138,19 @@ describe('templateDatabaseName', () => {
     expect(templateDatabaseName(OWN_DIM, changed)).not.toBe(template);
     expect(templateDatabaseName(OWN_DIM + 1, unchanged)).not.toBe(template);
     expect(template.length).toBeLessThanOrEqual(63);
+  });
+
+  // `migrate` identifies a migration by its content and its journal date: a copy carrying
+  // the old date would be refused by every later `migrate`.
+  it('depends on the journal date of every migration', () => {
+    const redated = copyOfMigrations();
+    const journalPath = join(redated, 'meta', '_journal.json');
+    const journal = journalSchema.parse(JSON.parse(readFileSync(journalPath, 'utf8')));
+    const entries = journal.entries.map((entry, index) =>
+      index === 0 ? { ...entry, when: entry.when + 1 } : entry,
+    );
+    writeFileSync(journalPath, JSON.stringify({ ...journal, entries }));
+
+    expect(templateDatabaseName(OWN_DIM, redated)).not.toBe(template);
   });
 });

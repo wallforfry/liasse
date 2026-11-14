@@ -12,17 +12,19 @@ import {
 /** A migrated database that test databases are copied from; one per migrations and dimension. */
 export const TEMPLATE_DATABASE_PREFIX = 'liasse_template_';
 
+// `migrate` identifies an applied migration by its content hash and its journal date, and
+// refuses a database where either differs; the digest covers both.
 const migrationsDigest = (migrationsFolder: string): string =>
   createHash('sha256')
     .update(
       readMigrationFiles(migrationsFolder)
-        .map(({ hash }) => hash)
+        .map(({ hash, createdAt }) => `${hash}@${String(createdAt)}`)
         .join('\n'),
     )
     .digest('hex')
     .slice(0, 16);
 
-// A change to any migration names another template, so a stale one is never copied.
+// A changed or re-dated migration names another template, so a stale one is never copied.
 export const templateDatabaseName = (
   embeddingDim: number,
   migrationsFolder: string = MIGRATIONS_FOLDER,
