@@ -1,11 +1,10 @@
 import { sql } from 'drizzle-orm';
 import { z } from 'zod';
-import { documents } from '../db/schema/documents.ts';
-import { entityNameKey } from '../domain/entity-name.ts';
+import { documents, isLiveDocument } from '../db/schema/documents.ts';
 import {
-  MAX_QUERY_STRING_LENGTH,
   MAX_QUERY_SUGGESTED_ENTITIES,
   MAX_QUERY_SUGGESTION_CANDIDATES,
+  MAX_QUERY_SUGGESTION_NAMES,
 } from '../domain/limits.ts';
 import { PROVENANCE_ENTITY_ID_KEY } from '../domain/provenance.ts';
 import { ok, type Result } from '../registry/result.ts';
@@ -13,8 +12,7 @@ import { textParameters } from './access.ts';
 import { editDistance, isClose, rankByDistance } from './closest.ts';
 import { cut, type QueryError } from './errors.ts';
 import { executeStatement } from './execute.ts';
-import type { EntityReading, KnownEntity } from './entity-index.ts';
-import { isLiveDocument } from './source.ts';
+import { type EntityReading, type KnownEntity, queryNameKey } from './entity-index.ts';
 
 const PREFIX_LENGTH = 3;
 
@@ -38,22 +36,24 @@ const byPrefix = (known: readonly KnownEntity[]): ReadonlyMap<string, readonly n
   return index;
 };
 
-const comparable = (key: string): string => key.slice(0, MAX_QUERY_STRING_LENGTH);
-
-// The edit distance is only measured against a fixed number of entities, those that
-// share the start of a word with the name: its cost does not grow with the table. A
-// name whose typo is in the first letters of every word gets no suggestion.
+// The edit distance is the costly part, and every factor of it is fixed: a number of
+// entities, those that share the start of a word with the name, a number of names for
+// each, and the length of a key. Its cost grows neither with the table nor with what an
+// entity holds. A name whose typo is in the first letters of every word, or that is
+// only close to a late alias, gets no suggestion.
 const shortlist = (
   name: string,
   known: readonly KnownEntity[],
   prefixes: ReadonlyMap<string, readonly number[]>,
 ): readonly KnownEntity[] => {
-  const key = comparable(entityNameKey(name));
+  const key = queryNameKey(name);
   const candidates = [...new Set(prefixesOf(key).flatMap((prefix) => prefixes.get(prefix) ?? []))]
     .slice(0, MAX_QUERY_SUGGESTION_CANDIDATES)
     .flatMap((position) => known[position] ?? []);
   const distanceOf = ({ keys }: KnownEntity): number =>
-    Math.min(...keys.map((candidate) => editDistance(key, comparable(candidate))));
+    Math.min(
+      ...keys.slice(0, MAX_QUERY_SUGGESTION_NAMES).map((candidate) => editDistance(key, candidate)),
+    );
   return rankByDistance(candidates, distanceOf)
     .filter(({ distance }) => isClose(distance, key))
     .slice(0, SHORTLIST_LENGTH)

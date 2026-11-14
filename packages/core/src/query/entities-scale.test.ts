@@ -4,9 +4,12 @@ import {
   DEFAULT_QUERY_TIMEOUT_MILLISECONDS,
   MAX_QUERY_CONDITIONS,
   MAX_QUERY_ENTITIES,
+  MAX_QUERY_ENTITY_NAME_LENGTH,
+  MAX_QUERY_ENTITY_NAMES,
   MAX_QUERY_IN_VALUES,
   MAX_QUERY_REPORTED_PROBLEMS,
   MAX_QUERY_SUGGESTED_NAMES,
+  MAX_QUERY_SUGGESTION_NAMES,
 } from '../domain/limits.ts';
 import { insertSyntheticDocument } from '../testing/fixtures.ts';
 import { createTestDatabase, type TestDatabase } from '../testing/test-database.ts';
@@ -133,6 +136,27 @@ describe('entity conditions against many entities', () => {
     }
   });
 
+  // The limit is lowered to the number of entities there are instead of inserting ten
+  // thousand: the comparison is the same line, with the limit as its only operand.
+  it('compares a name with exactly as many entities as the limit, and not with one more', async () => {
+    const byName = { where: [['core.issuer', '=', 'Synthetic Supplier 0']] };
+    expect(await runQuery(byName, { db: database.db, maxEntities: FEW_THOUSAND })).toMatchObject({
+      ok: true,
+      value: { rows: [{ title: 'from the first supplier' }] },
+    });
+    expect(await runQuery(byName, { db: database.db, maxEntities: FEW_THOUSAND - 1 })).toEqual({
+      ok: false,
+      error: [
+        {
+          code: 'too_many_entities',
+          path: ['where', 0, 2],
+          message:
+            'A name is compared with at most 2999 entities and more exist: give the id of the entity instead of its name.',
+        },
+      ],
+    });
+  });
+
   describe('past the number of entities a query reads', () => {
     beforeAll(async () => {
       await addSuppliers(FEW_THOUSAND, MAX_QUERY_ENTITIES + 1);
@@ -170,5 +194,102 @@ describe('entity conditions against many entities', () => {
         value: { rows: [{ title: 'from the first supplier' }], warnings: [] },
       });
     });
+  });
+});
+
+const WIDE_ENTITIES = 300;
+const ALIASES_OF_EACH = 30;
+const FILLER = 'y'.repeat(180);
+
+const wideAlias = (entity: number, alias: number): string =>
+  `E${String(entity)} A${String(alias)} ${FILLER}`;
+
+describe('entity conditions against entities that hold many long names', () => {
+  let database: TestDatabase;
+
+  const issuedBy = async (name: string, includePrivate = true) => {
+    const result = await runQuery(
+      { where: [['core.issuer', '=', name]], include_private: includePrivate },
+      { db: database.db },
+    );
+    if (!result.ok || !('rows' in result.value)) throw new Error(JSON.stringify(result));
+    const [warning] = result.value.warnings;
+    return {
+      titles: result.value.rows.map(({ title }) => title),
+      suggestions: warning?.code === 'unknown_entity' ? warning.suggestions : undefined,
+    };
+  };
+
+  beforeAll(async () => {
+    database = await createTestDatabase();
+    const { db } = database;
+    const wide = await db
+      .insert(entities)
+      .values(
+        Array.from({ length: WIDE_ENTITIES }, (_, entity) => ({
+          kind: 'org' as const,
+          canonicalName: `Wide Holder ${String(entity)}`,
+          aliases: Array.from({ length: ALIASES_OF_EACH }, (_, alias) => wideAlias(entity, alias)),
+        })),
+      )
+      .returning({ id: entities.id });
+    await db.insert(entities).values({
+      kind: 'org',
+      canonicalName: 'Short Holder',
+      aliases: ['Kappa One', 'Lambda Two', 'Mu Three', 'Nu Four'],
+    });
+    await insertSyntheticDocument(db, {
+      title: 'from the seventh wide holder',
+      provenance: { issuer: { entity_id: wide[7]?.id } },
+    });
+  });
+
+  afterAll(async () => {
+    await database.dispose();
+  });
+
+  it('stays quick for unknown names close to every one of them', async () => {
+    const started = performance.now();
+    const result = await runQuery(
+      {
+        where: [
+          [
+            'core.issuer',
+            'in',
+            Array.from({ length: MAX_QUERY_SUGGESTED_NAMES }, (_, index) =>
+              wideAlias(index, 0).replace(' A0 ', ' A0x '),
+            ),
+          ],
+        ],
+        include_private: true,
+      },
+      { db: database.db },
+    );
+    // Generous on purpose: the work is some tens of milliseconds, and was seconds.
+    expect(performance.now() - started).toBeLessThan(2000);
+    expect(result).toMatchObject({ ok: true, value: { warnings: { length: 5 } } });
+  });
+
+  it('takes the canonical name and the first fifteen aliases of an entity', async () => {
+    expect(MAX_QUERY_ENTITY_NAMES).toBe(16);
+    expect((await issuedBy(wideAlias(7, 14))).titles).toEqual(['from the seventh wide holder']);
+    expect((await issuedBy(wideAlias(7, 15))).titles).toEqual([]);
+    expect((await issuedBy('wide holder 7')).titles).toEqual(['from the seventh wide holder']);
+  });
+
+  it('compares the first eighty characters of a name', async () => {
+    expect(MAX_QUERY_ENTITY_NAME_LENGTH).toBe(80);
+    const start = wideAlias(7, 3).slice(0, MAX_QUERY_ENTITY_NAME_LENGTH);
+    expect((await issuedBy(`${start} and another end`)).titles).toEqual([
+      'from the seventh wide holder',
+    ]);
+    expect((await issuedBy(`${start.slice(0, -1)}z`)).titles).toEqual([]);
+  });
+
+  it('measures closeness against the first four names of an entity', async () => {
+    expect(MAX_QUERY_SUGGESTION_NAMES).toBe(4);
+    expect((await issuedBy('Mu Threee')).suggestions).toEqual(['Short Holder']);
+    expect((await issuedBy('Nu Fourr')).suggestions).toEqual([]);
+    expect((await issuedBy('Nu Four')).suggestions).toBeUndefined();
   });
 });

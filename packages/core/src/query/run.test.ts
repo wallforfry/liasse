@@ -115,8 +115,6 @@ describe('runQuery', () => {
     const untyped = await insertSyntheticDocument(db, { title: 'untyped' });
     Object.assign(ids, { payslip: slip.id, untyped: untyped.id });
     await markMerged(gasBill, energyBill, context);
-    // The ingestion change adds this value to the enum; until it is merged the fixture does.
-    await db.execute(sql`ALTER TYPE document_status ADD VALUE IF NOT EXISTS 'deleted'`);
     await db.execute(sql`UPDATE documents SET status = 'deleted' WHERE id = ${ids.deleted}`);
   });
 
@@ -231,6 +229,22 @@ describe('runQuery', () => {
     expect(await titles({ where: [['id', '=', ids.deleted]], include_private: true })).toEqual([]);
     expect(await run({ aggregate: { count: '*' }, include_private: true })).toMatchObject({
       value: { groups: [{ key: {}, values: { count: 10 } }] },
+    });
+  });
+
+  it('accepts the status of a deleted document as a value and still returns none', async () => {
+    const [stored] = await database.db
+      .select({ status: documents.status })
+      .from(documents)
+      .where(eq(documents.id, ids.deleted ?? ''));
+    expect(stored).toEqual({ status: 'deleted' });
+    for (const where of [[['status', '=', 'deleted']], [['status', 'in', ['deleted', 'failed']]]]) {
+      expect(await titles({ where, include_private: true })).toEqual([]);
+    }
+    expect(
+      await run({ aggregate: { count: '*' }, group_by: ['status'], include_private: true }),
+    ).toMatchObject({
+      value: { groups: [{ key: { status: 'received' }, values: { count: 10 } }] },
     });
   });
 

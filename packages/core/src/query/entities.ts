@@ -1,9 +1,8 @@
-import { entityNameKey } from '../domain/entity-name.ts';
-import { MAX_QUERY_ENTITIES, MAX_QUERY_SUGGESTED_NAMES } from '../domain/limits.ts';
+import { MAX_QUERY_SUGGESTED_NAMES } from '../domain/limits.ts';
 import { err, ok, type Result } from '../registry/result.ts';
 import type { CheckedCondition } from './check-conditions.ts';
 import type { EntityIds } from './condition-sql.ts';
-import { existingEntityIds, idsByKey, readEntities } from './entity-index.ts';
+import { existingEntityIds, idsByKey, queryNameKey, readEntities } from './entity-index.ts';
 import { suggestEntities, type SuggestionScope } from './entity-suggestions.ts';
 import {
   cut,
@@ -73,12 +72,12 @@ export const resolveEntities = async (
   if (firstName === undefined) return ok({ ...NOTHING, entityIds: idsOfThemselves(names) });
   const known = await readEntities(scope);
   if (!known.ok) return known;
-  if (known.value.length > MAX_QUERY_ENTITIES) {
+  if (known.value.length > scope.maxEntities) {
     return err([
       failure(
         'too_many_entities',
         firstPlace.get(firstName) ?? [],
-        `A name is compared with at most ${String(MAX_QUERY_ENTITIES)} entities and more exist: give the id of the entity instead of its name.`,
+        `A name is compared with at most ${String(scope.maxEntities)} entities and more exist: give the id of the entity instead of its name.`,
       ),
     ]);
   }
@@ -86,7 +85,7 @@ export const resolveEntities = async (
   const entityIds = new Map(
     names.map((name) => [
       name,
-      ids.value.has(name) ? [name] : (byKey.get(entityNameKey(name)) ?? []),
+      ids.value.has(name) ? [name] : (byKey.get(queryNameKey(name)) ?? []),
     ]),
   );
   const unknown = names.filter((name) => entityIds.get(name)?.length === 0);

@@ -97,8 +97,6 @@ describe('entity conditions', () => {
     const deleted = await issued('deleted', await entity('deleted', 'Oncology Clinix'));
     await entity('unreferenced', 'Oncology Clinik');
     await issued('hostile', await entity('hostile', HOSTILE_NAME, ['Zeta Holdings']));
-    // The ingestion change adds this value to the enum; until it is merged the fixture does.
-    await db.execute(sql`ALTER TYPE document_status ADD VALUE IF NOT EXISTS 'deleted'`);
     await db.execute(sql`UPDATE documents SET status = 'deleted' WHERE id = ${deleted.id}`);
   });
 

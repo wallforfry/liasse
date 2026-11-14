@@ -37,6 +37,12 @@ export const MAX_QUERY_ECHOED_LENGTH = 60;
 // Entity names are matched in memory, by the one normaliser of entity names: a query
 // reads at most this many entities to do it, and refuses names beyond.
 export const MAX_QUERY_ENTITIES = 10_000;
+// What is taken of each entity: its canonical name and its first aliases, and the start
+// of each name. An entity may hold dozens of aliases of any length.
+export const MAX_QUERY_ENTITY_NAMES = 16;
+export const MAX_QUERY_ENTITY_NAME_LENGTH = 80;
+// Names of an entity an unknown name is measured against to suggest it.
+export const MAX_QUERY_SUGGESTION_NAMES = 4;
 // Unknown entity names that get suggestions, and entities compared with each of them.
 export const MAX_QUERY_SUGGESTED_NAMES = 5;
 export const MAX_QUERY_SUGGESTION_CANDIDATES = 200;

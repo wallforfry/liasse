@@ -20,9 +20,3 @@ export const documentSource = sql`${documents}
   LEFT JOIN ${docTypes} AS ${sql.identifier(LIVE_TYPE)} ON ${liveType.status} <> ${MERGED}
     AND (${liveType.id} = ${ownType.id}
       OR (${ownType.status} = ${MERGED} AND ${liveType.aliases} @> ARRAY[${ownType.slug}]))`;
-
-// The status of a deleted document. It is compared as text, so the comparison holds on a
-// database whose `document_status` enum does not have the value yet.
-const TOMBSTONE_STATUS = 'deleted';
-
-export const isLiveDocument = sql`${documents.status}::text <> ${TOMBSTONE_STATUS}`;
