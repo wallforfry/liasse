@@ -2,11 +2,14 @@ import { serve } from '@hono/node-server';
 import { loadConfig } from '@liasse/core/config';
 import { createDb, migrate } from '@liasse/core/db';
 import { StartupError } from '@liasse/core/domain';
+import { describeModelPrivacy } from '@liasse/core/models';
 import { createApp } from './app.ts';
 import { installShutdown } from './shutdown.ts';
 
 const start = async (): Promise<void> => {
   const config = loadConfig();
+  const { warning } = describeModelPrivacy(config);
+  if (warning !== undefined) process.stderr.write(`${warning}\n`);
   await migrate(config.database.url, { embeddingDim: config.embedding.dimension });
   const database = createDb(config.database.url);
   const server = serve(
