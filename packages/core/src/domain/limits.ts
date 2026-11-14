@@ -10,3 +10,9 @@ export const MAX_TYPE_DESCRIPTION_LENGTH = 500;
 
 // A page without a text layer costs one vision call, so a scanned PDF longer than this is refused.
 export const DEFAULT_MAX_VISION_PAGES = 100;
+
+// A hint given with a file is free text from the caller; it is cut, not rejected.
+export const MAX_HINT_LENGTH = 2000;
+
+// The longest file name the common file systems accept.
+export const MAX_FILENAME_LENGTH = 255;
