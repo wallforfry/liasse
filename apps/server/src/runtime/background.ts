@@ -38,6 +38,16 @@ export const startQueue = async ({
         ...describeError(error),
       });
     },
+    // Not a failure: the job waits for a state that settles on its own.
+    onJobDeferred: ({ job, error, delayMs }) => {
+      logger.event('job_deferred', {
+        job_id: job.id,
+        kind: job.kind,
+        attempt: job.attempt,
+        delay_ms: delayMs,
+        ...describeError(error.cause ?? error),
+      });
+    },
     onError: (error) => {
       logger.event('queue_error', describeError(error));
     },

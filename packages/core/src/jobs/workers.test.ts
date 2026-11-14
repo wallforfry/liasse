@@ -3,11 +3,12 @@ import { jobs } from '../db/schema/jobs.ts';
 import { createGate, sleep, waitUntil } from '../testing/async.ts';
 import { enqueue } from './enqueue.ts';
 import {
+  DeferJobError,
   DuplicateJobHandlerError,
   InvalidWorkersOptionsError,
   PermanentJobError,
 } from './errors.ts';
-import type { JobFailure } from './execution.ts';
+import type { JobDeferral, JobFailure } from './execution.ts';
 import { handle, type JobContext } from './handlers.ts';
 import { jobById, labelJob, otherJob } from './kinds.test-helper.ts';
 import {
@@ -129,6 +130,53 @@ describe('workers: running, retrying and limiting jobs', () => {
     await waitUntil(async () => (await jobById(harness.database.db, id)).lastError !== null);
     const job = await jobById(harness.database.db, id);
     expect(job.status).toBe('queued');
+    expect(job.runAfter.getTime() - Date.now()).toBeGreaterThan(50_000);
+    await sleep(150);
+    expect(runs).toBe(1);
+  });
+
+  it('runs a deferred job again without counting the attempt or reporting a failure', async () => {
+    const attempts: number[] = [];
+    const failures: JobFailure[] = [];
+    const deferrals: JobDeferral[] = [];
+    await start({
+      handlers: [
+        handle(labelJob, ({ attempt }) => {
+          attempts.push(attempt);
+          return attempts.length <= 4
+            ? Promise.reject(new DeferJobError('synthetic deferral'))
+            : Promise.resolve();
+        }),
+      ],
+      onJobFailed: (failure) => failures.push(failure),
+      onJobDeferred: (deferral) => deferrals.push(deferral),
+    });
+    const id = await queue('defers');
+    await waitUntil(async () => (await statusOf(id)) === 'succeeded');
+    // More deferrals than the kind has attempts, every one of them on the first attempt.
+    expect(attempts).toEqual([1, 1, 1, 1, 1]);
+    expect(failures).toEqual([]);
+    expect(deferrals.map(({ job, delayMs }) => ({ id: job.id, delayMs }))).toEqual(
+      Array.from({ length: 4 }, () => ({ id, delayMs: 10 })),
+    );
+    expect(await jobById(harness.database.db, id)).toMatchObject({ attempts: 1, lastError: null });
+  });
+
+  it('runs a deferred job after the delay it asked for', async () => {
+    let runs = 0;
+    await start({
+      handlers: [
+        handle(labelJob, () => {
+          runs += 1;
+          return Promise.reject(new DeferJobError('synthetic deferral', { delayMs: 60_000 }));
+        }),
+      ],
+    });
+    const id = await queue('waits');
+    await waitUntil(() => runs > 0);
+    await waitUntil(async () => (await statusOf(id)) === 'queued');
+    const job = await jobById(harness.database.db, id);
+    expect(job.attempts).toBe(0);
     expect(job.runAfter.getTime() - Date.now()).toBeGreaterThan(50_000);
     await sleep(150);
     expect(runs).toBe(1);

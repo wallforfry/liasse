@@ -1,11 +1,17 @@
 import type { Database } from '../db/client.ts';
 import { type RetryPolicy, retryDelayMs } from './backoff.ts';
-import { JobLockLostError, PermanentJobError, WorkersStoppingError } from './errors.ts';
+import {
+  DeferJobError,
+  JobLockLostError,
+  PermanentJobError,
+  WorkersStoppingError,
+} from './errors.ts';
 import type { RegisteredHandler } from './handlers.ts';
 import { describeJobError } from './last-error.ts';
 import {
   type ClaimedJob,
   completeJob,
+  deferJob,
   failJob,
   releaseJob,
   renewJobLock,
@@ -18,12 +24,19 @@ export interface JobFailure {
   readonly willRetry: boolean;
 }
 
+export interface JobDeferral {
+  readonly job: Pick<ClaimedJob, 'id' | 'kind' | 'attempt'>;
+  readonly error: DeferJobError;
+  readonly delayMs: number;
+}
+
 export interface ExecutionDeps {
   readonly db: Database;
   readonly handlers: ReadonlyMap<string, RegisteredHandler>;
   readonly retry: RetryPolicy;
   readonly lockRenewalMs: number;
   readonly onJobFailed: (failure: JobFailure) => void;
+  readonly onJobDeferred: (deferral: JobDeferral) => void;
   readonly onError: (error: unknown) => void;
 }
 
@@ -48,6 +61,11 @@ const settleFailure = (
   signal: AbortSignal,
 ): Promise<boolean> => {
   if (signal.reason instanceof WorkersStoppingError) return releaseJob(deps.db, job);
+  if (error instanceof DeferJobError) {
+    const delayMs = error.delayMs ?? retryDelayMs(1, deps.retry);
+    deps.onJobDeferred({ job, error, delayMs });
+    return deferJob(deps.db, job, delayMs);
+  }
   const willRetry = !(error instanceof PermanentJobError) && job.attempt < job.maxAttempts;
   deps.onJobFailed({ job, error, willRetry });
   const lastError = describeJobError(error);
