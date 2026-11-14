@@ -1,4 +1,4 @@
-import { eq } from 'drizzle-orm';
+import { eq, sql } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createTestDatabase, type TestDatabase } from '../../testing/test-database.ts';
 import { jobs } from './jobs.ts';
@@ -44,6 +44,27 @@ describe('doc_types, entities, type_changes and jobs', () => {
       embedding: EMBEDDING,
     });
     expect(selected?.id).toMatch(/^typ_/);
+  });
+
+  it('gives doc_types exactly its columns: the document count is not stored', async () => {
+    const columns = await database.db.execute(sql`
+      SELECT column_name AS name FROM information_schema.columns
+      WHERE table_schema = 'public' AND table_name = 'doc_types'
+      ORDER BY ordinal_position
+    `);
+    expect(columns.map(({ name }) => name)).toEqual([
+      'id',
+      'slug',
+      'description',
+      'schema',
+      'version',
+      'status',
+      'parent_slug',
+      'aliases',
+      'embedding',
+      'created_at',
+      'updated_at',
+    ]);
   });
 
   it('rejects a second type with the same slug', async () => {
