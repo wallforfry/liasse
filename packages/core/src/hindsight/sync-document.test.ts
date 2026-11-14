@@ -403,8 +403,11 @@ describe('syncDocumentToHindsight', () => {
       expect(await recordOf(id)).toEqual({ mayHold: true, hashed: false });
 
       await flagPrivate(id);
-      expect(await actionOf(id)).toBe('forgotten');
+      await expect(sync(id)).rejects.toBeInstanceOf(HindsightRetainInFlightError);
       expect(retained(id)).toBeUndefined();
+      await outlastRetains(database.db, id);
+      expect(await actionOf(id)).toBe('forgotten');
+      expect(await recordOf(id)).toEqual({ mayHold: false, hashed: false });
     });
 
     it('sends the facts again after a retain whose outcome is not known', async () => {

@@ -108,6 +108,10 @@ const confirmRetained = async (run: SyncRun, sentHash: string): Promise<void> =>
   await recordRetained(run.session, run.documentId, sentHash);
 };
 
+// The bound is written before the request leaves: this covers the time between the two
+// and the slack of the timers that end the request.
+const RETAIN_START_MARGIN_MS = 10_000;
+
 const retain = async (
   run: SyncRun,
   state: SyncState,
@@ -119,7 +123,8 @@ const retain = async (
   // stored the facts included, the row says the bank may hold them. A document deleted
   // or flagged private since it was read is left to the sync queued by that change.
   const { client } = run.deps;
-  if (!(await recordRetainStarted(run.session, run.documentId, client.requestWindowMs))) {
+  const windowMs = client.requestWindowMs + RETAIN_START_MARGIN_MS;
+  if (!(await recordRetainStarted(run.session, run.documentId, windowMs))) {
     return 'skipped';
   }
   await sendRequest(run, () => client.retain(item, run.signal));
