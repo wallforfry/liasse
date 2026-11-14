@@ -21,6 +21,14 @@ import type { MergeChangeKind } from './proposal-store.ts';
 // each entry of a list field, which the lax mode of the path unwraps.
 const EVERY_ENTITY_ID = `$.*."${PROVENANCE_ENTITY_ID_KEY}"`;
 
+// True for a document that names the entity in an entity-typed field, core or not.
+export const namesEntity = (entityId: string): SQL =>
+  sql`jsonb_path_exists(
+    ${documents.provenance},
+    ${`${EVERY_ENTITY_ID} ? (@ == $id)`}::jsonpath,
+    jsonb_build_object('id', ${entityId}::text)
+  )`;
+
 export interface DocumentCountOptions {
   // Private documents are left out unless asked for, as search and queries do.
   readonly includePrivate?: boolean | undefined;
