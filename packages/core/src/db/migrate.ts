@@ -9,6 +9,11 @@ import {
 import { readMigrationFiles } from './migration-files.ts';
 import { type AppliedMigration, pendingMigrations } from './migration-history.ts';
 import {
+  assertSupportedPgvector,
+  availablePgvectorVersion,
+  type PgvectorVersionReader,
+} from './pgvector-version.ts';
+import {
   assertSupportedPostgres,
   installedPostgresMajorVersion,
   type PostgresVersionReader,
@@ -63,6 +68,7 @@ const applyPending = async (
 export interface MigrateOptions {
   readonly embeddingDim: number;
   readonly migrationsFolder?: string;
+  readonly readPgvectorVersion?: PgvectorVersionReader;
   readonly readPostgresVersion?: PostgresVersionReader;
 }
 
@@ -71,6 +77,7 @@ export const migrate = async (
   {
     embeddingDim,
     migrationsFolder = MIGRATIONS_FOLDER,
+    readPgvectorVersion = availablePgvectorVersion,
     readPostgresVersion = installedPostgresMajorVersion,
   }: MigrateOptions,
 ): Promise<void> => {
@@ -80,6 +87,7 @@ export const migrate = async (
     await sql.begin(async (transaction) => {
       // Before anything is written: a server that is too old is left untouched.
       assertSupportedPostgres(await readPostgresVersion(transaction));
+      assertSupportedPgvector(await readPgvectorVersion(transaction));
       await transaction`SELECT pg_advisory_xact_lock(${MIGRATION_LOCK_KEY})`;
       await assertInstalledEmbeddingDimension(transaction, embeddingDim);
       await applyPending(transaction, { embeddingDim, migrationsFolder });
