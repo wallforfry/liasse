@@ -1,5 +1,4 @@
 import { and, asc, eq, inArray, type SQL, sql } from 'drizzle-orm';
-import { qualified } from '../db/columns.ts';
 import { documents, isLiveDocument } from '../db/schema/documents.ts';
 import { documentLinks } from '../db/schema/knowledge.ts';
 import type { DocumentState, LinkKind } from '../domain/enums.ts';
@@ -12,8 +11,7 @@ const CURRENT = 'current' satisfies DocumentState;
 const isTargetOf = (kind: LinkKind): SQL =>
   sql`EXISTS (
     SELECT 1 FROM ${documentLinks}
-    WHERE ${qualified(documentLinks.toDocumentId)} = ${qualified(documents.id)}
-      AND ${qualified(documentLinks.kind)} = ${kind}
+    WHERE ${documentLinks.toDocumentId} = ${documents.id} AND ${documentLinks.kind} = ${kind}
   )`;
 
 // The state of a document follows from the links that point at it, and from nothing else:

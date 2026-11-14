@@ -9,9 +9,10 @@ import {
   timestamp,
 } from 'drizzle-orm/pg-core';
 
-// A column written with the name of its table, or with the alias given. Drizzle leaves
-// the table out of a column in a query over one table: inside a correlated subquery over
-// another table the bare name would then designate a column of that other table.
+// A column written with the name of its table, or with the alias given. In the selection
+// of a query over one table, Drizzle prints a column given to `sql` by its bare name
+// (`qualified.test.ts`); inside a subquery that reads the same table under an alias, the
+// bare name would designate the alias.
 export const qualified = (column: PgColumn, tableAlias?: string): SQL =>
   sql`${sql.identifier(tableAlias ?? getTableName(column.table))}.${sql.identifier(column.name)}`;
 
