@@ -1,0 +1,32 @@
+{
+  "name": "@liasse/eval",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Liasse public evaluation set: a synthetic corpus, its ground truth, reference questions and scoring",
+  "license": "AGPL-3.0-only",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/wallforfry/liasse.git",
+    "directory": "eval"
+  },
+  "type": "module",
+  "engines": {
+    "node": ">=22.12.0"
+  },
+  "exports": {
+    "./corpus": "./src/corpus.ts",
+    "./schema": "./src/schema/index.ts",
+    "./score": "./src/score/index.ts"
+  },
+  "scripts": {
+    "generate": "node --conditions=@liasse/source --experimental-strip-types src/generate/cli.ts",
+    "typecheck": "tsc --noEmit -p tsconfig.json"
+  },
+  "devDependencies": {
+    "@liasse/core": "workspace:*",
+    "@types/heic-decode": "^2.0.1",
+    "heic-decode": "^2.1.0",
+    "jpeg-js": "^0.4.4",
+    "zod": "^4.6.7"
+  }
+}
