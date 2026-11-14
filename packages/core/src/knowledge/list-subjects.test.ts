@@ -23,14 +23,14 @@ describe('listSubjects, on a synthetic household', () => {
     listSubjects({ db: database.db }, input);
 
   const summary = async (input: Parameters<typeof listSubjects>[1] = {}) =>
-    (await list(input)).subjects.map(({ id, documentCount }) => [id, documentCount]);
+    (await list(input)).subjects.map(({ id, document_count }) => [id, document_count]);
 
   it('lists the subjects public documents concern, oldest first, with their counts', async () => {
     const result = await list();
     expect(listSubjectsOutputSchema.parse(result)).toEqual(result);
     expect(result.truncated).toBe(false);
     const { oldContractSubject, home, newContractSubject, car } = scenario.subjects;
-    expect(result.subjects.map(({ id, documentCount }) => [id, documentCount])).toEqual([
+    expect(result.subjects.map(({ id, document_count }) => [id, document_count])).toEqual([
       [oldContractSubject, 3],
       [home, 4],
       [newContractSubject, 1],

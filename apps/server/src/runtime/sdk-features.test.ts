@@ -26,7 +26,7 @@ describe('the TypeScript SDK on the bound features', () => {
     const { subjects, truncated: cut } = await client.listSubjects({ kind: 'contract' });
     expect(cut).toBe(false);
     expect(subjects.map(({ id: _id, ...subject }) => subject)).toEqual([
-      { kind: 'contract', name: 'Home insurance contract', aliases: [], documentCount: 1 },
+      { kind: 'contract', name: 'Home insurance contract', aliases: [], document_count: 1 },
     ]);
     const { dates, truncated } = await client.upcoming(YEAR_2027);
     expect(truncated).toBe(false);

@@ -169,7 +169,7 @@ describe('the knowledge tools, on a synthetic household', () => {
         (await timeline({ db: database.db }, input)).items.map(async (item) =>
           item.kind === 'document'
             ? `${item.date ?? 'undated'} document ${item.document.title ?? ''} [${item.state}]`
-            : `${item.date ?? 'undated'} fact ${(await titleOf(item.fact.documentId)) ?? ''}`,
+            : `${item.date ?? 'undated'} fact ${(await titleOf(item.fact.document_id)) ?? ''}`,
         ),
       );
 
@@ -276,11 +276,11 @@ describe('the knowledge tools, on a synthetic household', () => {
       expect(result.facts[0]).toEqual({
         id: result.facts[0]?.id,
         text: 'The electricity supplier of the Lyon apartment switched from Volta Energie to Lumen Power on February 1st 2026.',
-        validFrom: '2026-02-01',
-        validTo: null,
-        documentId: scenario.documents.switchLetter,
-        entityIds: [scenario.entities.lumen, scenario.entities.volta],
-        subjectIds: [scenario.subjects.home],
+        valid_from: '2026-02-01',
+        valid_to: null,
+        document_id: scenario.documents.switchLetter,
+        entity_ids: [scenario.entities.lumen, scenario.entities.volta],
+        subject_ids: [scenario.subjects.home],
         match: 'direct',
       });
     });
@@ -379,10 +379,10 @@ describe('the knowledge tools, on a synthetic household', () => {
           identifiers: [{ type: 'contract_number', value: 'HAB202500417' }],
         },
         state: 'terminated',
-        documentCount: 3,
+        document_count: 3,
         // The renewal and its notice deadline are gone: what is left to come is the
         // last day of cover, which the letter that ended the contract states.
-        nextDates: [{ date: '2026-02-28', kind: 'effective', label: 'Last day of cover' }],
+        next_dates: [{ date: '2026-02-28', kind: 'effective', label: 'Last day of cover' }],
       });
       expect(result.found && result.documents).toEqual([
         {
@@ -411,8 +411,8 @@ describe('the knowledge tools, on a synthetic household', () => {
 
     it('holds the contract that replaced it as current, with its next dates', async () => {
       const result = await get({ id: scenario.subjects.newContractSubject });
-      expect(result).toMatchObject({ found: true, state: 'current', documentCount: 1 });
-      expect(result.found && result.nextDates.map(({ date, kind }) => [date, kind])).toEqual([
+      expect(result).toMatchObject({ found: true, state: 'current', document_count: 1 });
+      expect(result.found && result.next_dates.map(({ date, kind }) => [date, kind])).toEqual([
         ['2026-03-01', 'effective'],
         ['2027-02-01', 'notice_deadline'],
         ['2027-03-01', 'renewal'],
@@ -430,13 +430,13 @@ describe('the knowledge tools, on a synthetic household', () => {
           identifiers: [{ type: 'license_plate', value: 'AB123CD' }],
         },
         state: 'current',
-        documentCount: 2,
+        document_count: 2,
       });
       expect(result.found && result.documents.map(({ title }) => title)).toEqual([
         'Car insurance certificate',
         'Registration certificate of the Clio',
       ]);
-      expect(result.found && result.nextDates.map(({ date, kind }) => [date, kind])).toEqual([
+      expect(result.found && result.next_dates.map(({ date, kind }) => [date, kind])).toEqual([
         ['2026-03-15', 'expiry'],
       ]);
       expect(await get({ query: 'ab 123 cd' })).toMatchObject({
@@ -449,7 +449,7 @@ describe('the knowledge tools, on a synthetic household', () => {
 
     it('counts the next dates from the day given', async () => {
       const later = await get({ id: scenario.subjects.car, asOf: '2026-03-16' });
-      expect(later.found && later.nextDates).toEqual([]);
+      expect(later.found && later.next_dates).toEqual([]);
     });
 
     it('holds a home as current while one of its documents is, whatever ended', async () => {
@@ -483,8 +483,8 @@ describe('the knowledge tools, on a synthetic household', () => {
 
     it('shows the private documents of a subject only when asked', async () => {
       const withPrivate = await get({ id: scenario.subjects.car, includePrivate: true });
-      expect(withPrivate).toMatchObject({ documentCount: 3 });
-      expect(withPrivate.found && withPrivate.nextDates.map(({ date }) => date)).toEqual([
+      expect(withPrivate).toMatchObject({ document_count: 3 });
+      expect(withPrivate.found && withPrivate.next_dates.map(({ date }) => date)).toEqual([
         '2026-02-05',
         '2026-03-15',
       ]);
