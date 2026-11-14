@@ -3,6 +3,7 @@ import { documents } from '../db/schema/documents.ts';
 import { docTypes } from '../db/schema/registry.ts';
 import type { TypeStatus } from '../domain/enums.ts';
 import type { Embedding } from '../models/ports.ts';
+import { isLiveDocument } from '../ingest/live-document.ts';
 import type { RegistryReadContext } from './context.ts';
 import { exampleTitles } from './example-titles.ts';
 import {
@@ -39,7 +40,10 @@ export const listTypes = async (
   { db }: RegistryReadContext,
 ): Promise<readonly ListedType[]> => {
   const rows = await db
-    .select({ ...TYPE_COLUMNS, docCount: db.$count(documents, eq(documents.typeId, docTypes.id)) })
+    .select({
+      ...TYPE_COLUMNS,
+      docCount: db.$count(documents, and(eq(documents.typeId, docTypes.id), isLiveDocument)),
+    })
     .from(docTypes)
     .where(status === undefined ? ne(docTypes.status, 'merged') : eq(docTypes.status, status))
     .orderBy(asc(docTypes.slug));
