@@ -67,6 +67,11 @@
       "types": "./dist/registry/index.d.ts",
       "default": "./dist/registry/index.js"
     },
+    "./search": {
+      "@liasse/source": "./src/search/index.ts",
+      "types": "./dist/search/index.d.ts",
+      "default": "./dist/search/index.js"
+    },
     "./storage": {
       "@liasse/source": "./src/storage/index.ts",
       "types": "./dist/storage/index.d.ts",

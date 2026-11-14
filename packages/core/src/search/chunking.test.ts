@@ -123,14 +123,14 @@ describe('chunkPages', () => {
   });
 
   it('cuts a run without whitespace by length, without splitting a surrogate pair', () => {
-    const blob = '😀'.repeat(101);
+    const blob = `a${'😀'.repeat(101)}`;
     const chunks = texts(
       chunkPages([{ page: 1, text: blob }], { maxTokens: 25, overlapTokens: 0 }),
     );
     expect(chunks.join('')).toBe(blob);
     expect(Math.max(...chunks.map(estimateTokens))).toBeLessThanOrEqual(25);
     expect(
-      chunks.every((chunk) => Array.from(chunk).every((character) => character === '😀')),
+      chunks.every((chunk) => Array.from(chunk).every((character) => 'a😀'.includes(character))),
     ).toBe(true);
   });
 
