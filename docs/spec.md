@@ -1,6 +1,6 @@
 # Liasse — Specification
 
-*Status: draft, pre-implementation. Last updated 2026-11-13.*
+*Status: draft, pre-implementation. Last updated 2026-11-14.*
 
 ## Vision and principles
 
@@ -91,7 +91,7 @@ Eleven Postgres tables: documents, text pages, chunks, types, entities, change l
 | `chunks` | Search units | `id`, `document_id`, `page_from`, `page_to`, `text`, `language`, `embedding` (vector), `tsv` |
 | `doc_types` | Type registry | `id`, `slug`, `description`, `schema` (jsonb), `version`, `status`, `parent_slug`, `aliases` (text[]), `embedding`; the document count is computed from `documents`, never stored |
 | `entities` | Issuers, recipients | `id`, `kind` (org/person), `canonical_name`, `aliases` (text[]), `identifiers` (jsonb: company ID, masked IBAN, customer number), `embedding` |
-| `type_changes` | Consolidation proposals | `id`, `kind` (merge/promote_field/stabilize/split/rename/merge_entity/merge_subject), `payload`, `rationale`, `status` (pending/applied/rejected), `auto`, `created_at` |
+| `type_changes` | Consolidation proposals | `id`, `kind` (merge/promote_field/stabilize/remove_field/split/rename/merge_entity/merge_subject), `payload`, `rationale`, `status` (pending/applied/rejected), `auto` (safe to apply without approval), `created_at`, `decided_at`, `note` |
 | `jobs` | Processing queue | `id`, `kind`, `payload`, `status`, `attempts`, `run_after`, `locked_at` |
 
 Knowledge-layer tables are described in [Knowledge layer](#knowledge-layer).
@@ -232,9 +232,19 @@ Consolidation prevents type drift: it runs every night and after every batch of 
 | Merge of provisional types | Yes | LLM confidence ≥ 0.9 and lossless mapping |
 | Merge involving a stable type | No | Approval required |
 | Field removal or retyping | No | Approval required |
+| Entity or subject merge | Yes | A strong identifier is shared |
 | Change to the common core | Never | Code migration only |
 
-`AUTO_APPLY=none` disables all automatic application (useful for first trials).
+`AUTO_APPLY=none` disables all automatic application (useful for first trials); `safe`, the default, applies what the table calls automatic; `all` applies every change consolidation proposes. `type_changes.auto` records whether a change is safe by the table, whatever the mode.
+
+**Rules of consolidation.**
+
+- *Triggers.* Runs go through the job queue (`consolidate`), one at a time. A nightly run is due at 03:00 UTC: one is queued at startup, and each nightly run queues the next as it starts, so a run that fails does not end the chain. After each indexing, a run is queued when 20 documents ingested since the last run started have settled and no run is queued.
+- *Proposals once.* A pair of types put to the model is recorded whatever it answers: `merge` as a pending change, `distinct` and `common_parent` as a rejected one, so the pair is never asked about again. Consolidation does not create common parents. Overlap means a share of common field names (Jaccard) of at least 0.7 and a share of common issuers of at least 0.5. A key of `extra` named by a promotion, a removal pending or rejected, a stabilization pending or rejected are not proposed again; at most 10 pairs of types go to the model per run, the most similar first. A model answer outside its schema skips its item until the next run.
+- *What the model reads.* The two schemas and the titles and values of the three most recent public documents of each type for a merge; the frequent keys of `extra` with three values of public documents each for a promotion. All of it is delimited as untrusted and masked again; the model never reads a document's text here.
+- *Application.* A change is decided once, under a lock on its row, by a person (`apply_change`) or by the policy at the end of a run, merges first. The documents of the type are moved in the transaction of the registry write, before it: their values are renamed by the mapping or the promotion and kept as fields where the schema has a field they fit, in `extra` under their own name otherwise, with their provenance and their manual mark. A document moved to another type has no `schema_version` until it is extracted again, and keeps its confidence. Every settled document of the type is then queued for re-extraction; a document still on its way is extracted for its type as it is by then. Entity and subject merges rewrite every reference to the source (`facts.entity_ids`, the provenance entries, `documents.subject_ids`, `facts.subject_ids`) and queue no re-extraction.
+- *Refusals.* A change the current state refuses (a type merged meanwhile, a field redefined since a promotion was proposed without a retyping, a hierarchy that would get a third level, two entities of different kinds, an entity gone) is rejected with the reason as its note, and what it moved is undone. It is never tried again.
+- *Manual corrections.* A value a person corrected is never overwritten: it moves with its mark and the re-extraction keeps it.
 
 ## Entity resolution
 
@@ -247,7 +257,7 @@ Entities are managed locally and deterministically: it is the most queried field
 3. **Similarity**: embedding of the name and context; above 0.92, attach and add an alias; between 0.80 and 0.92, the LLM arbitrates among the 3 closest candidates.
 4. **Otherwise**: create a new entity.
 
-Entity merges go through `type_changes` (kind `merge_entity`) with the same policy: automatic if a strong identifier is shared, approval otherwise.
+Entity merges go through `type_changes` (kind `merge_entity`) with the same policy: automatic if a strong identifier is shared, approval otherwise. Consolidation proposes a merge for every pair of entities of one kind that share a global identifier or a normalized name.
 
 An IBAN or a card number carried by an entity is a strong identifier too, matched through its hash. A customer number is scoped to the entity that issued it: it attaches only when it has at least 6 characters once normalized and no other entity of the same kind carries it (otherwise the name rules decide), and sharing one never makes a merge automatic. An identifier of a free format is kept but never attaches or merges anything. A document never makes two entities share a strong identifier: a mention whose identifiers designate more than one entity is resolved by the name and similarity rules, and an entity never takes an identifier another entity carries; what the mention suggests is kept as a merge proposal that needs an approval. A fragment is not an identifier: a company ID under 5 characters, a VAT number under 4, or either without a digit, is ignored. Names are normalized without accents on Latin letters only: in other scripts a mark is part of the word. A name or similarity match yields when the entity and the mention carry different company IDs or VAT numbers: a new entity is created, since a duplicate can be merged and a wrong fusion cannot be undone. The text model arbitrates outside the entity lock, and its answer is used only if the candidates are still the same once the lock is taken. A mention of a `private` document skips the similarity rule when the embedding provider is external.
 
@@ -359,7 +369,7 @@ Fourteen tools, over Streamable HTTP (`/mcp`, Bearer token auth) and stdio. All 
 | `ingest` | Add a document | `file` (base64) or `url`, `filename`, `hint?` | ID and status; asynchronous processing |
 | `get_status` | Track processing | `id` | Status, error if any |
 | `update_document` | Correct a document | `id`, `type?`, `core?`, `fields?`, `private?` | Updated document (provenance `manual`) |
-| `list_pending_changes` | See consolidation proposals | `kind?` | Changes with rationale |
+| `list_pending_changes` | See consolidation proposals | `kind?` | Pending changes with rationale, oldest first (at most 100, `truncated`) |
 | `apply_change` | Approve or reject | `id`, `decision` (`apply`/`reject`), `note?` | Result and number of documents to re-extract |
 
 **Knowledge-layer tools**
@@ -392,6 +402,7 @@ A single Node binary, configured through environment variables, shipped as a mul
 - **Files are served as data.** `Content-Disposition` is `attachment` except for PDF, JPEG and PNG, always with `X-Content-Type-Options: nosniff` and `Content-Security-Policy: sandbox`.
 - **Errors** are `{"error": {"code", "message", "request_id", …}}` with stable codes. A route whose feature is not part of the build answers 501 `not_implemented`.
 - **Private documents in counts.** The document counts of `GET /types` and `GET /entities` leave private documents out unless `include_private=true`, as search and queries do.
+- **Changes.** `GET /changes` lists the pending changes, oldest first, filtered by `kind`; at most 100, with `truncated` when more are pending. `POST /changes/:id` answers with the change as decided, the number of documents queued for re-extraction and, for an application the current state refused, the `refusal` (`code`, `message`); a change already decided answers 400 `change_already_decided`.
 - **Subjects.** `GET /subjects` lists the subjects a public document concerns, oldest first, each with its kind, name, aliases and number of public documents, filtered by `kind` and by a `query` read as `get_subject` reads it; at most 100, with `truncated` when more match. Like the knowledge tools, it never shows a private subject or one known only through private or deleted documents.
 - **No CORS.** The API allows no other origin; the web UI is served from the same one.
 - **Shutdown.** SIGTERM or SIGINT stops accepting requests, lets requests and jobs in progress finish within a grace period, then exits with code 0 (1 if a part could not be stopped). Any second signal exits at once with code 1.
