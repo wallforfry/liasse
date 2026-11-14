@@ -93,9 +93,8 @@ describe('documents of the API', () => {
         private: false,
         source: 'api',
       });
-      expect(Object.keys(document)).not.toEqual(
-        expect.arrayContaining(['fields', 'extra', 'provenance', 'text', 'pages', 'file_url']),
-      );
+      const parts = ['fields', 'extra', 'manual_fields', 'provenance', 'text', 'pages', 'file_url'];
+      expect(parts.filter((part) => Object.hasOwn(document, part))).toEqual([]);
       const [row] = await harness.database.db.select().from(documents).where(eq(documents.id, id));
       const serialised = JSON.stringify(
         await getDocument(harness.context, id, {
@@ -168,6 +167,18 @@ describe('documents of the API', () => {
         total: 2,
         has_more: false,
       });
+    });
+
+    // A file URL opens the original without any credential for fifteen minutes: it is
+    // minted only for a caller who names it, never as part of an ordinary read.
+    it('mints no file URL for a private document read without include', async () => {
+      const { id } = await upload('private, no include', { private: true });
+      for (const include of [[], ['fields', 'text', 'pages', 'provenance']] as const) {
+        const document = await getDocument(harness.context, id, { include: [...include] });
+        expect([include, Object.hasOwn(document, 'file_url')]).toEqual([include, false]);
+      }
+      const asked = await getDocument(harness.context, id, { include: ['file_url'] });
+      expect(asked.file_url).toMatch(/^https:\/\/liasse\.example\.com\/documents\//);
     });
 
     it('signs a file URL its own signer accepts', async () => {
