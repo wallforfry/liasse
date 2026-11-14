@@ -171,6 +171,7 @@ describe('loadConfig', () => {
   it.each([
     ['credentials', 'https://operator:secret-9f3a@llm.example.com/v1'],
     ['a user name', 'https://secret-9f3a@llm.example.com/v1'],
+    ['a password', 'https://:secret-9f3a@llm.example.com/v1'],
     ['a query string', 'https://llm.example.com/v1?api-key=secret-9f3a'],
     ['another scheme', 'ftp://llm.example.com/secret-9f3a'],
   ])('rejects a model base URL with %s, without echoing it', (_case, url) => {
