@@ -89,6 +89,9 @@ const apply = (
         .update(documents)
         .set(applyCorrection(stored, correction))
         .where(eq(documents.id, read.id));
+      if (correction.private !== undefined && correction.private !== stored.private) {
+        await deps.onPrivacyChanged?.(tx, read.id);
+      }
       if (stored.status === 'indexed' || stored.status === 'needs_review') {
         await enqueue(tx, {
           kind: correction.typeChanged ? reextractDocumentJob : reindexDocumentJob,

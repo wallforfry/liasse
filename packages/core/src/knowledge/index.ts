@@ -25,6 +25,14 @@ export {
 export { createKnowledgeHandlers, detectLinksJob } from './jobs.ts';
 export { type KeyDateRow, planKeyDates } from './key-dates.ts';
 export { findLinkCandidates, type LinkDocument } from './link-candidates.ts';
+export {
+  type ListedSubject,
+  listSubjects,
+  type ListSubjectsInput,
+  listSubjectsInputSchema,
+  listSubjectsOutputSchema,
+  type SubjectList,
+} from './list-subjects.ts';
 export { LINK_ACTORS, type LinkActor, type ProposedLink } from './link-prompt.ts';
 export { validateLinks, type ValidLink } from './link-rules.ts';
 export { type Period, shiftMonths, subtractPeriod } from './notice-deadline.ts';

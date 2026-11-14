@@ -47,6 +47,9 @@ jobs:
           POSTGRES_USER: liasse
           POSTGRES_PASSWORD: liasse
           POSTGRES_DB: liasse_test
+          # Same settings as the `command` of docker-compose.dev.yml, which a service container
+          # cannot set: parallel test files ran out of the default lock table.
+          POSTGRES_INITDB_ARGS: -c max_locks_per_transaction=256 -c shared_buffers=256MB
         ports:
           - 54329:5432
         options: >-
