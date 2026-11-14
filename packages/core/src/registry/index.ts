@@ -31,6 +31,7 @@ export {
   type FieldPrimitive,
   fieldValueSchema,
   type ScalarFieldDefinition,
+  type ValueWrapper,
 } from './primitives.ts';
 export {
   type ClosestType,
@@ -51,9 +52,4 @@ export {
 } from './stored-schema.ts';
 export type { RegisteredType } from './type-store.ts';
 export { type FieldValueError, validateDocumentFields } from './validate-document-fields.ts';
-export {
-  coreValueSchema,
-  extraValueSchema,
-  valueSchemaForFields,
-  type ValueWrapper,
-} from './values.ts';
+export { coreValueSchema, extraValueSchema, valueSchemaForFields } from './values.ts';

@@ -137,7 +137,7 @@ describe('field values', () => {
 });
 
 describe('untyped values', () => {
-  const untyped = (value: unknown): boolean => untypedValueSchema.safeParse(value).success;
+  const untyped = (value: unknown): boolean => untypedValueSchema().safeParse(value).success;
 
   it('accepts any value a parameterless primitive describes, and lists of them', () => {
     expect(untyped('free text')).toBe(true);

@@ -83,10 +83,19 @@ export type FieldDefinition = z.output<typeof fieldDefinitionSchema>;
 const scalarValueSchema = (definition: ScalarFieldDefinition): z.ZodType =>
   SCALAR_PRIMITIVES[definition.type].valueOf(definition);
 
-export const fieldValueSchema = (definition: FieldDefinition): z.ZodType =>
+// The one statement of what a wrapper decorates: a single value. A list is a list of
+// decorated items, never a decorated list, so each item can carry its own page and quote.
+export type ValueWrapper = (value: z.ZodType) => z.ZodType;
+
+export const unwrapped: ValueWrapper = (value) => value;
+
+export const fieldValueSchema = (
+  definition: FieldDefinition,
+  wrap: ValueWrapper = unwrapped,
+): z.ZodType =>
   definition.type === LIST
-    ? z.array(scalarValueSchema(definition.items))
-    : scalarValueSchema(definition);
+    ? z.array(wrap(scalarValueSchema(definition.items)))
+    : wrap(scalarValueSchema(definition));
 
 const parameterless = scalarNames.flatMap((name) => {
   const definition = scalarDefinitionSchema.safeParse({ type: name });
@@ -97,4 +106,7 @@ const untypedScalarSchema = z.union([...new Set(parameterless)]);
 
 // What a value may be when no definition describes it: any primitive that needs no
 // parameter, or a list of them.
-export const untypedValueSchema = z.union([untypedScalarSchema, z.array(untypedScalarSchema)]);
+export const untypedValueSchema = (wrap: ValueWrapper = unwrapped): z.ZodType => {
+  const item = wrap(untypedScalarSchema);
+  return z.union([item, z.array(item)]);
+};

@@ -3,12 +3,8 @@ import { z } from 'zod';
 import { fieldPaths } from './field-paths.ts';
 import type { TypeFields } from './fields.ts';
 import { validateDocumentFields } from './validate-document-fields.ts';
-import {
-  coreValueSchema,
-  extraValueSchema,
-  valueSchemaForFields,
-  type ValueWrapper,
-} from './values.ts';
+import type { ValueWrapper } from './primitives.ts';
+import { coreValueSchema, extraValueSchema, valueSchemaForFields } from './values.ts';
 
 const FIELDS: TypeFields = {
   energy: { type: 'enum', values: ['electricity', 'gas'] },
@@ -55,7 +51,6 @@ describe('valueSchemaForFields', () => {
     expect(
       wrapped.safeParse({
         consumption_kwh: { value: 312, page: 1, quote: '312 kWh' },
-        readings: { value: ['2026-09-01'], page: 2, quote: 'Reading on 1 September' },
       }).success,
     ).toBe(true);
     expect(wrapped.safeParse({ consumption_kwh: 312 }).success).toBe(false);
@@ -63,6 +58,22 @@ describe('valueSchemaForFields', () => {
       wrapped.safeParse({ consumption_kwh: { value: '312', page: 1, quote: '312 kWh' } }).success,
     ).toBe(false);
     expect(wrapped.safeParse({}).success).toBe(true);
+  });
+
+  it('wraps each item of a list, so every item carries its own trace', () => {
+    const wrapped = valueSchemaForFields(FIELDS, traced);
+    const first = { value: '2026-09-01', page: 1, quote: 'Reading on 1 September' };
+    const second = { value: '2026-09-30', page: 2, quote: 'Reading on 30 September' };
+    expect(wrapped.parse({ readings: [first, second] })).toEqual({ readings: [first, second] });
+    expect(wrapped.safeParse({ readings: [] }).success).toBe(true);
+    expect(
+      wrapped.safeParse({ readings: { value: ['2026-09-01'], page: 1, quote: 'Readings' } })
+        .success,
+    ).toBe(false);
+    expect(wrapped.safeParse({ readings: ['2026-09-01'] }).success).toBe(false);
+    expect(wrapped.safeParse({ readings: [{ ...first, value: '2026-02-30' }] }).success).toBe(
+      false,
+    );
   });
 });
 
@@ -156,6 +167,14 @@ describe('extraValueSchema', () => {
       wrapped.safeParse({ loyalty_points: { value: 120, page: 1, quote: '120 points' } }).success,
     ).toBe(true);
     expect(wrapped.safeParse({ loyalty_points: 120 }).success).toBe(false);
+    const green = { value: 'green', page: 1, quote: 'Green option' };
+    const fixed = { value: 'fixed', page: 2, quote: 'Fixed price' };
+    expect(wrapped.safeParse({ options: [green, fixed] }).success).toBe(true);
+    expect(
+      wrapped.safeParse({ options: { value: ['green', 'fixed'], page: 1, quote: 'Options' } })
+        .success,
+    ).toBe(false);
+    expect(wrapped.safeParse({ options: ['green', 'fixed'] }).success).toBe(false);
   });
 });
 
@@ -194,6 +213,19 @@ describe('validateDocumentFields', () => {
     expect(empty.ok ? '' : empty.error[0]?.message).toBe(
       'The type has no field "supplier". It defines no field.',
     );
+  });
+
+  it('reports a key every object inherits as unknown when the type does not define it', () => {
+    const fields: unknown = JSON.parse(
+      '{"__proto__": "a", "constructor": "b", "toString": "c", "hasOwnProperty": "d"}',
+    );
+    const result = validateDocumentFields(type, fields);
+    expect((result.ok ? [] : result.error).map(({ field, code }) => [field, code])).toEqual([
+      ['__proto__', 'unknown_field'],
+      ['constructor', 'unknown_field'],
+      ['toString', 'unknown_field'],
+      ['hasOwnProperty', 'unknown_field'],
+    ]);
   });
 
   it('rejects fields that are not an object', () => {
