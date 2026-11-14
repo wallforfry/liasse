@@ -22,7 +22,7 @@
     "lint": "eslint . --max-warnings 0 && prettier --check .",
     "test": "vitest run",
     "test:models": "vitest run --config packages/core/vitest.models.config.ts",
-    "test:paradedb": "vitest run --config packages/core/vitest.paradedb.config.ts",
+    "test:paradedb": "vitest run --config vitest.paradedb.config.ts",
     "typecheck": "tsc --noEmit -p tsconfig.json && pnpm -r typecheck"
   },
   "devDependencies": {

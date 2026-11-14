@@ -93,7 +93,7 @@ jobs:
     runs-on: ubuntu-latest
     services:
       # Same image and credentials as the `paradedb` service of docker-compose.dev.yml; the port is
-      # the one packages/core/vitest.paradedb.config.ts connects to.
+      # the one vitest.paradedb.config.ts connects to.
       paradedb:
         image: paradedb/paradedb:0.26.6-pg16
         env:
