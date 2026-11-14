@@ -1,7 +1,7 @@
-import { type SQL, sql } from 'drizzle-orm';
+import { eq, type SQL, sql } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createDb, type Database } from '../db/client.ts';
-import { chunks } from '../db/schema/documents.ts';
+import { chunks, documents } from '../db/schema/documents.ts';
 import type { Embedder, EmbeddingKind } from '../models/ports.ts';
 import { createFakeEmbedder } from '../testing/fake-embedder.ts';
 import { insertSyntheticDocument } from '../testing/fixtures.ts';
@@ -176,6 +176,17 @@ describe('chunk rankers', () => {
       await expect(rankByVector(embedder)(database.db, await request('salary'))).rejects.toThrow(
         'synthetic embedder outage',
       );
+    });
+  });
+
+  describe('a tombstone', () => {
+    it('is ranked by neither ranker', async () => {
+      const id = await corpus.add(extra('tombstone', 'basalt basalt basalt'));
+      expect(await fullText('basalt')).toEqual(['tombstone']);
+      expect((await byVector('basalt basalt basalt'))[0]).toBe('tombstone');
+      await database.db.update(documents).set({ status: 'deleted' }).where(eq(documents.id, id));
+      expect(await fullText('basalt')).toEqual([]);
+      expect(await byVector('basalt basalt basalt')).not.toContain('tombstone');
     });
   });
 

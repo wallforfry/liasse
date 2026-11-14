@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { TOMBSTONE_STATUS } from '../domain/enums.ts';
 import { documentStatusSchema } from '../domain/schemas.ts';
 
 export const DEFAULT_SEARCH_LIMIT = 10;
@@ -10,7 +11,8 @@ export const searchFiltersSchema = z.strictObject({
   subject: z.string().min(1).optional(),
   dateFrom: z.iso.date().optional(),
   dateTo: z.iso.date().optional(),
-  status: documentStatusSchema.optional(),
+  // A tombstone is not a document: no filter brings one back.
+  status: documentStatusSchema.exclude([TOMBSTONE_STATUS]).optional(),
 });
 
 export const searchInputSchema = z.strictObject({

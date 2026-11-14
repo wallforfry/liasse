@@ -366,6 +366,18 @@ describe('indexDocument', () => {
       expect(await storedChunks(id)).toEqual(before);
     });
 
+    it('stores nothing for a document that became a tombstone meanwhile', async () => {
+      const id = await documentWithPages(['Soon a tombstone']);
+      const { embedder } = interrupted(
+        () => database.db.update(documents).set({ status: 'deleted' }).where(eq(documents.id, id)),
+        firstCallOnly,
+      );
+      await expect(indexDocument({ db: database.db, embedder }, id)).rejects.toBeInstanceOf(
+        DocumentNotFoundError,
+      );
+      expect(await storedChunks(id)).toEqual([]);
+    });
+
     it('reports a document deleted meanwhile as not found', async () => {
       const id = await documentWithPages(['Soon deleted']);
       const { embedder } = interrupted(
@@ -389,6 +401,14 @@ describe('indexDocument', () => {
       chunkCount: 1,
       embedded: false,
     });
+  });
+
+  it('refuses a tombstone, which is not a document', async () => {
+    const id = await documentWithPages(['Left behind'], { status: 'deleted' });
+    await expect(
+      indexDocument({ db: database.db, embedder: createFakeEmbedder() }, id),
+    ).rejects.toBeInstanceOf(DocumentNotFoundError);
+    expect(await storedChunks(id)).toEqual([]);
   });
 
   it('rejects an unknown document', async () => {

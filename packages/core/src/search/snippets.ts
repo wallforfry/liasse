@@ -1,7 +1,7 @@
 import { inArray, sql } from 'drizzle-orm';
 import { z } from 'zod';
 import type { Database } from '../db/client.ts';
-import { chunks } from '../db/schema/documents.ts';
+import { chunks, documents, isLiveDocument } from '../db/schema/documents.ts';
 
 // A hard bound for text that has no word boundary; `ts_headline` already limits the words.
 export const MAX_SNIPPET_LENGTH = 600;
@@ -11,9 +11,13 @@ export const MAX_SNIPPET_LENGTH = 600;
 const MATCH_START = '\u{E000}';
 const MATCH_END = '\u{E001}';
 
-const HEADLINE_OPTIONS = [
-  `StartSel=${MATCH_START}`,
-  `StopSel=${MATCH_END}`,
+const MARKS = [`StartSel=${MATCH_START}`, `StopSel=${MATCH_END}`];
+
+// A chunk that fits in a snippet is shown whole. A longer one is excerpted around its matches;
+// that mode would cut a short chunk down to its matched words.
+const WHOLE_TEXT = [...MARKS, 'HighlightAll=true'].join(', ');
+const EXCERPTS = [
+  ...MARKS,
   'MaxFragments=2',
   'MaxWords=30',
   'MinWords=10',
@@ -76,7 +80,8 @@ const snippetRows = z.array(
 );
 
 // Excerpts of the chunks around the words of the query, in the chunk's own language. A chunk
-// found by its embedding alone has no such word: its excerpt is then its opening words.
+// found by its embedding alone has no such word: its excerpt is then its opening words. The
+// chunks of a document deleted since they were ranked are left out.
 export const readSnippets = async (
   db: Database,
   chunkIds: readonly string[],
@@ -90,10 +95,12 @@ export const readSnippets = async (
           liasse_regconfig(${chunks.language}),
           translate(${chunks.text}, ${MATCH_START + MATCH_END}, ''),
           ${tsquery}::tsquery,
-          ${HEADLINE_OPTIONS}
+          CASE WHEN length(${chunks.text}) <= ${MAX_SNIPPET_LENGTH}
+            THEN ${WHOLE_TEXT} ELSE ${EXCERPTS} END
         ) AS headline
       FROM ${chunks}
-      WHERE ${inArray(chunks.id, [...chunkIds])}
+      JOIN ${documents} ON ${documents.id} = ${chunks.documentId}
+      WHERE ${inArray(chunks.id, [...chunkIds])} AND ${isLiveDocument}
     `),
   );
   return new Map(

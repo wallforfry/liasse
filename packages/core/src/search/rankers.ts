@@ -1,7 +1,7 @@
 import { type SQL, sql } from 'drizzle-orm';
 import { z } from 'zod';
 import type { Database } from '../db/client.ts';
-import { chunks, documents } from '../db/schema/documents.ts';
+import { chunks, documents, isLiveDocument } from '../db/schema/documents.ts';
 import type { Embedder } from '../models/ports.ts';
 
 export interface RankRequest {
@@ -17,6 +17,9 @@ export interface RankedChunk {
   readonly documentId: string;
 }
 
+// Both rankers leave tombstones out themselves, whatever filter they are given: a deleted
+// document must not come back through a caller that forgot the condition.
+
 // The seam between hybrid search and one way of ranking chunks, best first. The full-text side
 // goes through it so that another engine, such as BM25, can replace `rankByFullText`.
 export type ChunkRanker = (db: Database, request: RankRequest) => Promise<readonly RankedChunk[]>;
@@ -30,7 +33,7 @@ export const fullTextCandidates = ({ tsquery, filter, limit }: RankRequest): SQL
   SELECT ${chunks.id} AS chunk_id, ${chunks.documentId} AS document_id
   FROM ${chunks}
   JOIN ${documents} ON ${documents.id} = ${chunks.documentId}
-  WHERE ${chunks.tsv} @@ ${tsquery}::tsquery AND ${filter}
+  WHERE ${chunks.tsv} @@ ${tsquery}::tsquery AND ${isLiveDocument} AND ${filter}
   ORDER BY ts_rank_cd(${chunks.tsv}, ${tsquery}::tsquery) DESC, ${chunks.id}
   LIMIT ${limit}
 `;
@@ -46,7 +49,7 @@ const nearestChunks = (distance: SQL, { filter, limit }: NearestRequest): SQL =>
     SELECT ${chunks.id} AS chunk_id, ${chunks.documentId} AS document_id, ${distance} AS distance
     FROM ${chunks}
     JOIN ${documents} ON ${documents.id} = ${chunks.documentId}
-    WHERE ${chunks.embedding} IS NOT NULL AND ${filter}
+    WHERE ${chunks.embedding} IS NOT NULL AND ${isLiveDocument} AND ${filter}
     ORDER BY distance
     LIMIT ${limit}
   ) AS nearest

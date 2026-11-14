@@ -1,7 +1,7 @@
-import { eq, inArray } from 'drizzle-orm';
+import { and, eq, inArray } from 'drizzle-orm';
 import type { Database } from '../db/client.ts';
 import type { JsonObject } from '../db/columns.ts';
-import { documents } from '../db/schema/documents.ts';
+import { documents, isLiveDocument } from '../db/schema/documents.ts';
 import { docTypes } from '../db/schema/registry.ts';
 import type { Embedder } from '../models/ports.ts';
 import { documentFilter } from './filters.ts';
@@ -41,7 +41,7 @@ const readDocuments = async (db: Database, ids: readonly string[]) => {
     })
     .from(documents)
     .leftJoin(docTypes, eq(docTypes.id, documents.typeId))
-    .where(inArray(documents.id, [...ids]));
+    .where(and(inArray(documents.id, [...ids]), isLiveDocument));
   return new Map(rows.map((row) => [row.id, row]));
 };
 

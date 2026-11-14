@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
-import { asc, eq } from 'drizzle-orm';
+import { and, asc, eq } from 'drizzle-orm';
 import type { Database } from '../db/client.ts';
-import { chunks, documentPages, documents } from '../db/schema/documents.ts';
+import { chunks, documentPages, documents, isLiveDocument } from '../db/schema/documents.ts';
 import { docTypes } from '../db/schema/registry.ts';
 import { languageCodeSchema } from '../domain/values.ts';
 import { batchesOf } from '../models/batching.ts';
@@ -89,7 +89,8 @@ const readSource = async (reader: Reader, documentId: string): Promise<Source> =
     })
     .from(documents)
     .leftJoin(docTypes, eq(docTypes.id, documents.typeId))
-    .where(eq(documents.id, documentId));
+    // A tombstone is not a document: it has nothing to index, and must get nothing back.
+    .where(and(eq(documents.id, documentId), isLiveDocument));
   if (document === undefined) throw new DocumentNotFoundError(documentId);
   const pages = await reader
     .select({ page: documentPages.page, text: documentPages.text })

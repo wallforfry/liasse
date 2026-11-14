@@ -165,6 +165,22 @@ describe('search', () => {
     });
   });
 
+  describe('deleted documents', () => {
+    // A tombstone whose chunks were, against the rule, left behind: nothing may surface them.
+    it('never returns a tombstone, whatever is asked', async () => {
+      const id = await corpus.add(extra('tombstone', ['obsidian relic of a deleted file']));
+      expect(keys(await find('obsidian relic'))[0]).toBe('tombstone');
+      await database.db.update(documents).set({ status: 'deleted' }).where(eq(documents.id, id));
+      expect(keys(await find('obsidian relic', { limit: 50 }))).not.toContain('tombstone');
+      expect(keys(await find('obsidian relic', { limit: 50, includePrivate: true }))).not.toContain(
+        'tombstone',
+      );
+      expect(
+        searchInputSchema.safeParse({ query: 'obsidian', filters: { status: 'deleted' } }).success,
+      ).toBe(false);
+    });
+  });
+
   describe('private documents', () => {
     const TAX_NOTICES = { type: 'property_tax_notice' };
 
@@ -258,7 +274,7 @@ describe('search', () => {
       const [first] = await find('Brisa');
       expect(first?.snippets).toEqual([
         {
-          text: 'Warranty certificate reference ZX4101. Appliance model Brisa, covered for 24 months from the purchase',
+          text: 'Warranty certificate reference ZX4101. Appliance model Brisa, covered for 24 months from the purchase.',
           highlights: [{ start: 55, end: 60 }],
           pageFrom: 1,
           pageTo: 1,
@@ -306,7 +322,7 @@ describe('search', () => {
       const [first] = await find('zenithmark');
       const [snippet] = first?.snippets ?? [];
       expect(first && corpus.keyOf(first.id)).toBe('marked');
-      expect(snippet?.text).toBe('Notice: **bold** zenithmark & 5 > 3 ends');
+      expect(snippet?.text).toBe('Notice: **bold** zenithmark & 5 > 3 ends.');
       expect(highlighted(snippet)).toEqual(['zenithmark']);
     });
   });

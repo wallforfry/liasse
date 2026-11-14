@@ -1,5 +1,9 @@
-import { describe, expect, it } from 'vitest';
-import { toExcerpt } from './snippets.ts';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { chunks } from '../db/schema/documents.ts';
+import { insertSyntheticDocument } from '../testing/fixtures.ts';
+import { createTestDatabase, type TestDatabase } from '../testing/test-database.ts';
+import { readSnippets, toExcerpt } from './snippets.ts';
+import { parseSearchQuery } from './tsquery.ts';
 
 const START = '\u{E000}';
 const END = '\u{E001}';
@@ -38,5 +42,41 @@ describe('toExcerpt', () => {
   it('does not cut a surrogate pair in two', () => {
     expect(toExcerpt('ab😀cd', 3).text).toBe('ab');
     expect(toExcerpt('ab😀cd', 4).text).toBe('ab😀');
+  });
+});
+
+describe('readSnippets', () => {
+  let database: TestDatabase;
+
+  beforeAll(async () => {
+    database = await createTestDatabase();
+  });
+
+  afterAll(async () => {
+    await database.dispose();
+  });
+
+  const chunkOf = async (status: 'indexed' | 'deleted'): Promise<string> => {
+    const { id } = await insertSyntheticDocument(database.db, { status });
+    const [chunk] = await database.db
+      .insert(chunks)
+      .values({ documentId: id, pageFrom: 2, pageTo: 2, text: 'Total due: 84.20 EUR' })
+      .returning({ id: chunks.id });
+    if (chunk === undefined) throw new Error('the chunk was not inserted');
+    return chunk.id;
+  };
+
+  it('excerpts the chunks of live documents only', async () => {
+    const live = await chunkOf('indexed');
+    const tombstone = await chunkOf('deleted');
+    const tsquery = (await parseSearchQuery(database.db, 'total')) ?? '';
+    const snippets = await readSnippets(database.db, [live, tombstone], tsquery);
+    expect([...snippets.keys()]).toEqual([live]);
+    expect(snippets.get(live)).toEqual({
+      text: 'Total due: 84.20 EUR',
+      highlights: [{ start: 0, end: 5 }],
+      pageFrom: 2,
+      pageTo: 2,
+    });
   });
 });
