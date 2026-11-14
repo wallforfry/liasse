@@ -6,8 +6,7 @@ import { failure, respondWith } from './errors.ts';
 
 /**
  * One way of proving a request may pass. A route group lists the credentials it accepts;
- * a new one (the session cookie of the web UI) is one more entry in those lists, and no
- * route changes.
+ * a new one is one more entry in those lists, and no route changes.
  */
 export type Credential = (context: AppContext) => boolean | Promise<boolean>;
 

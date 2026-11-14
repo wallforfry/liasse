@@ -1,5 +1,5 @@
 import { Readable } from 'node:stream';
-import { openDocumentFile } from '@liasse/core/api';
+import { type ApiContext, openDocumentFile } from '@liasse/core/api';
 import { supportedMimeSchema } from '@liasse/core/domain';
 import { Hono, type MiddlewareHandler } from 'hono';
 import { z } from 'zod';
@@ -33,6 +33,24 @@ export const contentDisposition = (mime: string, filename: string): string =>
 const servedType = (mime: string): string =>
   supportedMimeSchema.safeParse(mime).success ? mime : FALLBACK_TYPE;
 
+/** The original file of a document, served as data. The web UI serves it the same way. */
+export const documentFileResponse = async (
+  api: Pick<ApiContext, 'db' | 'storage'>,
+  id: string,
+): Promise<Response> => {
+  const { mime, filename, stream } = await openDocumentFile(api, id);
+  const type = servedType(mime);
+  return new Response(Readable.toWeb(stream), {
+    headers: {
+      'Content-Type': type,
+      'Content-Disposition': contentDisposition(type, filename),
+      // No script, no form, no navigation, whatever the file turns out to hold.
+      'Content-Security-Policy': 'sandbox',
+      'Cache-Control': 'private, no-store',
+    },
+  });
+};
+
 const grantQuery = z.strictObject({
   expires: z.string().optional(),
   signature: z.string().optional(),
@@ -61,17 +79,5 @@ export const fileRoutes = ({ api, fileAccess }: FileRouteDeps): Hono<AppEnv> =>
     fileAccess,
     valid('param', idParam),
     valid('query', grantQuery),
-    async (context) => {
-      const { mime, filename, stream } = await openDocumentFile(api, context.req.valid('param').id);
-      const type = servedType(mime);
-      return new Response(Readable.toWeb(stream), {
-        headers: {
-          'Content-Type': type,
-          'Content-Disposition': contentDisposition(type, filename),
-          // No script, no form, no navigation, whatever the file turns out to hold.
-          'Content-Security-Policy': 'sandbox',
-          'Cache-Control': 'private, no-store',
-        },
-      });
-    },
+    async (context) => documentFileResponse(api, context.req.valid('param').id),
   );

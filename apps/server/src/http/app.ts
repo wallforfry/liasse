@@ -3,6 +3,8 @@ import { Hono, type MiddlewareHandler } from 'hono';
 import { every } from 'hono/combine';
 import { generateSpecs } from 'hono-openapi';
 import { createLogger, type Logger } from '../log.ts';
+import { createUi, type UiOptions } from '../ui/app.ts';
+import { UI_ROOT } from '../ui/markup.ts';
 import { reportMcpFailure } from '../mcp-failures.ts';
 import { accessLog } from './access-log.ts';
 import { bearerToken, type Credential, requireAny, signedFileUrl } from './auth.ts';
@@ -31,6 +33,8 @@ export interface AppDependencies {
   readonly logger?: Logger;
   readonly requestTimeoutMs?: number;
   readonly uploadTimeoutMs?: number;
+  /** `config.auth.ui`: the web UI is mounted only when it is given. */
+  readonly ui?: UiOptions | undefined;
 }
 
 const OPENAPI_DOCUMENT = {
@@ -62,9 +66,10 @@ export const createApp = ({
   logger = createLogger(),
   requestTimeoutMs = DEFAULT_REQUEST_TIMEOUT_MS,
   uploadTimeoutMs = DEFAULT_UPLOAD_TIMEOUT_MS,
+  ui,
 }: AppDependencies): Hono<AppEnv> => {
-  // The one place that says who may call what. The session cookie of the web UI is one
-  // more credential in this list.
+  // The one place that says who may call what. The web UI renders its pages on the
+  // server from the same use cases: its session cookie opens `/ui` and nothing here.
   const apiCredentials: readonly Credential[] = [bearerToken(apiTokens)];
   const access = requireAny(apiCredentials);
   const within = (milliseconds: number): MiddlewareHandler<AppEnv> =>
@@ -86,6 +91,10 @@ export const createApp = ({
   );
   app.route('/', searchRoutes({ api, authenticated }));
   app.route('/', registryRoutes({ api, authenticated }));
+  if (ui !== undefined) {
+    app.route(UI_ROOT, createUi({ ...ui, api, logger, requestTimeoutMs, uploadTimeoutMs }));
+    app.get('/', (context) => context.redirect(UI_ROOT, 302));
+  }
   // `ingest` carries a file: an MCP call gets the deadline of an upload.
   app.route(
     '/',

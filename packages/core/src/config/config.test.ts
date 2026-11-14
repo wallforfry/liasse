@@ -105,7 +105,7 @@ describe('loadConfig', () => {
     expect(config.pipeline.maxVisionPages).toBe(25);
     expect(config.pipeline.watchDir).toBe('/inbox');
     expect(config.auth.ui).toEqual({
-      password: 'synthetic-ui-password',
+      password: { kind: 'plain', value: 'synthetic-ui-password' },
       sessionTtlMs: 43_200_000,
     });
     expect(config.hindsight).toEqual({

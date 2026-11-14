@@ -64,7 +64,7 @@ describe('loadConfig value parsing', () => {
 
   it('keeps the UI password exactly as given', () => {
     const config = loadConfig({ ...SYNTHETIC_ENV, UI_PASSWORD: '  padded password ' });
-    expect(config.auth.ui?.password).toBe('  padded password ');
+    expect(config.auth.ui?.password).toEqual({ kind: 'plain', value: '  padded password ' });
   });
 
   it('treats empty variables as unset', () => {

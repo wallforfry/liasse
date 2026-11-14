@@ -34,7 +34,7 @@ Before pushing, `pnpm lint`, `pnpm typecheck`, `pnpm test` and `pnpm build` must
 
 ## Layout
 
-- `apps/server` (`@liasse/server`): the Node process. `src/runtime/` builds it from the configuration (`createRuntime`; `bindings.ts` is the one module that binds a feature to it), `src/http/` is the REST transport (Hono): credentials, guards, error bodies, metrics and one file of routes per resource. A route validates, calls a use case of `@liasse/core/api` and answers; it holds no logic of its own, since MCP calls the same use cases. Everything the server logs goes to stderr through `src/log.ts`, never to stdout.
+- `apps/server` (`@liasse/server`): the Node process. `src/runtime/` builds it from the configuration (`createRuntime`; `bindings.ts` is the one module that binds a feature to it), `src/http/` is the REST transport (Hono): credentials, guards, error bodies, metrics and one file of routes per resource. A route validates, calls a use case of `@liasse/core/api` and answers; it holds no logic of its own, since MCP calls the same use cases. `src/ui/` is the web UI, server-rendered pages under `/ui` that call the same use cases: views escape everything through `hono/html` and run no script. Everything the server logs goes to stderr through `src/log.ts`, never to stdout.
 - `packages/core` (`@liasse/core`): everything else on the server side. No barrel: import a subpath such as `@liasse/core/config` or `@liasse/core/db`, each declared in `exports` of its `package.json`.
 - `packages/mcp` (`@liasse/mcp`): the MCP server.
 - `packages/sdk` (`@liasse/sdk`): the TypeScript client.
