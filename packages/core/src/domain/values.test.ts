@@ -70,6 +70,14 @@ describe('moneySchema', () => {
     },
   );
 
+  it('accepts XAD, the accounting dinar of the Arab Monetary Fund', () => {
+    expect(accepts(moneySchema, { value: 100, currency: 'XAD' })).toBe(true);
+  });
+
+  it('rejects CNX, which is in neither list of ISO 4217', () => {
+    expect(accepts(currencyCodeSchema, 'CNX')).toBe(false);
+  });
+
   it('lists each ISO 4217 code once, as three capital letters', () => {
     expect(new Set(CURRENCY_CODES).size).toBe(CURRENCY_CODES.length);
     expect(CURRENCY_CODES.filter((code) => !/^[A-Z]{3}$/.test(code))).toEqual([]);
