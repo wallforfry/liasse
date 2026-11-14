@@ -1,6 +1,7 @@
 import { eq } from 'drizzle-orm';
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 import { documentPages, documents } from '../db/schema/documents.ts';
+import { jobs } from '../db/schema/jobs.ts';
 import { documentLinks } from '../db/schema/knowledge.ts';
 import { PIPELINE_PROVENANCE_KEY } from '../domain/provenance.ts';
 import { deleteDocument } from '../ingest/delete-document.ts';
@@ -247,20 +248,29 @@ describe('the text stage', () => {
     expect(await harness.db.select().from(documents)).toHaveLength(2);
   });
 
-  it('links nothing to a tombstone, nor an email to itself', async () => {
-    const gone = await harness.ingest('deleted attachment');
-    await deleteDocument({ db: harness.db }, gone);
-    const id = await harness.ingest('email of a tombstone');
-    await harness.db.update(documents).set({ source: 'watch' }).where(eq(documents.id, id));
-    await run(
-      id,
-      withAttachments(attachment('deleted attachment'), attachment('email of a tombstone')),
-    );
-    expect(await harness.db.select().from(documentLinks)).toEqual([]);
-    expect((await harness.document(id)).provenance[PIPELINE_PROVENANCE_KEY]).toMatchObject({
-      text: { attachments_ingested: 0, attachments_skipped: 2 },
-    });
-  });
+  // Verdict P5: only an explicit upload of the file itself brings a deleted document back.
+  it.each(['watch', 'api', 'mcp'] as const)(
+    'never brings back a deleted attachment of an email from %s, nor links an email to itself',
+    async (source) => {
+      const gone = await harness.ingest('deleted attachment');
+      await deleteDocument({ db: harness.db }, gone);
+      const id = await harness.ingest('email of a tombstone');
+      await harness.db.update(documents).set({ source }).where(eq(documents.id, id));
+      const putsBefore = harness.ingestHarness.puts();
+      await run(
+        id,
+        withAttachments(attachment('deleted attachment'), attachment('email of a tombstone')),
+      );
+      expect(await harness.document(gone)).toMatchObject({ status: 'deleted', originalName: '' });
+      expect(harness.ingestHarness.puts()).toBe(putsBefore);
+      const queued = await harness.db.select({ payload: jobs.payload }).from(jobs);
+      expect(queued.filter(({ payload }) => payload.documentId === gone)).toHaveLength(1);
+      expect(await harness.db.select().from(documentLinks)).toEqual([]);
+      expect((await harness.document(id)).provenance[PIPELINE_PROVENANCE_KEY]).toMatchObject({
+        text: { attachments_ingested: 0, attachments_skipped: 2 },
+      });
+    },
+  );
 
   it('writes no link to an email deleted while its attachments are ingested', async () => {
     const id = await harness.ingest('email deleted meanwhile');

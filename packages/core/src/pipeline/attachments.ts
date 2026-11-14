@@ -17,8 +17,9 @@ interface ParentDocument {
 }
 
 // True when the attachment is a document of its own, linked to the email. Bytes that
-// already have a document are linked to it; a tombstone, or an email deleted meanwhile,
-// gets no link.
+// already have a document are linked to it. A deleted document stays deleted whatever
+// the source of the email (a person deleted it), and neither it nor an email deleted
+// meanwhile gets a link.
 const ingestAttachment = async (
   { db, storage, settings }: PipelineDeps,
   parent: ParentDocument,
@@ -26,7 +27,7 @@ const ingestAttachment = async (
 ): Promise<boolean> => {
   const ingested = await ingestFile(
     { db, storage, maxFileSize: settings.maxFileSize },
-    { bytes, filename, source: parent.source },
+    { bytes, filename, source: parent.source, revivesDeleted: false },
   ).catch((error: unknown) => {
     if (error instanceof IngestError) return undefined;
     throw error;

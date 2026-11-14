@@ -223,6 +223,31 @@ describe('ingestFile', () => {
   });
 
   it.each(['api', 'mcp'] as const)(
+    'leaves a deleted document deleted when its bytes come through %s inside another file',
+    async (source) => {
+      const bytes = syntheticPdf(`deleted, then attached through ${source}`);
+      const first = await ingestFile(harness.deps, { bytes, filename: 'a.pdf', source });
+      await deleteDocument(harness.deps, first.id);
+      await harness.database.db.delete(jobs);
+      const putsBefore = harness.puts();
+      const again = await ingestFile(harness.deps, {
+        bytes,
+        filename: 'a.pdf',
+        source,
+        revivesDeleted: false,
+      });
+      expect(again).toEqual({
+        id: first.id,
+        status: 'deleted',
+        duplicate: true,
+        fileRestored: false,
+      });
+      expect(await jobRows()).toEqual([]);
+      expect(harness.puts()).toBe(putsBefore);
+    },
+  );
+
+  it.each(['api', 'mcp'] as const)(
     'revives a deleted document handed back through %s, under the same id',
     async (source) => {
       const bytes = syntheticPdf(`deleted, uploaded again through ${source}`);
