@@ -29,3 +29,9 @@ export const decide = (
     (previous.phase === 'failed' && now >= previous.retryAt);
   return due ? { ingest: true } : { ingest: false, state: previous };
 };
+
+/** Drops the remembered paths that the last listing no longer holds. */
+export const forgetAbsent = (states: Map<string, WatchState>, listed: readonly string[]): void => {
+  const present = new Set(listed);
+  [...states.keys()].filter((path) => !present.has(path)).forEach((path) => states.delete(path));
+};

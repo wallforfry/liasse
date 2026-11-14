@@ -3,7 +3,7 @@ import { basename } from 'node:path';
 import { isFileNotFound } from '../storage/node-errors.ts';
 import { IngestError } from './errors.ts';
 import { fingerprintOf } from './watch-files.ts';
-import { decide, type WatchState } from './watch-state.ts';
+import { decide, forgetAbsent, type WatchState } from './watch-state.ts';
 
 export interface WatchedFile {
   readonly stream: AsyncIterable<Uint8Array>;
@@ -77,9 +77,7 @@ export const createVisitor = ({
       else states.set(path, decision.state);
     },
     keepOnly: (paths) => {
-      [...states.keys()]
-        .filter((path) => !paths.includes(path))
-        .forEach((path) => states.delete(path));
+      forgetAbsent(states, paths);
     },
     hasSettlingFiles: () => [...states.values()].some(({ phase }) => phase === 'settling'),
   };
