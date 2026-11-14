@@ -86,7 +86,7 @@ Eleven Postgres tables: documents, text pages, chunks, types, entities, change l
 
 | Table | Role | Key columns |
 | --- | --- | --- |
-| `documents` | One ingested document | `id`, `sha256` (unique), `storage_key`, `mime`, `original_name`, `source` (watch/api/mcp), `status`, `type_id`, `schema_version`, `core` (jsonb), `fields` (jsonb), `extra` (jsonb), `provenance` (jsonb), `title`, `summary`, `private`, `ingested_at` |
+| `documents` | One ingested document | `id`, `sha256` (unique), `storage_key`, `mime`, `original_name`, `hint`, `source` (watch/api/mcp), `status`, `type_id`, `schema_version`, `core` (jsonb), `fields` (jsonb), `extra` (jsonb), `provenance` (jsonb), `title`, `summary`, `private`, `ingested_at` |
 | `document_pages` | Full text per page | `document_id`, `page`, `text`, `tsv` (tsvector) |
 | `chunks` | Search units | `id`, `document_id`, `page_from`, `page_to`, `text`, `embedding` (vector), `tsv` |
 | `doc_types` | Type registry | `id`, `slug`, `description`, `schema` (jsonb), `version`, `status`, `parent_slug`, `aliases` (text[]), `embedding`; the document count is computed from `documents`, never stored |
@@ -96,7 +96,7 @@ Eleven Postgres tables: documents, text pages, chunks, types, entities, change l
 
 Knowledge-layer tables are described in [Knowledge layer](#knowledge-layer).
 
-**Document statuses**: `received` → `extracted` → `classified` → `indexed`, or `failed` (with `error`); `needs_review` when confidence is below the threshold.
+**Document statuses**: `received` → `extracted` → `classified` → `indexed`, or `failed` (with `error`); `needs_review` when confidence is below the threshold. `deleted` marks a tombstone: deleting a document removes its derived rows, blanks its content and keeps only the row with the hash of the file, while a queued job removes the stored file. A tombstone is not a document for any list, count, search or file request. It is what keeps a file still lying in the watched folder from being ingested again; the same bytes uploaded through the API or MCP revive the document under the same ID.
 
 **Per-field provenance** (in `provenance`):
 
@@ -365,7 +365,9 @@ A single Node binary, configured through environment variables, shipped as a mul
 | `DATABASE_URL` | — | Postgres 16+ with pgvector |
 | `STORAGE_DRIVER` | `fs` | `fs` or `s3` |
 | `STORAGE_PATH` / `S3_*` | `/data/files` | File location |
+| `S3_REQUEST_TIMEOUT` / `S3_MIN_UPLOAD_RATE` | `30s` / `65536` | Deadline of one S3 request; an upload gets it plus its size at this rate (bytes per second) |
 | `WATCH_DIR` | empty | Watched folder (disabled if empty) |
+| `MAX_FILE_SIZE` | `52428800` | Largest accepted file, in bytes |
 | `LLM_PROVIDER` | `anthropic` | `anthropic`, `openai`, `mistral`, `gemini`, `ollama`, `openai-compatible` |
 | `VISION_MODEL` | — | Model for extraction from images |
 | `TEXT_MODEL` | — | Model for classification, re-extraction, consolidation |
@@ -381,6 +383,8 @@ A single Node binary, configured through environment variables, shipped as a mul
 | `UI_PASSWORD` | empty | Enables the web UI (plain value or `$argon2id$…` hash) |
 | `UI_SESSION_TTL` | `7d` | UI session lifetime |
 | `WORKERS` | `2` | Jobs processed in parallel |
+
+**Watched folder.** With `WATCH_DIR` set, Liasse ingests every file of that folder and of its subfolders, those present at startup and those dropped later. It only reads the folder: it never moves, renames or deletes a file, so what was ingested stays where the user put it and is recognised by its hash at the next start. A file is read once its size and modification time have held still for two seconds. A writer that pauses longer than that in the middle of a file gets the partial file ingested as it is, and the complete file ingested as a second document when it changes again. A tool that writes under a temporary name (a leading dot, `.part`, `.tmp`, `.crdownload`) and renames at the end is safe: the watcher ignores those names. Hidden files and folders are ignored, symbolic links are not followed, and a subfolder that cannot be read is reported once and skipped. A file refused for what it is (unsupported format, empty, larger than `MAX_FILE_SIZE`) is not read again until it changes. Deleting a document does not delete its file from the folder, and the file is not ingested again.
 
 **Local embeddings by default.** `EMBEDDING_PROVIDER=local` runs a small quantized multilingual model in-process (ONNX Runtime): around 384 dimensions and roughly 100 MB, with candidates to be compared on the evaluation set (for example the multilingual-e5-small family). The model is loaded on first use and unloaded after 10 minutes of inactivity to meet the idle RAM target; embeddings are computed in batches in the job queue, with a single dedicated worker.
 
