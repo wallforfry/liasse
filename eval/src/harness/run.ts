@@ -16,6 +16,7 @@ import {
 import { answerQuestion } from './agent.ts';
 import { toCorpusAnswer } from './agent-schema.ts';
 import { type CorpusIds, ingestCorpus } from './ingest.ts';
+import { cleanUpOnInterrupt } from './interrupt.ts';
 import { type Env, type Instance, startInstance } from './instance.ts';
 import { openMcpSession } from './mcp-session.ts';
 import { type IngestionSummary, modelsOf, type QuestionResult, type RunReport } from './report.ts';
@@ -119,21 +120,23 @@ export const runEvaluation = async ({
   const index = createCorpusIndex(corpus);
   const instance = await startInstance(env, logger === undefined ? {} : { logger });
   try {
-    const ids = await ingestCorpus(instance, corpus);
-    const results = await scoreDocuments(instance, corpus, ids, index);
-    const model = agentModel(ids, instance.config);
-    const answers = await answerQuestions(instance, questionSet, model, ids, index);
-    return {
-      label,
-      models: modelsOf(instance.config),
-      ingestion: await summarizeIngestion(instance.db, corpus, ids),
-      documents: { totals: aggregateReport(results), results },
-      questions: {
-        passed: answers.filter(({ pass }) => pass).length,
-        total: answers.length,
-        results: answers,
-      },
-    };
+    return await cleanUpOnInterrupt(instance.stop, async () => {
+      const ids = await ingestCorpus(instance, corpus);
+      const results = await scoreDocuments(instance, corpus, ids, index);
+      const model = agentModel(ids, instance.config);
+      const answers = await answerQuestions(instance, questionSet, model, ids, index);
+      return {
+        label,
+        models: modelsOf(instance.config),
+        ingestion: await summarizeIngestion(instance.db, corpus, ids),
+        documents: { totals: aggregateReport(results), results },
+        questions: {
+          passed: answers.filter(({ pass }) => pass).length,
+          total: answers.length,
+          results: answers,
+        },
+      };
+    });
   } finally {
     await instance.stop();
   }

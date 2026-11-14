@@ -63,14 +63,17 @@ export const startInstance = async (
       await runtime.stop();
       throw new Error('The server of the run listens on no port');
     }
+    // An interrupted run stops the instance from its signal handler, then again on its way
+    // out: the second call waits for the first.
+    let stopped: Promise<void> | undefined;
     return {
       config,
       baseUrl: `http://127.0.0.1:${String(runtime.port)}`,
       token,
       db: database.db,
-      stop: async () => {
-        await runtime.stop();
-        await discard();
+      stop: () => {
+        stopped ??= runtime.stop().then(discard);
+        return stopped;
       },
     };
   } catch (error) {
