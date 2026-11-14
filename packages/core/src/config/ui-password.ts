@@ -17,10 +17,14 @@ export type UiPassword = { readonly kind: 'plain'; readonly value: string } | Ar
 const ARGON2_VERSION = 19;
 const MIN_SALT_BYTES = 8;
 const MIN_HASH_BYTES = 16;
-// Bounds the work one login attempt can cost: 1 GiB of memory, 64 passes, 64 lanes.
-const MAX_MEMORY_KIB = 1024 * 1024;
-const MAX_ITERATIONS = 64;
-const MAX_PARALLELISM = 64;
+// The hash is computed on the event loop, so its cost is time every request waits for.
+// Memory times passes is bounded at 64 MiB-passes: about 50 ms on an Apple M-series core
+// with hash-wasm (the OWASP setting m=19456,t=2 takes 28 ms there), a few times that on a
+// small ARM host. Every OWASP argon2id setting (m=47104,t=1 down to m=7168,t=5) fits.
+const MAX_MEMORY_KIB = 64 * 1024;
+const MAX_ITERATIONS = 16;
+const MAX_PARALLELISM = 8;
+const MAX_MEMORY_PASSES = 64 * 1024;
 
 const HASH_PREFIX = '$argon2';
 const PHC = /^\$argon2id\$v=(\d+)\$m=(\d+),t=(\d+),p=(\d+)\$([A-Za-z0-9+/]+)\$([A-Za-z0-9+/]+)$/;
@@ -29,7 +33,8 @@ const NOT_A_HASH =
   'a value starting with $argon2 must be an argon2id hash in PHC form, ' +
   `$argon2id$v=${String(ARGON2_VERSION)}$m=<KiB>,t=<passes>,p=<lanes>$<salt>$<hash>, ` +
   `with at most ${String(MAX_MEMORY_KIB)} KiB, ${String(MAX_ITERATIONS)} passes, ` +
-  `${String(MAX_PARALLELISM)} lanes, a salt of ${String(MIN_SALT_BYTES)} bytes or more ` +
+  `${String(MAX_PARALLELISM)} lanes and ${String(MAX_MEMORY_PASSES)} KiB times passes, ` +
+  `a salt of ${String(MIN_SALT_BYTES)} bytes or more ` +
   `and a hash of ${String(MIN_HASH_BYTES)} bytes or more`;
 
 const parseArgon2id = (value: string): Argon2idHash | undefined => {
@@ -52,6 +57,7 @@ const parseArgon2id = (value: string): Argon2idHash | undefined => {
     parsed.memorySize <= MAX_MEMORY_KIB &&
     parsed.iterations >= 1 &&
     parsed.iterations <= MAX_ITERATIONS &&
+    parsed.memorySize * parsed.iterations <= MAX_MEMORY_PASSES &&
     parsed.salt.length >= MIN_SALT_BYTES &&
     parsed.hash.length >= MIN_HASH_BYTES;
   return withinBounds ? Object.freeze(parsed) : undefined;
