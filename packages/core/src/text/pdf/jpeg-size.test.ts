@@ -33,6 +33,24 @@ describe('readJpegSize', () => {
   ];
   const start = [0xff, 0xd8];
 
+  const frameWith = (marker: number): Uint8Array =>
+    Uint8Array.from([...start, 0xff, marker, ...frame.slice(2)]);
+
+  // Baseline, extended, progressive, lossless and their arithmetic-coded variants.
+  it.each([0xc0, 0xc1, 0xc2, 0xc3, 0xc5, 0xc6, 0xc7, 0xc9, 0xca, 0xcb, 0xcd, 0xce, 0xcf])(
+    'reads the frame that starts with marker %d',
+    (marker) => {
+      expect(readJpegSize(frameWith(marker))).toEqual({ width: 64, height: 48 });
+    },
+  );
+
+  it.each([0xbf, 0xc4, 0xc8, 0xcc, 0xd0, 0xe0])(
+    'does not take the segment with marker %d for a frame',
+    (marker) => {
+      expect(readJpegSize(frameWith(marker))).toBeUndefined();
+    },
+  );
+
   it('skips a Huffman table, whose marker sits among the frame markers', () => {
     const table = [0xff, 0xc4, 0x00, 0x09, 1, 2, 3, 4, 5, 6, 7];
     expect(readJpegSize(Uint8Array.from([...start, ...table, ...frame]))).toEqual({
