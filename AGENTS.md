@@ -49,6 +49,7 @@ Inside `packages/core/src`, one directory per concern. A new concern gets its ow
 | `entities/`   | Entity resolution, sensitive identifier masking, entity listing and merges                          |
 | `ingest/`     | `ingestFile`, deletion with tombstones, format detection, the watched folder                        |
 | `jobs/`       | The job queue on the `jobs` table: kinds, `enqueue`, workers                                        |
+| `knowledge/`  | Key dates, subjects, facts and links of a document, derived state, and the four knowledge tools     |
 | `models/`     | Ports for the text model, the vision model and the embedder; `providers/` adapts them               |
 | `prompt/`     | Prompt helpers, starting with the untrusted-content wrapper                                         |
 | `query/`      | The structured query DSL: its schema, field typing and compilation to bound SQL                     |
@@ -58,7 +59,7 @@ Inside `packages/core/src`, one directory per concern. A new concern gets its ow
 | `testing/`    | Test database and bucket helpers, model fakes and synthetic document builders                       |
 | `text/`       | `extractText`: native text of PDF, DOCX and email, vision transcription otherwise                   |
 
-Names reserved for the features to come, created only by the change that implements them: `pipeline/`, `knowledge/`, `consolidation/`, `hindsight/`.
+Names reserved for the features to come, created only by the change that implements them: `pipeline/`, `consolidation/`, `hindsight/`.
 
 Tests sit next to the code they cover, as `*.test.ts`. A helper that only the tests of one directory use is a `*.test-helper.ts` beside them; neither is compiled into `dist`. Two more suffixes are kept out of the build: `*.fixture.ts` for data shared by several test files, and `*.modeltest.ts` for the tests of `pnpm test:models`.
 
@@ -95,6 +96,9 @@ Tests sit next to the code they cover, as `*.test.ts`. A helper that only the te
 - A migration must not use an enum value added by a migration that can run in the same `migrate` call. The runner applies every pending migration in one transaction, and Postgres refuses a new enum value used in the transaction that added it (`unsafe use of new value`). Migration `0003` adds `deleted` to `document_status`: an index or a constraint on `status <> 'deleted'` needs the runner to commit each migration on its own first.
 - A deleted document keeps its row as a tombstone, so the cascade of the foreign keys to `documents` does not run on deletion. A new table that references `documents` is added to `DOCUMENT_REFERENCES` in `packages/core/src/ingest/delete-document.ts`, and a new column of `documents` gets its tombstone value in `BLANK_CONTENT` there; a test fails for each until it is done. Queries that list, count, search or serve documents add `isLiveDocument` from `@liasse/core/db`.
 - Migrations from parallel branches are all applied, whatever their timestamps: a migration is pending when its journal entry (content hash at its journal date) is not recorded, and pending ones run in journal order. Never change the date of a journal entry that is on `main` either. When two branches both add a migration, rebase, delete yours and generate it again, so the journal and the snapshot stay consistent.
+- An entity id or a subject id stored in an array or a JSON column has no foreign key. Every place one lives is listed in `entities/references.ts` or `knowledge/subject-references.ts`, which a merge rewrites; a test scans every column of the database for the merged id and fails until a new place is listed. Such an id is written under `withEntityLock` (`withSubjectLock` is the same lock), taken before the row of any document.
+- A row over two documents, such as a link, is written through `writeIfBothLive`. `documents.state` is derived from `document_links` by `recomputeDocumentStates`, called by whoever changes the links of a document, the deletion included.
+- In a correlated subquery written with `sql`, name a column of the outer table with `qualified(column)` from `db/columns.ts`: Drizzle leaves the table out of a column in a query over one table.
 - Extracted values keep their trace: spread `traceColumns()` (`model`, `schema_version`, `page`, `quote`, `confidence`) into a table that stores them.
 - Vector columns use `embeddingVector`. The generated SQL contains the token `__EMBEDDING_DIM__`, which the migration runner replaces with `EMBEDDING_DIM`. The installed dimension is read back from the Postgres catalog, and `migrate` refuses to run when `EMBEDDING_DIM` differs from it.
 - Full-text columns use `searchVector`, next to a `searchLanguage` column that holds the ISO 639-1 code of the row's text (null when unknown). The SQL function `liasse_tsvector(language, text)` picks the text search configuration `liasse_<code>` (unaccent, then the Snowball stemmer of that language), or `liasse_simple` for a language without one. The configuration is decided there and nowhere else, but stored generated columns are not rewritten when the function body changes: a change of configuration needs a migration that redefines the three `tsv` columns. Setting `language` on a row does rewrite its `tsv`.
