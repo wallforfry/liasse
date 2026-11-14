@@ -1,16 +1,18 @@
 import { eq } from 'drizzle-orm';
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
+import { z } from 'zod';
 import { documents } from '../db/schema/documents.ts';
 import { jobs } from '../db/schema/jobs.ts';
 import { facts } from '../db/schema/knowledge.ts';
-import { PermanentJobError } from '../jobs/errors.ts';
-import { startWorkers, type Workers } from '../jobs/workers.ts';
+import { DeferJobError, PermanentJobError } from '../jobs/errors.ts';
+import type { JobDeferral } from '../jobs/execution.ts';
+import { startWorkers, type Workers, type WorkersOptions } from '../jobs/workers.ts';
 import { waitUntil } from '../testing/async.ts';
 import { insertSyntheticDocument } from '../testing/fixtures.ts';
 import { createTestDatabase, type TestDatabase } from '../testing/test-database.ts';
 import { createHindsightClient } from './client.ts';
 import { flagsSyntheticIdentifiers, SYNTHETIC_IDENTIFIER } from './detector.test-helper.ts';
-import { HindsightError, HindsightSyncBusyError } from './errors.ts';
+import { HindsightError, HindsightRetainInFlightError, HindsightSyncBusyError } from './errors.ts';
 import { type HindsightStub, startHindsightStub, type StubOverride } from './stub.test-helper.ts';
 import {
   createHindsightSyncHandler,
@@ -60,7 +62,7 @@ describe('the hindsight_sync job', () => {
     return job;
   };
 
-  const work = async (): Promise<void> => {
+  const work = async (options: Pick<WorkersOptions, 'onJobDeferred'> = {}): Promise<void> => {
     started.push(
       await startWorkers({
         db: database.db,
@@ -69,8 +71,13 @@ describe('the hindsight_sync job', () => {
         pollIntervalMs: 20,
         maxPollIntervalMs: 40,
         retry: { baseMs: 10, maxMs: 20 },
+        ...options,
       }),
     );
+  };
+
+  const flagPrivate = async (id: string): Promise<void> => {
+    await database.db.update(documents).set({ private: true }).where(eq(documents.id, id));
   };
 
   beforeAll(async () => {
@@ -156,7 +163,7 @@ describe('the hindsight_sync job', () => {
     expect(stub.documents.get(`documents/${id}`)).toBe(`[doc:${id}] A ${MARKER} fact.`);
   });
 
-  it('leaves a document whose sync is in progress to the retries of the queue', async () => {
+  it('defers a document whose sync is in progress, without a delay of its own', async () => {
     const id = await documentWithFact();
     override = () => 'hang';
     const controller = new AbortController();
@@ -164,10 +171,46 @@ describe('the hindsight_sync job', () => {
     const first = run({ documentId: id }, controller.signal);
     await waitUntil(() => stub.calls.length === before + 1);
     const error: unknown = await run({ documentId: id }).catch((reason: unknown) => reason);
-    expect(error).toBeInstanceOf(HindsightSyncBusyError);
-    expect(error).not.toBeInstanceOf(PermanentJobError);
+    expect(error).toBeInstanceOf(DeferJobError);
+    expect(error).toMatchObject({ delayMs: undefined });
+    expect(error).toHaveProperty('cause', expect.any(HindsightSyncBusyError));
     controller.abort();
     await expect(first).rejects.toMatchObject({ code: 'aborted' });
+  });
+
+  it('defers a forget a retain may still overtake until that retain can no longer land', async () => {
+    const id = await documentWithFact();
+    override = () => ({ status: 503, body: { detail: 'synthetic failure' } });
+    await expect(run({ documentId: id })).rejects.toBeInstanceOf(HindsightError);
+    override = undefined;
+    await flagPrivate(id);
+    const error: unknown = await run({ documentId: id }).catch((reason: unknown) => reason);
+    expect(error).toBeInstanceOf(DeferJobError);
+    expect(error).toHaveProperty('cause', expect.any(HindsightRetainInFlightError));
+    // The client of this test makes one attempt of two minutes at most.
+    expect(error).toHaveProperty('delayMs', expect.any(Number));
+    const { delayMs } = z.object({ delayMs: z.number() }).parse(error);
+    expect(delayMs).toBeGreaterThan(100_000);
+    expect(delayMs).toBeLessThanOrEqual(120_000);
+  });
+
+  it('waits for the sync in progress without spending an attempt', async () => {
+    const id = await documentWithFact();
+    override = () => 'hang';
+    const controller = new AbortController();
+    const before = stub.calls.length;
+    const first = run({ documentId: id }, controller.signal);
+    await waitUntil(() => stub.calls.length === before + 1);
+    const deferrals: JobDeferral[] = [];
+    const jobId = await enqueueHindsightSync(database.db, id);
+    await work({ onJobDeferred: (deferral) => deferrals.push(deferral) });
+    // More deferrals than the 8 attempts of the kind.
+    await waitUntil(() => deferrals.length > 8);
+    override = undefined;
+    controller.abort();
+    await expect(first).rejects.toMatchObject({ code: 'aborted' });
+    await waitUntil(async () => (await jobRow(jobId)).status === 'succeeded');
+    expect(await jobRow(jobId)).toMatchObject({ attempts: 1, lastError: null });
   });
 
   it('states the cap the workers must apply to its kind', () => {
