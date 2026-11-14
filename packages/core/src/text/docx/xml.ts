@@ -1,5 +1,6 @@
 import { decodeCharacterReferences } from '../character-references.ts';
 import { TextExtractionError } from '../errors.ts';
+import { findTagEnd } from '../markup.ts';
 
 export interface XmlElement {
   readonly name: string;
@@ -32,13 +33,22 @@ const malformed = (reason: string): TextExtractionError =>
 
 const decodeEntities = (text: string): string => decodeCharacterReferences(text, XML_ENTITIES);
 
-const parseAttributes = (source: string): Readonly<Record<string, string>> =>
-  Object.fromEntries(
-    Array.from(source.matchAll(/([^\s=]+)\s*=\s*(?:"([^"]*)"|'([^']*)')/g), (match) => [
-      match[1] ?? '',
-      decodeEntities(match[2] ?? match[3] ?? ''),
-    ]),
-  );
+const NO_ATTRIBUTES: Readonly<Record<string, string>> = Object.freeze({});
+
+// Sticky: each attribute is matched where the previous one ended and the scan stops at the
+// first thing that is not one. An unanchored search would retry from every offset of a
+// long run without `=`, which is quadratic. Parsing is synchronous, so sharing the
+// `lastIndex` of one pattern is safe.
+const ATTRIBUTE = /\s*([^\s=]+)\s*=\s*(?:"([^"]*)"|'([^']*)')/y;
+
+const parseAttributes = (source: string): Readonly<Record<string, string>> => {
+  const attributes: [string, string][] = [];
+  ATTRIBUTE.lastIndex = 0;
+  for (let match = ATTRIBUTE.exec(source); match !== null; match = ATTRIBUTE.exec(source)) {
+    attributes.push([match[1] ?? '', decodeEntities(match[2] ?? match[3] ?? '')]);
+  }
+  return attributes.length === 0 ? NO_ATTRIBUTES : Object.fromEntries(attributes);
+};
 
 const MARKUP_ENDS = [
   ['<!--', '-->'],
@@ -59,11 +69,12 @@ const readMarkup = (xml: string, start: number): Markup => {
     '<',
     '>',
   ];
-  const bodyEnd = xml.indexOf(closing, start + opening.length);
+  const bodyStart = start + opening.length;
+  const bodyEnd = opening === '<' ? findTagEnd(xml, bodyStart) : xml.indexOf(closing, bodyStart);
   if (bodyEnd === -1) throw malformed('unterminated markup');
   return {
     opening,
-    body: xml.slice(start + opening.length, bodyEnd),
+    body: xml.slice(bodyStart, bodyEnd),
     end: bodyEnd + closing.length,
   };
 };
@@ -73,28 +84,41 @@ const openElement = (body: string): OpenElement => {
   const nameEnd = source.search(/\s/);
   return {
     name: nameEnd === -1 ? source : source.slice(0, nameEnd),
-    attributes: nameEnd === -1 ? {} : parseAttributes(source.slice(nameEnd)),
+    attributes: nameEnd === -1 ? NO_ATTRIBUTES : parseAttributes(source.slice(nameEnd)),
     children: [],
   };
 };
 
 // A small, non-validating parser for the XML that Word writes: elements, attributes,
 // text, CDATA and the five predefined entities. Declarations, comments and processing
-// instructions are skipped; DTD entities are never expanded.
-export const parseXml = (xml: string): XmlElement => {
-  const root: OpenElement = { name: '#document', attributes: {}, children: [] };
+// instructions are skipped; DTD entities are never expanded. The tree holds at most
+// `maxNodes` elements and text nodes: the size of the XML bounds its bytes, not the
+// memory of the objects built from it.
+export const parseXml = (xml: string, maxNodes: number): XmlElement => {
+  const root: OpenElement = { name: '#document', attributes: NO_ATTRIBUTES, children: [] };
   const stack: OpenElement[] = [root];
+  let nodes = 0;
+  const append = (parent: OpenElement, node: XmlNode): void => {
+    nodes += 1;
+    if (nodes > maxNodes) {
+      throw new TextExtractionError(
+        'docx_too_large',
+        `The document XML holds more than the limit of ${String(maxNodes)} nodes`,
+      );
+    }
+    parent.children.push(node);
+  };
   let position = 0;
   while (position < xml.length) {
     const current = stack.at(-1) ?? root;
     const start = xml.indexOf('<', position);
     const text = xml.slice(position, start === -1 ? xml.length : start);
-    if (text !== '') current.children.push(decodeEntities(text));
+    if (text !== '') append(current, decodeEntities(text));
     if (start === -1) break;
     const { opening, body, end } = readMarkup(xml, start);
     position = end;
     if (opening === '<![CDATA[') {
-      current.children.push(body);
+      append(current, body);
     } else if (opening === '<' && body.startsWith('/')) {
       if (stack.length === 1 || current.name !== body.slice(1).trim()) {
         throw malformed('unbalanced closing tag');
@@ -102,7 +126,7 @@ export const parseXml = (xml: string): XmlElement => {
       stack.pop();
     } else if (opening === '<') {
       const element = openElement(body);
-      current.children.push(element);
+      append(current, element);
       if (!body.endsWith('/')) {
         if (stack.length >= MAX_XML_DEPTH) throw malformed('elements nested too deeply');
         stack.push(element);

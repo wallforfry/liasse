@@ -3,6 +3,7 @@ import { createFakeVisionModel } from '../../testing/fake-vision-model.ts';
 import { buildSyntheticDocx, syntheticDocumentXml } from '../../testing/synthetic-docx.ts';
 import { buildSyntheticZip } from '../../testing/synthetic-zip.ts';
 import { extractText } from '../extract-text.ts';
+import { DEFAULT_TEXT_LIMITS } from '../limits.ts';
 import { MAX_XML_DEPTH } from './xml.ts';
 
 const DOCX = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
@@ -209,6 +210,33 @@ describe('extractText on a DOCX it cannot read', () => {
     const failure = extract(withCentralField(single, 20, 0xffff));
     await expect(failure).rejects.toMatchObject({ code: 'docx_corrupt' });
     await expect(failure).rejects.toThrow(/truncated file data/);
+  });
+});
+
+describe('extractText on a DOCX with too many elements', () => {
+  // `w:document`, `w:body`, `w:sectPr`, then `w:p`, `w:r`, `w:t` and its text per paragraph.
+  const bytes = buildSyntheticDocx(paragraph('One') + paragraph('Two'));
+  const nodes = 3 + 2 * 4;
+  const extractWithin = (maxDocxXmlNodes: number) =>
+    extractText(
+      { bytes, mime: DOCX },
+      { vision: createFakeVisionModel(), limits: { maxDocxXmlNodes } },
+    );
+
+  it('accepts a document with exactly as many nodes as the limit', async () => {
+    expect((await extractWithin(nodes)).pages[0]?.text).toBe('One\n\nTwo');
+  });
+
+  it('refuses a document with one node more than the limit', async () => {
+    await expect(extractWithin(nodes - 1)).rejects.toMatchObject({
+      name: 'TextExtractionError',
+      code: 'docx_too_large',
+      retryable: false,
+    });
+  });
+
+  it('holds at most 500 000 nodes by default', () => {
+    expect(DEFAULT_TEXT_LIMITS.maxDocxXmlNodes).toBe(500_000);
   });
 });
 
