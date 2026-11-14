@@ -1,6 +1,6 @@
 import { and, eq, lt, sql } from 'drizzle-orm';
 import type { Database } from '../db/client.ts';
-import { documents } from '../db/schema/documents.ts';
+import { documents, isLiveDocument } from '../db/schema/documents.ts';
 import {
   type DocumentSource,
   type DocumentStatus,
@@ -24,6 +24,7 @@ export interface IncomingFile {
   readonly filename: string;
   readonly source: DocumentSource;
   readonly hint: string | undefined;
+  readonly private: boolean;
 }
 
 export interface IngestResult {
@@ -86,6 +87,7 @@ const reviveTombstone = async (
       originalName: file.filename,
       source: file.source,
       hint: file.hint ?? null,
+      private: file.private,
       watchRequeues: 0,
       fileDeletedAt: null,
       ingestedAt: sql`now()`,
@@ -114,6 +116,12 @@ const repairLiveDocument = async (
   file: IncomingFile,
 ): Promise<Attempt> => {
   const { id, status } = existing;
+  if (file.private) {
+    await tx
+      .update(documents)
+      .set({ private: true })
+      .where(and(eq(documents.id, id), isLiveDocument));
+  }
   const fileMissing = !(await storage.exists(file.storageKey));
   if (!fileMissing && status !== 'failed') {
     return { id, status, duplicate: true, fileRestored: false };
@@ -171,6 +179,7 @@ export const ingestNew = async (
       originalName: file.filename,
       source: file.source,
       hint: file.hint ?? null,
+      private: file.private,
     })
     .returning({ id: documents.id, status: documents.status });
   if (document === undefined) throw new Error('The document was not inserted');

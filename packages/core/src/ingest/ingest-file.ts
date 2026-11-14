@@ -23,6 +23,12 @@ export type IngestInput = FileContent & {
   readonly filename: string;
   readonly source: DocumentSource;
   readonly hint?: string | undefined;
+  /**
+   * True flags the document `private` in the transaction that creates or revives it, so
+   * no job ever sees it unflagged. On bytes that already have a live document, true
+   * raises the flag and false leaves it as it is: handing a file back never lowers it.
+   */
+  readonly private?: boolean | undefined;
 };
 
 /**
@@ -54,6 +60,7 @@ export const ingestFile = async (
     filename: cleanFilename(input.filename),
     source: input.source,
     hint: cleanHint(input.hint),
+    private: input.private ?? false,
   };
 
   return db.transaction(async (tx) => {
