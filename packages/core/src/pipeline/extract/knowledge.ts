@@ -1,20 +1,19 @@
-import { MAX_FACTS_PER_DOCUMENT, MAX_SUBJECTS_PER_DOCUMENT } from '../../domain/limits.ts';
+import {
+  MAX_FACTS_PER_DOCUMENT,
+  MAX_KEY_DATES_PER_DOCUMENT,
+  MAX_SUBJECTS_PER_DOCUMENT,
+} from '../../domain/limits.ts';
 import { keyDateSchema } from '../../domain/values.ts';
+import { type KnowledgeInput, knowledgeKeyDateSchema } from '../../knowledge/input.ts';
 import { KEY_DATES_FIELD } from '../../registry/core-fields.ts';
 import { ownValue } from '../../registry/own.ts';
-import type {
-  Knowledge,
-  KnowledgeFact,
-  KnowledgeKeyDate,
-  KnowledgeSubjectCandidate,
-  KnowledgeTrace,
-} from '../deps.ts';
 import type { ExtractionTrace } from './assemble.ts';
 import { type EntityResolutions, mentionKey } from './entities.ts';
 import {
   type ExtractedFact,
   type ExtractionOutput,
   factSchema,
+  noticePeriodOutputSchema,
   subjectCandidateSchema,
 } from './extraction-schema.ts';
 import { factSupport, type SupportedFact } from './support.ts';
@@ -54,16 +53,32 @@ export const readFacts = (
 export const factEntityNames = ({ facts }: FactsReading): readonly string[] =>
   facts.flatMap(({ entities }) => entities ?? []);
 
+type KeyDateInput = KnowledgeInput['keyDates'][number];
+type FactInput = KnowledgeInput['facts'][number];
+type SubjectInput = KnowledgeInput['subjects'][number];
+type NoticePeriodInput = NonNullable<KnowledgeInput['noticePeriod']>;
+type TraceInput = Pick<KeyDateInput, 'model' | 'schemaVersion' | 'page' | 'quote' | 'confidence'>;
+
+export interface NoticePeriodReading {
+  readonly noticePeriod: NoticePeriodInput | undefined;
+  readonly rejected: number;
+}
+
+export const readNoticePeriod = ({ notice_period: raw }: ExtractionOutput): NoticePeriodReading => {
+  const parsed = noticePeriodOutputSchema.safeParse(raw);
+  return { noticePeriod: parsed.data, rejected: raw === undefined || parsed.success ? 0 : 1 };
+};
+
 const traceOf = (
   { page, quote, confidence }: Pick<VerifiedValue, 'page' | 'quote' | 'confidence'>,
   { model, schemaVersion }: ExtractionTrace,
-): KnowledgeTrace => ({ model, schemaVersion, page, quote, confidence });
+): TraceInput => ({ model, schemaVersion, page, quote, confidence });
 
 const toFact = (
   fact: ExtractedFact,
   trace: ExtractionTrace,
   resolutions: EntityResolutions,
-): KnowledgeFact => ({
+): FactInput => ({
   text: fact.text,
   validFrom: fact.valid_from ?? null,
   validTo: fact.valid_to ?? null,
@@ -76,16 +91,22 @@ const toFact = (
   ...traceOf(fact, trace),
 });
 
-const keyDatesOf = (core: Readings, trace: ExtractionTrace): readonly KnowledgeKeyDate[] => {
+// A key date is checked again against the knowledge layer, whose label is trimmed and
+// bounded where the core field's is not.
+const keyDatesOf = (core: Readings, trace: ExtractionTrace): readonly KeyDateInput[] => {
   const reading = ownValue(core, KEY_DATES_FIELD);
   if (reading === undefined || !isListReading(reading)) return [];
-  return reading.flatMap((item) => {
-    const keyDate = keyDateSchema.safeParse(item.value);
-    return keyDate.success ? [{ ...keyDate.data, ...traceOf(item, trace) }] : [];
-  });
+  return reading
+    .flatMap((item) => {
+      const keyDate = keyDateSchema.safeParse(item.value).data;
+      return keyDate === undefined
+        ? []
+        : (knowledgeKeyDateSchema.safeParse({ ...keyDate, ...traceOf(item, trace) }).data ?? []);
+    })
+    .slice(0, MAX_KEY_DATES_PER_DOCUMENT);
 };
 
-const subjectsOf = (output: ExtractionOutput): readonly KnowledgeSubjectCandidate[] =>
+const subjectsOf = (output: ExtractionOutput): readonly SubjectInput[] =>
   (output.subjects ?? [])
     .flatMap((raw) => subjectCandidateSchema.safeParse(raw).data ?? [])
     .slice(0, MAX_SUBJECTS_PER_DOCUMENT)
@@ -95,15 +116,20 @@ const subjectsOf = (output: ExtractionOutput): readonly KnowledgeSubjectCandidat
       ...(identifier === undefined ? {} : { identifier }),
     }));
 
-/** The knowledge section of the same call: key dates, facts and candidate subjects. */
+/**
+ * The knowledge section of the same call: key dates, facts, candidate subjects and the
+ * notice period.
+ */
 export const toKnowledge = (
   output: ExtractionOutput,
   core: Readings,
   facts: FactsReading,
+  { noticePeriod }: NoticePeriodReading,
   trace: ExtractionTrace,
   resolutions: EntityResolutions,
-): Knowledge => ({
+): KnowledgeInput => ({
   keyDates: keyDatesOf(core, trace),
   facts: facts.facts.map((fact) => toFact(fact, trace, resolutions)),
   subjects: subjectsOf(output),
+  ...(noticePeriod === undefined ? {} : { noticePeriod }),
 });

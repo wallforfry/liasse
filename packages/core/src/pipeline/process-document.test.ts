@@ -263,7 +263,7 @@ describe('processDocument', () => {
       id,
       live(),
     ).catch(() => undefined);
-    expect(received[0]).toEqual({ id, private: false, language: 'fr' });
+    expect(received[0]).toEqual({ id, private: false });
     expect(received[1]).toMatchObject({
       subjects: [
         {
@@ -301,7 +301,7 @@ describe('processDocument', () => {
   it('lets a deletion during the indexing win, without failing the job', async () => {
     const id = await harness.ingest('deleted before indexing');
     const { indexDocument: _fake, ...defaults } = depsFor(OUTPUT, {
-      persistKnowledge: () => Promise.resolve(),
+      persistKnowledge: () => Promise.resolve({ rejectedValues: 0 }),
       afterIndexed: () => Promise.reject(new Error('a deleted document has no hook')),
     });
     const embedder = {
@@ -376,6 +376,47 @@ describe('processDocument', () => {
         dropped_identifiers: 1,
       },
     });
+  });
+
+  it('computes the notice deadline from the notice period the extraction gives', async () => {
+    const id = await harness.ingest('notice period');
+    const notice_period = { amount: 2, unit: 'months', confidence: 0.8 };
+    await processDocument(depsFor({ ...OUTPUT, notice_period }), id, live());
+    expect(
+      (await harness.db.select().from(documentDates)).map(({ kind, date }) => ({ kind, date })),
+    ).toEqual(
+      expect.arrayContaining([
+        { kind: 'renewal', date: '2027-03-01' },
+        { kind: 'notice_deadline', date: '2027-01-01' },
+      ]),
+    );
+  });
+
+  // Five years at most: the knowledge layer drops the first; the second is not a period.
+  it.each([
+    ['a notice period out of range', { amount: 61, unit: 'months', confidence: 0.8 }],
+    ['a malformed notice period', { amount: 1, unit: 'years', confidence: 0.8 }],
+  ])('counts %s with the rejected values, and keeps the rest', async (_, notice_period) => {
+    const id = await harness.ingest('dropped notice period');
+    await processDocument(depsFor({ ...OUTPUT, notice_period }), id, live());
+    const document = await harness.document(id);
+    expect(document.provenance[PIPELINE_PROVENANCE_KEY]).toMatchObject({
+      extraction: { rejected_values: 3 },
+    });
+    expect((await harness.db.select().from(documentDates)).map(({ kind }) => kind)).toEqual([
+      'renewal',
+    ]);
+    expect(document).toMatchObject({ status: 'indexed' });
+  });
+
+  it('leaves out of the knowledge a key date its layer refuses, without failing the job', async () => {
+    const id = await harness.ingest('blank key date label');
+    const key_dates = [
+      at({ kind: 'renewal', date: '2027-03-01', label: '   ' }, 'renews on 01/03/2027', 2),
+    ];
+    await processDocument(depsFor({ ...OUTPUT, core: { ...OUTPUT.core, key_dates } }), id, live());
+    expect(await harness.db.select().from(documentDates)).toEqual([]);
+    expect(await harness.document(id)).toMatchObject({ status: 'indexed' });
   });
 
   it('flags for review a document under the confidence threshold, and still indexes it', async () => {

@@ -2,16 +2,14 @@ import { eq } from 'drizzle-orm';
 import { documents } from '../../db/schema/documents.ts';
 import { docTypes } from '../../db/schema/registry.ts';
 import type { DocumentStatus } from '../../domain/enums.ts';
-import { languageCodeSchema } from '../../domain/values.ts';
 import { PROVENANCE_ENTITY_ID_KEY } from '../../domain/provenance.ts';
 import type { Transaction } from '../../ingest/existing-document.ts';
 import { writeIfLive } from '../../ingest/live-write.ts';
 import { isPlainRecord } from '../../registry/own.ts';
 import type { RegisteredType } from '../../registry/type-store.ts';
-import { entitiesOf } from '../bindings.ts';
+import { entitiesOf, persisterOf } from '../bindings.ts';
 import type { PipelineDeps } from '../deps.ts';
 import { loadDocument, type PipelineDocument } from '../document.ts';
-import { storeKnowledge } from '../knowledge-store.ts';
 import type { ExtractedDocument } from './interpret.ts';
 import { mergeWithStored } from './merge.ts';
 
@@ -80,25 +78,29 @@ const write = async (
     ]),
   ];
   if ((await entitiesOf(deps).missingIds(tx, entityIds)).length > 0) return 'stale';
-  const merged = mergeWithStored(stored, fresh, {
-    type,
-    truncated,
-    model,
-    keepProvenanceOfUnchanged: mode === 'reextract',
-  });
+  const merge = (rejectedByKnowledge: number) =>
+    mergeWithStored(
+      stored,
+      { ...fresh, rejected: fresh.rejected + rejectedByKnowledge },
+      { type, truncated, model, keepProvenanceOfUnchanged: mode === 'reextract' },
+    );
   await tx
     .update(documents)
-    .set({ ...merged, typeId: type?.id ?? null, schemaVersion: type?.version ?? null })
+    .set({ ...merge(0), typeId: type?.id ?? null, schemaVersion: type?.version ?? null })
     .where(eq(documents.id, documentId));
-  await (deps.persistKnowledge ?? storeKnowledge)(
+  // The knowledge store reads the language and the issuer from the row as just written,
+  // and only then knows how many of its values it dropped.
+  const { rejectedValues } = await persisterOf(deps)(
     tx,
-    {
-      id: documentId,
-      private: stored.private,
-      language: languageCodeSchema.safeParse(merged.core.language).data ?? null,
-    },
+    { id: documentId, private: stored.private },
     fresh.knowledge,
   );
+  if (rejectedValues > 0) {
+    await tx
+      .update(documents)
+      .set({ provenance: merge(rejectedValues).provenance })
+      .where(eq(documents.id, documentId));
+  }
   return 'stored';
 };
 

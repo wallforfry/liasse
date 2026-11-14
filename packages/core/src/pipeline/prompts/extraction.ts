@@ -1,4 +1,9 @@
-import { KEY_DATE_KINDS, type SchemaLanguage, SUBJECT_KINDS } from '../../domain/enums.ts';
+import {
+  KEY_DATE_KINDS,
+  NOTICE_PERIOD_UNITS,
+  type SchemaLanguage,
+  SUBJECT_KINDS,
+} from '../../domain/enums.ts';
 import { MAX_FACTS_PER_DOCUMENT } from '../../domain/limits.ts';
 import { wrapUntrusted } from '../../prompt/untrusted.ts';
 import type { TypeFields } from '../../registry/fields.ts';
@@ -23,6 +28,7 @@ export const extractionSystemPrompt = (language: SchemaLanguage): string =>
     `"core.key_dates" lists the dates that matter, each with a kind (${KEY_DATE_KINDS.join(', ')}) and a short label.`,
     `"facts" holds 1 to ${String(MAX_FACTS_PER_DOCUMENT)} short, self-contained statements of what the document establishes, each with the dates between which it holds when the document gives them, and the names of the entities and subjects it is about. The quote of a fact, at least ${String(MIN_FACT_QUOTE_LENGTH)} characters, states every name, date and number the fact gives, and the fact uses the words of its quote. No opinion, nothing the document does not say.`,
     `"subjects" lists the things the recipient owns or holds that the document is about (${SUBJECT_KINDS.join(', ')}), never the organizations or people involved.`,
+    `"notice_period" is the notice period a contract states, as a whole amount of ${NOTICE_PERIOD_UNITS.join(', ')} with your confidence; leave it out when the document states none.`,
   ].join('\n');
 
 const describeField = (definition: FieldDefinition): string => {

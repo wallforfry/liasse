@@ -1,22 +1,17 @@
 import type { Database } from '../db/client.ts';
-import type {
-  EntityIdentifierType,
-  EntityKind,
-  KeyDateKind,
-  SchemaLanguage,
-  SubjectKind,
-} from '../domain/enums.ts';
-import type { LanguageCode } from '../domain/languages.ts';
+import type { EntityIdentifierType, EntityKind, SchemaLanguage } from '../domain/enums.ts';
 import type { EntityProvenance } from '../domain/provenance.ts';
 import type { IdentifierKey } from '../entities/sensitive.ts';
 import type { SimilarityThresholds } from '../entities/similarity.ts';
 import type { Transaction } from '../ingest/existing-document.ts';
+import type { KnowledgeDocument, KnowledgeInput } from '../knowledge/input.ts';
+import type { PersistedKnowledge } from '../knowledge/persist-knowledge.ts';
 import type { Embedder, TextModel, VisionModel } from '../models/ports.ts';
 import type { Storage } from '../storage/port.ts';
 import type { ExtractedText, ExtractTextDeps, ExtractTextInput } from '../text/types.ts';
 import type { TextProcessLimits } from './text-process/limits.ts';
 
-// Entity resolution, masking and indexing are bound to the real functions in
+// Entity resolution, masking, indexing and the knowledge store are bound to the real functions in
 // `bindings.ts`. The shapes below are what the pipeline uses of them, and what a caller
 // may substitute.
 
@@ -58,60 +53,15 @@ export type MaskSensitive = (text: string) => string;
 
 export type IndexDocument = (documentId: string) => Promise<unknown>;
 
-export interface KnowledgeTrace {
-  readonly model: string;
-  readonly schemaVersion: number | null;
-  readonly page: number;
-  readonly quote: string;
-  readonly confidence: number;
-}
-
-export interface KnowledgeKeyDate extends KnowledgeTrace {
-  readonly kind: KeyDateKind;
-  readonly date: string;
-  readonly label: string;
-}
-
-export interface KnowledgeFact extends KnowledgeTrace {
-  readonly text: string;
-  readonly validFrom: string | null;
-  readonly validTo: string | null;
-  readonly entityIds: readonly string[];
-  /** Names of the subjects the fact is about, as the document writes them. */
-  readonly subjects: readonly string[];
-}
-
-export interface KnowledgeSubjectCandidate {
-  readonly kind: SubjectKind;
-  readonly name: string;
-  readonly identifier?: string;
-}
-
-/** The knowledge section of one extraction, validated and masked. */
-export interface Knowledge {
-  readonly keyDates: readonly KnowledgeKeyDate[];
-  readonly facts: readonly KnowledgeFact[];
-  readonly subjects: readonly KnowledgeSubjectCandidate[];
-}
-
-export interface KnowledgeDocument {
-  readonly id: string;
-  readonly private: boolean;
-  /** `core.language` as it is being written: what `indexDocument` gives the pages. */
-  readonly language: LanguageCode | null;
-}
-
 /**
- * Stores the knowledge of a document in the transaction that writes the document, in
- * place of what a previous extraction stored. Subject resolution and link detection
- * belong to the knowledge layer and replace `storeKnowledge`, the default.
+ * Stores the knowledge of a document in the transaction that writes the document, once
+ * its row is written, in place of what a previous extraction stored.
  */
 export type PersistKnowledge = (
   tx: Transaction,
   document: KnowledgeDocument,
-  knowledge: Knowledge,
-) => Promise<void>;
-
+  knowledge: KnowledgeInput,
+) => Promise<PersistedKnowledge>;
 export type ExtractDocumentText = (
   input: ExtractTextInput,
   deps: Pick<ExtractTextDeps, 'vision' | 'signal' | 'limits'>,
@@ -151,7 +101,7 @@ export interface PipelineDeps {
   readonly maskSensitive?: MaskSensitive;
   /** `indexDocument` of `@liasse/core/search`, with the embedder above, by default. */
   readonly indexDocument?: IndexDocument;
-  /** `storeKnowledge` by default. */
+  /** `createPersistKnowledge` of `@liasse/core/knowledge`, with the key above, by default. */
   readonly persistKnowledge?: PersistKnowledge;
   /** Called after a document is indexed, at least once: it must be idempotent. */
   readonly afterIndexed?: (documentId: string) => Promise<void>;

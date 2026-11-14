@@ -12,12 +12,6 @@ export type {
   EntityResolver,
   ExtractDocumentText,
   IndexDocument,
-  Knowledge,
-  KnowledgeDocument,
-  KnowledgeFact,
-  KnowledgeKeyDate,
-  KnowledgeSubjectCandidate,
-  KnowledgeTrace,
   MaskSensitive,
   PersistKnowledge,
   PipelineDeps,
@@ -35,7 +29,6 @@ export { MAX_QUOTE_LENGTH } from './extract/extraction-schema.ts';
 export { MIN_QUOTE_LENGTH, normalizeForQuote } from './extract/quotes.ts';
 export { createPipelineHandlers, failAbandonedDocuments } from './handlers.ts';
 export { reextractDocumentJob, reindexDocumentJob } from './jobs.ts';
-export { storeKnowledge } from './knowledge-store.ts';
 export { processDocument, reextractDocument, reindexDocument } from './process-document.ts';
 export {
   DEFAULT_TEXT_PROCESS_LIMITS,

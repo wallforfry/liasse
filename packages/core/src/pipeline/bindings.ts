@@ -3,10 +3,18 @@ import { withEntityLock } from '../entities/entity-lock.ts';
 import { missingEntityIds } from '../entities/entity-store.ts';
 import { InvalidEntityMentionError, prepareMention } from '../entities/mention.ts';
 import { resolveEntity } from '../entities/resolve.ts';
+import { createPersistKnowledge } from '../knowledge/persist-knowledge.ts';
 import { indexDocument } from '../search/indexing.ts';
-import type { EntityResolver, IndexDocument, MaskSensitive, PipelineDeps } from './deps.ts';
+import type {
+  EntityResolver,
+  IndexDocument,
+  MaskSensitive,
+  PersistKnowledge,
+  PipelineDeps,
+} from './deps.ts';
 
-// The one place the pipeline is bound to entity resolution, masking and indexing. Each
+// The one place the pipeline is bound to entity resolution, masking, indexing and the
+// knowledge store. Each
 // accessor answers what the caller injected, or the real function.
 
 const realEntities = ({
@@ -57,3 +65,6 @@ export const maskOf = (deps: PipelineDeps): MaskSensitive =>
 
 export const indexerOf = (deps: PipelineDeps): IndexDocument =>
   deps.indexDocument ?? ((documentId) => indexDocument(deps, documentId));
+
+export const persisterOf = (deps: PipelineDeps): PersistKnowledge =>
+  deps.persistKnowledge ?? createPersistKnowledge({ identifierKey: deps.identifierKey });

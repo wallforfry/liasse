@@ -8,7 +8,11 @@ import {
   MAX_IDENTIFIERS_PER_MENTION,
   MAX_SUBJECT_NAME_LENGTH,
 } from '../../domain/limits.ts';
-import { entityKindSchema, subjectKindSchema } from '../../domain/schemas.ts';
+import {
+  entityKindSchema,
+  noticePeriodUnitSchema,
+  subjectKindSchema,
+} from '../../domain/schemas.ts';
 import { isoDateSchema } from '../../domain/values.ts';
 import { CORE_FIELD_NAMES } from '../../registry/core-fields.ts';
 import type { TypeFields } from '../../registry/fields.ts';
@@ -75,6 +79,13 @@ export const subjectCandidateSchema = z.object({
 });
 export type SubjectCandidate = z.output<typeof subjectCandidateSchema>;
 
+// Its range is checked by the knowledge layer, which counts a period out of it as rejected.
+export const noticePeriodOutputSchema = z.object({
+  amount: z.number().int(),
+  unit: noticePeriodUnitSchema,
+  confidence: z.number().min(0).max(1),
+});
+
 type RawRecord = Readonly<Record<string, unknown>>;
 
 const recordOf = (input: unknown): RawRecord => (isPlainRecord(input) ? input : {});
@@ -133,6 +144,7 @@ export const extractionOutputSchema = (fields: TypeFields) =>
       entities: z.array(lenient(entityDetailSchema)).optional(),
       facts: z.array(lenient(factSchema)).optional(),
       subjects: z.array(lenient(subjectCandidateSchema)).optional(),
+      notice_period: lenient(noticePeriodOutputSchema).optional(),
     }),
   );
 export type ExtractionOutput = z.output<ReturnType<typeof extractionOutputSchema>>;

@@ -1,6 +1,7 @@
 import { CORE_FIELDS } from '../../registry/core-fields.ts';
 import type { RegisteredType } from '../../registry/type-store.ts';
-import type { Knowledge, MaskSensitive } from '../deps.ts';
+import type { KnowledgeInput } from '../../knowledge/input.ts';
+import type { MaskSensitive } from '../deps.ts';
 import type { PageText } from '../token-budget.ts';
 import { type AssembledSection, assembleSection, entityNamesOf } from './assemble.ts';
 import { type MentionDeps, resolveMentions } from './entities.ts';
@@ -10,7 +11,7 @@ import {
   MAX_SUMMARY_LENGTH,
   MAX_TITLE_LENGTH,
 } from './extraction-schema.ts';
-import { factEntityNames, readFacts, toKnowledge } from './knowledge.ts';
+import { factEntityNames, readFacts, readNoticePeriod, toKnowledge } from './knowledge.ts';
 import { maskQuotes, maskValues } from './masking.ts';
 import { createQuoteIndex } from './quotes.ts';
 import { languageOf, readOutput } from './read-output.ts';
@@ -34,7 +35,7 @@ export interface ExtractedDocument {
   readonly droppedIdentifiers: number;
   readonly title: string | null;
   readonly summary: string | null;
-  readonly knowledge: Knowledge;
+  readonly knowledge: KnowledgeInput;
 }
 
 export interface ModelAnswer {
@@ -81,7 +82,8 @@ const maskSection = (mask: MaskSensitive, section: AssembledSection): MaskedSect
 const isClean = (mask: MaskSensitive, texts: readonly string[]): boolean =>
   texts.every((text) => mask(text) === text);
 
-const maskKnowledge = (mask: MaskSensitive, knowledge: Knowledge): Knowledge => ({
+const maskKnowledge = (mask: MaskSensitive, knowledge: KnowledgeInput): KnowledgeInput => ({
+  ...knowledge,
   keyDates: knowledge.keyDates.map((keyDate) => ({
     ...keyDate,
     label: mask(keyDate.label),
@@ -127,6 +129,7 @@ export const interpret = async (
   const evidence = { quotes: createQuoteIndex(pages), language: languageOf(output) };
   const reading = readOutput(output, typeFields, evidence);
   const facts = readFacts(output, evidence);
+  const noticePeriod = readNoticePeriod(output);
   const { resolutions, droppedIdentifiers } = await resolveMentions(
     deps,
     [...entityNamesOf(reading, typeFields), ...factEntityNames(facts)],
@@ -148,13 +151,21 @@ export const interpret = async (
     provenance: { ...extra.provenance, ...fields.provenance, ...core.provenance },
     coreConfidences: core.confidences,
     rejectedCore: core.rejected,
-    rejected: core.rejected + fields.rejected + extra.rejected + facts.rejected,
+    rejected:
+      core.rejected + fields.rejected + extra.rejected + facts.rejected + noticePeriod.rejected,
     droppedIdentifiers,
     title: tidyText(mask, output.title, MAX_TITLE_LENGTH),
     summary: tidyText(mask, output.summary, MAX_SUMMARY_LENGTH),
     knowledge: maskKnowledge(
       mask,
-      toKnowledge(output, without(reading.core.readings, core.dropped), facts, trace, resolutions),
+      toKnowledge(
+        output,
+        without(reading.core.readings, core.dropped),
+        facts,
+        noticePeriod,
+        trace,
+        resolutions,
+      ),
     ),
   };
 };
