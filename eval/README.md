@@ -22,7 +22,7 @@ The corpus is committed (1.4 MB: 1.1 MB of documents, 0.3 MB of JSON), so it can
 
 ## The scenario
 
-Jane Doe rents a flat in Valmont-sur-Orbe with her partner Malo Kerven, works for a consulting firm and owns a car. The corpus is what such a household keeps over three years (2023 to January 2026), plus one invoice from 1998. The documents relate to each other, which is what makes the knowledge layer testable:
+Jane Doe rents a flat in Trévolzac-sur-Yvrelle with her partner Malo Kerven, works for a consulting firm and owns a car. The corpus is what such a household keeps over three years (2023 to January 2026), plus one invoice from 1998. The documents relate to each other, which is what makes the knowledge layer testable:
 
 - **Energy.** Bills every two months from Voltaneige, then a contract with Brisevent that takes over on 1 April 2025, a closing bill from Voltaneige and bills from Brisevent. One bill exists twice as the same bytes.
 - **Water, internet, mobile.** Two water bills and the receipt that pays one of them; internet bills; a mobile contract with a 24-month commitment, its bills (one only as the attachment of an email), a termination letter and its confirmation.
@@ -36,30 +36,43 @@ The reference date, "today" for every question that says now, still or this quar
 
 ### Cast
 
-Everything is invented. Do not look for these names: they were made up for the corpus and checked against nothing.
+Everything is invented. The names of companies, brands, places and the river Yvrelle are coinages. Each was searched on the web before it was adopted (results are in the pull request that introduced it), and names that turned out to belong to a real place or business were replaced: Valmont-sur-Orbe, Corbelin, the Sorbiers, the Belvédère garage and agency, Autobilan, Fernway, Sotomar and Tessaro.
 
-| Who                                                                                                      | Role                                               |
-| -------------------------------------------------------------------------------------------------------- | -------------------------------------------------- |
-| Jane Doe, Malo Kerven                                                                                    | The household                                      |
-| Voltaneige Energie, Brisevent Électricité                                                                | Electricity suppliers, before and after the switch |
-| Régie des Eaux de l'Orbe, Fibrenoix, Telorca                                                             | Water, internet, mobile                            |
-| Agence Immobilière du Belvédère, Hector Vasseur                                                          | Letting agency and landlord                        |
-| Assurances Corbelin, Roulavie Assurances, Northmere Travel Cover                                         | Home, car and travel insurers                      |
-| Ostrelia Conseil, Crédit Orbien                                                                          | Employer and bank                                  |
-| Centre des Finances Publiques de Valmont-sur-Orbe, Agence de Traitement des Contraventions de l'Orbe     | Tax office and fines agency                        |
-| Garage du Belvédère, Autobilan Valmont, Parking du Belvédère                                             | Garage, test centre, car park                      |
-| Laboratoire des Sorbiers, Mutuelle Sorbier Santé                                                         | Laboratory and health mutual                       |
-| Brindlemoor Cycles, Quillfern Cloud, Meubles Sauvageon, Bricorbe, Gasthof Lindenhöhe, Alquileres Sotomar | Shops, hotel, car rental                           |
+| Who                                                                                                            | Role                                               |
+| -------------------------------------------------------------------------------------------------------------- | -------------------------------------------------- |
+| Jane Doe, Malo Kerven                                                                                          | The household                                      |
+| Voltaneige Energie, Brisevent Électricité                                                                      | Electricity suppliers, before and after the switch |
+| Régie des Eaux de l'Yvrelle, Fibrenoix, Telorca                                                                | Water, internet, mobile                            |
+| Agence Immobilière Vouzelin, Hector Vasseur                                                                    | Letting agency and landlord                        |
+| Assurances Tolvérane, Roulavie Assurances, Northmere Travel Cover                                              | Home, car and travel insurers                      |
+| Ostrelia Conseil, Crédit Yvrellois                                                                             | Employer and bank                                  |
+| Centre des Finances Publiques de Trévolzac-sur-Yvrelle, Agence de Traitement des Contraventions de l'Yvrelle   | Tax office and fines agency                        |
+| Garage Brumezac, Zérubane Contrôle, Parking Halle Yvrelle                                                      | Garage, test centre, car park                      |
+| Laboratoire Zolméa, Mutuelle Ozvalie Santé                                                                     | Laboratory and health mutual                       |
+| Brindlemoor Cycles, Quillfern Cloud, Meubles Sauvageon, Brico Yvrelle, Gasthof Lindenhöhe, Alquileres Zubrenal | Shops, hotel, car rental                           |
 
 ### What keeps the data fictitious
 
-- Towns do not exist. Postcodes are chosen outside the ranges in use: they start with 99 in France and 00 in Germany and Spain, and British and American ones use `ZZ`.
-- Phone numbers are in the ranges reserved for fiction (01 99 00 and 06 39 98 in France, 020 7946 0 in the United Kingdom). E-mail addresses are on `example.org` and on the reserved `.example` domain.
-- IBANs have valid check digits and a valid national key, on the bank code `99999`, which no bank holds. The card number passes the Luhn check under the prefix `9999`, which no network issues.
-- Company numbers (SIREN, SIRET) pass the Luhn check and are drawn from the seed, not looked up. The social security number has a valid key and a place of birth that does not exist; the tax number starts with 99.
-- The car plate `SS-417-OU` uses letters that French plates never carry.
+Drawing well-formed identifiers at random is not enough: about one valid French company number in three is assigned. Every identifier family is made impossible by construction, by a check that every real one passes and this one fails, by a range nothing is assigned in, or by a value published for tests. Where Liasse itself must recognise the identifier (it detects IBANs by their mod 97 check and cards by issuer range and Luhn check, to mask them), the corpus keeps the check that detector reads and breaks another one.
 
-A test checks the e-mail domains, the IBANs, the card numbers and the phone numbers of every page mechanically. The names of people and companies cannot be checked that way: they were chosen to be unlikely, and a collision with a real name would be a coincidence to fix.
+| Family                   | Printed as                               | Why it cannot designate anything real                                                                                                       | Checked by a test |
+| ------------------------ | ---------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- | ----------------- |
+| Company number (SIREN)   | 9 digits                                 | The Luhn check digit is deliberately wrong. Every number of the French register passes that check                                           | yes               |
+| Establishment (SIRET)    | 14 digits                                | Built on a SIREN that fails the check, with its own check digit wrong as well                                                               | yes               |
+| VAT number               | none printed                             | Not used in the corpus                                                                                                                      | not applicable    |
+| IBAN                     | `FR49 9999 9...`                         | Passes mod 97 so that the detector finds it, on bank code `99999`, which no bank holds, with a French national key one off the required one | yes               |
+| Card number              | `4111 1111 1111 1111`                    | The test number the card networks publish, never issued to anyone; it passes the issuer range and Luhn check the detector reads             | yes               |
+| Social security number   | `2 72 05 99 999 ...`                     | The key is one off the valid one, so no register can hold it; it reads as born abroad (department 99) in country 999, which is not assigned | yes               |
+| Tax number               | `99 ...`                                 | French tax numbers start with 0 to 3                                                                                                        | yes               |
+| Car plate                | `SS-417-OU`                              | French plates never use I, O or U, nor the pair SS                                                                                          | no                |
+| Rented car plate         | `0417 AEI`                               | Spanish plates use consonants only                                                                                                          | no                |
+| Phone numbers            | `01 99 00`, `06 39 98`, `020 7946 0`     | The ranges the French and British regulators reserve for fiction                                                                            | yes               |
+| E-mail and web addresses | `example.org`, `*.example`               | Domains reserved by RFC 2606 and RFC 6761                                                                                                   | yes               |
+| Postcodes                | `99xxx`, `00xxx`, `ZZ`                   | 99 is no French department and 00 no German or Spanish postal area; `ZZ` is no British postcode area                                        | no                |
+| Towns, river, streets    | Trévolzac-sur-Yvrelle, Port-Lanvec...    | Coinages searched on the web before adoption (no commune of that name); the street names are common nouns on an invented town               | no                |
+| People                   | Jane Doe, Malo Kerven, Hector Vasseur... | Jane Doe is the usual placeholder; the others were searched and no notable person bears them                                                | no                |
+
+A name cannot be held to a rule the way a number can: the searches lower the odds of a collision, they do not exclude one. A collision found later is a corpus bug to fix by renaming.
 
 ## Coverage
 
@@ -76,6 +89,12 @@ A test checks the e-mail domains, the IBANs, the card numbers and the phone numb
 
 Languages: 46 documents in French, 3 in English, 1 in German, 1 in Spanish. Twelve pages have no text layer and go through the vision model.
 
+### What the scanned pages are, and are not
+
+The twelve raster pages are drawn in one dot-matrix face, in two weights (headings are bold), with skew, uneven light and grain. One holds a ruled table of figures (the scanned payslip), one sets two blocks side by side (the parking fine), one carries a rubber stamp across the text (the amendment) and one lies a few degrees off (the roadworthiness report). The digits 0 and 8 and the letter G are drawn apart, since an OCR engine confused them.
+
+That is a floor, not a fair sample of real paper: there is no logo, no photograph, no handwriting, no second typeface, no fold, no stain, and every page has one clean column of print. A vision model reads them more easily than it reads a real scan, so **vision scores on this corpus are an upper bound** on what the same model does on real documents.
+
 Hard cases, each tagged in `hard_cases`:
 
 | Tag                     | Document                                          | What is expected                                                                                                               |
@@ -87,7 +106,7 @@ Hard cases, each tagged in `hard_cases`:
 | `sensitive_identifiers` | bank statement, bank letter, tax notice, payslips | IBAN, card, tax and social security numbers shown in clear, expected masked outside the page text                              |
 | `private`               | `tax-notice-2025`, `lab-report-2025-06`           | Flagged private                                                                                                                |
 | `foreign_currency`      | bike and cloud invoices                           | Amounts in GBP and USD                                                                                                         |
-| `withdrawn_currency`    | `furniture-invoice-1998`                          | Amount in FRF, with an indicative value in euros that is not the amount                                                        |
+| `withdrawn_currency`    | `furniture-invoice-1998`                          | Amount in FRF. The euro figure it prints is an indication: a system that gives it as the amount is wrong                       |
 | `little_text`           | `parking-ticket-2025-10`                          | Three short lines: nothing is required, nothing may be invented                                                                |
 | `email_attachment`      | the email and `mobile-bill-2025-11`               | The bill is a document of its own, linked `attachment_of` its email                                                            |
 
@@ -128,13 +147,13 @@ Tolerance rules (`src/score/compare.ts`):
 | Identifiers, references            | Exact once spaces, punctuation and case are set aside                                           |
 | Amounts, numbers                   | Within 0.005; an amount needs its currency                                                      |
 | Entity names                       | As entity resolution compares them: no case, no accents, no legal form; any alias of the entity |
-| Free text                          | The expected words are in the value                                                             |
+| Free text                          | The expected words are in the value, whole and in order (`favorable` is not in `défavorable`)   |
 | Masked identifier                  | Ends with the visible characters and does not hold the clear value                              |
 
 Each expected value gets one outcome: `correct`, `missing` (required, not found), `wrong` (another value), `invented` (found where forbidden) or `absent` (not found, not required). Precision is `correct / (correct + wrong + invented)` and recall is `correct / (correct + missing + wrong when required)`.
 
 - **Type**: `exact`, `acceptable`, `parent`, `mismatch` or `missing`.
-- **Type fields**: a value is looked for under the accepted names, then under any other name. Found there, it is correct and the judgement notes the name, so that a report tells a naming disagreement from a missing value.
+- **Type fields**: a value is looked for under the accepted names. An amount, an identifier or a date, which identify themselves, is then looked for under any other name: found there, it is correct and the judgement notes the name, so that a report tells a naming disagreement from a missing value. A number, a flag or a word is not: `copies: 2` is no notice period of two months.
 - **Key dates**: a date the truth does not list is not held against the system (a contract has many dates); a date of a forbidden kind is.
 - **Links**: the truth lists every link, so a link beyond them is an invention.
 - **Subjects**: matched by kind and by label, alias or identifier. Subjects the truth does not list are left alone.
@@ -143,7 +162,9 @@ Each expected value gets one outcome: `correct`, `missing` (required, not found)
 - **Transcription**: for pages without a text layer, precision, recall and F1 over words, without case, accents or punctuation.
 - **Duplicates**: a byte-identical copy is only scored on being recognised.
 
-`aggregateReport` sums the documents of a run into per-field and per-section precision and recall. `scoreAnswer` judges an answer to a question (documents cited, amounts, dates, counts, entities named, yes or no) and returns pass or fail with the reasons.
+`scoreDocument` parses what it is given: an output that is not a system output of that document is answered `{ kind: 'invalid', issues }` rather than scored or thrown on. `aggregateReport` sums the documents of a run into per-field and per-section precision and recall, and counts invalid outputs apart.
+
+`scoreAnswer` judges an answer to a question and returns pass or fail with the reasons; an input that is not an answer fails with the reason. Each value a question expects is a slot with a key (`total`, `voltaneige`, `lease-end`), and the answer files each value under the key of its slot, so a right number cannot stand for another thing. A slot passes when the answer gives it one or more values and all of them are right: a right total beside a wrong one fails. Documents and entities may be marked `exhaustive`, in which case anything beyond the expected set fails too; values under keys the question does not have are left alone.
 
 ## Reference questions
 
@@ -165,7 +186,7 @@ The exception is the HEIC photo. Node has no HEIC encoder, so the file is encode
 pnpm --filter @liasse/eval generate --encode-heic
 ```
 
-`pnpm test` regenerates the corpus in a temporary directory and fails when it differs from the committed files. It also reads every file with `extractText`, checks that each quoted value is in the document, that scanned pages reach the vision model, and that every expected answer follows from the ground truth.
+`pnpm test` regenerates the corpus in a temporary directory and fails when it differs from the committed files. It also reads every file with `extractText`, checks that each quoted value is in the document, that scanned pages reach the vision model, that the figures of every bill, payslip, invoice and statement add up to the totals it prints, that each notice deadline is the renewal minus the notice period, and that every expected answer follows from the expected values of the documents it cites.
 
 To change the corpus, edit `src/scenario/`, regenerate and commit the result.
 
