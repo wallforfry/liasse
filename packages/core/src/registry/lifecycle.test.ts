@@ -240,6 +240,22 @@ describe('type lifecycle', () => {
         });
       });
 
+      it('does not take a merged child for a child', async () => {
+        const alpha = await newType('alpha_parent');
+        const beta = await newType('beta_child', 'alpha_parent');
+        await newType('papa_parent');
+        const charlie = await newType('charlie_child', 'papa_parent');
+        expect((await markMerged(beta.id, alpha.id, context)).ok).toBe(true);
+        expect(await markMerged(alpha.id, charlie.id, context)).toMatchObject({
+          ok: true,
+          value: { parentSlug: 'papa_parent' },
+        });
+        expect(await stored('beta_child')).toMatchObject({
+          status: 'merged',
+          parentSlug: 'alpha_parent',
+        });
+      });
+
       it('rejects a merge that would make a third level, and writes nothing', async () => {
         await newType('top_level');
         const source = await newType('parent_source');

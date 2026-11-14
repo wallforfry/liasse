@@ -62,8 +62,12 @@ export const addAlias = (
     return ok(await updateTypeAttributes(tx, typeId, { aliases: [...type.value.aliases, alias] }));
   });
 
+// A merged child no longer stands under its parent: its names resolve to its target.
+const liveChildOf = (type: RegisteredType) =>
+  and(eq(docTypes.parentSlug, type.slug), ne(docTypes.status, 'merged'));
+
 const hasChildren = async (tx: RegistryTransaction, type: RegisteredType): Promise<boolean> =>
-  (await tx.$count(docTypes, eq(docTypes.parentSlug, type.slug))) > 0;
+  (await tx.$count(docTypes, liveChildOf(type))) > 0;
 
 // The children of the source follow it to the target. When the target is itself one of
 // them, it takes the place of the source at the top.
@@ -104,7 +108,7 @@ export const markMerged = (
     await tx
       .update(docTypes)
       .set({ parentSlug: target.value.slug })
-      .where(and(eq(docTypes.parentSlug, source.value.slug), ne(docTypes.id, targetId)));
+      .where(and(liveChildOf(source.value), ne(docTypes.id, targetId)));
     await updateTypeAttributes(tx, sourceId, { status: 'merged', aliases: [] });
     return ok(
       await updateTypeAttributes(tx, targetId, {
