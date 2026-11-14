@@ -297,9 +297,21 @@ describe('correctDocument', () => {
     ['a patch of the private flag alone', { private: true }],
   ])('leaves a document flagged for review after %s', async (_case, patch) => {
     const type = await bill();
-    const id = await settled(type.id);
+    const id = await settled(type.id, { error: 'reextraction_failed' });
     await correctDocument(harness.deps(), { id, ...patch });
-    expect(await harness.document(id)).toMatchObject({ status: 'needs_review' });
+    expect(await harness.document(id)).toMatchObject({
+      status: 'needs_review',
+      error: 'reextraction_failed',
+    });
+  });
+
+  // An indexed document never carries the code of a re-extraction that failed: the
+  // correction that clears the flag is the review of what that left.
+  it('clears the code of a failed re-extraction with the flag it came with', async () => {
+    const type = await bill();
+    const id = await settled(type.id, { error: 'reextraction_failed' });
+    await correctDocument(harness.deps(), { id, core: { reference: 'SYN-2' } });
+    expect(await harness.document(id)).toMatchObject({ status: 'indexed', error: null });
   });
 
   it('marks a type a person confirmed as manual without touching the fields', async () => {

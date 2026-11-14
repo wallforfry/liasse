@@ -1,3 +1,4 @@
+import { DOCUMENT_JOB_FAILURE_CODES } from '../../domain/enums.ts';
 import {
   MANUAL_PROVENANCE,
   MANUAL_TYPE_FIELD,
@@ -75,10 +76,11 @@ interface MovedFields {
   readonly extra: Values;
 }
 
-// Nothing is lost on a change of type. A value of the old type stays a field when the
-// new type has a field of that name it is valid for, and goes to `extra` otherwise. Its
-// provenance and its manual mark stay with it under its name: the re-extraction keeps a
-// manual value wherever it is.
+// On a change of type, a value of the old type stays a field when the new type has a
+// field of that name it is valid for, and goes to `extra` otherwise, with its provenance
+// and its manual mark. Only a manual value is kept for good: the re-extraction keeps it
+// wherever it is, and replaces `extra` otherwise, since the text can give the other values
+// back.
 const moveFields = (stored: PipelineDocument, type: RegisteredType | undefined): MovedFields => {
   const entries = Object.entries(stored.fields);
   return {
@@ -92,10 +94,14 @@ const moveFields = (stored: PipelineDocument, type: RegisteredType | undefined):
 
 // Correcting the type, the core or the fields is the review of a document flagged for
 // one; a correction of the `private` flag alone, or of nothing, says nothing of its values.
-const statusAfter = (stored: PipelineDocument, correction: Correction, touched: number) =>
+// The code of a failed re-extraction goes with the flag it came with.
+const reviewed = (stored: PipelineDocument, correction: Correction, touched: number) =>
   stored.status === 'needs_review' && (correction.typeGiven || touched > 0)
-    ? ('indexed' as const)
-    : stored.status;
+    ? {
+        status: 'indexed' as const,
+        error: stored.error === DOCUMENT_JOB_FAILURE_CODES.reextraction ? null : stored.error,
+      }
+    : { status: stored.status, error: stored.error };
 
 /**
  * What a correction makes of a document. A corrected field is recorded in
@@ -127,6 +133,6 @@ export const applyCorrection = (stored: PipelineDocument, correction: Correction
       ...new Set([...stored.manualFields, ...touched, ...(typeGiven ? [MANUAL_TYPE_FIELD] : [])]),
     ],
     private: correction.private ?? stored.private,
-    status: statusAfter(stored, correction, touched.length),
+    ...reviewed(stored, correction, touched.length),
   };
 };
