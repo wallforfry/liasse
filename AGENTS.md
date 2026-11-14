@@ -22,6 +22,7 @@ Node 22 or later and pnpm (version pinned in `package.json`). Run everything fro
 | `pnpm format`                      | Format with Prettier                                             |
 | `pnpm typecheck`                   | `tsc --noEmit` on every package                                  |
 | `pnpm test`                        | Vitest, all packages (needs `pnpm db:up`)                        |
+| `pnpm test:models`                 | Tests that download and run the real local embedding model       |
 | `pnpm build`                       | Compile every package with `tsc`                                 |
 | `pnpm --filter @liasse/server dev` | Run the server from source (copy `.env.example` to `.env` first) |
 | `pnpm changeset`                   | Describe a user-facing change for the changelog                  |
@@ -38,24 +39,26 @@ Before pushing, `pnpm lint`, `pnpm typecheck`, `pnpm test` and `pnpm build` must
 
 Inside `packages/core/src`, one directory per concern. A new concern gets its own directory and its own subpath export.
 
-| Directory   | Content                                                                               |
-| ----------- | ------------------------------------------------------------------------------------- |
-| `config/`   | The Zod schema that turns `process.env` into the typed, frozen configuration          |
-| `db/`       | Drizzle schema, `createDb`, the migration runner; SQL migrations are in `migrations/` |
-| `domain/`   | Enumerations, ids, shared Zod schemas, limits                                         |
-| `ingest/`   | `ingestFile`, deletion with tombstones, format detection, the watched folder          |
-| `jobs/`     | The job queue on the `jobs` table: kinds, `enqueue`, workers                          |
-| `models/`   | Ports for the text model, the vision model and the embedder; `providers/` adapts them |
-| `prompt/`   | Prompt helpers, starting with the untrusted-content wrapper                           |
-| `query/`    | The structured query DSL: its schema, field typing and compilation to bound SQL       |
-| `registry/` | Field primitives, naming rules and the operations on the evolving type registry       |
-| `storage/`  | The file storage port and its `fs` and `s3` drivers                                   |
-| `testing/`  | Test database and bucket helpers, model fakes and synthetic document builders         |
-| `text/`     | `extractText`: native text of PDF, DOCX and email, vision transcription otherwise     |
+| Directory     | Content                                                                                |
+| ------------- | -------------------------------------------------------------------------------------- |
+| `config/`     | The Zod schema that turns `process.env` into the typed, frozen configuration           |
+| `db/`         | Drizzle schema, `createDb`, the migration runner; SQL migrations are in `migrations/`  |
+| `domain/`     | Enumerations, ids, shared Zod schemas, limits                                          |
+| `embeddings/` | The local embedder: an ONNX model run in process, loaded on demand, unloaded when idle |
+| `ingest/`     | `ingestFile`, deletion with tombstones, format detection, the watched folder           |
+| `jobs/`       | The job queue on the `jobs` table: kinds, `enqueue`, workers                           |
+| `models/`     | Ports for the text model, the vision model and the embedder; `providers/` adapts them  |
+| `prompt/`     | Prompt helpers, starting with the untrusted-content wrapper                            |
+| `query/`      | The structured query DSL: its schema, field typing and compilation to bound SQL        |
+| `registry/`   | Field primitives, naming rules and the operations on the evolving type registry        |
+| `search/`     | Chunking, `indexDocument`, and hybrid `search` (full text + vector, fused by RRF)      |
+| `storage/`    | The file storage port and its `fs` and `s3` drivers                                    |
+| `testing/`    | Test database and bucket helpers, model fakes and synthetic document builders          |
+| `text/`       | `extractText`: native text of PDF, DOCX and email, vision transcription otherwise      |
 
-Names reserved for the features to come, created only by the change that implements them: `embeddings/`, `search/`, `pipeline/`, `entities/`, `knowledge/`, `consolidation/`, `hindsight/`.
+Names reserved for the features to come, created only by the change that implements them: `pipeline/`, `entities/`, `knowledge/`, `consolidation/`, `hindsight/`.
 
-Tests sit next to the code they cover, as `*.test.ts`. A helper that only the tests of one directory use is a `*.test-helper.ts` beside them; neither is compiled into `dist`.
+Tests sit next to the code they cover, as `*.test.ts`. A helper that only the tests of one directory use is a `*.test-helper.ts` beside them; neither is compiled into `dist`. Two more suffixes are kept out of the build: `*.fixture.ts` for data shared by several test files, and `*.modeltest.ts` for the tests of `pnpm test:models`.
 
 ## Testing rules
 
@@ -64,7 +67,7 @@ Tests sit next to the code they cover, as `*.test.ts`. A helper that only the te
 - **Real S3.** The `s3` storage driver is tested against the S3-compatible server of `docker-compose.dev.yml` (RustFS, started by `pnpm db:up`), never a mock. `createTestBucket()` creates one throwaway bucket per call. It connects to `TEST_S3_ENDPOINT` (default `http://127.0.0.1:54330`).
 - **An unreachable database or S3 server fails the tests.** Never skip such a test or guard it behind a condition.
 - **Asynchronous effects are awaited, not slept for.** Use `waitUntil` and `createGate` from `@liasse/core/testing` to wait for a job or a watcher and to order concurrent steps.
-- **Fakes for models.** Tests never call a provider. Use `createFakeEmbedder`, `createFakeTextModel` and `createFakeVisionModel` from `@liasse/core/testing`.
+- **Fakes for models.** Tests never call a provider. Use `createFakeEmbedder`, `createFakeTextModel` and `createFakeVisionModel` from `@liasse/core/testing`. The one exception is `pnpm test:models`, which downloads the local embedding model (about 120 MB, cached in `packages/core/node_modules/.cache/liasse-models` or `EMBEDDING_CACHE_DIR`) and is not part of `pnpm test` or of CI.
 - **Synthetic fixtures only.** No real document, name, identifier or secret in a test or a fixture. Build documents with `buildSyntheticPdf`, `buildSyntheticDocx`, `buildSyntheticPng` and `buildSyntheticZip` from `@liasse/core/testing`; the two binary image fixtures are regenerated by `scripts/generate-image-fixtures.sh`.
 - **Never skip or retry a failing test.** A flaky test is a bug: find the cause. No `.skip`, no `retry`, no raised timeout to hide a race. The `core` project runs with a long test timeout because every file shares one Postgres: that bound only ends a hang, so a test must never pass or fail on how fast something answers. Wait for the condition itself.
 - **A test must be able to fail.** When you add one, check that it breaks when the behaviour it covers is removed.
@@ -92,5 +95,7 @@ Tests sit next to the code they cover, as `*.test.ts`. A helper that only the te
 - Migrations from parallel branches are all applied, whatever their timestamps: a migration is pending when its journal entry (content hash at its journal date) is not recorded, and pending ones run in journal order. Never change the date of a journal entry that is on `main` either. When two branches both add a migration, rebase, delete yours and generate it again, so the journal and the snapshot stay consistent.
 - Extracted values keep their trace: spread `traceColumns()` (`model`, `schema_version`, `page`, `quote`, `confidence`) into a table that stores them.
 - Vector columns use `embeddingVector`. The generated SQL contains the token `__EMBEDDING_DIM__`, which the migration runner replaces with `EMBEDDING_DIM`. The installed dimension is read back from the Postgres catalog, and `migrate` refuses to run when `EMBEDDING_DIM` differs from it.
-- Full-text columns use `searchVector`, which calls the SQL function `liasse_tsvector`. The configuration is decided there and nowhere else, but stored generated columns are not rewritten when the function body changes: a change of configuration needs a migration that redefines the three `tsv` columns.
+- Full-text columns use `searchVector`, next to a `searchLanguage` column that holds the ISO 639-1 code of the row's text (null when unknown). The SQL function `liasse_tsvector(language, text)` picks the text search configuration `liasse_<code>` (unaccent, then the Snowball stemmer of that language), or `liasse_simple` for a language without one. The configuration is decided there and nowhere else, but stored generated columns are not rewritten when the function body changes: a change of configuration needs a migration that redefines the three `tsv` columns. Setting `language` on a row does rewrite its `tsv`.
+- A full-text query goes through `liasse_tsquery(languages, query)`, which reads the query in each of the given languages; never call `to_tsquery` on user input, it raises on malformed input.
+- `drizzle-kit` does not order a redefined generated column after the column it reads, and does not recreate the indexes dropped with it: read the generated SQL of such a migration and fix it before committing.
 - Ids are text, `<prefix>_<ULID>`, created by `newId` with a prefix from `ID_PREFIXES`.
