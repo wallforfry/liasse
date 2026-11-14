@@ -1,5 +1,5 @@
 import { once } from 'node:events';
-import { Server } from 'node:http';
+import { type IncomingMessage, Server, type ServerResponse } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { serve } from '@hono/node-server';
 import { StartupError } from '@liasse/core/domain';
@@ -45,11 +45,22 @@ const close = async (server: Server, graceMs: number): Promise<void> => {
   });
 };
 
+// `server.close()` closes only the connections idle at that moment. One busy then is kept
+// alive by Node and goes on serving every later request it carries, so the server would
+// answer until the grace period cut it. A request received after `close()` is answered
+// with `Connection: close`, which ends its connection once the response is sent.
+const refuseKeepAliveWhenClosing = (server: Server): void => {
+  server.prependListener('request', (_request: IncomingMessage, response: ServerResponse) => {
+    if (!server.listening && !response.headersSent) response.setHeader('Connection', 'close');
+  });
+};
+
 /** Listens on `host` alone: the default is the loopback address, never every interface. */
 export const listen = async ({ fetch, host, port }: ListenOptions): Promise<Listener> => {
   const server = serve({ fetch, hostname: host, port });
   // `serve` may also build an HTTP/2 server; it builds this one unless told otherwise.
   if (!(server instanceof Server)) throw new Error('Expected an HTTP/1.1 server');
+  refuseKeepAliveWhenClosing(server);
   try {
     await once(server, 'listening');
   } catch (error) {
