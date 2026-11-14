@@ -361,7 +361,20 @@ describe('scoreDocument on readings a careful person could defend', () => {
         (target) => ({ kind: 'pays' as const, target }),
       ),
     }));
-    expect(score.links.map(({ outcome }) => outcome)).toEqual(['correct', 'correct', 'correct']);
+    expect(score.links.map(({ outcome }) => outcome)).toEqual([
+      'correct',
+      'correct',
+      'correct',
+      'absent',
+    ]);
+  });
+
+  it('accepts the bank statement paying the car-park ticket it debits by card', () => {
+    const score = scoreWith('bank-statement-2025-10', () => ({
+      links: [{ kind: 'pays' as const, target: 'parking-ticket-2025-10' }],
+    }));
+    expect(outcomeOf(score.links, 'pays parking-ticket-2025-10')).toBe('correct');
+    expect(score.links.filter(({ outcome }) => outcome === 'invented')).toEqual([]);
   });
 
   it('does not reward the indicative euro value of the franc invoice', () => {
@@ -566,6 +579,13 @@ describe('scoreAnswer', () => {
     expect(scoreWithAnswer('q05', { documents: [...cited, 'lease'] }).reasons).toEqual([
       'cites lease, which the question does not call for',
     ]);
+  });
+
+  it('names five uncalled-for documents at most, and counts the others', () => {
+    const everything = corpus.documents.map(({ id }) => id);
+    const reasons = scoreWithAnswer('q05', { documents: everything }).reasons;
+    const uncalled = reasons.find((reason) => reason.endsWith('the question does not call for'));
+    expect(uncalled).toMatch(/^cites [a-z0-9-]+(, [a-z0-9-]+){4} and \d+ more, which/);
   });
 
   it('fails a private document that surfaces unasked', () => {

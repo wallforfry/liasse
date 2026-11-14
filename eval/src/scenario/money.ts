@@ -87,10 +87,14 @@ const bankStatement: ScenarioDocument = {
       ),
     ],
     key_dates: [noKeyDate('due', 'expiry', 'renewal')],
-    // The statement debits these three bills to the cent on the day each one announces.
-    links: ['mobile-bill-2025-10', 'internet-bill-2025-10', 'energy-bill-2025-10'].map((bill) =>
-      link('pays', bill, 'optional'),
-    ),
+    // The statement debits these three bills to the cent on the day each one announces,
+    // and the car-park ticket by card for its amount.
+    links: [
+      'mobile-bill-2025-10',
+      'internet-bill-2025-10',
+      'energy-bill-2025-10',
+      'parking-ticket-2025-10',
+    ].map((paid) => link('pays', paid, 'optional')),
     subjects: [about(SUBJECTS.bankAccount)],
     facts: [
       fact('The current account at Crédit Yvrellois held 3214.65 EUR on 2025-10-31.', {

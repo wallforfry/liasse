@@ -50,18 +50,44 @@ const NEGATIONS: ReadonlySet<string> = new Set([
   'sin', 'nunca',
 ]);
 
-// The expected words, in order and whole, and not right after a negation: "favorable" is
-// neither in "défavorable" nor in "non favorable". A negation the expected words carry
-// themselves is matched like any other word.
+// How many words before the expected ones a negation still reaches: "pas du tout
+// favorable" is negated, "aucun défaut relevé avis favorable" is not.
+const NEGATION_REACH = 3;
+
+// Punctuation that ends a sentence or a clause, when a space or the end follows it: a
+// negation does not reach past it ("Contre-visite : non. Favorable"), and "39.99" or
+// "NON-FAVORABLE" are not cut.
+const CLAUSE_END = /[.!?;:,]+(?=\s|$)|\n/;
+
+interface Word {
+  readonly word: string;
+  readonly clause: number;
+}
+
+// The same words as `wordsOf`, each with the clause it stands in.
+const clauseWordsOf = (text: string): readonly Word[] =>
+  text
+    .split(CLAUSE_END)
+    .flatMap((clause, index) => wordsOf(clause).map((word) => ({ word, clause: index })));
+
+const isNegatedAt = (given: readonly Word[], start: number): boolean =>
+  given
+    .slice(Math.max(0, start - NEGATION_REACH), start)
+    .some(({ word, clause }) => clause === given[start]?.clause && NEGATIONS.has(word));
+
+// The expected words, in order and whole, and not within the reach of a negation of the
+// same clause: "favorable" is neither in "défavorable", nor in "non favorable", nor in
+// "n'est pas du tout favorable". A negation the expected words carry themselves is
+// matched like any other word.
 export const textCarries = (expected: string, actual: string): boolean => {
   const wanted = wordsOf(expected);
-  const given = wordsOf(actual);
+  const given = clauseWordsOf(actual);
   return (
     wanted.length > 0 &&
     given.some(
       (_, start) =>
-        wanted.every((word, offset) => given[start + offset] === word) &&
-        !NEGATIONS.has(given[start - 1] ?? ''),
+        wanted.every((word, offset) => given[start + offset]?.word === word) &&
+        !isNegatedAt(given, start),
     )
   );
 };

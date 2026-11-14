@@ -2,7 +2,7 @@
 
 Fifty synthetic documents of one fictitious household, the ground truth of each, and twenty reference questions with their expected answers. The set measures what Liasse derives from documents (text, type, fields, key dates, links, subjects, facts) and whether an agent answers correctly over MCP. It contains no real document and no real personal data.
 
-This package holds the corpus, its generator and the scoring functions. It does not run the pipeline: the regression harness that ingests the corpus and scores a run is a separate piece of work, which feeds `scoreDocument` and `scoreAnswer`.
+This package holds the corpus, its generator, the scoring functions and the regression harness, which ingests the corpus into a throwaway Liasse instance, has an agent answer the questions through MCP, and scores both with `scoreDocument` and `scoreAnswer` (see [Running the harness](#running-the-harness)).
 
 ## Layout
 
@@ -16,6 +16,8 @@ This package holds the corpus, its generator and the scoring functions. It does 
 | `src/generate/`            | `buildCorpus` and the command that writes `corpus/`                   |
 | `src/schema/`              | Zod schemas of the ground truth, the questions and a system output    |
 | `src/score/`               | Pure scoring functions                                                |
+| `src/harness/`             | The run: instance, ingestion, answering agent, report, comparison     |
+| `src/calibrate/`           | The measure of the entity similarity thresholds on the corpus names   |
 | `src/corpus.ts`            | `loadCorpus`, `loadQuestions`, `readDocumentFile`                     |
 
 The corpus is committed (1.4 MB: 1.1 MB of documents, 0.3 MB of JSON), so it can be used without running anything. The JSON files are validated by the schemas of `src/schema/`, which derive from the schemas of `@liasse/core/domain`, `@liasse/core/registry` and `@liasse/core/query`.
@@ -141,14 +143,14 @@ A record holds:
 
 Tolerance rules (`src/score/compare.ts`):
 
-| Value                              | Rule                                                                                                                                                 |
-| ---------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Dates, periods, booleans, language | Exact                                                                                                                                                |
-| Identifiers, references            | Exact once spaces, punctuation and case are set aside                                                                                                |
-| Amounts, numbers                   | Within 0.005; an amount needs its currency                                                                                                           |
-| Entity names                       | As entity resolution compares them: no case, no accents, no legal form; any alias of the entity                                                      |
-| Free text                          | The expected words are in the value, whole, in order and not right after a negation (`favorable` is neither in `défavorable` nor in `non favorable`) |
-| Masked identifier                  | Ends with the visible characters and does not hold the clear value                                                                                   |
+| Value                              | Rule                                                                                                                                                                                                                                                                          |
+| ---------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Dates, periods, booleans, language | Exact                                                                                                                                                                                                                                                                         |
+| Identifiers, references            | Exact once spaces, punctuation and case are set aside                                                                                                                                                                                                                         |
+| Amounts, numbers                   | Within 0.005; an amount needs its currency                                                                                                                                                                                                                                    |
+| Entity names                       | As entity resolution compares them: no case, no accents, no legal form; any alias of the entity                                                                                                                                                                               |
+| Free text                          | The expected words are in the value, whole, in order and not within three words after a negation of the same sentence or clause (`favorable` is neither in `défavorable`, nor in `non favorable`, nor in `pas du tout favorable`, and is in `Contre-visite : non. Favorable`) |
+| Masked identifier                  | Ends with the visible characters and does not hold the clear value                                                                                                                                                                                                            |
 
 Each expected value gets one outcome: `correct`, `missing` (required, not found), `wrong` (another value), `invented` (found where forbidden) or `absent` (not found, not required). Precision is `correct / (correct + wrong + invented)` and recall is `correct / (correct + missing + wrong when required)`.
 
@@ -164,13 +166,57 @@ Each expected value gets one outcome: `correct`, `missing` (required, not found)
 
 `scoreDocument` parses what it is given: an output that is not a system output of that document, or that nests deeper than 64 levels, is answered `{ kind: 'invalid', issues }` rather than scored or thrown on. `aggregateReport` sums the documents of a run into per-field and per-section precision and recall, and counts invalid outputs apart.
 
-`scoreAnswer` judges an answer to a question and returns pass or fail with the reasons; an input that is not an answer fails with the reason. Each value a question expects is a slot with a key (`total`, `voltaneige`, `lease-end`), and the answer files each value under the key of its slot, so a right number cannot stand for another thing. A slot passes when the answer gives it one or more values and all of them are right: a right total beside a wrong one fails. Documents and entities may be marked `exhaustive`, in which case anything beyond the expected set fails too. Such a question asks for an exact answer, so an amount, a date or a count under a key it does not have fails it as well. Elsewhere a value under another key is about something the question did not ask, and is left alone: an answer to "how much for electricity in 2025?" may also give the total with the duplicated bill, under a key of its own.
+`scoreAnswer` judges an answer to a question and returns pass or fail with the reasons; an input that is not an answer fails with the reason. Each value a question expects is a slot with a key (`total`, `voltaneige`, `lease-end`), and the answer files each value under the key of its slot, so a right number cannot stand for another thing. A slot passes when the answer gives it one or more values and all of them are right: a right total beside a wrong one fails. Documents and entities may be marked `exhaustive`, in which case anything beyond the expected set fails too. Such a question asks for an exact answer, so an amount, a date or a count under a key it does not have fails it as well. Elsewhere a value under another key is about something the question did not ask, and is left alone: an answer to "how much for electricity in 2025?" may also give the total with the duplicated bill, under a key of its own. A reason names five unwanted documents at most and counts the others.
 
 ## Reference questions
 
 `corpus/questions.json` holds twenty questions in French and English. Each has the calls an agent would plausibly make (the `query` arguments are valid against the DSL of `@liasse/core/query`), the expected answer as data and a rationale. They cover numeric aggregation, deadlines relative to the reference date, links between documents, subjects, entities, fuzzy search, a question whose answer is that nothing was found, and private documents, which must not surface unless asked for. A question that does not ask for private documents only calls for documents whose truth forbids the private flag, and a test holds every question to that rule: a system that flags a document private where the truth allows it, and then respects the flag, can still answer every question.
 
 The tool calls document the intended route: an agent is free to answer another way, and only the answer is scored.
+
+## Running the harness
+
+```sh
+pnpm db:up
+pnpm eval:run --label <name> [--out <file>]
+pnpm eval:compare <report.json> <report.json> [...]
+```
+
+`pnpm eval:run` calls the models of the configuration: it reads `.env` at the root of the repository, then the environment, like the server. It is never part of `pnpm test` or the CI. One run:
+
+1. Starts the real server (`createRuntime` of `@liasse/server`) on a throwaway database of the test Postgres (`TEST_DATABASE_URL`) and a temporary folder, with an API token drawn for the run. The watched folder, Hindsight and the web UI of the configuration are switched off; the models and the embedder are the configured ones.
+2. Uploads the fifty files through the API, in corpus order, and waits until no job is queued or running. The attached bill is found as the document linked `attachment_of` to the email.
+3. Reads what the instance stored for each document, names the documents it links to by their corpus id, and scores it with `scoreDocument`.
+4. Has an agent answer each question with the read-only tools of the MCP endpoint. The agent is the configured text model behind the `TextModel` port: each turn it calls one tool or answers, and sees every call made so far, the results delimited as untrusted data. It is shown the keys and labels of the question's slots, and its answer schema offers those keys and nothing else, so no value can land under a key the question does not have; a verdict is offered only for a yes-or-no question. The documents it cites are translated to corpus ids and the answer is scored with `scoreAnswer`.
+5. Writes the report (`eval-<label>.json` unless `--out` says otherwise) and prints its summary. The instance is dropped, also when the run is interrupted by SIGINT or SIGTERM.
+
+The report holds the models of the run, the documents the instance did not find or left failed or waiting for review, every document result (each judgement with its outcome), the totals of `aggregateReport` (per section, per core field and per type field), and each question with its answer, its tool calls, whether it passed and why not. `pnpm eval:compare` puts several reports side by side, one column each, in Markdown: two models, or two versions of a prompt, under two labels.
+
+The scanned pages have been read by no vision model yet: until a run with one reads them, scores on scans (transcription, and what is extracted from a scanned page) are an upper bound, for the reasons given in [What the scanned pages are, and are not](#what-the-scanned-pages-are-and-are-not).
+
+`pnpm test` runs the harness in a deterministic mode (`src/harness/run.test.ts`): the same server and pipeline, with a local stand-in for the model server that extracts nothing, and an agent that makes the reference calls of each question through MCP and then gives the expected answer. It passes every question exactly when the wiring is right: ids, attachment, duplicate, tools, translation and scoring.
+
+### Entity similarity thresholds
+
+```sh
+pnpm eval:calibrate
+```
+
+Entity resolution attaches a name to a known entity above a cosine similarity of 0.92 and asks the text model between 0.80 and 0.92. The command embeds every name and alias of the corpus entities with the embedder of the configuration, measures the similarity of the names of one entity and of the names of two entities of one kind, counts what the current thresholds attach and arbitrate, and suggests values: `attach` at or above the closest pair of distinct entities, `arbitrate` at or below the farthest pair of names of one entity. It changes no default: a default changes only on measurements with more names than the 51 of these 27 entities, which are embedded bare, whereas resolution embeds a mention with a line of its context.
+
+Measured on 14 November 2026 with the default local embedder (`Xenova/multilingual-e5-small`, 384 dimensions, run offline once downloaded):
+
+| Pairs of names              | Pairs | Min   | Median | Max   |
+| --------------------------- | ----- | ----- | ------ | ----- |
+| Of one entity               | 31    | 0.903 | 0.955  | 0.995 |
+| Of two entities of one kind | 866   | 0.789 | 0.884  | 0.961 |
+
+| Thresholds (attach above / arbitrate from) | One entity: attached | One entity: below arbitration | Two entities: attached | Two entities: arbitrated |
+| ------------------------------------------ | -------------------- | ----------------------------- | ---------------------- | ------------------------ |
+| Current, 0.92 / 0.80                       | 26                   | 0                             | 38                     | 862                      |
+| Suggested on this corpus, 0.97 / 0.90      | 10                   | 0                             | 0                      | 210                      |
+
+The two bands overlap: names of two distinct entities reach 0.961, above names of one entity (from 0.903). With this embedder the current `attach` of 0.92 merges 38 pairs of distinct entities without asking, and the `arbitrate` of 0.80 sends almost every pair (862 of 866) to the text model. The measure supports raising both thresholds for this embedder, to about 0.97 and 0.90, which attach no distinct pair and still arbitrate every alias. The defaults are not changed here: 51 bare names are too few to set them, and the measure says they depend on the model, so the change belongs with a broader measure and, likely, thresholds made configurable.
 
 ## Regenerating
 

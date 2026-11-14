@@ -7125,6 +7125,11 @@
           "kind": "pays",
           "target": "energy-bill-2025-10",
           "requirement": "optional"
+        },
+        {
+          "kind": "pays",
+          "target": "parking-ticket-2025-10",
+          "requirement": "optional"
         }
       ],
       "subjects": [
