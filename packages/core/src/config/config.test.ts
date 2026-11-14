@@ -116,6 +116,27 @@ describe('loadConfig', () => {
     expect(config.auth.ui?.sessionTtlMs).toBe(604_800_000);
   });
 
+  it('reads the input window of a remote embedding model, which has no default', () => {
+    const remote = {
+      ...SYNTHETIC_ENV,
+      EMBEDDING_PROVIDER: 'ollama',
+      EMBEDDING_MODEL: 'embedding-model',
+    };
+    expect(loadConfig(remote).embedding).toMatchObject({ maxInputTokens: undefined });
+    expect(loadConfig({ ...remote, EMBEDDING_MAX_INPUT_TOKENS: '512' }).embedding).toMatchObject({
+      maxInputTokens: 512,
+    });
+    expect(problemsOf({ ...remote, EMBEDDING_MAX_INPUT_TOKENS: '63' })).toEqual([
+      'EMBEDDING_MAX_INPUT_TOKENS: Too small: expected number to be >=64',
+    ]);
+  });
+
+  it('refuses an input window for the local model, which knows its own', () => {
+    expect(problemsOf({ ...SYNTHETIC_ENV, EMBEDDING_MAX_INPUT_TOKENS: '512' })).toEqual([
+      'EMBEDDING_MAX_INPUT_TOKENS: only applies when EMBEDDING_PROVIDER is not local',
+    ]);
+  });
+
   it('defaults the embedding request timeout to one minute', () => {
     const config = loadConfig({
       ...SYNTHETIC_ENV,

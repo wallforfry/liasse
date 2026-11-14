@@ -71,6 +71,8 @@ export const createProviderEmbedder = async (
     dimension,
     model,
     isLocal: await isLocalEndpoint(provider, config.baseUrl, resolveHost),
+    // The provider does not tell what its model reads: only the operator can.
+    ...(config.maxInputTokens === undefined ? {} : { maxInputTokens: config.maxInputTokens }),
     embed: async (texts, kind) => {
       const embeddings: Embedding[] = [];
       for (const batch of batchesOf(texts)) embeddings.push(...(await embedBatch(batch, kind)));

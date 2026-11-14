@@ -2,6 +2,7 @@ import { serve } from '@hono/node-server';
 import { loadConfig } from '@liasse/core/config';
 import { createDb, migrate } from '@liasse/core/db';
 import { StartupError } from '@liasse/core/domain';
+import { describeEmbeddingWindow } from '@liasse/core/embeddings';
 import { describeModelPrivacy } from '@liasse/core/models';
 import { createApp } from './app.ts';
 import { installShutdown } from './shutdown.ts';
@@ -10,6 +11,8 @@ const start = async (): Promise<void> => {
   const config = loadConfig();
   const { warning } = await describeModelPrivacy(config);
   if (warning !== undefined) process.stderr.write(`${warning}\n`);
+  const windowNotice = describeEmbeddingWindow(config.embedding);
+  if (windowNotice !== undefined) process.stderr.write(`${windowNotice}\n`);
   await migrate(config.database.url, { embeddingDim: config.embedding.dimension });
   const database = createDb(config.database.url);
   const server = serve(

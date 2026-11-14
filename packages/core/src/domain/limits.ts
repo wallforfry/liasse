@@ -47,3 +47,6 @@ export const MAX_QUERY_SUGGESTION_NAMES = 4;
 export const MAX_QUERY_SUGGESTED_NAMES = 5;
 export const MAX_QUERY_SUGGESTION_CANDIDATES = 200;
 export const DEFAULT_QUERY_TIMEOUT_MILLISECONDS = 5000;
+
+// Below this, an embedding model has no room for a chunk worth embedding next to its header.
+export const MIN_EMBEDDING_INPUT_TOKENS = 64;

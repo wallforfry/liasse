@@ -15,3 +15,4 @@ export {
   type LocalEmbedderOptions,
 } from './local.ts';
 export type { LocalModel, LocalModelLoader, LocalModelSpec } from './local-model.ts';
+export { describeEmbeddingWindow } from './window-notice.ts';
