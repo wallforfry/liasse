@@ -1,6 +1,6 @@
 # Liasse — Specification
 
-*Status: draft, pre-implementation. Last updated 2026-11-13.*
+*Status: draft, pre-implementation. Last updated 2026-11-14.*
 
 ## Vision and principles
 
@@ -91,7 +91,7 @@ Eleven Postgres tables: documents, text pages, chunks, types, entities, change l
 | `chunks` | Search units | `id`, `document_id`, `page_from`, `page_to`, `text`, `language`, `embedding` (vector), `tsv` |
 | `doc_types` | Type registry | `id`, `slug`, `description`, `schema` (jsonb), `version`, `status`, `parent_slug`, `aliases` (text[]), `embedding`; the document count is computed from `documents`, never stored |
 | `entities` | Issuers, recipients | `id`, `kind` (org/person), `canonical_name`, `aliases` (text[]), `identifiers` (jsonb: company ID, masked IBAN, customer number), `embedding` |
-| `type_changes` | Consolidation proposals | `id`, `kind` (merge/promote_field/stabilize/split/rename/merge_entity/merge_subject), `payload`, `rationale`, `status` (pending/applied/rejected), `auto`, `created_at` |
+| `type_changes` | Consolidation proposals | `id`, `kind` (merge/promote_field/stabilize/remove_field/split/rename/merge_entity/merge_subject), `payload`, `rationale`, `status` (pending/applied/rejected), `auto` (safe to apply without approval), `created_at`, `decided_at`, `note` |
 | `jobs` | Processing queue | `id`, `kind`, `payload`, `status`, `attempts`, `run_after`, `locked_at` |
 
 Knowledge-layer tables are described in [Knowledge layer](#knowledge-layer).
@@ -232,9 +232,19 @@ Consolidation prevents type drift: it runs every night and after every batch of 
 | Merge of provisional types | Yes | LLM confidence ≥ 0.9 and lossless mapping |
 | Merge involving a stable type | No | Approval required |
 | Field removal or retyping | No | Approval required |
+| Entity or subject merge | Yes | A strong identifier is shared |
 | Change to the common core | Never | Code migration only |
 
-`AUTO_APPLY=none` disables all automatic application (useful for first trials).
+`AUTO_APPLY=none` disables all automatic application (useful for first trials); `safe`, the default, applies what the table calls automatic; `all` applies every change consolidation proposes. `type_changes.auto` records whether a change is safe by the table, whatever the mode.
+
+**Rules of consolidation.**
+
+- *Triggers.* Runs go through the job queue (`consolidate`), one at a time across every process: a run holds a session advisory lock, and a run that finds another in progress ends at once. A nightly run is due at 03:00 UTC: one is queued at startup, and each nightly run queues the next as it starts, so a run that fails does not end the chain. After each indexing, a run is queued when 20 documents ingested since the last run started have settled and no run is queued.
+- *Proposals once.* A pair of types put to the model is recorded whatever it answers: `merge` as a pending change, `distinct` and `common_parent` as a rejected one, so the pair is never asked about again. Consolidation does not create common parents. Overlap means a share of common field names (Jaccard) of at least 0.7 and a share of common issuers of at least 0.5. A key of `extra` named by a promotion, a removal pending or rejected, a stabilization pending or rejected are not proposed again; at most 10 pairs of types go to the model per run, the most similar first. A model answer outside its schema skips its item until the next run.
+- *What the model reads.* The two schemas and the titles and values of the three most recent public documents of each type for a merge; the frequent keys of `extra` with three values of public documents each for a promotion. All of it is delimited as untrusted and masked again; the model never reads a document's text here.
+- *Application.* A change is decided once, under a lock on its row, by a person (`apply_change`) or by the policy at the end of a run, merges first. The policy reads again under that lock, and under the registry lock for a change of a type, whether the change is still safe, from the registry as it is then: a merge marked safe is not once a type became stable, nor a promotion once its field got another definition; such a change loses its `auto` flag and waits for approval under `AUTO_APPLY=safe`. The documents of the type are moved in the transaction of the registry write, before it: their values are renamed by the mapping or the promotion and kept as fields where the schema has a field they fit, in `extra` under their own name otherwise, with their provenance and their manual mark, placed in one pass from the name each value had, so that no key is both a field and a key of `extra`. On a collision a manual value wins and the name of a field a person cleared stays free; an extracted value that loses its own name to a manual one is dropped, the re-extraction can give it back. A manual value is never dropped: two corrected values that would leave one of them without a key refuse the change (`manual_collision`). A document moved to another type has no `schema_version` until it is extracted again, and keeps its confidence. Every settled document of the type is then queued for re-extraction; a document still on its way is extracted for its type as it is by then. Entity and subject merges rewrite every reference to the source (`facts.entity_ids`, the provenance entries, `documents.subject_ids`, `facts.subject_ids`) and queue no re-extraction.
+- *Refusals.* A change the current state refuses (a type merged meanwhile, a field redefined since a promotion was proposed without a retyping, two corrected values competing for one field, a hierarchy that would get a third level, two entities of different kinds, an entity gone) is rejected with the reason as its note, and what it moved is undone. It is never tried again.
+- *Manual corrections.* A value a person corrected is never overwritten: it moves with its mark and the re-extraction keeps it.
 
 ## Entity resolution
 
@@ -247,7 +257,7 @@ Entities are managed locally and deterministically: it is the most queried field
 3. **Similarity**: embedding of the name and context; above 0.92, attach and add an alias; between 0.80 and 0.92, the LLM arbitrates among the 3 closest candidates.
 4. **Otherwise**: create a new entity.
 
-Entity merges go through `type_changes` (kind `merge_entity`) with the same policy: automatic if a strong identifier is shared, approval otherwise.
+Entity merges go through `type_changes` (kind `merge_entity`) with the same policy: automatic if a strong identifier is shared, approval otherwise. Consolidation proposes a merge for every pair of entities of one kind that share a global identifier or a normalized name.
 
 An IBAN or a card number carried by an entity is a strong identifier too, matched through its hash. A customer number is scoped to the entity that issued it: it attaches only when it has at least 6 characters once normalized and no other entity of the same kind carries it (otherwise the name rules decide), and sharing one never makes a merge automatic. An identifier of a free format is kept but never attaches or merges anything. A document never makes two entities share a strong identifier: a mention whose identifiers designate more than one entity is resolved by the name and similarity rules, and an entity never takes an identifier another entity carries; what the mention suggests is kept as a merge proposal that needs an approval. A fragment is not an identifier: a company ID under 5 characters, a VAT number under 4, or either without a digit, is ignored. Names are normalized without accents on Latin letters only: in other scripts a mark is part of the word. A name or similarity match yields when the entity and the mention carry different company IDs or VAT numbers: a new entity is created, since a duplicate can be merged and a wrong fusion cannot be undone. The text model arbitrates outside the entity lock, and its answer is used only if the candidates are still the same once the lock is taken. A mention of a `private` document skips the similarity rule when the embedding provider is external.
 
@@ -360,7 +370,7 @@ Fourteen tools, over Streamable HTTP (`/mcp`, Bearer token auth) and stdio. All 
 | `ingest` | Add a document | `file` (base64) or `url`, `filename`, `hint?`, `private?` | ID and status; asynchronous processing |
 | `get_status` | Track processing | `id` | Status and state, error if any |
 | `update_document` | Correct a document | `id`, `type?`, `core?`, `fields?`, `private?` | Updated document (provenance `manual`) |
-| `list_pending_changes` | See consolidation proposals | `kind?` | Changes with rationale |
+| `list_pending_changes` | See consolidation proposals | `kind?` | Pending changes with rationale, oldest first (at most 100, `truncated`) |
 | `apply_change` | Approve or reject | `id`, `decision` (`apply`/`reject`), `note?` | Result and number of documents to re-extract |
 
 **Knowledge-layer tools**
@@ -390,7 +400,7 @@ Fourteen tools, over Streamable HTTP (`/mcp`, Bearer token auth) and stdio. All 
 - A tool answers compact JSON in one text content, its keys in snake_case like every answer of the REST API. A failure is a tool error (`isError`) whose text is `{"error": {"code", "message", …}}` with the codes of the REST API; a feature this build does not provide answers `not_implemented` where REST answers 501. An unexpected failure answers `internal_error`, and only its class is logged.
 - Arguments are checked against strict schemas derived from those of the REST API; the SDK refuses those that do not match with an "invalid arguments" tool error. `query` is the exception: the DSL reads its arguments itself, so its errors name the field, type or operator to correct, as `POST /query` does.
 - A resource that does not exist answers the JSON-RPC error -32002, with the body a tool would answer as its data.
-- `upcoming`, `timeline`, `recall` and `get_subject` reach the knowledge layer through the features the server binds, as `GET /upcoming` and `GET /subjects` do; their answers are those of the knowledge layer. `list_pending_changes` and `apply_change` answer `not_implemented` until consolidation is bound.
+- `upcoming`, `timeline`, `recall` and `get_subject` reach the knowledge layer through the features the server binds, as `GET /upcoming` and `GET /subjects` do; their answers are those of the knowledge layer. `list_pending_changes` and `apply_change` reach consolidation the same way, as `GET /changes` and `POST /changes/:id` do, and answer what they answer (`@liasse/core/contract`).
 
 ## API, configuration and deployment
 
@@ -406,6 +416,7 @@ A single Node binary, configured through environment variables, shipped as a mul
 - **Files are served as data.** `Content-Disposition` is `attachment` except for PDF, JPEG and PNG, always with `X-Content-Type-Options: nosniff` and `Content-Security-Policy: sandbox`.
 - **Errors** are `{"error": {"code", "message", "request_id", …}}` with stable codes. A route whose feature is not part of the build answers 501 `not_implemented`.
 - **Private documents in counts.** The document counts of `GET /types` and `GET /entities` leave private documents out unless `include_private=true`, as search and queries do.
+- **Changes.** `GET /changes` lists the pending changes, oldest first, filtered by `kind`; at most 100, with `truncated` when more are pending. `POST /changes/:id` answers with the change as decided, the number of documents queued for re-extraction and, for an application the current state refused, the `refusal` (`code`, `message`); a change already decided answers 400 `change_already_decided`.
 - **Subjects.** `GET /subjects` lists the subjects a public document concerns, oldest first, each with its kind, name, aliases and number of public documents, filtered by `kind` and by a `query` read as `get_subject` reads it; at most 100, with `truncated` when more match. Like the knowledge tools, it never shows a private subject or one known only through private or deleted documents.
 - **No CORS.** The API allows no other origin; the web UI is served from the same one.
 - **Shutdown.** SIGTERM or SIGINT stops accepting requests, lets requests and jobs in progress finish within a grace period, then exits with code 0 (1 if a part could not be stopped). Any second signal exits at once with code 1.
@@ -447,7 +458,7 @@ A single Node binary, configured through environment variables, shipped as a mul
 
 **Local embeddings by default.** `EMBEDDING_PROVIDER=local` runs a small quantized multilingual model on the same host (ONNX Runtime): around 384 dimensions and roughly 100 MB, with candidates to be compared on the evaluation set (for example the multilingual-e5-small family). The model files are downloaded into `EMBEDDING_CACHE_DIR` on first use, unless the directory already holds them (pre-filled image or mounted volume), after which no network access is needed. The model runs in a child process of the server, started on first use and ended after 10 minutes of inactivity: ONNX Runtime does not return its memory to the operating system when a model is released in place, so ending the process is what meets the idle RAM target. While it works, the model process peaks between 0.8 and 1.35 GB with batches of four inputs (measured on inputs of 512 tokens: 0.83 GB on Linux arm64 with Node 22; 1.09 to 1.32 GB on macOS arm64 with Node 24, where the peak varies from run to run and grows with the length of the run more than with anything else). The process serves one batch at a time, in the order the batches arrive, whatever the number of workers asking: `process_document` embeds in up to `WORKERS` jobs at once, and their batches take turns, so the peak stays the one of a single batch (two concurrent requests of 64 inputs measured 1.06 to 1.31 GB on macOS).
 
-**Web UI.** Enabled only when `UI_PASSWORD` is set; otherwise nothing is mounted under `/ui`. Pages are rendered on the server (Hono, `hono/html`) from the use cases of `@liasse/core/api` that REST and MCP call, so the UI applies the same rules, private documents included: a list or a search leaves them out unless asked, a document named by its id is shown. Pages: document list with status and privacy filters, document page (details, core values, fields, text, the original file), search, upload, the `needs_review` queue, and pending consolidation changes, which show the API's "not available" state while consolidation is not part of the build.
+**Web UI.** Enabled only when `UI_PASSWORD` is set; otherwise nothing is mounted under `/ui`. Pages are rendered on the server (Hono, `hono/html`) from the use cases of `@liasse/core/api` that REST and MCP call, so the UI applies the same rules, private documents included: a list or a search leaves them out unless asked, a document named by its id is shown. Pages: document list with status and privacy filters, document page (details, core values, fields, text, the original file), search, upload, the `needs_review` queue, and pending consolidation changes, each with its rationale and payload and a form to apply or reject it with a note; a change the current state refuses is reported as rejected.
 
 - **Password.** `UI_PASSWORD` is a plain value, or an argon2id hash in PHC form (`$argon2id$v=19$m=…,t=…,p=…$salt$hash`), refused at startup when it cannot be read. Both are compared in constant time. The hash is computed with `hash-wasm`, since `crypto.argon2` is not in Node 22, on the event loop: its cost is bounded to 64 MiB, 16 passes, 8 lanes and 64 MiB times passes (about 50 ms on a desktop core, a few times that on a small ARM host), which every OWASP argon2id setting fits, such as `m=19456,t=2,p=1`. At most 2 hashes are computed at once, whatever the number of clients; an attempt beyond them is answered 503 with `Retry-After` and not hashed.
 - **Sessions.** The session cookie `liasse_session` is `HttpOnly`, `SameSite=Strict`, `Path=/ui`, lasts `UI_SESSION_TTL`, and is `Secure` when `PUBLIC_URL` is https. Sessions are held in memory: logging out ends one for good, logging in again ends the one the browser held, a restart ends them all. Pages have the request deadline of the API, an upload its upload deadline, and the original file none. The cookie opens `/ui` only, and a Bearer token does not open `/ui`.

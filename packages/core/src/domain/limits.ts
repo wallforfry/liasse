@@ -128,3 +128,38 @@ export const MAX_SUBJECT_NEXT_DATES = 5;
 export const MAX_SUBJECT_SUGGESTIONS = 5;
 export const DEFAULT_SUBJECT_LIST_LIMIT = 100;
 export const MAX_SUBJECT_LIST_LIMIT = 500;
+
+// Consolidation, by the specification. None of these was calibrated on the evaluation set
+// yet (see the open questions of the specification).
+// New documents settled since the last run that queue a run of their own.
+export const CONSOLIDATION_BATCH_DOCUMENTS = 20;
+// Hour of the nightly run, in UTC.
+export const CONSOLIDATION_NIGHTLY_HOUR_UTC = 3;
+// Cosine similarity of two type descriptions above which they are merge candidates.
+export const TYPE_MERGE_SIMILARITY = 0.85;
+// Or: the share of field names two types have in common (Jaccard), together with the share
+// of their issuers, at or above which their documents overlap strongly.
+export const TYPE_MERGE_FIELD_OVERLAP = 0.7;
+export const TYPE_MERGE_ISSUER_OVERLAP = 0.5;
+// Pairs of types put to the text model in one run, the most similar first.
+export const MAX_TYPE_MERGE_PAIRS_PER_RUN = 10;
+export const TYPE_MERGE_EXAMPLES = 3;
+// A merge of two provisional types applies without approval at this confidence or above.
+export const AUTO_MERGE_CONFIDENCE = 0.9;
+// A key of `extra` in at least this share of the documents of a type, and in at least this
+// many, is a candidate for promotion to a field.
+export const FIELD_PROMOTION_SHARE = 0.6;
+export const MIN_FIELD_PROMOTION_DOCUMENTS = 3;
+// Sample values of a promotion candidate shown to the text model, and keys of `extra` it
+// may name as variants.
+export const FIELD_PROMOTION_SAMPLES = 3;
+export const MAX_FIELD_PROMOTION_KEYS = 50;
+// A provisional type with this many documents and no open merge proposal becomes stable.
+export const STABILIZATION_DOCUMENTS = 5;
+// A field filled in less than this share of the documents of a stable type with at least
+// this many documents is proposed for removal.
+export const FIELD_CLEANUP_SHARE = 0.1;
+export const FIELD_CLEANUP_MIN_DOCUMENTS = 20;
+export const MAX_CHANGE_RATIONALE_LENGTH = 1000;
+// Pending changes one listing returns, oldest first.
+export const MAX_LISTED_CHANGES = 100;

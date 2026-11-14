@@ -7,10 +7,11 @@ import {
   upcoming,
 } from '@liasse/core/api';
 import {
+  changeDecisionResultSchema,
   changeDecisionSchema,
+  changeListSchema,
   describeTypesOptionsSchema,
   entityListSchema,
-  featureResultSchema,
   listChangesOptionsSchema,
   listEntitiesRequestSchema,
   listSubjectsOptionsSchema,
@@ -120,7 +121,7 @@ export const registryRoutes = ({ api, authenticated }: RouteDeps): Hono<AppEnv> 
         summary: 'List consolidation proposals',
         tag: 'Registry',
         responses: {
-          200: jsonResponse('The changes.', featureResultSchema),
+          200: jsonResponse('The pending changes, oldest first.', changeListSchema),
           ...failures(400, 501),
         },
       }),
@@ -134,7 +135,7 @@ export const registryRoutes = ({ api, authenticated }: RouteDeps): Hono<AppEnv> 
         summary: 'Apply or reject a consolidation proposal',
         tag: 'Registry',
         responses: {
-          200: jsonResponse('The outcome.', featureResultSchema),
+          200: jsonResponse('The change as decided.', changeDecisionResultSchema),
           ...failures(400, 404, 413, 415, 501),
         },
       }),

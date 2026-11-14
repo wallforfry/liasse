@@ -1,4 +1,4 @@
-export type { RegistryContext, RegistryReadContext } from './context.ts';
+export type { RegistryContext, RegistryReadContext, RegistryWriteContext } from './context.ts';
 export { CORE_FIELD_NAMES, CORE_FIELDS, KEY_DATES_FIELD } from './core-fields.ts';
 export { createType, type CreateTypeInput } from './create-type.ts';
 export type {

@@ -1,5 +1,7 @@
-import { jobs } from '@liasse/core/db';
+import { changeDecisionResultSchema, changeListSchema } from '@liasse/core/contract';
+import { documents, jobs, typeChanges } from '@liasse/core/db';
 import { waitUntil } from '@liasse/core/testing';
+import { eq } from 'drizzle-orm';
 import { describe, expect, it } from 'vitest';
 import { z } from 'zod';
 import { LETTER, NEW_CONTRACT, OLD_CONTRACT } from '../synthetic-documents.fixture.ts';
@@ -81,7 +83,6 @@ describe('the features the runtime binds', () => {
     expect(await corrected.json()).toMatchObject({ id, private: true, status: 'indexed' });
     expect(await documentOf(id)).toEqual({ status: 'indexed', private: true });
     expect(await datesOf(runtime, '')).toEqual([]);
-    expect((await call(runtime, '/changes')).status).toBe(501);
   });
 
   it('answers the knowledge tools of MCP from what the pipeline stored', async () => {
@@ -159,6 +160,95 @@ describe('the features the runtime binds', () => {
       '2027-01-25 renewal',
       '2027-06-20 renewal',
     ]);
+  });
+
+  it('lists and decides consolidation changes, and keeps a nightly run queued', async () => {
+    const runtime = await start();
+    const nightly = await harness
+      .database()
+      .db.select({ payload: jobs.payload, status: jobs.status })
+      .from(jobs)
+      .where(eq(jobs.kind, 'consolidate'));
+    expect(nightly).toEqual([{ payload: { trigger: 'nightly' }, status: 'queued' }]);
+
+    const id = await upload(runtime, LETTER.lines, 'letter.pdf');
+    await waitUntil(async () => (await documentOf(id))?.status === 'indexed');
+    const [document] = await harness
+      .database()
+      .db.select({ typeId: documents.typeId })
+      .from(documents)
+      .where(eq(documents.id, id));
+    const [change] = await harness
+      .database()
+      .db.insert(typeChanges)
+      .values({
+        kind: 'stabilize',
+        payload: { type_id: document?.typeId ?? '' },
+        rationale: 'Synthetic rationale.',
+      })
+      .returning({ id: typeChanges.id });
+
+    const listed = await call(runtime, '/changes?kind=stabilize');
+    expect(listed.status).toBe(200);
+    expect(await listed.json()).toMatchObject({
+      changes: [{ id: change?.id, kind: 'stabilize', status: 'pending' }],
+      truncated: false,
+    });
+    const decide = () =>
+      call(runtime, `/changes/${change?.id ?? ''}`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ decision: 'apply', note: 'Looks right.' }),
+      });
+    const applied = await decide();
+    expect(applied.status).toBe(200);
+    expect(await applied.json()).toMatchObject({
+      change: { status: 'applied', note: 'Looks right.' },
+      documents_to_reextract: 0,
+    });
+    const again = await decide();
+    expect(again.status).toBe(400);
+    expect(await again.json()).toMatchObject({ error: { code: 'change_already_decided' } });
+    expect(await (await call(runtime, '/changes')).json()).toEqual({
+      changes: [],
+      truncated: false,
+    });
+  });
+
+  it('lists and decides consolidation changes over MCP, as the routes answer', async () => {
+    const runtime = await start();
+    const id = await upload(runtime, LETTER.lines, 'letter.pdf');
+    await waitUntil(async () => (await documentOf(id))?.status === 'indexed');
+    const [document] = await harness
+      .database()
+      .db.select({ typeId: documents.typeId })
+      .from(documents)
+      .where(eq(documents.id, id));
+    const [change] = await harness
+      .database()
+      .db.insert(typeChanges)
+      .values({
+        kind: 'stabilize',
+        payload: { type_id: document?.typeId ?? '' },
+        rationale: 'Synthetic rationale.',
+      })
+      .returning({ id: typeChanges.id });
+    const changeId = change?.id ?? '';
+
+    const listed = changeListSchema.parse(
+      await callTool(runtime, 'list_pending_changes', { kind: 'stabilize' }),
+    );
+    expect(listed.changes.map(({ id: listedId, status }) => [listedId, status])).toEqual([
+      [changeId, 'pending'],
+    ]);
+    const decided = changeDecisionResultSchema.parse(
+      await callTool(runtime, 'apply_change', { id: changeId, decision: 'apply' }),
+    );
+    expect(decided).toMatchObject({ change: { status: 'applied' }, documents_to_reextract: 0 });
+    expect(await callTool(runtime, 'list_pending_changes', {})).toEqual({
+      changes: [],
+      truncated: false,
+    });
   });
 
   it('fails at startup a document on its way that no job will process', async () => {
