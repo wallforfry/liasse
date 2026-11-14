@@ -82,6 +82,8 @@ describe('deleteDocument and the delete_file job', () => {
         private: true,
         watchRequeues: 1,
         fileDeletedAt: new Date('2026-01-01T00:00:00Z'),
+        hindsightHeldSince: new Date('2026-02-01T00:00:00Z'),
+        hindsightSentHash: 'synthetic-hash',
       })
       .where(eq(documents.id, id));
     const before = await documentRow(id);
@@ -115,8 +117,55 @@ describe('deleteDocument and the delete_file job', () => {
       subjectIds: [],
       watchRequeues: 0,
       fileDeletedAt: null,
+      // Kept: the only trace that Hindsight may still hold facts and owes a forget.
+      hindsightHeldSince: new Date('2026-02-01T00:00:00Z'),
+      hindsightSentHash: null,
     });
     expect(updatedAt.getTime()).toBeGreaterThanOrEqual(before.updatedAt.getTime());
+  });
+
+  it('runs the deletion hook in its transaction, on the tombstone', async () => {
+    const { id } = await ingest(syntheticPdf('hooked'));
+    const seen: unknown[] = [];
+    const deleted = await deleteDocument(
+      {
+        ...harness.deps,
+        onDeleted: async (tx, document) => {
+          const [row] = await tx
+            .select({ status: documents.status })
+            .from(documents)
+            .where(eq(documents.id, document.id));
+          seen.push({ document, status: row?.status, queued: await jobsOfKind('delete_file') });
+          await tx.insert(jobs).values({ kind: 'test_hook', payload: { documentId: document.id } });
+        },
+      },
+      id,
+    );
+    expect(deleted).toBe(true);
+    expect(seen).toEqual([{ document: { id }, status: 'deleted', queued: [] }]);
+    expect(await jobsOfKind('test_hook')).toHaveLength(1);
+    expect(await jobsOfKind('delete_file')).toHaveLength(1);
+  });
+
+  it('undoes the deletion when its hook fails, and skips the hook when nothing is deleted', async () => {
+    const { id } = await ingest(syntheticPdf('hook fails'));
+    let calls = 0;
+    const onDeleted = () => {
+      calls += 1;
+      return Promise.reject(new Error('synthetic hook failure'));
+    };
+    await expect(deleteDocument({ ...harness.deps, onDeleted }, id)).rejects.toThrow(
+      'synthetic hook failure',
+    );
+    expect((await documentRow(id)).status).toBe('received');
+    expect(await jobsOfKind('delete_file')).toEqual([]);
+
+    expect(await deleteDocument({ ...harness.deps, onDeleted }, 'doc_synthetic_missing')).toBe(
+      false,
+    );
+    await deleteDocument(harness.deps, id);
+    expect(await deleteDocument({ ...harness.deps, onDeleted }, id)).toBe(false);
+    expect(calls).toBe(1);
   });
 
   it('deletes the rows derived from the document and leaves those of the others', async () => {
