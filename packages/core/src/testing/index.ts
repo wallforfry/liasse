@@ -19,6 +19,14 @@ export {
   type SyntheticDocxOptions,
   syntheticDocumentXml,
 } from './synthetic-docx.ts';
+export { chatCompletion, embeddings } from '../models/providers/wire-fixtures.ts';
+export {
+  startStubServer,
+  type StubHandler,
+  type StubRequest,
+  type StubResponse,
+  type StubServer,
+} from '../models/providers/stub-server.ts';
 export { SYNTHETIC_ENV } from './synthetic-env.ts';
 export {
   buildSyntheticPdf,
