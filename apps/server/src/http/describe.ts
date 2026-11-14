@@ -18,6 +18,7 @@ const FAILURES: Readonly<Record<number, string>> = {
   400: 'The request is not valid.',
   401: 'No valid credential.',
   404: 'Not found.',
+  405: 'The route does not serve this method.',
   413: 'The body is too large.',
   415: 'The body has an unsupported media type or format.',
   501: 'This server does not provide the feature yet.',

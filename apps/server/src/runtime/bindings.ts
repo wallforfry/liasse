@@ -46,8 +46,8 @@ export type Bind = (parts: RuntimeParts) => Bindings;
  *   `features`, a concurrency of 1 for its indexing kind (the embedder is one model
  *   process), `afterIndexed: (id) => hindsight.enqueueSync(db, id)` in its deps (a
  *   correction that changes `private` queues the same sync), and the notice below goes;
- * - the knowledge layer and consolidation: `listSubjects`, `upcoming`, `listChanges`
- *   and `applyChange` in `features`.
+ * - the knowledge layer and consolidation: `listSubjects`, `upcoming`, `timeline`,
+ *   `recall`, `getSubject`, `listChanges` and `applyChange` in `features`.
  */
 export const bindFeatures: Bind = ({ config, db, storage }) => {
   const hindsight = createHindsightIntegration(config.hindsight, {
