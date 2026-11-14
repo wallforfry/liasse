@@ -360,12 +360,22 @@ Fourteen tools, over Streamable HTTP (`/mcp`, Bearer token auth) and stdio. All 
 
 A single Node binary, configured through environment variables, shipped as a multi-arch Docker image (amd64, arm64) with a `docker-compose.yml` including Postgres and pgvector.
 
-**REST API** (generated OpenAPI, same logic as MCP): `POST /documents`, `GET /documents/:id`, `GET /documents/:id/file`, `PATCH /documents/:id`, `DELETE /documents/:id`, `POST /search`, `POST /query`, `GET /types`, `GET /entities`, `GET /subjects`, `GET /upcoming`, `GET /changes`, `POST /changes/:id`, `GET /health`, `GET /metrics` (Prometheus).
+**REST API** (generated OpenAPI, same logic as MCP): `POST /documents`, `GET /documents`, `GET /documents/:id`, `GET /documents/:id/file`, `PATCH /documents/:id`, `DELETE /documents/:id`, `POST /search`, `POST /query`, `GET /types`, `GET /entities`, `GET /subjects`, `GET /upcoming`, `GET /changes`, `POST /changes/:id`, `GET /health`, `GET /metrics` (Prometheus), `GET /openapi.json`.
+
+- **One logic, two transports.** The use cases live in `@liasse/core/api`; REST and MCP both call them, so a tool and its route answer the same thing.
+- **Credentials.** Every route needs `Authorization: Bearer <token>`, `/metrics` and `/openapi.json` included. Two exceptions: `GET /health` is open and only says whether the database answers, and `GET /documents/:id/file` also accepts a signed URL.
+- **Documents.** `POST /documents` takes a multipart form (`file`, optional `hint` and `private`) or the raw bytes (`Content-Type: application/octet-stream`, name in `X-Filename`); it answers 201 for a new document and 200 for bytes already known. `GET /documents` lists documents, most recent first, filtered by `status`, `type` and `private` (`exclude` by default, `include`, `only`); the web UI uses it for its list and its review queue. `GET /documents/:id` returns a private document, since naming it is asking for it. `DELETE` answers 204, then 404: a deleted document is not a document.
+- **Signed file URLs.** `file_url` is `PUBLIC_URL/documents/:id/file?expires=…&signature=…`: an HMAC-SHA-256 of the document ID and the expiry, under a key derived from `FILE_URL_SECRET`. It opens that one file, for 15 minutes, any number of times, and nothing else. It stops working when the document is deleted and works again if the same bytes revive the document before it expires. It is issued only to an authenticated caller, private documents included.
+- **Files are served as data.** `Content-Disposition` is `attachment` except for PDF, JPEG and PNG, always with `X-Content-Type-Options: nosniff` and `Content-Security-Policy: sandbox`.
+- **Errors** are `{"error": {"code", "message", "request_id", …}}` with stable codes. A route whose feature is not part of the build answers 501 `not_implemented`.
+- **No CORS.** The API allows no other origin; the web UI is served from the same one.
 
 **Main variables**
 
 | Variable | Default | Role |
 | --- | --- | --- |
+| `HOST` / `PORT` | `127.0.0.1` / `8080` | Address the server listens on |
+| `PUBLIC_URL` | `http://HOST:PORT` | Origin clients reach the server at; signed file URLs start with it, never with the `Host` of a request |
 | `DATABASE_URL` | — | Postgres 16+ with pgvector 0.8+ |
 | `STORAGE_DRIVER` | `fs` | `fs` or `s3` |
 | `STORAGE_PATH` / `S3_*` | `/data/files` | File location |
@@ -386,6 +396,7 @@ A single Node binary, configured through environment variables, shipped as a mul
 | `SCHEMA_LANGUAGE` | `en` | Language of generated slugs and field names: `en`, `fr`, `de`, `es` or `it` |
 | `HINDSIGHT_URL` / `HINDSIGHT_BANK` / `HINDSIGHT_API_KEY` | empty | Optional integration |
 | `API_TOKENS` | — | Bearer tokens (list) for API and MCP |
+| `FILE_URL_SECRET` | required | Secret the keys of signed file URLs and of identifier hashes are derived from |
 | `UI_PASSWORD` | empty | Enables the web UI (plain value or `$argon2id$…` hash) |
 | `UI_SESSION_TTL` | `7d` | UI session lifetime |
 | `WORKERS` | `2` | Jobs processed in parallel |
