@@ -47,6 +47,11 @@
       "types": "./dist/registry/index.d.ts",
       "default": "./dist/registry/index.js"
     },
+    "./text": {
+      "@liasse/source": "./src/text/index.ts",
+      "types": "./dist/text/index.d.ts",
+      "default": "./dist/text/index.js"
+    },
     "./testing": {
       "@liasse/source": "./src/testing/index.ts",
       "types": "./dist/testing/index.d.ts",
@@ -70,10 +75,15 @@
     "@ai-sdk/openai-compatible": "^3.0.92",
     "ai": "^7.0.173",
     "drizzle-orm": "^0.45.4",
+    "heic-decode": "^2.1.0",
+    "jpeg-js": "^0.4.4",
+    "pdfjs-dist": "^6.5.438",
+    "postal-mime": "^4.2.1",
     "postgres": "^4.1.1",
     "zod": "^4.6.7"
   },
   "devDependencies": {
+    "@types/heic-decode": "^2.0.1",
     "drizzle-kit": "^0.31.11"
   }
 }
