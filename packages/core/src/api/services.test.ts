@@ -11,7 +11,8 @@ import { ApiError } from './errors.ts';
 import { applyChange, correctDocument, listChanges, listSubjects, upcoming } from './features.ts';
 import { type ApiHarness, createApiHarness } from './harness.test-helper.ts';
 import { listEntities } from './list-entities.ts';
-import { queryDocuments } from './query-documents.ts';
+import { QueryExecutionError } from '../query/execute.ts';
+import { executionFailure, queryDocuments } from './query-documents.ts';
 import { searchDocuments } from './search-documents.ts';
 import { readStats } from './stats.ts';
 
@@ -139,6 +140,22 @@ describe('use cases of the API', () => {
       } finally {
         await unreachable.close();
       }
+    });
+
+    // Class 22 is a data exception: the query carried a value the database refused, and
+    // running it again fails the same way. Anything else may pass on another try.
+    it.each([
+      ['22021', 'invalid', 'invalid_query'],
+      ['22P02', 'invalid', 'invalid_query'],
+      ['22003', 'invalid', 'invalid_query'],
+      ['08006', 'unavailable', 'query_failed'],
+      ['53300', 'unavailable', 'query_failed'],
+      ['57P01', 'unavailable', 'query_failed'],
+      [undefined, 'unavailable', 'query_failed'],
+    ])('maps the SQLSTATE %s of a failed query to %s', (sqlState, kind, code) => {
+      const failure = executionFailure(new QueryExecutionError(sqlState));
+      expect(failure).toMatchObject({ kind, code, details: {} });
+      expect(failure.message).not.toContain('SQLSTATE');
     });
   });
 

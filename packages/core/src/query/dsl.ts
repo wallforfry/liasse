@@ -10,6 +10,9 @@ import {
 } from '../domain/limits.ts';
 import { err, ok, type Result } from '../registry/result.ts';
 import { failure, type QueryError, quoted } from './errors.ts';
+import { nulCharacterPlaces } from './unstorable.ts';
+
+const NUL_MESSAGE = 'This text holds a NUL character, which cannot be stored or compared.';
 
 export const OPERATORS = ['=', '!=', '<', '<=', '>', '>=', 'in', 'contains', 'exists'] as const;
 export type Operator = (typeof OPERATORS)[number];
@@ -103,11 +106,15 @@ const firstByPlace = (issues: readonly z.core.$ZodIssue[]): readonly z.core.$Zod
 // Every problem, one per place. `runQuery` is what bounds how many of them it answers.
 export const parseQueryDsl = (input: unknown): Result<QueryDsl, readonly QueryError[]> => {
   const parsed = queryDslSchema.safeParse(input);
-  return parsed.success
+  if (!parsed.success) {
+    return err(
+      firstByPlace(parsed.error.issues).map((issue) =>
+        failure('invalid_query', location(issue.path), describeIssue(issue)),
+      ),
+    );
+  }
+  const unstorable = nulCharacterPlaces(parsed.data);
+  return unstorable.length === 0
     ? ok(parsed.data)
-    : err(
-        firstByPlace(parsed.error.issues).map((issue) =>
-          failure('invalid_query', location(issue.path), describeIssue(issue)),
-        ),
-      );
+    : err(unstorable.map((path) => failure('invalid_query', path, NUL_MESSAGE)));
 };

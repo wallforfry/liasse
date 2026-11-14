@@ -28,10 +28,21 @@ const refusal = (errors: readonly QueryError[]): ApiError => {
     : new ApiError('timeout', 'query_timeout', timedOut.message);
 };
 
+// SQLSTATE class 22, data exception: the database refused a value the query carried.
+// Running it again fails the same way, so it is the caller's to correct.
+const DATA_EXCEPTION_CLASS = '22';
+
+/** What a database failure during a query tells the caller, without the statement. */
+export const executionFailure = ({ sqlState }: QueryExecutionError): ApiError =>
+  sqlState?.startsWith(DATA_EXCEPTION_CLASS) === true
+    ? new ApiError('invalid', 'invalid_query', 'The query holds a value the database refused.')
+    : new ApiError('unavailable', 'query_failed', 'The query could not be run.');
+
 /**
  * Runs a structured query. The input is untrusted and parsed by the DSL itself.
- * Rejects with `invalid_query` (details: `errors`), `query_timeout`, or `query_failed`
- * when the database could not run it; no statement ever leaves.
+ * Rejects with `invalid_query` (details: `errors`, or none for a value
+ * the database refused), `query_timeout`, or `query_failed` when the database could not
+ * run it; no statement ever leaves.
  */
 export const queryDocuments = async (
   { db, queryTimeoutMs }: Pick<ApiContext, 'db' | 'queryTimeoutMs'>,
@@ -46,6 +57,6 @@ export const queryDocuments = async (
     throw refusal(outcome.error);
   } catch (error) {
     if (!(error instanceof QueryExecutionError)) throw error;
-    throw new ApiError('unavailable', 'query_failed', 'The query could not be run.');
+    throw executionFailure(error);
   }
 };

@@ -114,6 +114,17 @@ describe('search, query, registry and metrics routes', () => {
       expect(await response.json()).toMatchObject({ error: { code: 'query_timeout' } });
     });
 
+    it('refuses a NUL character in a value with 400 and its place, not a 503', async () => {
+      const response = await post('/query', { where: [['title', '=', 'a\u0000b']] });
+      expect(response.status).toBe(400);
+      expect(await response.json()).toMatchObject({
+        error: {
+          code: 'invalid_query',
+          errors: [{ code: 'invalid_query', path: ['where', 0, 2] }],
+        },
+      });
+    });
+
     it('binds what looks like a statement as a value', async () => {
       const before = await harness.database.db.$count(documents);
       const response = await post('/query', {
