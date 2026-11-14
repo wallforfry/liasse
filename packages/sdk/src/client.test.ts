@@ -47,6 +47,51 @@ describe('createLiasseClient', () => {
     );
   });
 
+  it('forwards the filters of every list and the decision on a change', async () => {
+    const answers: Readonly<Record<string, unknown>> = {
+      '/subjects': { subjects: [], truncated: false },
+      '/entities': { entities: [], total: 0 },
+      '/types': { types: [] },
+    };
+    const server = answering((url) => json(answers[new URL(url).pathname] ?? {}));
+    const client = createLiasseClient({
+      baseUrl: 'http://x.test',
+      token: 't',
+      fetch: server.fetch,
+    });
+    await client.listSubjects({ query: 'home', kind: 'contract' });
+    await client.listEntities({ query: 'zirc', kind: 'org', limit: 5, include_private: true });
+    await client.listTypes({ status: 'stable', include_examples: true, include_private: false });
+    await client.listChanges({ kind: 'merge' });
+    await client.decideChange('chg_01', { decision: 'reject', note: 'Not the same type.' });
+    expect(server.sent.map(({ url }) => url)).toEqual([
+      'http://x.test/subjects?query=home&kind=contract',
+      'http://x.test/entities?query=zirc&kind=org&limit=5&include_private=true',
+      'http://x.test/types?status=stable&include_examples=true&include_private=false',
+      'http://x.test/changes?kind=merge',
+      'http://x.test/changes/chg_01',
+    ]);
+    const decision = server.sent[4]?.init;
+    expect(decision?.method).toBe('POST');
+    expect(new Headers(decision?.headers).get('Content-Type')).toBe('application/json');
+    expect(decision?.body).toBe(JSON.stringify({ decision: 'reject', note: 'Not the same type.' }));
+  });
+
+  it('sends the file and the options of an upload in the fields of the contract', async () => {
+    const server = answering(() => json({ id: 'doc_01', status: 'received', duplicate: false }));
+    const client = createLiasseClient({
+      baseUrl: 'http://x.test',
+      token: 't',
+      fetch: server.fetch,
+    });
+    await client.uploadDocument({ file: new Blob(['%PDF']), filename: 'a.pdf', private: false });
+    const form = server.sent[0]?.init?.body;
+    if (!(form instanceof FormData)) throw new Error('Expected a form');
+    expect([...form.keys()]).toEqual(['file', 'private']);
+    expect(form.get('private')).toBe('false');
+    expect(server.sent[0]?.init?.method).toBe('POST');
+  });
+
   it('turns the error body of the API into a LiasseApiError with its code', async () => {
     const server = answering(() =>
       json(
