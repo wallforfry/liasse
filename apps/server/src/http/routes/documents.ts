@@ -1,14 +1,11 @@
+import { correctDocument, getDocument, listDocuments, removeDocument } from '@liasse/core/api';
 import {
-  correctDocument,
   documentCorrectionSchema,
   documentListSchema,
   documentSchema,
-  getDocument,
   getDocumentOptionsSchema,
-  listDocuments,
   listDocumentsOptionsSchema,
-  removeDocument,
-} from '@liasse/core/api';
+} from '@liasse/core/contract';
 import { Hono } from 'hono';
 import { z } from 'zod';
 import { failures, jsonResponse, operation, valid } from '../describe.ts';

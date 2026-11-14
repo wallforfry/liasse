@@ -1,25 +1,9 @@
-import { z } from 'zod';
 import { entityNameKey, normalizeEntityName } from '../domain/entity-name.ts';
-import { MAX_ENTITY_NAME_LENGTH } from '../domain/limits.ts';
-import { entityKindSchema } from '../domain/schemas.ts';
 import type { EntitiesReadContext } from './context.ts';
 import { type Entity, findEntityById, loadEntities } from './entity-store.ts';
 import { type IdentifierView, viewIdentifier } from './identifiers.ts';
+import { type ListEntitiesOptions, listEntitiesOptionsSchema } from './list-options.ts';
 import { countDocumentsByEntity, type DocumentCountOptions } from './references.ts';
-
-export const DEFAULT_ENTITY_LIST_LIMIT = 50;
-export const MAX_ENTITY_LIST_LIMIT = 200;
-
-export const listEntitiesOptionsSchema = z.strictObject({
-  // Words of a name, in any order, each one possibly cut short: "synth ener".
-  query: z.string().trim().min(1).max(MAX_ENTITY_NAME_LENGTH).optional(),
-  kind: entityKindSchema.optional(),
-  limit: z.int().min(1).max(MAX_ENTITY_LIST_LIMIT).default(DEFAULT_ENTITY_LIST_LIMIT),
-  offset: z.int().min(0).default(0),
-  // Whether the document counts include the documents flagged `private`.
-  includePrivate: z.boolean().default(false),
-});
-export type ListEntitiesOptions = z.input<typeof listEntitiesOptionsSchema>;
 
 export interface ListedEntity extends Omit<Entity, 'identifiers'> {
   readonly identifiers: readonly IdentifierView[];

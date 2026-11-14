@@ -1,6 +1,5 @@
-import { z } from 'zod';
+import { type UploadResult, uploadResultSchema } from '../contract/documents.ts';
 import type { DocumentSource } from '../domain/enums.ts';
-import { liveDocumentStatusSchema } from '../domain/schemas.ts';
 import {
   EmptyFileError,
   FileTooLargeError,
@@ -19,15 +18,6 @@ export type UploadInput = FileContent & {
   readonly hint?: string | undefined;
   readonly private?: boolean | undefined;
 };
-
-export const uploadResultSchema = z.object({
-  id: z.string(),
-  status: liveDocumentStatusSchema,
-  duplicate: z
-    .boolean()
-    .describe('True when these bytes already had a document, which is the one returned.'),
-});
-export type UploadResult = z.output<typeof uploadResultSchema>;
 
 const toApiError = (error: IngestError): ApiError => {
   if (error instanceof FileTooLargeError) {
