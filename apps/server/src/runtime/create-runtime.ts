@@ -122,7 +122,21 @@ export const createRuntime = async (
       }),
       features: bindings.features,
     };
-    const app = createApp({ api, apiTokens: config.auth.apiTokens, ping: database.ping, logger });
+    const { ui } = config.auth;
+    const app = createApp({
+      api,
+      apiTokens: config.auth.apiTokens,
+      ping: database.ping,
+      logger,
+      ui:
+        ui === undefined
+          ? undefined
+          : {
+              password: ui.password,
+              sessionTtlMs: ui.sessionTtlMs,
+              secureCookies: config.server.publicUrl.startsWith('https:'),
+            },
+    });
     const listener = await listen({
       fetch: app.fetch,
       host: config.server.host,
