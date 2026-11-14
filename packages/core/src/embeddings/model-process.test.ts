@@ -62,6 +62,24 @@ describe('startModelProcess', () => {
     expect(await pidOf(model)).not.toBe(process.pid);
   });
 
+  it('serves one request at a time: two batches never run side by side', async () => {
+    const model = start();
+    const [first, second] = await Promise.all([model.embed(['overlap']), model.embed(['overlap'])]);
+    expect([first[0]?.[0], second[0]?.[0]]).toEqual([1, 1]);
+  });
+
+  it('serves the requests in the order they arrive, a quick one after a slow one', async () => {
+    const model = start();
+    const answered: string[] = [];
+    await Promise.all(
+      ['slow', 'quick'].map(async (text) => {
+        await model.countTokens([text]);
+        answered.push(text);
+      }),
+    );
+    expect(answered).toEqual(['slow', 'quick']);
+  });
+
   it('rejects with the message of a failure reported by the model', async () => {
     const model = start();
     const failure = model.embed(['fail']);
@@ -116,8 +134,8 @@ describe('startModelProcess', () => {
 
   it('rejects the requests in flight when the process dies, as retryable', async () => {
     const model = start();
-    const inFlight = model.embed(['hang']);
     const crash = model.embed(['crash']);
+    const inFlight = model.embed(['hang']);
     await expect(inFlight).rejects.toBeInstanceOf(LocalModelProcessError);
     await expect(inFlight).rejects.toMatchObject({ retryable: true });
     await expect(crash).rejects.toThrow('the model process ended (exit code 3)');

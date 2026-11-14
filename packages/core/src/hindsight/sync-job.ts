@@ -1,9 +1,14 @@
 import { z } from 'zod';
 import { enqueue, type JobExecutor } from '../jobs/enqueue.ts';
-import { PermanentJobError } from '../jobs/errors.ts';
+import { DeferJobError, PermanentJobError } from '../jobs/errors.ts';
 import { handle, type RegisteredHandler } from '../jobs/handlers.ts';
 import { defineJobKind } from '../jobs/kinds.ts';
-import { HindsightError } from './errors.ts';
+import {
+  HindsightError,
+  HindsightRetainInFlightError,
+  HindsightSyncBusyError,
+  HindsightSyncLockLostError,
+} from './errors.ts';
 import { type HindsightSyncDeps, syncDocumentToHindsight } from './sync-document.ts';
 
 // With the default backoff, eight attempts span about ten minutes. A forget that gives
@@ -45,11 +50,23 @@ export interface HindsightSyncHandlerDeps extends HindsightSyncDeps {
   readonly onFactsWithheld?: (withheld: WithheldFacts) => void;
 }
 
+// What says the sync must wait, not that it failed: none of them spends an attempt.
+const deferralOf = (error: unknown): DeferJobError | undefined => {
+  if (error instanceof HindsightRetainInFlightError) {
+    return new DeferJobError(error.message, { delayMs: error.retainingMs, cause: error });
+  }
+  if (error instanceof HindsightSyncBusyError || error instanceof HindsightSyncLockLostError) {
+    return new DeferJobError(error.message, { cause: error });
+  }
+  return undefined;
+};
+
 /**
  * The handler the server registers for `hindsightSyncJob`. A failure another attempt
- * can get past (network, timeout, 408, 429, 5xx, another sync of the document in
- * progress) is left to the retries of the queue; a request Hindsight refuses fails the
- * job at once.
+ * can get past (network, timeout, 408, 429, 5xx) is left to the retries of the queue; a
+ * request Hindsight refuses fails the job at once. Another sync of the document in
+ * progress, a lost lock and a retain that may still land defer the job without
+ * spending an attempt: each ends by itself.
  */
 export const createHindsightSyncHandler = ({
   onFactsWithheld,
@@ -65,6 +82,6 @@ export const createHindsightSyncHandler = ({
       if (error instanceof HindsightError && !error.retryable) {
         throw new PermanentJobError(error.message);
       }
-      throw error;
+      throw deferralOf(error) ?? error;
     }
   });

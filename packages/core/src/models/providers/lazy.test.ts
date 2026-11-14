@@ -2,8 +2,13 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { z } from 'zod';
 import { createProviderEmbedder, createTextModel, createVisionModel } from '../index.ts';
 import { once } from './lazy.ts';
-import { type StubServer, startStubServer } from './stub-server.ts';
-import { chatCompletion, embeddingConfig, embeddings, llmConfig } from './wire-fixtures.ts';
+import { type StubServer, startStubServer } from '../../testing/provider-stub-server.ts';
+import {
+  chatCompletion,
+  embeddingConfig,
+  embeddings,
+  llmConfig,
+} from '../../testing/provider-wire.ts';
 
 // Importing a forbidden package fails the test: only the configured provider may load.
 const { loads, forbidden } = vi.hoisted(() => ({

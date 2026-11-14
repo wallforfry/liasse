@@ -3,7 +3,7 @@ import { DEFAULT_RETRY_POLICY, type RetryPolicy } from './backoff.ts';
 import { JOBS_CHANNEL } from './enqueue.ts';
 import { startDispatcher } from './dispatcher.ts';
 import { InvalidWorkersOptionsError } from './errors.ts';
-import type { Execution, JobFailure } from './execution.ts';
+import type { Execution, JobDeferral, JobFailure } from './execution.ts';
 import { createHandlerRegistry, type RegisteredHandler } from './handlers.ts';
 import { recoverStaleJobs, terminalFailureHooks } from './store.ts';
 import { createWakeSignal } from './wake-signal.ts';
@@ -24,6 +24,8 @@ export interface WorkersOptions {
   readonly lockRenewalMs?: number;
   readonly retry?: RetryPolicy;
   readonly onJobFailed?: (failure: JobFailure) => void;
+  /** Called for a job a handler deferred with `DeferJobError`: not a failure. */
+  readonly onJobDeferred?: (deferral: JobDeferral) => void;
   /** Called for a failure of the queue itself, such as an unreachable database. */
   readonly onError?: (error: unknown) => void;
 }
@@ -115,6 +117,7 @@ export const startWorkers = async (options: WorkersOptions): Promise<Workers> =>
       retry: options.retry ?? DEFAULT_RETRY_POLICY,
       lockRenewalMs,
       onJobFailed: options.onJobFailed ?? (() => undefined),
+      onJobDeferred: options.onJobDeferred ?? (() => undefined),
       onError,
     },
     concurrency: options.concurrency,

@@ -4,10 +4,17 @@ import { createServer as createHttpServer } from 'node:http';
 import { createServer } from 'node:net';
 import { join } from 'node:path';
 import { loadConfig } from '@liasse/core/config';
-import { documents, jobs } from '@liasse/core/db';
+import { documents, facts, jobs } from '@liasse/core/db';
 import { StartupError } from '@liasse/core/domain';
-import { defineJobKind, enqueue, handle } from '@liasse/core/jobs';
-import { createGate, SYNTHETIC_ENV, syntheticPdf, waitUntil } from '@liasse/core/testing';
+import { enqueueHindsightSync } from '@liasse/core/hindsight';
+import { DeferJobError, defineJobKind, enqueue, handle } from '@liasse/core/jobs';
+import {
+  createGate,
+  insertSyntheticDocument,
+  SYNTHETIC_ENV,
+  syntheticPdf,
+  waitUntil,
+} from '@liasse/core/testing';
 import { eq, ne } from 'drizzle-orm';
 import { describe, expect, it } from 'vitest';
 import { z } from 'zod';
@@ -25,6 +32,10 @@ const fastJob = defineJobKind({
   name: 'synthetic_fast',
   schema: z.object({ label: z.string() }),
 });
+
+class SyntheticWaitError extends Error {
+  override readonly name = 'SyntheticWaitError';
+}
 
 describe('createRuntime', () => {
   const harness = useRuntimeHarness();
@@ -137,6 +148,46 @@ describe('createRuntime', () => {
     }
   });
 
+  it('logs how many facts it kept out of Hindsight, and nothing that names the document', async () => {
+    const retained: string[] = [];
+    const hindsight = createHttpServer((request, response) => {
+      request.setEncoding('utf8');
+      let body = '';
+      request.on('data', (chunk: string) => {
+        body += chunk;
+      });
+      request.on('end', () => {
+        retained.push(body);
+        response.writeHead(200, { 'content-type': 'application/json' });
+        response.end(JSON.stringify({ success: true, items_count: 1 }));
+      });
+    });
+    hindsight.listen(0, '127.0.0.1');
+    await once(hindsight, 'listening');
+    const address = hindsight.address();
+    if (address === null || typeof address === 'string') throw new Error('no port');
+    try {
+      await start({ HINDSIGHT_URL: `http://127.0.0.1:${String(address.port)}` });
+      const { db } = harness.database();
+      const { id } = await insertSyntheticDocument(db, { status: 'indexed' });
+      await db.insert(facts).values([
+        { documentId: id, text: 'A synthetic fact the bank may hold.' },
+        { documentId: id, text: 'Paid from the account DE37999999990123456789.' },
+      ]);
+      await enqueueHindsightSync(db, id);
+      await waitUntil(() => retained.length === 1);
+      expect(retained[0]).not.toContain('DE37');
+      await waitUntil(() => harness.lines().some((line) => line.includes('withheld')));
+      expect(harness.lines().filter((line) => line.includes('withheld'))).toEqual([
+        '{"event":"hindsight_facts_withheld","count":1}',
+      ]);
+      expect(harness.lines().some((line) => line.includes(id))).toBe(false);
+    } finally {
+      hindsight.close();
+      await once(hindsight, 'close');
+    }
+  });
+
   it('queues no Hindsight sync without HINDSIGHT_URL', async () => {
     const runtime = await start();
     const form = new FormData();
@@ -207,6 +258,49 @@ describe('createRuntime', () => {
       return rows.every(({ status }) => status === 'succeeded');
     });
     expect(peak).toBe(1);
+  });
+
+  it('logs a deferred job as deferred, once, and never as failed', async () => {
+    let runs = 0;
+    const bind: Bind = (parts) => {
+      const defaults = bindWithFakes(parts);
+      return {
+        ...defaults,
+        handlers: [
+          ...defaults.handlers,
+          handle(fastJob, () => {
+            runs += 1;
+            return runs === 1
+              ? Promise.reject(
+                  new DeferJobError('synthetic deferral', {
+                    delayMs: 10,
+                    cause: new SyntheticWaitError(),
+                  }),
+                )
+              : Promise.resolve();
+          }),
+        ],
+      };
+    };
+    await start({}, { bind });
+    const id = await enqueue(harness.database().db, {
+      kind: fastJob,
+      payload: { label: 'synthetic-payload-marker' },
+    });
+    await waitUntil(async () => {
+      const [row] = await harness
+        .database()
+        .db.select({ status: jobs.status })
+        .from(jobs)
+        .where(eq(jobs.id, id));
+      return row?.status === 'succeeded';
+    });
+    const queueLines = harness.lines().filter((line) => line.includes(id));
+    expect(queueLines).toEqual([
+      `{"event":"job_deferred","job_id":"${id}","kind":"synthetic_fast","attempt":1,"delay_ms":10,"error":"SyntheticWaitError"}`,
+    ]);
+    expect(harness.lines().some((line) => line.includes('job_failed'))).toBe(false);
+    expect(harness.lines().some((line) => line.includes('synthetic-payload-marker'))).toBe(false);
   });
 
   it('gives a job in flight until the deadline, then returns it to the queue', async () => {

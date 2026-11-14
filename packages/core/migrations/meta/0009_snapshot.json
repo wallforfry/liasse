@@ -1,5 +1,5 @@
 {
-  "id": "b3b9f6c0-fabc-4462-aa2c-6154499f89d3",
+  "id": "9c6dc28b-73fd-4eb8-b349-f609119bea16",
   "prevId": "b342364f-e7bd-4db0-9381-b81d4229e858",
   "version": "7",
   "dialect": "postgresql",
@@ -410,6 +410,12 @@
         "hindsight_sent_hash": {
           "name": "hindsight_sent_hash",
           "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "hindsight_retain_until": {
+          "name": "hindsight_retain_until",
+          "type": "timestamp with time zone",
           "primaryKey": false,
           "notNull": false
         },
@@ -1398,18 +1404,6 @@
           "primaryKey": false,
           "notNull": true,
           "default": "now()"
-        },
-        "decided_at": {
-          "name": "decided_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "note": {
-          "name": "note",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
         }
       },
       "indexes": {},
@@ -1432,8 +1426,7 @@
         "split",
         "rename",
         "merge_entity",
-        "merge_subject",
-        "remove_field"
+        "merge_subject"
       ]
     },
     "public.change_status": {
