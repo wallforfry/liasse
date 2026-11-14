@@ -214,6 +214,8 @@ describe('slugViolations', () => {
 
     it('ignores a name without any significant word', () => {
       expect(slugRules('bp_invoice')).toEqual([]);
+      expect(slugRules('bp')).toEqual([]);
+      expect(slugRules('id_of')).toEqual([]);
       expect(slugRules('sa_filing')).toEqual([]);
     });
 
