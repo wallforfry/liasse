@@ -87,3 +87,32 @@ jobs:
       - run: pnpm typecheck
       - run: pnpm test
       - run: pnpm build
+
+  bm25:
+    name: BM25 tests (ParadeDB)
+    runs-on: ubuntu-latest
+    services:
+      # Same image and credentials as the `paradedb` service of docker-compose.dev.yml; the port is
+      # the one packages/core/vitest.paradedb.config.ts connects to.
+      paradedb:
+        image: paradedb/paradedb:0.26.6-pg16
+        env:
+          POSTGRES_USER: liasse
+          POSTGRES_PASSWORD: liasse
+          POSTGRES_DB: liasse_test
+        ports:
+          - 54331:5432
+        options: >-
+          --health-cmd "pg_isready -h 127.0.0.1 -U liasse -d liasse_test"
+          --health-interval 2s
+          --health-timeout 3s
+          --health-retries 60
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm test:paradedb

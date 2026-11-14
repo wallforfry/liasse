@@ -35,6 +35,13 @@ pnpm lint && pnpm typecheck && pnpm test && pnpm build
 pnpm --filter @liasse/server dev
 ```
 
+BM25 ranking is optional and has tests of its own, which need Postgres with ParadeDB `pg_search`:
+
+```sh
+pnpm db:up:paradedb   # Postgres with pg_search on 127.0.0.1:54331
+pnpm test:paradedb
+```
+
 Conventions, layout and testing rules are in [`AGENTS.md`](AGENTS.md); they apply to humans too.
 
 ## Before you start

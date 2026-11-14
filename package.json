@@ -13,14 +13,16 @@
     "build": "pnpm -r build",
     "changeset": "changeset",
     "db:clean-test": "pnpm --filter @liasse/core db:clean-test",
-    "db:down": "docker compose -f docker-compose.dev.yml down",
+    "db:down": "docker compose -f docker-compose.dev.yml --profile paradedb down",
     "db:generate": "pnpm -r db:generate",
     "db:migrate": "pnpm -r db:migrate",
     "db:up": "docker compose -f docker-compose.dev.yml up -d --wait",
+    "db:up:paradedb": "docker compose -f docker-compose.dev.yml --profile paradedb up -d --wait paradedb",
     "format": "prettier --write .",
     "lint": "eslint . --max-warnings 0 && prettier --check .",
     "test": "vitest run",
     "test:models": "vitest run --config packages/core/vitest.models.config.ts",
+    "test:paradedb": "vitest run --config packages/core/vitest.paradedb.config.ts",
     "typecheck": "tsc --noEmit -p tsconfig.json && pnpm -r typecheck"
   },
   "devDependencies": {
