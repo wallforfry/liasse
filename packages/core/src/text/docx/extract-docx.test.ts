@@ -37,7 +37,13 @@ describe('extractText on a DOCX', () => {
       [paragraph('Employment contract'), paragraph('Between Jane Doe and Example Corp.')].join(''),
     );
     expect(await extract(bytes)).toEqual({
-      pages: [{ page: 1, text: 'Employment contract\n\nBetween Jane Doe and Example Corp.' }],
+      pages: [
+        {
+          page: 1,
+          text: 'Employment contract\n\nBetween Jane Doe and Example Corp.',
+          method: 'native',
+        },
+      ],
       method: 'native',
       attachments: [],
     });

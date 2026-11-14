@@ -1,5 +1,6 @@
 import { TextExtractionError } from '../errors.ts';
 import { normalizeText } from '../normalize.ts';
+import { toExtractedText } from '../result.ts';
 import type { ExtractedText, ExtractionContext } from '../types.ts';
 import { renderDocxMarkdown } from './markdown.ts';
 import { parseXml } from './xml.ts';
@@ -23,5 +24,5 @@ export const extractDocx = async (
   if (markdown === undefined) {
     throw new TextExtractionError('docx_corrupt', `${MAIN_DOCUMENT} has no document body`);
   }
-  return { pages: [{ page: 1, text: normalizeText(markdown) }], method: 'native', attachments: [] };
+  return toExtractedText([{ text: normalizeText(markdown) }]);
 };

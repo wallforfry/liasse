@@ -7,6 +7,7 @@ export interface TextLimits {
   readonly maxVisionPages: number;
   readonly visionConcurrency: number;
   readonly renderTimeoutMs: number;
+  readonly maxRenderEdgePx: number;
   readonly maxImageBytes: number;
   readonly maxHeicPixels: number;
   readonly maxHeicEdgePx: number;
@@ -19,6 +20,8 @@ export const DEFAULT_TEXT_LIMITS: TextLimits = Object.freeze({
   maxVisionPages: DEFAULT_MAX_VISION_PAGES,
   visionConcurrency: 2,
   renderTimeoutMs: 30_000,
+  // The long edge of an A3 page at the 200 dpi scanned pages are rendered at.
+  maxRenderEdgePx: 3308,
   // JPEG and PNG files are sent as they are: nothing here can decode and resize them.
   maxImageBytes: 10 * MEBIBYTE,
   // Decoding takes four bytes per pixel; 50 megapixels still admits a 48 MP phone photo.

@@ -63,7 +63,11 @@ describe('extractText on an email', () => {
     const result = await extract(withAttachment);
     expect(result.method).toBe('native');
     expect(result.pages).toEqual([
-      { page: 1, text: `${HEADER_BLOCK}\n\nHello,\n\nPlease find the invoice attached.` },
+      {
+        page: 1,
+        text: `${HEADER_BLOCK}\n\nHello,\n\nPlease find the invoice attached.`,
+        method: 'native',
+      },
     ]);
   });
 
@@ -168,7 +172,7 @@ describe('extractText on an email', () => {
 
   it('returns the body alone when the message has no known header', async () => {
     expect((await extract(eml(['X-Synthetic: 1', '', 'Only a body.']))).pages).toEqual([
-      { page: 1, text: 'Only a body.' },
+      { page: 1, text: 'Only a body.', method: 'native' },
     ]);
   });
 

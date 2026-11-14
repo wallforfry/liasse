@@ -26,8 +26,8 @@ describe('extractText on a PDF with a text layer', () => {
     const bytes = buildSyntheticPdf([{ lines: linesOf(150) }, { lines: linesOf(50) }]);
     expect(await extractText({ bytes, mime: PDF }, { vision })).toEqual({
       pages: [
-        { page: 1, text: linesOf(150).join('\n') },
-        { page: 2, text: linesOf(50).join('\n') },
+        { page: 1, text: linesOf(150).join('\n'), method: 'native' },
+        { page: 2, text: linesOf(50).join('\n'), method: 'native' },
       ],
       method: 'native',
       attachments: [],
@@ -41,8 +41,8 @@ describe('extractText on a PDF with a text layer', () => {
     const result = await extractText({ bytes, mime: PDF }, { vision });
     expect(result.method).toBe('vision');
     expect(result.pages).toEqual([
-      { page: 1, text: 'transcribed' },
-      { page: 2, text: 'transcribed' },
+      { page: 1, text: 'transcribed', method: 'vision' },
+      { page: 2, text: 'transcribed', method: 'vision' },
     ]);
     expect(vision.calls).toHaveLength(2);
   });
@@ -117,9 +117,9 @@ describe('extractText on a scanned PDF', () => {
     const result = await extractText({ bytes: scan, mime: PDF }, { vision });
     expect(result).toEqual({
       pages: [
-        { page: 1, text: '# Page 200 pixels wide' },
-        { page: 2, text: '# Page 400 pixels wide' },
-        { page: 3, text: '# Page 600 pixels wide' },
+        { page: 1, text: '# Page 200 pixels wide', method: 'vision' },
+        { page: 2, text: '# Page 400 pixels wide', method: 'vision' },
+        { page: 3, text: '# Page 600 pixels wide', method: 'vision' },
       ],
       method: 'vision',
       visionModel: 'fake-vision-model',
@@ -171,7 +171,7 @@ describe('extractText on a scanned PDF', () => {
     const vision = createFakeVisionModel(() => ' \n');
     const bytes = buildSyntheticPdf([{ scanned: true }]);
     expect((await extractText({ bytes, mime: PDF }, { vision })).pages).toEqual([
-      { page: 1, text: '' },
+      { page: 1, text: '', method: 'vision' },
     ]);
   });
 

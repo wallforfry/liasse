@@ -2,7 +2,12 @@ import type { SupportedMime } from '../domain/enums.ts';
 import type { VisionModel } from '../models/ports.ts';
 import type { TextLimits } from './limits.ts';
 
-export const TEXT_EXTRACTION_METHODS = ['native', 'vision'] as const;
+// Where the text of one page comes from: the file itself, or the vision model.
+export const PAGE_TEXT_METHODS = ['native', 'vision'] as const;
+export type PageTextMethod = (typeof PAGE_TEXT_METHODS)[number];
+
+// For a whole document, `mixed` when its pages do not all share one method.
+export const TEXT_EXTRACTION_METHODS = [...PAGE_TEXT_METHODS, 'mixed'] as const;
 export type TextExtractionMethod = (typeof TEXT_EXTRACTION_METHODS)[number];
 
 export interface ExtractTextInput {
@@ -27,6 +32,7 @@ export interface ExtractTextDeps {
 export interface ExtractedPage {
   readonly page: number;
   readonly text: string;
+  readonly method: PageTextMethod;
 }
 
 export interface ExtractedAttachment {

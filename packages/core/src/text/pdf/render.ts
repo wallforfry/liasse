@@ -17,13 +17,21 @@ const RENDERED_MIME = 'image/jpeg';
 const OWNER_ONLY = 0o600;
 const MAX_REPORTED_STDERR = 300;
 
+const POINTS_PER_INCH = 72;
+
+export interface PdfPageToRender {
+  readonly number: number;
+  readonly longEdgePt: number;
+}
+
 export interface PdfPageRenderer {
-  readonly renderPage: (page: number) => Promise<PageImage>;
+  readonly renderPage: (page: PdfPageToRender) => Promise<PageImage>;
 }
 
 export interface PdfRenderRequest extends PdfRendererOptions {
   readonly bytes: Uint8Array;
   readonly timeoutMs: number;
+  readonly maxEdgePx: number;
   readonly signal: AbortSignal | undefined;
 }
 
@@ -55,36 +63,60 @@ const toRenderError = (error: unknown, command: string, timeoutMs: number): unkn
   );
 };
 
+// 200 dpi while the page fits the pixel budget. A larger page is scaled so that its long
+// edge is the budget: the memory `pdftoppm` needs grows with the raster, and a page of a
+// few hundred bytes can declare any size.
+const resolutionArguments = (longEdgePt: number, maxEdgePx: number): readonly string[] =>
+  (longEdgePt * PDF_RENDER_DPI) / POINTS_PER_INCH > maxEdgePx
+    ? ['-scale-to', String(maxEdgePx)]
+    : ['-r', String(PDF_RENDER_DPI)];
+
+const readRenderedPage = async (output: string, command: string): Promise<Uint8Array> => {
+  try {
+    return Uint8Array.from(await readFile(output));
+  } catch (error) {
+    throw new TextExtractionError(
+      'pdf_renderer_no_output',
+      `The command ${command} exited without writing the page it was asked for`,
+      { cause: error },
+    );
+  }
+};
+
 const renderPage = async (
   directory: string,
   input: string,
-  page: number,
-  { command, timeoutMs, signal }: PdfRenderRequest,
+  { number, longEdgePt }: PdfPageToRender,
+  { command, timeoutMs, signal, maxEdgePx }: PdfRenderRequest,
 ): Promise<PageImage> => {
-  const prefix = join(directory, `page-${String(page)}`);
+  const prefix = join(directory, `page-${String(number)}`);
   const output = `${prefix}.jpg`;
+  const args = [
+    ...resolutionArguments(longEdgePt, maxEdgePx),
+    // pdfjs measures the visible box of a page; without this flag `pdftoppm` renders the
+    // media box, which can be far larger than the size the resolution was chosen for.
+    '-cropbox',
+    '-jpeg',
+    '-jpegopt',
+    `quality=${String(JPEG_QUALITY)}`,
+    '-f',
+    String(number),
+    '-l',
+    String(number),
+    '-singlefile',
+    input,
+    prefix,
+  ];
+  const options = {
+    timeout: timeoutMs,
+    killSignal: 'SIGKILL',
+    ...(signal === undefined ? {} : { signal }),
+  } as const;
   try {
-    await run(
-      command,
-      [
-        '-r',
-        String(PDF_RENDER_DPI),
-        '-jpeg',
-        '-jpegopt',
-        `quality=${String(JPEG_QUALITY)}`,
-        '-f',
-        String(page),
-        '-l',
-        String(page),
-        '-singlefile',
-        input,
-        prefix,
-      ],
-      { timeout: timeoutMs, killSignal: 'SIGKILL', ...(signal === undefined ? {} : { signal }) },
-    );
-    return { image: Uint8Array.from(await readFile(output)), mime: RENDERED_MIME };
-  } catch (error) {
-    throw toRenderError(error, command, timeoutMs);
+    await run(command, args, options).catch((error: unknown) => {
+      throw toRenderError(error, command, timeoutMs);
+    });
+    return { image: await readRenderedPage(output, command), mime: RENDERED_MIME };
   } finally {
     await rm(output, { force: true });
   }

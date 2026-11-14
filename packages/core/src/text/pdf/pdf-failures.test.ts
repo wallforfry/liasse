@@ -107,7 +107,7 @@ describe('extractText rendering a scanned PDF', () => {
       { bytes: scan, mime: PDF },
       { vision, pdfRenderer: { tempRoot, command } },
     );
-    await expect(failure).rejects.toMatchObject({ code: 'pdf_renderer_missing' });
+    await expect(failure).rejects.toMatchObject({ code: 'pdf_renderer_missing', retryable: false });
     await expect(failure).rejects.toThrow(/poppler-utils/);
     expect(await readdir(tempRoot)).toEqual([]);
   });
@@ -120,7 +120,7 @@ describe('extractText rendering a scanned PDF', () => {
         { bytes: scan, mime: PDF },
         { vision, pdfRenderer: { tempRoot, command }, limits: { renderTimeoutMs: 100 } },
       ),
-    ).rejects.toMatchObject({ code: 'pdf_renderer_timeout' });
+    ).rejects.toMatchObject({ code: 'pdf_renderer_timeout', retryable: true });
     expect(vision.calls).toHaveLength(0);
   });
 
@@ -131,7 +131,7 @@ describe('extractText rendering a scanned PDF', () => {
       { bytes: scan, mime: PDF },
       { vision, pdfRenderer: { tempRoot, command } },
     );
-    await expect(failure).rejects.toMatchObject({ code: 'pdf_renderer_failed' });
+    await expect(failure).rejects.toMatchObject({ code: 'pdf_renderer_failed', retryable: true });
     await expect(failure).rejects.toThrow(/Syntax Error: broken page/);
   });
 

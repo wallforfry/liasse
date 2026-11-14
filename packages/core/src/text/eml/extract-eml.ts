@@ -1,6 +1,7 @@
 import type { Address, Attachment, Email } from 'postal-mime';
 import { TextExtractionError } from '../errors.ts';
 import { normalizeText } from '../normalize.ts';
+import { toExtractedText } from '../result.ts';
 import type { ExtractedAttachment, ExtractedText } from '../types.ts';
 import { htmlToText } from './html-to-text.ts';
 
@@ -77,9 +78,5 @@ export const extractEml = async (bytes: Uint8Array): Promise<ExtractedText> => {
     },
   );
   const text = [headerBlock(email), bodyOf(email)].filter((part) => part !== '').join('\n\n');
-  return {
-    pages: [{ page: 1, text: normalizeText(text) }],
-    method: 'native',
-    attachments: email.attachments.map(toAttachment),
-  };
+  return toExtractedText([{ text: normalizeText(text) }], email.attachments.map(toAttachment));
 };

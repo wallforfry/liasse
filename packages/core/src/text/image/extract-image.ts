@@ -1,5 +1,6 @@
 import { TextExtractionError } from '../errors.ts';
-import { transcribePageImage, visionResult, type PageImage } from '../transcribe.ts';
+import { toExtractedText } from '../result.ts';
+import { transcribePageImage, type PageImage } from '../transcribe.ts';
 import type { ExtractedText, ExtractionContext } from '../types.ts';
 import { convertHeicToJpeg } from './heic.ts';
 
@@ -34,12 +35,6 @@ export const extractImage = async (
   context: ExtractionContext,
 ): Promise<ExtractedText> => {
   const page = await toPageImage(bytes, mime, context);
-  const { maxImageBytes } = context.limits;
-  if (page.image.length > maxImageBytes) {
-    throw new TextExtractionError(
-      'image_too_large',
-      `The image weighs ${String(page.image.length)} bytes, more than the limit of ${String(maxImageBytes)}`,
-    );
-  }
-  return visionResult([await transcribePageImage(page, context)]);
+  const { text, model } = await transcribePageImage(page, context);
+  return toExtractedText([{ text, visionModel: model }]);
 };

@@ -19,7 +19,7 @@ describe('extractText on an image', () => {
     const vision = createFakeVisionModel(() => '# Receipt\n\nTotal: 12.00 EUR');
     const bytes = buildSyntheticPng(64, 48);
     expect(await extractText({ bytes, mime: 'image/png' }, { vision })).toEqual({
-      pages: [{ page: 1, text: '# Receipt\n\nTotal: 12.00 EUR' }],
+      pages: [{ page: 1, text: '# Receipt\n\nTotal: 12.00 EUR', method: 'vision' }],
       method: 'vision',
       visionModel: 'fake-vision-model',
       attachments: [],
@@ -33,7 +33,7 @@ describe('extractText on an image', () => {
     const vision = createFakeVisionModel(() => 'Jane Doe');
     const bytes = await fixture('gradient-64x48.jpg');
     const result = await extractText({ bytes, mime: 'image/jpeg' }, { vision });
-    expect(result.pages).toEqual([{ page: 1, text: 'Jane Doe' }]);
+    expect(result.pages).toEqual([{ page: 1, text: 'Jane Doe', method: 'vision' }]);
     expect(vision.calls).toEqual([
       { image: bytes, mime: 'image/jpeg', prompt: TRANSCRIPTION_PROMPT },
     ]);
@@ -43,7 +43,7 @@ describe('extractText on an image', () => {
     const vision = createFakeVisionModel(() => 'Jane Doe');
     const bytes = await fixture('gradient-64x48.heic');
     const result = await extractText({ bytes, mime: 'image/heic' }, { vision });
-    expect(result.pages).toEqual([{ page: 1, text: 'Jane Doe' }]);
+    expect(result.pages).toEqual([{ page: 1, text: 'Jane Doe', method: 'vision' }]);
     expect(result.method).toBe('vision');
     expect(vision.calls).toHaveLength(1);
     expect(vision.calls[0]?.mime).toBe('image/jpeg');
@@ -77,7 +77,7 @@ describe('extractText on an image', () => {
     const vision = createFakeVisionModel(() => '');
     const bytes = buildSyntheticPng(8, 8);
     expect((await extractText({ bytes, mime: 'image/png' }, { vision })).pages).toEqual([
-      { page: 1, text: '' },
+      { page: 1, text: '', method: 'vision' },
     ]);
   });
 

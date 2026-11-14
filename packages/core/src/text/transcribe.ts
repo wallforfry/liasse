@@ -1,6 +1,7 @@
+import { TextExtractionError } from './errors.ts';
 import { normalizeText } from './normalize.ts';
 import { TRANSCRIPTION_PROMPT } from './transcription-prompt.ts';
-import type { ExtractedText, ExtractionContext } from './types.ts';
+import type { ExtractionContext } from './types.ts';
 
 export interface PageImage {
   readonly image: Uint8Array;
@@ -12,10 +13,18 @@ export interface Transcription {
   readonly model: string;
 }
 
+// The one place an image leaves for the vision model, whether it is a file or a rendered
+// PDF page, so the weight limit holds for both.
 export const transcribePageImage = async (
   { image, mime }: PageImage,
-  { vision, signal }: ExtractionContext,
+  { vision, signal, limits }: ExtractionContext,
 ): Promise<Transcription> => {
+  if (image.length > limits.maxImageBytes) {
+    throw new TextExtractionError(
+      'image_too_large',
+      `The image for the vision model weighs ${String(image.length)} bytes, more than the limit of ${String(limits.maxImageBytes)}`,
+    );
+  }
   const { markdown, model } = await vision.transcribePage({
     image,
     mime,
@@ -23,14 +32,4 @@ export const transcribePageImage = async (
     ...(signal === undefined ? {} : { signal }),
   });
   return { text: normalizeText(markdown), model };
-};
-
-export const visionResult = (transcriptions: readonly Transcription[]): ExtractedText => {
-  const visionModel = transcriptions[0]?.model;
-  return {
-    pages: transcriptions.map(({ text }, index) => ({ page: index + 1, text })),
-    method: 'vision',
-    ...(visionModel === undefined ? {} : { visionModel }),
-    attachments: [],
-  };
 };
