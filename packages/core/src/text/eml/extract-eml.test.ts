@@ -172,12 +172,24 @@ describe('extractText on an email', () => {
     ]);
   });
 
-  it('returns an empty page for an empty message', async () => {
-    expect(await extract(new Uint8Array(0))).toEqual({
-      pages: [{ page: 1, text: '' }],
-      method: 'native',
-      attachments: [],
+  it('returns the header block alone when the message has no body', async () => {
+    expect((await extract(eml(['Subject: Reminder']))).pages[0]?.text).toBe('Subject: Reminder');
+  });
+
+  it.each([
+    ['an empty file', new Uint8Array(0)],
+    ['a PDF', buildSyntheticPdf([{ lines: ['Invoice 2026-001'] }])],
+    ['a PNG', buildSyntheticPng(8, 8)],
+    ['binary noise', Uint8Array.from({ length: 512 }, (_, index) => (index * 37 + 11) % 256)],
+    ['text without any header', eml(['Dear Jane Doe,', '', 'No header above.'])],
+    ['a header name with a space', eml(['Not a header: value', '', 'Body.'])],
+  ])('reports %s as not being an email', async (_, bytes) => {
+    const failure = extract(bytes);
+    await expect(failure).rejects.toMatchObject({
+      name: 'TextExtractionError',
+      code: 'eml_corrupt',
     });
+    await expect(failure).rejects.toThrow(/does not start with a header field/);
   });
 
   it('reports a message nested beyond what the parser accepts', async () => {
