@@ -59,11 +59,13 @@ const transcribePages = async (
   const transcribed = await withPdfPageRenderer(request, (renderer) =>
     mapWithConcurrency(pages, limits.visionConcurrency, async (page) => {
       const image = await renderer.renderPage(page.number);
+      // A page with no area keeps whatever text layer it has: there is nothing to look at.
+      if (image === undefined) return [];
       const { text, model } = await transcribePageImage(image, context);
-      return [page.number, { text, visionModel: model }] as const;
+      return [[page.number, { text, visionModel: model }] as const];
     }),
   );
-  return new Map(transcribed);
+  return new Map(transcribed.flat());
 };
 
 export const extractPdf = async (
