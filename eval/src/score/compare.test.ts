@@ -59,6 +59,18 @@ describe('the tolerance rules', () => {
     expect(textCarries('favorable', 'Résultat favorable, pas de contre-visite')).toBe(true);
   });
 
+  it('finds a word whose negation ends the sentence before it', () => {
+    expect(textCarries('favorable', 'Contre-visite : non. Favorable')).toBe(true);
+  });
+
+  it('does not find a word a negation reaches across a few words', () => {
+    expect(textCarries('favorable', "L'avis n'est pas du tout favorable")).toBe(false);
+  });
+
+  it('finds a word a negation of the same sentence no longer reaches', () => {
+    expect(textCarries('favorable', 'Aucun défaut majeur relevé avis favorable')).toBe(true);
+  });
+
   it('accepts a masked identifier that keeps its tail and not the clear value', () => {
     expect(isMasked('FR** **** 9322', '9322', 'FR76 9999 9000 0193 22')).toBe(true);
     expect(isMasked('FR7699999000019322', '9322', 'FR76 9999 9000 0193 22')).toBe(false);
