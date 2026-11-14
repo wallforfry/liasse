@@ -2,7 +2,7 @@ import { eq } from 'drizzle-orm';
 import type { Database } from '../db/client.ts';
 import { chunks, documentPages, documents } from '../db/schema/documents.ts';
 import { jobs } from '../db/schema/jobs.ts';
-import { documentDates, documentLinks, facts } from '../db/schema/knowledge.ts';
+import { documentDates, documentLinks, facts, subjects } from '../db/schema/knowledge.ts';
 import { docTypes, entities } from '../db/schema/registry.ts';
 import { deriveIdentifierKey } from '../entities/sensitive.ts';
 import { createIngestHarness, type IngestHarness } from '../ingest/harness.test-helper.ts';
@@ -160,7 +160,15 @@ export const createPipelineHarness = async (): Promise<PipelineHarness> => {
     reset: async () => {
       indexed.length = 0;
       fakeEntities.clear();
-      for (const table of [documentLinks, documentDates, facts, chunks, documentPages, jobs]) {
+      for (const table of [
+        documentLinks,
+        documentDates,
+        facts,
+        subjects,
+        chunks,
+        documentPages,
+        jobs,
+      ]) {
         await db.delete(table);
       }
       await db.delete(documents);

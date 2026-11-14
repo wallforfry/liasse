@@ -11,7 +11,13 @@ import {
   MAX_SUMMARY_LENGTH,
   MAX_TITLE_LENGTH,
 } from './extraction-schema.ts';
-import { factEntityNames, readFacts, readNoticePeriod, toKnowledge } from './knowledge.ts';
+import {
+  factEntityNames,
+  readFacts,
+  readNoticePeriod,
+  readSubjects,
+  toKnowledge,
+} from './knowledge.ts';
 import { maskQuotes, maskValues } from './masking.ts';
 import { createQuoteIndex } from './quotes.ts';
 import { languageOf, readOutput } from './read-output.ts';
@@ -129,7 +135,9 @@ export const interpret = async (
   const evidence = { quotes: createQuoteIndex(pages), language: languageOf(output) };
   const reading = readOutput(output, typeFields, evidence);
   const facts = readFacts(output, evidence);
-  const noticePeriod = readNoticePeriod(output);
+  const documentText = pages.map(({ text }) => text).join('\n');
+  const noticePeriod = readNoticePeriod(output, evidence);
+  const subjects = readSubjects(output, evidence, documentText);
   const { resolutions, droppedIdentifiers } = await resolveMentions(
     deps,
     [...entityNamesOf(reading, typeFields), ...factEntityNames(facts)],
@@ -137,7 +145,7 @@ export const interpret = async (
       details: (output.entities ?? []).flatMap(
         (raw) => entityDetailSchema.safeParse(raw).data ?? [],
       ),
-      documentText: pages.map(({ text }) => text).join('\n'),
+      documentText,
       allowExternalEmbedding: !isPrivate,
     },
   );
@@ -152,16 +160,21 @@ export const interpret = async (
     coreConfidences: core.confidences,
     rejectedCore: core.rejected,
     rejected:
-      core.rejected + fields.rejected + extra.rejected + facts.rejected + noticePeriod.rejected,
+      core.rejected +
+      fields.rejected +
+      extra.rejected +
+      facts.rejected +
+      subjects.rejected +
+      noticePeriod.rejected,
     droppedIdentifiers,
     title: tidyText(mask, output.title, MAX_TITLE_LENGTH),
     summary: tidyText(mask, output.summary, MAX_SUMMARY_LENGTH),
     knowledge: maskKnowledge(
       mask,
       toKnowledge(
-        output,
         without(reading.core.readings, core.dropped),
         facts,
+        subjects,
         noticePeriod,
         trace,
         resolutions,

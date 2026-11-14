@@ -1,7 +1,7 @@
 import { eq } from 'drizzle-orm';
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 import { chunks, documentPages } from '../db/schema/documents.ts';
-import { documentDates, facts } from '../db/schema/knowledge.ts';
+import { documentDates, facts, subjects } from '../db/schema/knowledge.ts';
 import { docTypes, entities } from '../db/schema/registry.ts';
 import { PIPELINE_PROVENANCE_KEY } from '../domain/provenance.ts';
 import { deleteDocument } from '../ingest/delete-document.ts';
@@ -18,17 +18,19 @@ import {
 } from './harness.test-helper.ts';
 import { processDocument } from './process-document.ts';
 
-const TEXT = pagesOf(
-  [
-    'Synthetic Energy SA',
-    'Invoice SYN-2026-001 dated 03/10/2026',
-    'Customer: Jane Synthetic',
-    'Total 84,20 EUR due 18/10/2026',
-    `Payee Synthetic Energy SA IBAN ${SYNTHETIC_IBAN}`,
-    'Meter PDL-000123',
-  ].join('\n'),
-  'The contract renews on 01/03/2027.',
-);
+const FIRST_PAGE = [
+  'Synthetic Energy SA',
+  'Invoice SYN-2026-001 dated 03/10/2026',
+  'Customer: Jane Synthetic',
+  'Total 84,20 EUR due 18/10/2026',
+  `Payee Synthetic Energy SA IBAN ${SYNTHETIC_IBAN}`,
+  'Meter PDL-000123',
+].join('\n');
+
+const RENEWAL = 'The contract renews on 01/03/2027.';
+
+// It states no notice period and no vehicle, as the contract of verdict P8.
+const TEXT = pagesOf(FIRST_PAGE, RENEWAL);
 
 const TYPE = {
   decision: 'new',
@@ -105,8 +107,22 @@ const OUTPUT = {
       confidence: 0.8,
     },
   ],
-  subjects: [{ kind: 'account', name: `Account ${SYNTHETIC_IBAN}`, identifier: SYNTHETIC_IBAN }],
+  subjects: [
+    {
+      kind: 'account',
+      name: `IBAN ${SYNTHETIC_IBAN}`,
+      identifier: SYNTHETIC_IBAN,
+      page: 1,
+      quote: `Payee Synthetic Energy SA IBAN ${SYNTHETIC_IBAN}`,
+    },
+  ],
 };
+
+const VEHICLE = 'Vehicle: Synthetic hatchback, plate AB-123-CD.';
+
+// TEXT, with a notice period and a vehicle on its second page.
+const noticeText = (period: string) =>
+  pagesOf(FIRST_PAGE, `${RENEWAL}\nNotice period: ${period}.\n${VEHICLE}`);
 
 describe('processDocument', () => {
   let harness: PipelineHarness;
@@ -268,7 +284,7 @@ describe('processDocument', () => {
       subjects: [
         {
           kind: 'account',
-          name: `Account ${SYNTHETIC_IBAN_MASKED}`,
+          name: `IBAN ${SYNTHETIC_IBAN_MASKED}`,
           identifier: SYNTHETIC_IBAN_MASKED,
         },
       ],
@@ -378,27 +394,147 @@ describe('processDocument', () => {
     });
   });
 
-  it('computes the notice deadline from the notice period the extraction gives', async () => {
+  const noticePeriod = (amount: number, unit: string, quote: string) => ({
+    amount,
+    unit,
+    page: 2,
+    quote,
+    confidence: 0.8,
+  });
+
+  const keyDates = async () =>
+    (await harness.db.select().from(documentDates)).map(({ kind, date }) => ({ kind, date }));
+
+  it('computes the notice deadline from a notice period its quote writes, and keeps a quoted subject', async () => {
     const id = await harness.ingest('notice period');
-    const notice_period = { amount: 2, unit: 'months', confidence: 0.8 };
-    await processDocument(depsFor({ ...OUTPUT, notice_period }), id, live());
-    expect(
-      (await harness.db.select().from(documentDates)).map(({ kind, date }) => ({ kind, date })),
-    ).toEqual(
+    const vehicle = {
+      kind: 'vehicle',
+      name: 'Synthetic hatchback',
+      identifier: 'AB 123 CD',
+      page: 2,
+      quote: VEHICLE,
+    };
+    await processDocument(
+      depsFor(
+        {
+          ...OUTPUT,
+          notice_period: noticePeriod(2, 'months', 'Notice period: 2 months.'),
+          subjects: [vehicle],
+        },
+        { extractText: () => Promise.resolve(noticeText('2 months')) },
+      ),
+      id,
+      live(),
+    );
+    expect(await keyDates()).toEqual(
       expect.arrayContaining([
         { kind: 'renewal', date: '2027-03-01' },
         { kind: 'notice_deadline', date: '2027-01-01' },
       ]),
     );
+    expect(await harness.db.select().from(subjects)).toMatchObject([
+      {
+        kind: 'vehicle',
+        canonicalName: 'Synthetic hatchback',
+        identifiers: { items: [{ type: 'license_plate', value: 'AB123CD' }] },
+      },
+    ]);
+    expect((await harness.document(id)).provenance[PIPELINE_PROVENANCE_KEY]).toMatchObject({
+      extraction: { rejected_values: 2 },
+    });
+  });
+
+  // Verdict P8: the contract states only its renewal.
+  it('stores no notice deadline from a notice period the text does not write', async () => {
+    const id = await harness.ingest('made-up notice period');
+    await processDocument(
+      depsFor({ ...OUTPUT, notice_period: noticePeriod(1, 'months', RENEWAL) }),
+      id,
+      live(),
+    );
+    const document = await harness.document(id);
+    expect(await keyDates()).toEqual([{ kind: 'renewal', date: '2027-03-01' }]);
+    expect(document.provenance[PIPELINE_PROVENANCE_KEY]).toMatchObject({
+      extraction: { rejected_values: 3 },
+    });
+    expect(document).toMatchObject({ status: 'indexed' });
+  });
+
+  // Verdict P8: the contract names no vehicle.
+  it('stores no subject its quote does not name', async () => {
+    const id = await harness.ingest('made-up vehicle');
+    const vehicle = {
+      kind: 'vehicle',
+      name: 'Family car',
+      identifier: 'ZZ-999-ZZ',
+      page: 2,
+      quote: RENEWAL,
+    };
+    await processDocument(depsFor({ ...OUTPUT, subjects: [vehicle] }), id, live());
+    expect(await harness.db.select().from(subjects)).toEqual([]);
+    expect((await harness.document(id)).provenance[PIPELINE_PROVENANCE_KEY]).toMatchObject({
+      extraction: { rejected_values: 3 },
+    });
+  });
+
+  it('drops a notice period and a subject whose quotes are not in the text', async () => {
+    const id = await harness.ingest('unquoted knowledge');
+    const vehicle = { kind: 'vehicle', name: 'Family car', page: 2, quote: 'Vehicle: Family car' };
+    await processDocument(
+      depsFor({
+        ...OUTPUT,
+        notice_period: noticePeriod(1, 'months', 'Notice period: 1 month.'),
+        subjects: [vehicle],
+      }),
+      id,
+      live(),
+    );
+    expect(await keyDates()).toEqual([{ kind: 'renewal', date: '2027-03-01' }]);
+    expect(await harness.db.select().from(subjects)).toEqual([]);
+    expect((await harness.document(id)).provenance[PIPELINE_PROVENANCE_KEY]).toMatchObject({
+      extraction: { rejected_values: 4 },
+    });
+  });
+
+  it('keeps a quoted subject without an identifier the text does not write', async () => {
+    const id = await harness.ingest('made-up plate');
+    const vehicle = {
+      kind: 'vehicle',
+      name: 'Synthetic hatchback',
+      identifier: 'ZZ-999-ZZ',
+      page: 2,
+      quote: VEHICLE,
+    };
+    await processDocument(
+      depsFor(
+        { ...OUTPUT, subjects: [vehicle] },
+        { extractText: () => Promise.resolve(noticeText('2 months')) },
+      ),
+      id,
+      live(),
+    );
+    expect(await harness.db.select().from(subjects)).toMatchObject([
+      { kind: 'vehicle', canonicalName: 'Synthetic hatchback', identifiers: { items: [] } },
+    ]);
+    expect((await harness.document(id)).provenance[PIPELINE_PROVENANCE_KEY]).toMatchObject({
+      extraction: { rejected_values: 3 },
+    });
   });
 
   // Five years at most: the knowledge layer drops the first; the second is not a period.
   it.each([
-    ['a notice period out of range', { amount: 61, unit: 'months', confidence: 0.8 }],
-    ['a malformed notice period', { amount: 1, unit: 'years', confidence: 0.8 }],
+    ['a notice period out of range', noticePeriod(61, 'months', 'Notice period: 61 months.')],
+    ['a malformed notice period', noticePeriod(1, 'years', 'Notice period: 61 months.')],
   ])('counts %s with the rejected values, and keeps the rest', async (_, notice_period) => {
     const id = await harness.ingest('dropped notice period');
-    await processDocument(depsFor({ ...OUTPUT, notice_period }), id, live());
+    await processDocument(
+      depsFor(
+        { ...OUTPUT, notice_period },
+        { extractText: () => Promise.resolve(noticeText('61 months')) },
+      ),
+      id,
+      live(),
+    );
     const document = await harness.document(id);
     expect(document.provenance[PIPELINE_PROVENANCE_KEY]).toMatchObject({
       extraction: { rejected_values: 3 },

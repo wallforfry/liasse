@@ -27,8 +27,8 @@ export const extractionSystemPrompt = (language: SchemaLanguage): string =>
     '"entities" lists each organization or person given as a value or named in a fact, once: its name as written, its kind (org or person), the identifiers printed next to it (company id, VAT number, customer number, IBAN, card number) and a few words of context.',
     `"core.key_dates" lists the dates that matter, each with a kind (${KEY_DATE_KINDS.join(', ')}) and a short label.`,
     `"facts" holds 1 to ${String(MAX_FACTS_PER_DOCUMENT)} short, self-contained statements of what the document establishes, each with the dates between which it holds when the document gives them, and the names of the entities and subjects it is about. The quote of a fact, at least ${String(MIN_FACT_QUOTE_LENGTH)} characters, states every name, date and number the fact gives, and the fact uses the words of its quote. No opinion, nothing the document does not say.`,
-    `"subjects" lists the things the recipient owns or holds that the document is about (${SUBJECT_KINDS.join(', ')}), never the organizations or people involved.`,
-    `"notice_period" is the notice period a contract states, as a whole amount of ${NOTICE_PERIOD_UNITS.join(', ')} with your confidence; leave it out when the document states none.`,
+    `"subjects" lists the things the recipient owns or holds that the document is about (${SUBJECT_KINDS.join(', ')}), never the organizations or people involved. Each has a page and a quote that contains its name as the document writes it, and an identifier only when the document writes one.`,
+    `"notice_period" is the notice period a contract states, as a whole amount of ${NOTICE_PERIOD_UNITS.join(', ')} with its page, a quote that writes the amount and the unit, and your confidence; leave it out when the document states none.`,
   ].join('\n');
 
 const describeField = (definition: FieldDefinition): string => {

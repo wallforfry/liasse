@@ -76,6 +76,8 @@ export const subjectCandidateSchema = z.object({
   kind: subjectKindSchema,
   name: z.string().trim().min(1).max(MAX_SUBJECT_NAME_LENGTH),
   identifier: z.string().trim().min(1).max(MAX_IDENTIFIER_VALUE_LENGTH).optional(),
+  page: evidence.page,
+  quote: evidence.quote,
 });
 export type SubjectCandidate = z.output<typeof subjectCandidateSchema>;
 
@@ -83,7 +85,7 @@ export type SubjectCandidate = z.output<typeof subjectCandidateSchema>;
 export const noticePeriodOutputSchema = z.object({
   amount: z.number().int(),
   unit: noticePeriodUnitSchema,
-  confidence: z.number().min(0).max(1),
+  ...evidence,
 });
 
 type RawRecord = Readonly<Record<string, unknown>>;
