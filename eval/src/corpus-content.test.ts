@@ -18,9 +18,6 @@ import { SCENARIO } from './scenario/index.ts';
 // here, the test only needs to know which pages were sent to one.
 const TRANSCRIBED = 'page sent to the vision model';
 
-// Reading 50 files, a dozen of them rendered by pdftoppm, takes a few seconds.
-const READ_TIMEOUT_MILLISECONDS = 120_000;
-
 let corpus: Corpus;
 const extracted = new Map<string, ExtractedText>();
 
@@ -42,7 +39,7 @@ beforeAll(async () => {
       ?.attachments.find((attachment) => attachment.filename === filename);
     if (carried !== undefined) extracted.set(document.id, await read(carried.bytes, document.mime));
   }
-}, READ_TIMEOUT_MILLISECONDS);
+});
 
 const squash = (text: string): string => text.replace(/\s+/g, ' ').trim();
 

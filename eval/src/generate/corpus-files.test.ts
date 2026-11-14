@@ -4,7 +4,7 @@ import { join, relative, sep } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { CORPUS_DIRECTORY } from '../corpus.ts';
 import { heicSource } from '../render/render-document.ts';
-import { buildCorpus } from './build-corpus.ts';
+import { type BuiltCorpus, buildCorpus } from './build-corpus.ts';
 import { heicDocuments, readHeicFiles } from './heic.ts';
 import { writeCorpus } from './write-corpus.ts';
 
@@ -24,10 +24,14 @@ const listFiles = async (directory: string): Promise<readonly string[]> => {
 
 describe('the committed corpus', () => {
   let regenerated = '';
+  let heic: ReadonlyMap<string, Uint8Array>;
+  let built: BuiltCorpus;
 
   beforeAll(async () => {
+    heic = await readHeicFiles(CORPUS_DIRECTORY);
+    built = buildCorpus(heic);
     regenerated = await mkdtemp(join(tmpdir(), 'liasse-eval-corpus-'));
-    await writeCorpus(regenerated, buildCorpus(await readHeicFiles(CORPUS_DIRECTORY)));
+    await writeCorpus(regenerated, built);
   });
 
   afterAll(async () => {
@@ -52,20 +56,21 @@ describe('the committed corpus', () => {
     expect(different.flat()).toEqual([]);
   });
 
-  it('gives the same bytes at every generation', async () => {
-    const heic = await readHeicFiles(CORPUS_DIRECTORY);
-    const [first, second] = [buildCorpus(heic), buildCorpus(heic)];
-    expect(first.files.map(({ path }) => path)).toEqual(second.files.map(({ path }) => path));
+  it('gives the same bytes at every generation', () => {
+    const again = buildCorpus(heic);
+    expect(again.files.map(({ path }) => path)).toEqual(built.files.map(({ path }) => path));
     expect(
-      first.files.every(({ bytes }, index) =>
-        Buffer.from(bytes).equals(Buffer.from(second.files[index]?.bytes ?? [])),
-      ),
-    ).toBe(true);
+      again.files
+        .filter(
+          ({ bytes }, index) =>
+            !Buffer.from(bytes).equals(Buffer.from(built.files[index]?.bytes ?? [])),
+        )
+        .map(({ path }) => path),
+    ).toEqual([]);
   });
 
-  it('stays small enough to live in the repository', async () => {
-    const { files } = buildCorpus(await readHeicFiles(CORPUS_DIRECTORY));
-    expect(files.reduce((total, { bytes }) => total + bytes.length, 0)).toBeLessThan(
+  it('stays small enough to live in the repository', () => {
+    expect(built.files.reduce((total, { bytes }) => total + bytes.length, 0)).toBeLessThan(
       MAX_CORPUS_BYTES,
     );
   });
@@ -76,7 +81,7 @@ describe('the committed corpus', () => {
     'holds a HEIC of $id that shows its source picture',
     async (document) => {
       const { default: decode } = await import('heic-decode');
-      const committed = (await readHeicFiles(CORPUS_DIRECTORY)).get(document.id);
+      const committed = heic.get(document.id);
       expect(committed).toBeDefined();
       const decoded = await decode({ buffer: committed ?? new Uint8Array() });
       const source = heicSource(document);
