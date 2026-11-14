@@ -1,0 +1,42 @@
+import { z } from 'zod';
+import { DOCUMENT_JOB_FAILURE_CODES } from '../domain/enums.ts';
+import { documentOfPayload, flagDocument } from '../ingest/document-failure.ts';
+import { PROCESS_DOCUMENT_MAX_ATTEMPTS } from '../ingest/process-document-job.ts';
+import { defineJobKind } from '../jobs/kinds.ts';
+import { SETTLED_STATUSES } from './document.ts';
+
+const payload = z.object({ documentId: z.string().min(1) });
+
+/**
+ * Extracts the fields of a document again from the text stored for it, with the current
+ * schema of its type: one text-model call, never a vision call. Queued by consolidation
+ * for the documents a type change affects, and by a manual change of type. A document
+ * that is not indexed yet is left to `process_document`.
+ *
+ * A re-extraction that never succeeds leaves the document indexed and queryable, but
+ * flagged for review with a code: what it owes stays recorded on the document itself
+ * (`confidence` and `schema_version` stay null until an extraction succeeds).
+ */
+export const reextractDocumentJob = defineJobKind({
+  name: 'reextract_document',
+  schema: payload,
+  maxAttempts: PROCESS_DOCUMENT_MAX_ATTEMPTS,
+  onTerminalFailure: async (tx, failure) => {
+    const documentId = documentOfPayload(failure.payload);
+    if (documentId === undefined) return;
+    await flagDocument(
+      tx,
+      documentId,
+      SETTLED_STATUSES,
+      'needs_review',
+      DOCUMENT_JOB_FAILURE_CODES.reextraction,
+    );
+  },
+});
+
+/** Computes the chunks of a document again, after a correction changed what they derive from. */
+export const reindexDocumentJob = defineJobKind({
+  name: 'reindex_document',
+  schema: payload,
+  maxAttempts: PROCESS_DOCUMENT_MAX_ATTEMPTS,
+});

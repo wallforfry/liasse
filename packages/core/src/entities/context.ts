@@ -2,6 +2,7 @@ import type { Database } from '../db/client.ts';
 import type { Embedder, TextModel } from '../models/ports.ts';
 import type { EntityExecutor } from './entity-lock.ts';
 import type { IdentifierKey } from './sensitive.ts';
+import type { SimilarityThresholds } from './similarity.ts';
 
 export interface EntitiesReadContext {
   readonly db: Database;
@@ -17,4 +18,7 @@ export interface EntitiesContext extends EntitiesReadContext {
   readonly textModel: TextModel;
   // `deriveIdentifierKey(config.auth.fileUrlSecret)`.
   readonly identifierKey: IdentifierKey;
+  // The thresholds of the similarity rule; those of the specification by default. They
+  // were never calibrated on a real embedder, so an installation can set its own.
+  readonly similarity?: SimilarityThresholds;
 }

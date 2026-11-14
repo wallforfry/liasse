@@ -1,5 +1,7 @@
 import { z } from 'zod';
+import { DOCUMENT_JOB_FAILURE_CODES } from '../domain/enums.ts';
 import { defineJobKind } from '../jobs/kinds.ts';
+import { documentOfPayload, failDocumentInProgress } from './document-failure.ts';
 
 // One model call already makes up to three provider attempts, with a backoff, inside
 // its own time limit: three executions of the job are at most nine attempts per call,
@@ -17,9 +19,18 @@ export const PROCESS_DOCUMENT_MAX_ATTEMPTS = 3;
  * deletion that arrives during the write waits for it and then deletes what it wrote.
  * Reads go through `isLiveDocument`. A document that is gone or deleted is no failure:
  * the handler returns.
+ *
+ * When the queue fails the job for good, by whatever path, a document still on its way
+ * ends `failed`: without it nothing would ever take it further. A handler that knows a
+ * more precise code writes it first; this leaves it as it is.
  */
 export const processDocumentJob = defineJobKind({
   name: 'process_document',
   schema: z.object({ documentId: z.string().min(1) }),
   maxAttempts: PROCESS_DOCUMENT_MAX_ATTEMPTS,
+  onTerminalFailure: async (tx, { payload, cause }) => {
+    const documentId = documentOfPayload(payload);
+    if (documentId === undefined) return;
+    await failDocumentInProgress(tx, documentId, DOCUMENT_JOB_FAILURE_CODES[cause]);
+  },
 });

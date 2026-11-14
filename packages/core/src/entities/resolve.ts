@@ -24,7 +24,12 @@ import {
 } from './entity-store.ts';
 import { identifiersFor, matchExact, mayDesignate } from './exact-match.ts';
 import { type EntityMention, type PreparedMention, prepareMention } from './mention.ts';
-import { decideBySimilarity, ENTITY_SIMILARITY, type SimilarityDecision } from './similarity.ts';
+import {
+  decideBySimilarity,
+  ENTITY_SIMILARITY,
+  type SimilarityDecision,
+  type SimilarityThresholds,
+} from './similarity.ts';
 
 export type { EntityResolution } from './attachment.ts';
 
@@ -71,19 +76,19 @@ const decideSimilarity = async (
   reader: EntityReader,
   mention: PreparedMention,
   embedding: Embedding,
+  thresholds: SimilarityThresholds,
 ): Promise<SimilarityDecision<SimilarEntity>> => {
-  const similar = await similarEntities(
-    reader,
-    embedding,
-    mention.kind,
-    ENTITY_SIMILARITY.arbitrate,
-  );
+  const similar = await similarEntities(reader, embedding, mention.kind, thresholds.arbitrate);
   // An entity the mention cannot designate is left out before the closest are kept, so
   // that namesakes with another company id do not hide the one it may be.
   return decideBySimilarity(
     similar.filter(({ entity }) => mayDesignate(mention)(entity)),
-    ENTITY_SIMILARITY,
+    thresholds,
   );
+};
+
+type ResolutionDeps = Pick<EntitiesContext, 'db' | 'textModel'> & {
+  readonly similarity: SimilarityThresholds;
 };
 
 interface Verdict {
@@ -98,7 +103,7 @@ const idsOf = (candidates: readonly SimilarEntity[]): readonly string[] =>
 // The text model may take minutes to answer: it is asked before the lock is taken, about
 // the candidates as they are then, so that no other entity write waits for it.
 const arbitrateOutsideLock = async (
-  { db, textModel }: Pick<EntitiesContext, 'db' | 'textModel'>,
+  { db, textModel, similarity }: ResolutionDeps,
   mention: PreparedMention,
   embedding: Embedding | undefined,
 ): Promise<Verdict | undefined> => {
@@ -106,7 +111,7 @@ const arbitrateOutsideLock = async (
   if (matchExact(ofKind(await loadEntities(db), mention.kind), mention) !== undefined) {
     return undefined;
   }
-  const decision = await decideSimilarity(db, mention, embedding);
+  const decision = await decideSimilarity(db, mention, embedding, similarity);
   if (decision.outcome !== 'arbitrate') return undefined;
   const chosen = await arbitrate(textModel, mention, decision.candidates);
   return { offered: idsOf(decision.candidates), chosen: chosen?.entity.id };
@@ -121,8 +126,9 @@ const bySimilarity = async (
   mention: PreparedMention,
   embedding: Embedding,
   verdict: Verdict | undefined,
+  thresholds: SimilarityThresholds,
 ): Promise<Attachment | typeof RESTART | undefined> => {
-  const decision = await decideSimilarity(tx, mention, embedding);
+  const decision = await decideSimilarity(tx, mention, embedding, thresholds);
   if (decision.outcome === 'none') return undefined;
   if (decision.outcome === 'attach') {
     return similarAttachment(decision.candidate, 'similarity', [mention.name]);
@@ -139,12 +145,13 @@ const resolveUnderLock = async (
   mention: PreparedMention,
   embedding: Embedding | undefined,
   verdict: Verdict | undefined,
+  thresholds: SimilarityThresholds,
 ): Promise<EntityResolution | typeof RESTART> => {
   const everyEntity = await loadEntities(tx);
   const exact = matchExact(ofKind(everyEntity, mention.kind), mention);
   const similar =
     exact === undefined && embedding !== undefined
-      ? await bySimilarity(tx, mention, embedding, verdict)
+      ? await bySimilarity(tx, mention, embedding, verdict, thresholds)
       : undefined;
   if (similar === RESTART) return RESTART;
   const attachment = exact === undefined ? similar : exactAttachment(exact);
@@ -165,14 +172,14 @@ const resolveUnderLock = async (
 };
 
 const resolveWithModels = async (
-  deps: Pick<EntitiesContext, 'db' | 'textModel'>,
+  deps: ResolutionDeps,
   mention: PreparedMention,
   embedding: Embedding | undefined,
   restarts: number,
 ): Promise<EntityResolution> => {
   const verdict = await arbitrateOutsideLock(deps, mention, embedding);
   const resolution = await withEntityLock(deps.db, (tx) =>
-    resolveUnderLock(tx, mention, embedding, verdict),
+    resolveUnderLock(tx, mention, embedding, verdict, deps.similarity),
   );
   if (resolution !== RESTART) return resolution;
   if (restarts === 0) {
@@ -186,7 +193,7 @@ const resolveWithModels = async (
 // Attaches a mention to the entity it designates, creating the entity when none does:
 // strong identifier, then normalized name, then similarity, in that order.
 export const resolveEntity = async (
-  { db, embedder, textModel, identifierKey }: EntitiesContext,
+  { db, embedder, textModel, identifierKey, similarity = ENTITY_SIMILARITY }: EntitiesContext,
   mention: EntityMention,
   { allowExternalEmbedding }: ResolveEntityOptions,
 ): Promise<EntityResolution> => {
@@ -206,5 +213,10 @@ export const resolveEntity = async (
   // answered is checked again under it.
   const embedding =
     embedder.isLocal || allowExternalEmbedding ? await embedMention(embedder, prepared) : undefined;
-  return resolveWithModels({ db, textModel }, prepared, embedding, ARBITRATION_RESTARTS);
+  return resolveWithModels(
+    { db, textModel, similarity },
+    prepared,
+    embedding,
+    ARBITRATION_RESTARTS,
+  );
 };

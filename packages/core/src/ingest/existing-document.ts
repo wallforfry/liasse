@@ -25,6 +25,7 @@ export interface IncomingFile {
   readonly source: DocumentSource;
   readonly hint: string | undefined;
   readonly private: boolean;
+  readonly revivesDeleted: boolean;
 }
 
 export interface IngestResult {
@@ -65,8 +66,9 @@ const stillIn = async (tx: Transaction, { id, status }: ExistingDocument): Promi
   return locked?.status === status;
 };
 
-// A file still lying in the watched folder is seen again at every restart: that is no
-// request to undo a deletion. An upload or an MCP call is one.
+// A file still lying in the watched folder is seen again at every restart, and an email
+// carries its attachments again each time it is read: neither is a request to undo a
+// deletion. An upload or an MCP call of the file itself is one.
 const reviveTombstone = async (
   tx: Transaction,
   storage: Storage,
@@ -74,7 +76,7 @@ const reviveTombstone = async (
   file: IncomingFile,
 ): Promise<Attempt> => {
   const { id } = tombstone;
-  if (file.source === 'watch') {
+  if (!file.revivesDeleted) {
     return { id, status: 'deleted', duplicate: true, fileRestored: false };
   }
   if (!(await stillIn(tx, tombstone))) return undefined;

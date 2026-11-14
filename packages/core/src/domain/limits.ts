@@ -7,6 +7,8 @@ export const MAX_FIELDS_PER_TYPE = 30;
 export const MAX_SLUG_LENGTH = 64;
 export const MAX_FIELD_NAME_LENGTH = 64;
 export const MAX_ENUM_VALUES = 50;
+// An enum value is a label: anything longer is text a model wrote, not a value.
+export const MAX_ENUM_VALUE_LENGTH = 64;
 export const MAX_IDENTIFIER_FORMAT_LENGTH = 32;
 export const MAX_TYPE_DESCRIPTION_LENGTH = 500;
 

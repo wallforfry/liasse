@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { MAX_FIELDS_PER_TYPE } from '../domain/limits.ts';
+import { MAX_ENUM_VALUE_LENGTH, MAX_FIELDS_PER_TYPE } from '../domain/limits.ts';
 import { checkTypeFields } from './fields.ts';
 
 const ENERGY_BILL_FIELDS = {
@@ -93,5 +93,20 @@ describe('checkTypeFields', () => {
       { field: 'issuer', rule: 'reserved' },
       { field: 'energy', rule: 'invalid_definition' },
     ]);
+  });
+
+  // An enum value is a short label; a longer one is text no type should hold.
+  it('refuses an enum value longer than a label, with a message that says the limit', () => {
+    const checked = checkTypeFields({
+      kind: { type: 'enum', values: ['income', 'x'.repeat(MAX_ENUM_VALUE_LENGTH + 1)] },
+    });
+    expect(checked).toMatchObject({
+      ok: false,
+      error: [{ field: 'kind', rule: 'invalid_definition' }],
+    });
+    expect(JSON.stringify(checked)).toContain(String(MAX_ENUM_VALUE_LENGTH));
+    expect(
+      checkTypeFields({ kind: { type: 'enum', values: ['x'.repeat(MAX_ENUM_VALUE_LENGTH)] } }).ok,
+    ).toBe(true);
   });
 });

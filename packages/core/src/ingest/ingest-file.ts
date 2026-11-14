@@ -29,6 +29,13 @@ export type IngestInput = FileContent & {
    * raises the flag and false leaves it as it is: handing a file back never lowers it.
    */
   readonly private?: boolean | undefined;
+  /**
+   * Whether bytes of a deleted document bring it back. Only a person handing the file
+   * itself over asks for that: true by default for the API and MCP, never for the
+   * watched folder. A file found inside another one, such as an email attachment,
+   * passes false.
+   */
+  readonly revivesDeleted?: boolean;
 };
 
 /**
@@ -61,6 +68,7 @@ export const ingestFile = async (
     source: input.source,
     hint: cleanHint(input.hint),
     private: input.private ?? false,
+    revivesDeleted: input.source !== 'watch' && input.revivesDeleted !== false,
   };
 
   return db.transaction(async (tx) => {

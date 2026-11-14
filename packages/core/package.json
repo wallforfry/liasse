@@ -72,6 +72,11 @@
       "types": "./dist/models/index.d.ts",
       "default": "./dist/models/index.js"
     },
+    "./pipeline": {
+      "@liasse/source": "./src/pipeline/index.ts",
+      "types": "./dist/pipeline/index.d.ts",
+      "default": "./dist/pipeline/index.js"
+    },
     "./prompt": {
       "@liasse/source": "./src/prompt/index.ts",
       "types": "./dist/prompt/index.d.ts",

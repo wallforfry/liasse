@@ -53,7 +53,7 @@ const settleFailure = (
   const lastError = describeJobError(error);
   return willRetry
     ? retryJob(deps.db, job, lastError, retryDelayMs(job.attempt, deps.retry))
-    : failJob(deps.db, job, lastError);
+    : failJob(deps.db, job, lastError, deps.handlers.get(job.kind)?.onTerminalFailure);
 };
 
 const runHandler = async (

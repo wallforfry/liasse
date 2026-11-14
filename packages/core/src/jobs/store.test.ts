@@ -147,7 +147,7 @@ describe('job store', () => {
 
     await queue('fails');
     const failed = await claimed();
-    expect(await failJob(database.db, failed, 'synthetic failure')).toBe(true);
+    expect(await failJob(database.db, failed, 'synthetic failure', undefined)).toBe(true);
     expect(await jobById(database.db, failed.id)).toMatchObject({
       status: 'failed',
       lockedAt: null,
@@ -177,7 +177,7 @@ describe('job store', () => {
     expect(current).toMatchObject({ id, attempt: 2 });
 
     expect(await completeJob(database.db, stale)).toBe(false);
-    expect(await failJob(database.db, stale, 'late')).toBe(false);
+    expect(await failJob(database.db, stale, 'late', undefined)).toBe(false);
     expect(await retryJob(database.db, stale, 'late', 0)).toBe(false);
     expect(await releaseJob(database.db, stale)).toBe(false);
     expect(await renewJobLock(database.db, stale)).toBe(false);

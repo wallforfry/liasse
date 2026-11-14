@@ -15,6 +15,27 @@ export const TOMBSTONE_STATUS = 'deleted' satisfies DocumentStatus;
 /** False for the tombstone of a deleted document, which is not a document any more. */
 export const isLiveStatus = (status: DocumentStatus): boolean => status !== TOMBSTONE_STATUS;
 
+// A document still on its way through the pipeline.
+export const IN_PROGRESS_STATUSES = [
+  'received',
+  'extracted',
+  'classified',
+] as const satisfies readonly DocumentStatus[];
+
+// What `documents.error` says when the queue failed the job of a document for good: the
+// worker stopped during the last attempt, the handler failed in a way it could not give
+// a code for, or a re-extraction never succeeded.
+export const DOCUMENT_JOB_FAILURE_CODES = {
+  stale: 'processing_abandoned',
+  error: 'processing_failed',
+  reextraction: 'reextraction_failed',
+} as const;
+
+// How a document got its type: an offered type the model chose, a type it created, the
+// closest candidate when a new type was refused or over quota, or no type at all.
+export const CLASSIFICATION_OUTCOMES = ['existing', 'new', 'fallback', 'untyped'] as const;
+export type ClassificationOutcome = (typeof CLASSIFICATION_OUTCOMES)[number];
+
 export const DOCUMENT_SOURCES = ['watch', 'api', 'mcp'] as const;
 export type DocumentSource = (typeof DOCUMENT_SOURCES)[number];
 
