@@ -1,3 +1,4 @@
+import { findTagEnd } from '../markup.ts';
 import { decodeHtmlEntities } from './html-entities.ts';
 
 // Elements whose content is never text of the message.
@@ -19,7 +20,7 @@ interface Tag {
 // `undefined` for a `<` that opens no tag, declaration or instruction: it is plain text.
 const readTag = (html: string, start: number): Tag | undefined => {
   if (!/^<[a-z/!?]/i.test(html.slice(start, start + 2))) return undefined;
-  const close = html.indexOf('>', start);
+  const close = findTagEnd(html, start + 1);
   const source = html.slice(start + 1, close === -1 ? html.length : close);
   const match = /^(\/?)([a-z][a-z0-9]*)/i.exec(source);
   return {

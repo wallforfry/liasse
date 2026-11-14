@@ -79,4 +79,21 @@ describe('htmlToText', () => {
   it('survives a tag that is never closed', () => {
     expect(convert('text <p class="unterminated')).toBe('text');
   });
+
+  it('does not end a tag at a > inside a quoted attribute value', () => {
+    expect(convert('<p title="a>S9">t')).toBe('t');
+    expect(convert('<p title=\'a>S9\' class="b>c">t')).toBe('t');
+    expect(convert('<a href="https://example.com/?a>b">link</a>')).toBe(
+      'link (https://example.com/?a>b)',
+    );
+  });
+
+  it('opens a quote only where an attribute value starts', () => {
+    expect(convert("<p don't>kept</p> it's")).toBe("kept\nit's");
+    expect(convert('<p class=plain>kept "as is"')).toBe('kept "as is"');
+  });
+
+  it('skips an element whose closing tag follows a quoted >', () => {
+    expect(convert('a<script data-x="1>2">alert(1)</script>b')).toBe('ab');
+  });
 });
