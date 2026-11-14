@@ -107,7 +107,11 @@ export const startModelProcess = ({
     },
     dispose: async () => {
       end('the model process was stopped');
-      if (child.exitCode === null && child.signalCode === null) child.kill();
+      if (child.exitCode === null && child.signalCode === null) {
+        // Waiting for an unref'd child does not keep the event loop alive.
+        child.ref();
+        child.kill();
+      }
       await exited;
     },
   };

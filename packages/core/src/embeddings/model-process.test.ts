@@ -115,6 +115,37 @@ describe('a server with a model process', () => {
   });
 });
 
+describe('a server that stops its model process', () => {
+  const SCRIPT = `
+    const { startModelProcess } = await import(process.argv[1]);
+    const model = startModelProcess({
+      entry: new URL(process.argv[2]),
+      args: [],
+      execArgv: ['--experimental-strip-types', '--disable-warning=ExperimentalWarning'],
+    });
+    await model.embed(['pid']);
+    await model.dispose();
+    process.stdout.write('stopped');
+  `;
+
+  it('stays alive until the process has ended', async () => {
+    const { stdout } = await run(
+      process.execPath,
+      [
+        '--experimental-strip-types',
+        '--disable-warning=ExperimentalWarning',
+        '--input-type=module',
+        '--eval',
+        SCRIPT,
+        fileURLToPath(new URL('./model-process.ts', import.meta.url)),
+        FIXTURE.href,
+      ],
+      { timeout: 10_000 },
+    );
+    expect(stdout).toBe('stopped');
+  });
+});
+
 describe('loadModelInChildProcess', () => {
   it('names EMBEDDING_CACHE_DIR when the directory cannot be created', async () => {
     const underAFile = `${fileURLToPath(import.meta.url)}/models`;
