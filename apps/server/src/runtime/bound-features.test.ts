@@ -1,3 +1,4 @@
+import { changeDecisionResultSchema, changeListSchema } from '@liasse/core/contract';
 import { documents, jobs, typeChanges } from '@liasse/core/db';
 import { waitUntil } from '@liasse/core/testing';
 import { eq } from 'drizzle-orm';
@@ -209,6 +210,42 @@ describe('the features the runtime binds', () => {
     expect(again.status).toBe(400);
     expect(await again.json()).toMatchObject({ error: { code: 'change_already_decided' } });
     expect(await (await call(runtime, '/changes')).json()).toEqual({
+      changes: [],
+      truncated: false,
+    });
+  });
+
+  it('lists and decides consolidation changes over MCP, as the routes answer', async () => {
+    const runtime = await start();
+    const id = await upload(runtime, LETTER.lines, 'letter.pdf');
+    await waitUntil(async () => (await documentOf(id))?.status === 'indexed');
+    const [document] = await harness
+      .database()
+      .db.select({ typeId: documents.typeId })
+      .from(documents)
+      .where(eq(documents.id, id));
+    const [change] = await harness
+      .database()
+      .db.insert(typeChanges)
+      .values({
+        kind: 'stabilize',
+        payload: { type_id: document?.typeId ?? '' },
+        rationale: 'Synthetic rationale.',
+      })
+      .returning({ id: typeChanges.id });
+    const changeId = change?.id ?? '';
+
+    const listed = changeListSchema.parse(
+      await callTool(runtime, 'list_pending_changes', { kind: 'stabilize' }),
+    );
+    expect(listed.changes.map(({ id: listedId, status }) => [listedId, status])).toEqual([
+      [changeId, 'pending'],
+    ]);
+    const decided = changeDecisionResultSchema.parse(
+      await callTool(runtime, 'apply_change', { id: changeId, decision: 'apply' }),
+    );
+    expect(decided).toMatchObject({ change: { status: 'applied' }, documents_to_reextract: 0 });
+    expect(await callTool(runtime, 'list_pending_changes', {})).toEqual({
       changes: [],
       truncated: false,
     });
