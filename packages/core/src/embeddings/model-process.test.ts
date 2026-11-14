@@ -228,7 +228,8 @@ describe('a model process whose server is killed', () => {
     const child = Number(String(output[0]).trim());
     server.kill('SIGKILL');
     await silence;
-    expect(isRunning(child)).toBe(false);
+    // The pipe closes when the process ends; on Linux its entry stays until it is reaped.
+    await expect.poll(() => isRunning(child), { timeout: 5000 }).toBe(false);
     expect(errors.join('')).toBe('');
   });
 });
