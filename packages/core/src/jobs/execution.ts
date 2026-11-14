@@ -54,6 +54,18 @@ export interface Execution {
   readonly abandon: () => void;
 }
 
+// Reported once the job is back in the queue: a lease lost meanwhile deferred nothing.
+const defer = async (
+  deps: ExecutionDeps,
+  job: ClaimedJob,
+  error: DeferJobError,
+): Promise<boolean> => {
+  const delayMs = error.delayMs ?? retryDelayMs(1, deps.retry);
+  const deferred = await deferJob(deps.db, job, delayMs);
+  if (deferred) deps.onJobDeferred({ job, error, delayMs });
+  return deferred;
+};
+
 const settleFailure = (
   deps: ExecutionDeps,
   job: ClaimedJob,
@@ -61,11 +73,7 @@ const settleFailure = (
   signal: AbortSignal,
 ): Promise<boolean> => {
   if (signal.reason instanceof WorkersStoppingError) return releaseJob(deps.db, job);
-  if (error instanceof DeferJobError) {
-    const delayMs = error.delayMs ?? retryDelayMs(1, deps.retry);
-    deps.onJobDeferred({ job, error, delayMs });
-    return deferJob(deps.db, job, delayMs);
-  }
+  if (error instanceof DeferJobError) return defer(deps, job, error);
   const willRetry = !(error instanceof PermanentJobError) && job.attempt < job.maxAttempts;
   deps.onJobFailed({ job, error, willRetry });
   const lastError = describeJobError(error);

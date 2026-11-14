@@ -1,3 +1,4 @@
+import { sql } from 'drizzle-orm';
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 import { jobs } from '../db/schema/jobs.ts';
 import { createGate, sleep, waitUntil } from '../testing/async.ts';
@@ -6,6 +7,7 @@ import {
   DeferJobError,
   DuplicateJobHandlerError,
   InvalidWorkersOptionsError,
+  JobLockLostError,
   PermanentJobError,
 } from './errors.ts';
 import type { JobDeferral, JobFailure } from './execution.ts';
@@ -160,6 +162,29 @@ describe('workers: running, retrying and limiting jobs', () => {
       Array.from({ length: 4 }, () => ({ id, delayMs: 10 })),
     );
     expect(await jobById(harness.database.db, id)).toMatchObject({ attempts: 1, lastError: null });
+  });
+
+  it('reports no deferral for a job whose lease was lost before it deferred', async () => {
+    const deferrals: JobDeferral[] = [];
+    const errors: unknown[] = [];
+    await start({
+      handlers: [
+        handle(labelJob, async ({ payload }) => {
+          // As if the lock had expired and another worker had claimed the job.
+          await harness.database.db
+            .update(jobs)
+            .set({ attempts: sql`${jobs.attempts} + 1` })
+            .where(sql`${jobs.payload}->>'label' = ${payload.label}`);
+          throw new DeferJobError('synthetic deferral');
+        }),
+      ],
+      onJobDeferred: (deferral) => deferrals.push(deferral),
+      onError: (error) => errors.push(error),
+    });
+    await queue('overtaken');
+    await waitUntil(() => errors.length > 0);
+    expect(errors[0]).toBeInstanceOf(JobLockLostError);
+    expect(deferrals).toEqual([]);
   });
 
   it('runs a deferred job after the delay it asked for', async () => {
