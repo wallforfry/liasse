@@ -30,14 +30,16 @@ export {
   type MergeReason,
 } from './merge-candidates.ts';
 export {
-  type EntityMergeProposal,
-  type MergeEntityPayload,
-  mergeEntityPayloadSchema,
   type ProposedEntityMerge,
   proposeEntityMerge,
   type ProposeEntityMergeInput,
 } from './merge-proposals.ts';
 export { type EntityPair, mergeEntities } from './merge.ts';
+export {
+  type EntityMergeProposal,
+  type MergeEntityPayload,
+  mergeEntityPayloadSchema,
+} from './proposal-store.ts';
 export type { DocumentCountOptions } from './references.ts';
 export {
   type EntityResolution,

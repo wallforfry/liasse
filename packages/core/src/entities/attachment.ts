@@ -47,7 +47,7 @@ export const enrichment = (
     aliases: withAliases(entity, aliases),
     identifiers: mergeIdentifiers(
       entity.identifiers,
-      identifiersFor(entity.id, everyEntity, mention.identifiers),
+      identifiersFor(entity, everyEntity, mention.identifiers),
     ),
   };
   const unchanged =

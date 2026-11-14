@@ -37,6 +37,14 @@ export const MAX_IDENTIFIER_VALUE_LENGTH = 64;
 // likely to be issued twice to say on its own which entity a mention designates.
 export const MIN_ATTACHING_CUSTOMER_NUMBER_LENGTH = 6;
 
+// Under these lengths a value is a fragment, not an identifier: it would match, as a
+// prefix or by chance, entities it says nothing about.
+export const MIN_COMPANY_ID_LENGTH = 5;
+export const MIN_VAT_NUMBER_LENGTH = 4;
+// The shortest company id an establishment id may extend: a French SIREN, of which a
+// SIRET is the longer form.
+export const MIN_EXTENDABLE_COMPANY_ID_LENGTH = 9;
+
 export const DEFAULT_QUERY_LIMIT = 50;
 export const MAX_QUERY_LIMIT = 200;
 export const MAX_QUERY_CONDITIONS = 20;

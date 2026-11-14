@@ -9,15 +9,16 @@ import {
   similarAttachment,
   toResolution,
 } from './attachment.ts';
+import { bridgeProposals, recordBridges } from './bridge-proposals.ts';
 import type { EntitiesContext } from './context.ts';
 import { withEntityLock } from './entity-lock.ts';
 import {
-  closestEntities,
   type Entity,
   type EntityReader,
   type EntityTransaction,
   insertEntity,
   loadEntities,
+  similarEntities,
   type SimilarEntity,
   updateEntityNames,
 } from './entity-store.ts';
@@ -71,14 +72,16 @@ const decideSimilarity = async (
   mention: PreparedMention,
   embedding: Embedding,
 ): Promise<SimilarityDecision<SimilarEntity>> => {
-  const closest = await closestEntities(
+  const similar = await similarEntities(
     reader,
     embedding,
     mention.kind,
-    ENTITY_SIMILARITY.candidates,
+    ENTITY_SIMILARITY.arbitrate,
   );
+  // An entity the mention cannot designate is left out before the closest are kept, so
+  // that namesakes with another company id do not hide the one it may be.
   return decideBySimilarity(
-    closest.filter(({ entity }) => mayDesignate(mention)(entity)),
+    similar.filter(({ entity }) => mayDesignate(mention)(entity)),
     ENTITY_SIMILARITY,
   );
 };
@@ -152,10 +155,12 @@ const resolveUnderLock = async (
       identifiers: identifiersFor(undefined, everyEntity, mention.identifiers),
       embedding,
     });
+    await recordBridges(tx, everyEntity, mention, created);
     return { entity_id: created.id, match: 'created', confidence: 1 };
   }
   const gained = enrichment(attachment, mention, everyEntity);
   if (gained !== undefined) await updateEntityNames(tx, attachment.entity.id, gained);
+  await recordBridges(tx, everyEntity, mention, attachment.entity);
   return toResolution(attachment);
 };
 
@@ -186,15 +191,16 @@ export const resolveEntity = async (
   { allowExternalEmbedding }: ResolveEntityOptions,
 ): Promise<EntityResolution> => {
   const prepared = prepareMention(identifierKey, mention);
-  // Most mentions name an entity already known and bring nothing new: they are answered
-  // from one read, without the lock and without a model.
+  // Most mentions name an entity already known, bring nothing new and say nothing of
+  // another entity: they are answered from one read, without the lock and without a model.
   const everyEntity = await loadEntities(db);
   const known = matchExact(ofKind(everyEntity, prepared.kind), prepared);
   if (known !== undefined) {
     const attachment = exactAttachment(known);
-    if (enrichment(attachment, prepared, everyEntity) === undefined) {
-      return toResolution(attachment);
-    }
+    const nothingToWrite =
+      enrichment(attachment, prepared, everyEntity) === undefined &&
+      bridgeProposals(everyEntity, prepared, known.entity).length === 0;
+    if (nothingToWrite) return toResolution(attachment);
   }
   // Both models may be remote calls: they run before the lock is taken, and what they
   // answered is checked again under it.

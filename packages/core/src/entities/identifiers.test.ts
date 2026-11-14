@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  haveConflictingIdentifiers,
   identifierIdentity,
   isAttachingCustomerNumber,
   isGlobalIdentifier,
@@ -7,6 +8,7 @@ import {
   mentionIdentifierSchema,
   mergeIdentifiers,
   parseIdentifiersColumn,
+  rejectionOf,
   sharedGlobalIdentifiers,
   storeIdentifier,
   toIdentifiersColumn,
@@ -90,6 +92,70 @@ describe('storeIdentifier', () => {
   it('stores nothing for a value without a letter or a digit', () => {
     expect(store({ type: 'company_id', value: ' - . ' })).toEqual([]);
     expect(store({ type: 'card_number', value: 'unknown' })).toEqual([]);
+  });
+
+  it.each([
+    ['company_id', '5'],
+    ['company_id', '1234'],
+    ['company_id', 'ABCDEF'],
+    ['vat_number', 'FR'],
+    ['vat_number', 'FRAB'],
+    ['vat_number', '123'],
+  ] as const)('stores nothing for a %s that is only "%s"', (type, value) => {
+    expect(store({ type, value })).toEqual([]);
+    expect(rejectionOf({ type, value })).toBe('malformed');
+  });
+
+  it.each([
+    ['company_id', '12345'],
+    ['company_id', 'HRB12345'],
+    ['vat_number', 'RO12'],
+    ['customer_number', '7'],
+  ] as const)('keeps a %s written "%s"', (type, value) => {
+    expect(store({ type, value })).toEqual([{ type, value }]);
+    expect(rejectionOf({ type, value })).toBeUndefined();
+  });
+
+  it('tells an empty value from a malformed one', () => {
+    expect(rejectionOf({ type: 'customer_number', value: ' - ' })).toBe('empty');
+  });
+});
+
+describe('haveConflictingIdentifiers', () => {
+  const companyId = (value: string) => ({ type: 'company_id', value }) as const;
+  const vatNumber = (value: string) => ({ type: 'vat_number', value }) as const;
+
+  it('tells two different values of one unique type', () => {
+    expect(haveConflictingIdentifiers([companyId('111111111')], [companyId('222222222')])).toBe(
+      true,
+    );
+    expect(haveConflictingIdentifiers([vatNumber('FR111')], [vatNumber('FR222')])).toBe(true);
+  });
+
+  it('finds no conflict in equal values, other types, or a type one side lacks', () => {
+    expect(haveConflictingIdentifiers([companyId('111111111')], [companyId('111111111')])).toBe(
+      false,
+    );
+    expect(haveConflictingIdentifiers([companyId('111111111')], [vatNumber('FR222')])).toBe(false);
+    expect(haveConflictingIdentifiers([companyId('111111111')], [])).toBe(false);
+  });
+
+  it('holds a company id of nine characters or more as the start of a longer one', () => {
+    expect(
+      haveConflictingIdentifiers([companyId('999990001')], [companyId('99999000100017')]),
+    ).toBe(false);
+    expect(
+      haveConflictingIdentifiers([companyId('99999000100017')], [companyId('999990001')]),
+    ).toBe(false);
+    expect(haveConflictingIdentifiers([companyId('99999000')], [companyId('999990001')])).toBe(
+      true,
+    );
+  });
+
+  it('never holds a VAT number as the start of another', () => {
+    expect(
+      haveConflictingIdentifiers([vatNumber('FR2222222222')], [vatNumber('FR22222222222')]),
+    ).toBe(true);
   });
 });
 

@@ -3,6 +3,9 @@ import type { EntityIdentifierType } from '../domain/enums.ts';
 import {
   MAX_IDENTIFIER_FORMAT_LENGTH,
   MAX_IDENTIFIER_VALUE_LENGTH,
+  MIN_COMPANY_ID_LENGTH,
+  MIN_EXTENDABLE_COMPANY_ID_LENGTH,
+  MIN_VAT_NUMBER_LENGTH,
   MIN_ATTACHING_CUSTOMER_NUMBER_LENGTH,
 } from '../domain/limits.ts';
 import { entityIdentifierTypeSchema } from '../domain/schemas.ts';
@@ -83,14 +86,33 @@ const sensitiveTypeOf = ({
   return isValidCardNumber(alphanumeric(value)) ? 'card_number' : undefined;
 };
 
-// Nothing is stored for a value that has no letter or digit.
+const MIN_LENGTHS: Readonly<Partial<Record<EntityIdentifierType, number>>> = {
+  company_id: MIN_COMPANY_ID_LENGTH,
+  vat_number: MIN_VAT_NUMBER_LENGTH,
+};
+
+export type IdentifierRejection = 'empty' | 'malformed';
+
+// Why an identifier read in a document is not kept: it has no letter or digit, or it is
+// too short for its type or has no digit, as a company id and a VAT number always have.
+// Such a fragment is neither stored nor matched.
+export const rejectionOf = (identifier: MentionIdentifier): IdentifierRejection | undefined => {
+  const sensitive = sensitiveTypeOf(identifier);
+  const value = NORMALIZERS[sensitive ?? identifier.type](identifier.value);
+  if (value === '') return 'empty';
+  const minimum = MIN_LENGTHS[identifier.type];
+  return minimum !== undefined && (value.length < minimum || !/\d/.test(value))
+    ? 'malformed'
+    : undefined;
+};
+
 export const storeIdentifier = (
   key: IdentifierKey,
   identifier: MentionIdentifier,
 ): readonly StoredIdentifier[] => {
+  if (rejectionOf(identifier) !== undefined) return [];
   const sensitive = sensitiveTypeOf(identifier);
   const value = NORMALIZERS[sensitive ?? identifier.type](identifier.value);
-  if (value === '') return [];
   if (sensitive !== undefined) {
     const { last4, hash } = maskSensitiveIdentifier(key, sensitive, value);
     return [{ type: sensitive, last4, hash }];
@@ -116,13 +138,22 @@ const CUSTOMER_NUMBER = 'customer_number';
 export const isGlobalIdentifier = (identifier: StoredIdentifier): boolean =>
   identifier.type !== OTHER && identifier.type !== CUSTOMER_NUMBER;
 
-// The types of which an entity has one value, give or take the longer form an
-// establishment of a company carries (a French SIRET starts with the SIREN of its
-// company). An entity may hold several IBANs or cards, so those say nothing here.
+// The types of which an entity has one value. An entity may hold several IBANs or cards,
+// so those say nothing here.
 const UNIQUE_TYPES: readonly string[] = ['company_id', 'vat_number'];
 
-const sameOrLongerForm = (left: string, right: string): boolean =>
-  left.startsWith(right) || right.startsWith(left);
+// An establishment carries the id of its company followed by its own number (a French
+// SIRET starts with the SIREN): the two are one company. That holds for a company id
+// that is a whole one, never for a VAT number.
+const isSameValue = (type: string, left: string, right: string): boolean => {
+  if (left === right) return true;
+  const [shorter, longer] = left.length < right.length ? [left, right] : [right, left];
+  return (
+    type === 'company_id' &&
+    shorter.length >= MIN_EXTENDABLE_COMPANY_ID_LENGTH &&
+    longer.startsWith(shorter)
+  );
+};
 
 // True when both lists hold a value of one unique type and no value of one list is the
 // value of the other: the two cannot describe the same entity.
@@ -139,7 +170,7 @@ export const haveConflictingIdentifiers = (
     return (
       ours.length > 0 &&
       theirs.length > 0 &&
-      !ours.some((value) => theirs.some((other) => sameOrLongerForm(value, other)))
+      !ours.some((value) => theirs.some((other) => isSameValue(type, value, other)))
     );
   });
 

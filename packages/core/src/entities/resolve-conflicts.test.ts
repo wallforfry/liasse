@@ -196,6 +196,43 @@ describe('resolveEntity against conflicting identifiers', () => {
       expect(await identifiersOf(dupont)).toEqual({ items: [BETA_VAT_NUMBER, ALPHA_COMPANY_ID] });
     });
 
+    it.each([
+      ['company_id', '5'],
+      ['vat_number', 'FR'],
+    ] as const)('ignores a %s that is only "%s"', async (type, fragment) => {
+      const known = [
+        { type: 'company_id', value: '552999999' },
+        { type: 'vat_number', value: 'FR22222222222' },
+      ] as const;
+      const dupont = await seedEntity(database.db, { name: 'Dupont SARL', identifiers: known });
+      const resolution = await resolveEntity(
+        context(),
+        { name: 'Dupont', identifiers: [{ type, value: fragment }] },
+        PRIVATE,
+      );
+      expect(resolution).toMatchObject({ entity_id: dupont, match: 'name' });
+      expect(await identifiersOf(dupont)).toEqual({ items: known });
+      const stranger = await resolveEntity(
+        context(),
+        { name: 'A Stranger', identifiers: [{ type, value: `${fragment}99999999` }] },
+        PRIVATE,
+      );
+      expect(stranger.match).toBe('created');
+    });
+
+    it('does not hold a shorter number as the company id of the longer one', async () => {
+      await seedEntity(database.db, {
+        name: 'Dupont SARL',
+        identifiers: [{ type: 'company_id', value: '999990001' }],
+      });
+      const resolution = await resolveEntity(
+        context(),
+        { name: 'Dupont', identifiers: [{ type: 'company_id', value: '99999000' }] },
+        PRIVATE,
+      );
+      expect(resolution.match).toBe('created');
+    });
+
     it('holds a company id and the longer id of one of its establishments as the same', async () => {
       const dupont = await seedEntity(database.db, {
         name: 'Dupont SARL',

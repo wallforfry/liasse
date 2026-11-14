@@ -81,19 +81,22 @@ export interface SimilarEntity {
   readonly similarity: number;
 }
 
-export const closestEntities = async (
+// Every entity at least that similar, closest first. No limit on their number: the
+// caller leaves some out before it keeps the closest, and few entities are that close.
+export const similarEntities = async (
   reader: EntityReader,
   embedding: Embedding,
   kind: EntityKind | undefined,
-  k: number,
+  minSimilarity: number,
 ): Promise<readonly SimilarEntity[]> => {
   const distance = cosineDistance(entities.embedding, [...embedding]);
   const rows = await reader
     .select({ ...ENTITY_COLUMNS, distance })
     .from(entities)
-    .where(and(isNotNull(entities.embedding), ofKind(kind)))
-    .orderBy(asc(distance), asc(entities.id))
-    .limit(k);
+    .where(
+      and(isNotNull(entities.embedding), ofKind(kind), sql`${distance} <= ${1 - minSimilarity}`),
+    )
+    .orderBy(asc(distance), asc(entities.id));
   return rows.map(({ distance: gap, ...row }) => ({
     entity: toEntity(row),
     similarity: 1 - Number(gap),

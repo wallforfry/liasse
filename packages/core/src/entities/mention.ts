@@ -9,8 +9,11 @@ import {
 import { entityKindSchema } from '../domain/schemas.ts';
 import { redactSensitiveIdentifiers } from './detect-sensitive.ts';
 import {
+  type IdentifierRejection,
+  type MentionIdentifier,
   mentionIdentifierSchema,
   mergeIdentifiers,
+  rejectionOf,
   type StoredIdentifier,
   storeIdentifier,
 } from './identifiers.ts';
@@ -39,7 +42,18 @@ export interface PreparedMention {
   // Normalized, sensitive ones masked: the clear values do not go further than this.
   readonly identifiers: readonly StoredIdentifier[];
   readonly context: string | undefined;
+  // How many identifiers of the mention were not kept, by reason.
+  readonly droppedIdentifiers: Readonly<Record<IdentifierRejection, number>>;
 }
+
+const countRejections = (
+  identifiers: readonly MentionIdentifier[],
+): Readonly<Record<IdentifierRejection, number>> => {
+  const reasons = identifiers.map(rejectionOf);
+  const count = (reason: IdentifierRejection): number =>
+    reasons.filter((found) => found === reason).length;
+  return { empty: count('empty'), malformed: count('malformed') };
+};
 
 export const prepareMention = (key: IdentifierKey, mention: EntityMention): PreparedMention => {
   const parsed = entityMentionSchema.safeParse(mention);
@@ -61,5 +75,6 @@ export const prepareMention = (key: IdentifierKey, mention: EntityMention): Prep
     ),
     context:
       context === undefined || context === '' ? undefined : redactSensitiveIdentifiers(context),
+    droppedIdentifiers: countRejections(identifiers),
   };
 };

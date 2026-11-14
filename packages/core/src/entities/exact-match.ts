@@ -91,20 +91,31 @@ export const matchExact = (
   return byAlias === undefined ? undefined : { entity: byAlias, match: 'alias' };
 };
 
-// The identifiers of a mention an entity may take: never a global identifier that another
-// entity carries, of whatever kind. Copying one would make the two look like one entity
+// The identifiers of a mention an entity may take. Never a global identifier that another
+// entity carries, of whatever kind: copying one would make the two look like one entity
 // to every later mention and to the merge candidates, on the word of a single document.
+// And never a company id or VAT number that differs from the one the entity has, however
+// the mention was attached.
 export const identifiersFor = (
-  entityId: string | undefined,
+  entity: Entity | undefined,
   everyEntity: readonly Entity[],
   identifiers: readonly StoredIdentifier[],
 ): readonly StoredIdentifier[] => {
-  const others = everyEntity.filter(({ id }) => id !== entityId);
+  const others = everyEntity.filter(({ id }) => id !== entity?.id);
   return identifiers.filter(
     (identifier) =>
-      !isGlobalIdentifier(identifier) || !others.some(carries(identifierIdentity(identifier))),
+      !haveConflictingIdentifiers(entity?.identifiers ?? [], [identifier]) &&
+      !(isGlobalIdentifier(identifier) && others.some(carries(identifierIdentity(identifier)))),
   );
 };
+
+// The entities a mention ties together without being one of them for sure: those its
+// global identifiers designate when they are several, and the one of another kind that
+// carries an identifier of the mention. Takes the entities of every kind.
+export const bridgedBy = (
+  everyEntity: readonly Entity[],
+  { identifiers }: NamedMention,
+): readonly Entity[] => designatedBy(everyEntity, identifiers);
 
 // The aliases of an entity once it also goes by these names: a name that normalizes like
 // the canonical name or like an alias already there adds nothing.

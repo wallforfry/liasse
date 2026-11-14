@@ -70,7 +70,7 @@ describe('resolveEntity by similarity', () => {
     });
 
     it('attaches to the closest entity, not to the oldest', async () => {
-      await seedEntity(database.db, { name: 'Older and far', embedding: atSimilarity(0.5, 1) });
+      await seedEntity(database.db, { name: 'Older and far', embedding: atSimilarity(0.85, 1) });
       const closest = await seedEntity(database.db, {
         name: 'Younger and close',
         embedding: atSimilarity(0.95, 2),
