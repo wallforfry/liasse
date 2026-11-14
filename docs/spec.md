@@ -329,7 +329,8 @@ Two modes coexist: hybrid natural-language search over chunks, and structured qu
 
 **Hybrid search (`search`)**
 
-- Full text: Postgres `tsvector` with a language-aware configuration + `unaccent` (BM25 through ParadeDB `pg_search` as an option, if installed). Each row is indexed in the language of its document (`core.language`, falling back to an unstemmed configuration); a query is read in every language present in the index, so it needs no language of its own.
+- Full text: Postgres `tsvector` with a language-aware configuration + `unaccent`, ranked by `ts_rank_cd`, or by BM25 (below). Each row is indexed in the language of its document (`core.language`, falling back to an unstemmed configuration); a query is read in every language present in the index, so it needs no language of its own.
+- BM25 (optional): when ParadeDB `pg_search` 0.26 or later is created in the database (`CREATE EXTENSION pg_search`, the operator's choice), the server creates a BM25 index on `chunks` at startup (and builds it again when pg_search is upgraded or when the functions or text search configurations its lexemes come from changed) and ranks the full-text side with BM25 instead of `ts_rank_cd`. Which chunks match does not change: `tsv @@ query` still decides, BM25 only orders them. The index reads the lexemes of `liasse_tsvector` (unaccented and stemmed in the language of the row, stop words removed, one per occurrence), split on whitespace, and the query is reduced to its lexemes in every language in use, passed as exact terms; nothing of the user's text reaches pg_search as query syntax. A query that can match a chunk without any of its terms (`-gas`) is ranked by `ts_rank_cd`. Without the extension, or with an older one (a startup notice says so), nothing changes. Recall over facts keeps `ts_rank_cd`. Once the index exists, pg_search logs a planner WARNING for queries on `chunks` it cannot run itself; the BM25 query turns them off in its own transaction, but the other queries of a search (the languages in use, the vector side) still log them unless the operator sets `paradedb.planner_warnings = off` on the server or the database. Liasse sends no pg_search setting on its connections, which a pooler such as PgBouncer would refuse.
 - Vector: `pgvector`, HNSW index, query embedding.
 - Fusion: Reciprocal Rank Fusion (k = 60), then grouping by document (best chunk + at most 2 snippets).
 - Combinable filters: type (aliases resolved), entity, subject, date range, status.
@@ -425,7 +426,7 @@ A single Node binary, configured through environment variables, shipped as a mul
 | --- | --- | --- |
 | `HOST` / `PORT` | `127.0.0.1` / `8080` | Address the server listens on |
 | `PUBLIC_URL` | `http://HOST:PORT` | Origin clients reach the server at; signed file URLs start with it, never with the `Host` of a request |
-| `DATABASE_URL` | — | Postgres 16+ with pgvector 0.8+ |
+| `DATABASE_URL` | — | Postgres 16+ with pgvector 0.8+; ParadeDB `pg_search` 0.26+ optional, for BM25 |
 | `STORAGE_DRIVER` | `fs` | `fs` or `s3` |
 | `STORAGE_PATH` / `S3_*` | `/data/files` | File location |
 | `S3_REQUEST_TIMEOUT` / `S3_MIN_UPLOAD_RATE` | `30s` / `65536` | Deadline of one S3 request; an upload gets it plus its size at this rate (bytes per second) |
