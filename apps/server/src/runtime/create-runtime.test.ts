@@ -8,7 +8,7 @@ import { documents, jobs } from '@liasse/core/db';
 import { StartupError } from '@liasse/core/domain';
 import { defineJobKind, enqueue, handle } from '@liasse/core/jobs';
 import { createGate, SYNTHETIC_ENV, syntheticPdf, waitUntil } from '@liasse/core/testing';
-import { eq } from 'drizzle-orm';
+import { eq, ne } from 'drizzle-orm';
 import { describe, expect, it } from 'vitest';
 import { z } from 'zod';
 import { createLogger } from '../log.ts';
@@ -49,10 +49,7 @@ describe('createRuntime', () => {
         `Liasse is listening on http://127.0.0.1:${String(runtime.port)}`,
       ]),
     );
-    expect(harness.lines()).toContain(
-      'Notice: consolidation is not part of this build. Listing and applying consolidation ' +
-        'changes answer 501.',
-    );
+    expect(harness.lines().some((line) => line.includes('consolidation'))).toBe(false);
     expect(harness.lines().some((line) => line.includes('document processing'))).toBe(false);
   });
 
@@ -68,8 +65,13 @@ describe('createRuntime', () => {
     await harness.database().db.delete(jobs);
 
     await start();
+    // The nightly run of consolidation is queued at every start too.
     const removals = () =>
-      harness.database().db.select({ kind: jobs.kind, status: jobs.status }).from(jobs);
+      harness
+        .database()
+        .db.select({ kind: jobs.kind, status: jobs.status })
+        .from(jobs)
+        .where(ne(jobs.kind, 'consolidate'));
     await waitUntil(async () => (await removals()).some(({ status }) => status === 'succeeded'));
     expect(await removals()).toEqual([{ kind: 'delete_file', status: 'succeeded' }]);
     const [tombstone] = await harness
@@ -197,7 +199,11 @@ describe('createRuntime', () => {
     expect(running).toHaveLength(1);
     gate.open();
     await waitUntil(async () => {
-      const rows = await harness.database().db.select({ status: jobs.status }).from(jobs);
+      const rows = await harness
+        .database()
+        .db.select({ status: jobs.status })
+        .from(jobs)
+        .where(ne(jobs.kind, 'consolidate'));
       return rows.every(({ status }) => status === 'succeeded');
     });
     expect(peak).toBe(1);

@@ -1,5 +1,13 @@
 import type { ApiFeatures } from '@liasse/core/api';
 import type { Config } from '@liasse/core/config';
+import {
+  applyChange,
+  CONSOLIDATION_CONCURRENCY,
+  createConsolidationHandlers,
+  listChanges,
+  queueBatchRunIfDue,
+  scheduleNightlyRun,
+} from '@liasse/core/consolidation';
 import type { Database } from '@liasse/core/db';
 import { deriveIdentifierKey, findSensitiveIdentifiers } from '@liasse/core/entities';
 import {
@@ -69,12 +77,13 @@ const pipelineDepsOf = (
       maxFileSize,
       maxVisionPages,
     },
-    ...(hindsight.enabled
-      ? {
-          afterIndexed: (id: string) => hindsight.enqueueSync(db, id),
-          onPrivacyChanged: (tx, id) => hindsight.enqueueSync(tx, id),
-        }
-      : {}),
+    // Consolidation counts the documents settled since its last run, and runs again
+    // after every batch of them.
+    afterIndexed: async (id: string) => {
+      if (hindsight.enabled) await hindsight.enqueueSync(db, id);
+      await queueBatchRunIfDue(db);
+    },
+    ...(hindsight.enabled ? { onPrivacyChanged: (tx, id) => hindsight.enqueueSync(tx, id) } : {}),
   };
 };
 
@@ -83,6 +92,8 @@ const featuresOf = (deps: PipelineDeps, hindsight: HindsightIntegration): ApiFea
   listSubjects: (options) => listSubjects({ db: deps.db }, options),
   upcoming: ({ current_only: currentOnly, ...window }) =>
     upcoming({ db: deps.db }, { ...window, currentOnly }),
+  listChanges: (options) => listChanges({ db: deps.db }, options),
+  applyChange: (id, decision) => applyChange({ db: deps.db }, id, decision),
   ...(hindsight.enabled
     ? { onDocumentDeleted: (tx, { id }) => hindsight.enqueueSync(tx, id) }
     : {}),
@@ -90,9 +101,7 @@ const featuresOf = (deps: PipelineDeps, hindsight: HindsightIntegration): ApiFea
 
 /**
  * The one module that binds the features to the runtime. A feature that merges adds
- * its lines here and nowhere else. The pipeline, link detection, the knowledge reads and
- * Hindsight are bound; consolidation (`listChanges` and `applyChange` in `features`) is
- * the one left, and the notice below goes with it.
+ * its lines here and nowhere else.
  */
 export const bindFeatures: Bind = (parts) => {
   const { config, db, storage } = parts;
@@ -107,21 +116,24 @@ export const bindFeatures: Bind = (parts) => {
       createDeleteFileHandler({ db, storage }),
       ...createPipelineHandlers(pipeline),
       ...createKnowledgeHandlers({ db, textModel: parts.textModel }),
+      ...createConsolidationHandlers({
+        db,
+        textModel: parts.textModel,
+        autoApply: config.pipeline.autoApply,
+        schemaLanguage: config.pipeline.schemaLanguage,
+      }),
       ...hindsight.handlers,
     ],
-    perKindConcurrency: hindsight.perKindConcurrency,
+    perKindConcurrency: { ...hindsight.perKindConcurrency, ...CONSOLIDATION_CONCURRENCY },
     features: featuresOf(pipeline, hindsight),
     startupTasks: [
       { name: 'queueing the file removals still owed', run: () => requeueFileDeletions({ db }) },
       { name: 'failing the documents no job will process', run: () => failAbandonedDocuments(db) },
+      { name: 'queueing the nightly consolidation', run: () => scheduleNightlyRun(db) },
       ...(hindsight.enabled
         ? [{ name: 'queueing the Hindsight forgets still owed', run: hindsight.requeueForgets }]
         : []),
     ],
-    notices: [
-      'Notice: consolidation is not part of this build. Listing and applying consolidation ' +
-        'changes answer 501.',
-      ...(hindsightNotice === undefined ? [] : [hindsightNotice]),
-    ],
+    notices: hindsightNotice === undefined ? [] : [hindsightNotice],
   };
 };
