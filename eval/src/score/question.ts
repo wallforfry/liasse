@@ -17,6 +17,15 @@ export interface AnswerScore {
 
 const list = (ids: readonly string[]): string => ids.join(', ');
 
+// How many unwanted documents a reason names: an answer that cites the whole corpus gets
+// one readable line, not fifty ids.
+const LISTED_DOCUMENTS = 5;
+
+const cappedList = (ids: readonly string[]): string =>
+  ids.length <= LISTED_DOCUMENTS
+    ? list(ids)
+    : `${list(ids.slice(0, LISTED_DOCUMENTS))} and ${String(ids.length - LISTED_DOCUMENTS)} more`;
+
 const documentReasons = (
   { required, any_of, optional, forbidden, exhaustive }: AnswerExpectation['documents'],
   cited: readonly string[],
@@ -31,10 +40,10 @@ const documentReasons = (
   return [
     ...(missing.length === 0 ? [] : [`does not cite ${list(missing)}`]),
     ...unmetGroups.map((group) => `cites none of ${list(group)}`),
-    ...(unwanted.length === 0 ? [] : [`cites ${list(unwanted)}, which must stay out`]),
+    ...(unwanted.length === 0 ? [] : [`cites ${cappedList(unwanted)}, which must stay out`]),
     ...(unexpected.length === 0
       ? []
-      : [`cites ${list(unexpected)}, which the question does not call for`]),
+      : [`cites ${cappedList(unexpected)}, which the question does not call for`]),
   ];
 };
 
