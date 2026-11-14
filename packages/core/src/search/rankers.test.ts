@@ -9,6 +9,7 @@ import { createTestDatabase, type TestDatabase } from '../testing/test-database.
 import { CORPUS, type CorpusDocument, seedCorpus, type SeededCorpus } from './corpus.fixture.ts';
 import { documentFilter } from './filters.ts';
 import type { SearchFilters } from './input.ts';
+import { parseSearchQuery } from './tsquery.ts';
 import {
   fullTextCandidates,
   rankByFullText,
@@ -45,21 +46,26 @@ describe('chunk rankers', () => {
     await database.dispose();
   });
 
-  const request = (query: string, filters: SearchFilters = {}, limit = 100): RankRequest => ({
+  const request = async (
+    query: string,
+    filters: SearchFilters = {},
+    limit = 100,
+  ): Promise<RankRequest> => ({
     query,
+    tsquery: (await parseSearchQuery(database.db, query)) ?? '',
     filter: documentFilter(filters, true),
     limit,
   });
 
   const fullText = async (query: string, filters?: SearchFilters, limit?: number) =>
-    (await rankByFullText(database.db, request(query, filters, limit))).map((chunk) =>
+    (await rankByFullText(database.db, await request(query, filters, limit))).map((chunk) =>
       corpus.keyOf(chunk.documentId),
     );
 
   const byVector = async (query: string, filters?: SearchFilters, limit?: number) =>
-    (await rankByVector(createFakeEmbedder())(database.db, request(query, filters, limit))).map(
-      (chunk) => corpus.keyOf(chunk.documentId),
-    );
+    (
+      await rankByVector(createFakeEmbedder())(database.db, await request(query, filters, limit))
+    ).map((chunk) => corpus.keyOf(chunk.documentId));
 
   describe('rankByFullText', () => {
     it.each([
@@ -134,7 +140,7 @@ describe('chunk rankers', () => {
           return createFakeEmbedder().embed(texts, kind);
         },
       };
-      await rankByVector(embedder)(database.db, request('salary'));
+      await rankByVector(embedder)(database.db, await request('salary'));
       expect(calls).toEqual([{ texts: ['salary'], kind: 'query' }]);
     });
 
@@ -167,7 +173,7 @@ describe('chunk rankers', () => {
         ...createFakeEmbedder(),
         embed: () => Promise.reject(new Error('synthetic embedder outage')),
       };
-      await expect(rankByVector(embedder)(database.db, request('salary'))).rejects.toThrow(
+      await expect(rankByVector(embedder)(database.db, await request('salary'))).rejects.toThrow(
         'synthetic embedder outage',
       );
     });
@@ -193,7 +199,7 @@ describe('chunk rankers', () => {
     // With selective document filters the planner rightly starts from `documents` instead.
     it('serves full-text candidates from the GIN index', async () => {
       const plan = await planOf(
-        fullTextCandidates({ ...request('facture'), filter: documentFilter({}, false) }),
+        fullTextCandidates({ ...(await request('facture')), filter: documentFilter({}, false) }),
       );
       expect(plan).toContain('Bitmap Index Scan on chunks_tsv_idx');
     });
@@ -202,7 +208,9 @@ describe('chunk rankers', () => {
       'serves vector candidates from the HNSW index, filters %j',
       async (filters) => {
         const [embedding] = await createFakeEmbedder().embed(['facture'], 'query');
-        const plan = await planOf(vectorCandidates(embedding ?? [], request('facture', filters)));
+        const plan = await planOf(
+          vectorCandidates(embedding ?? [], await request('facture', filters)),
+        );
         expect(plan).toContain('Index Scan using chunks_embedding_idx');
       },
     );
@@ -254,6 +262,7 @@ describe('the vector ranker on an HNSW index', () => {
 
   const request = (filters: SearchFilters, limit: number): RankRequest => ({
     query: QUERY,
+    tsquery: '',
     filter: documentFilter(filters, true),
     limit,
   });

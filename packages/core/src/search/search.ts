@@ -10,6 +10,7 @@ import { type DocumentGroup, groupByDocument } from './grouping.ts';
 import { type SearchInput, searchInputSchema } from './input.ts';
 import { type ChunkRanker, rankByFullText, rankByVector, type RankedChunk } from './rankers.ts';
 import { readSnippets, type Snippet } from './snippets.ts';
+import { parseSearchQuery } from './tsquery.ts';
 
 // How many chunks each ranker contributes to the fusion.
 export const CANDIDATES_PER_RANKER = 100;
@@ -47,7 +48,7 @@ const readDocuments = async (db: Database, ids: readonly string[]) => {
 const toHits = async (
   db: Database,
   groups: readonly DocumentGroup[],
-  query: string,
+  tsquery: string,
 ): Promise<readonly SearchHit[]> => {
   if (groups.length === 0) return [];
   const [documentsById, snippetsByChunk] = await Promise.all([
@@ -58,7 +59,7 @@ const toHits = async (
     readSnippets(
       db,
       groups.flatMap((group) => group.chunkIds),
-      query,
+      tsquery,
     ),
   ]);
   // A document or a chunk deleted since the candidates were read is left out.
@@ -84,8 +85,11 @@ export const search = async (
   // Postgres text cannot hold a NUL character.
   const text = query.replaceAll('\u0000', ' ').trim();
   if (text === '') return [];
+  const tsquery = await parseSearchQuery(db, text);
+  if (tsquery === undefined) return [];
   const request = {
     query: text,
+    tsquery,
     filter: documentFilter(filters, includePrivate),
     limit: candidatesPerRanker,
   };
@@ -100,5 +104,5 @@ export const search = async (
     [...candidates.values()].map((chunk) => ({ ...chunk, score: scores.get(chunk.chunkId) ?? 0 })),
     limit,
   );
-  return toHits(db, groups, text);
+  return toHits(db, groups, tsquery);
 };

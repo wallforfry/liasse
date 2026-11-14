@@ -30,5 +30,5 @@ export {
 } from './input.ts';
 export type { ChunkRanker, RankedChunk, RankRequest } from './rankers.ts';
 export { CANDIDATES_PER_RANKER, search, type SearchDeps, type SearchHit } from './search.ts';
-export { HIGHLIGHT_MARK, MAX_SNIPPET_LENGTH, type Snippet } from './snippets.ts';
+export { type Highlight, MAX_SNIPPET_LENGTH, type Snippet } from './snippets.ts';
 export { estimateTokens } from './token-estimate.ts';

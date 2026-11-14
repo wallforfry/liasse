@@ -14,8 +14,9 @@ import {
   SUBJECTS,
 } from './corpus.fixture.ts';
 import { type SearchFilters, type SearchInput, searchInputSchema } from './input.ts';
+import type { RankRequest } from './rankers.ts';
 import { search, type SearchDeps, type SearchHit } from './search.ts';
-import { MAX_SNIPPET_LENGTH } from './snippets.ts';
+import { MAX_SNIPPET_LENGTH, type Snippet } from './snippets.ts';
 
 const keysOfType = (...types: readonly string[]): readonly string[] =>
   CORPUS.filter((document) => types.includes(document.type))
@@ -31,6 +32,9 @@ const extra = (
 ): CorpusDocument => ({ key, title: key, type: 'warranty', language: null, pages, ...overrides });
 
 const remoteEmbedder = createFakeEmbedder({ isLocal: false });
+
+const highlighted = (snippet: Snippet | undefined): readonly string[] =>
+  snippet?.highlights.map(({ start, end }) => snippet.text.slice(start, end)) ?? [];
 
 describe('search', () => {
   let database: TestDatabase;
@@ -207,6 +211,23 @@ describe('search', () => {
       expect(await find('sigma', input)).toEqual(hits);
     });
 
+    it('parses the query once and hands the result to the rankers', async () => {
+      const requests: RankRequest[] = [];
+      await search(
+        {
+          ...deps,
+          fullText: (_, request) => {
+            requests.push(request);
+            return Promise.resolve([]);
+          },
+        },
+        { query: 'factures impayées' },
+      );
+      expect(requests.map((request) => request.query)).toEqual(['factures impayées']);
+      expect(requests[0]?.tsquery).toContain("'factur' & 'impaye'");
+      expect(requests[0]?.tsquery).toContain("'factures' & 'impayees'");
+    });
+
     it('goes through the full-text ranker it is given', async () => {
       const [first] = await search(
         { ...deps, fullText: () => Promise.resolve([]) },
@@ -237,7 +258,8 @@ describe('search', () => {
       const [first] = await find('Brisa');
       expect(first?.snippets).toEqual([
         {
-          text: 'Warranty certificate reference ZX4101. Appliance model **Brisa**, covered for 24 months from the purchase',
+          text: 'Warranty certificate reference ZX4101. Appliance model Brisa, covered for 24 months from the purchase',
+          highlights: [{ start: 55, end: 60 }],
           pageFrom: 1,
           pageTo: 1,
         },
@@ -246,7 +268,9 @@ describe('search', () => {
 
     it('highlights the words of the query in the original, accented text', async () => {
       const [first] = await find('electricite septembre');
-      expect(first?.snippets[0]?.text).toContain('Facture d’**électricité** de **septembre** 2026');
+      const [snippet] = first?.snippets ?? [];
+      expect(snippet?.text).toContain('Facture d’électricité de septembre 2026');
+      expect(highlighted(snippet)).toEqual(['électricité', 'septembre']);
     });
 
     it('bounds the length of a snippet', async () => {
@@ -255,7 +279,8 @@ describe('search', () => {
       const [first] = await find('zenith clause');
       const [snippet] = first?.snippets ?? [];
       expect(first && corpus.keyOf(first.id)).toBe('long-page');
-      expect(snippet?.text).toContain('The **zenith** **clause** applies.');
+      expect(snippet?.text).toContain('The zenith clause applies.');
+      expect(highlighted(snippet)).toEqual(['zenith', 'clause']);
       expect(snippet?.text.length).toBeLessThan(400);
 
       const longWords = Array.from(
@@ -267,7 +292,22 @@ describe('search', () => {
       );
       const [wordy] = await find('zenithword');
       expect(wordy && corpus.keyOf(wordy.id)).toBe('long-words');
-      expect(wordy?.snippets[0]?.text).toHaveLength(MAX_SNIPPET_LENGTH);
+      const [cut] = wordy?.snippets ?? [];
+      expect(cut?.text).toHaveLength(MAX_SNIPPET_LENGTH);
+      expect(
+        cut?.highlights.every(({ start, end }) => start < end && end <= MAX_SNIPPET_LENGTH),
+      ).toBe(true);
+    });
+
+    it('returns the words of the document as they are and highlights by offsets, not by marks', async () => {
+      await corpus.add(
+        extra('marked', ['Notice: **bold** \u{E000}zenithmark\u{E001} & 5 > 3 ends.']),
+      );
+      const [first] = await find('zenithmark');
+      const [snippet] = first?.snippets ?? [];
+      expect(first && corpus.keyOf(first.id)).toBe('marked');
+      expect(snippet?.text).toBe('Notice: **bold** zenithmark & 5 > 3 ends');
+      expect(highlighted(snippet)).toEqual(['zenithmark']);
     });
   });
 
@@ -284,10 +324,17 @@ describe('search', () => {
           issuer: { entity_id: ENTITIES.volta },
           recipient: { entity_id: ENTITIES.resident },
         },
-        snippets: [{ text: first?.snippets[0]?.text, pageFrom: 1, pageTo: 1 }],
+        snippets: [
+          {
+            text: first?.snippets[0]?.text,
+            highlights: first?.snippets[0]?.highlights,
+            pageFrom: 1,
+            pageTo: 1,
+          },
+        ],
         score: first?.score,
       });
-      expect(first?.snippets[0]?.text).toContain('**Facture**');
+      expect(highlighted(first?.snippets[0])).toEqual(['Facture', 'septembre']);
       expect(first?.score).toBeGreaterThan(0);
     });
 
@@ -327,6 +374,19 @@ describe('search', () => {
         embed: () => Promise.reject(new Error('the embedder must not be called')),
       };
       expect(await search({ db: database.db, embedder }, { query: ' \n\u0000 ' })).toEqual([]);
+    });
+
+    it('returns nothing from an index without chunks, without calling the embedder', async () => {
+      const empty = await createTestDatabase();
+      try {
+        const embedder: Embedder = {
+          ...createFakeEmbedder(),
+          embed: () => Promise.reject(new Error('the embedder must not be called')),
+        };
+        expect(await search({ db: empty.db, embedder }, { query: 'facture' })).toEqual([]);
+      } finally {
+        await empty.dispose();
+      }
     });
 
     it('fails when the query cannot be embedded', async () => {

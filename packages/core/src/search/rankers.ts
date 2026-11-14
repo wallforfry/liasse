@@ -6,6 +6,8 @@ import type { Embedder } from '../models/ports.ts';
 
 export interface RankRequest {
   readonly query: string;
+  // `query` as parsed by `parseSearchQuery`.
+  readonly tsquery: string;
   readonly filter: SQL;
   readonly limit: number;
 }
@@ -24,17 +26,12 @@ const rankedRows = z.array(z.object({ chunk_id: z.string(), document_id: z.strin
 const toRankedChunks = (rows: unknown): readonly RankedChunk[] =>
   rankedRows.parse(rows).map((row) => ({ chunkId: row.chunk_id, documentId: row.document_id }));
 
-// The query as read in every language the chunks are written in: see `liasse_tsquery`.
-export const searchTsquery = (query: string): SQL =>
-  sql`liasse_tsquery(ARRAY(SELECT DISTINCT ${chunks.language} FROM ${chunks}), ${query})`;
-
-export const fullTextCandidates = ({ query, filter, limit }: RankRequest): SQL => sql`
-  WITH parsed AS MATERIALIZED (SELECT ${searchTsquery(query)} AS tsquery)
+export const fullTextCandidates = ({ tsquery, filter, limit }: RankRequest): SQL => sql`
   SELECT ${chunks.id} AS chunk_id, ${chunks.documentId} AS document_id
   FROM ${chunks}
   JOIN ${documents} ON ${documents.id} = ${chunks.documentId}
-  WHERE ${chunks.tsv} @@ (SELECT tsquery FROM parsed) AND ${filter}
-  ORDER BY ts_rank_cd(${chunks.tsv}, (SELECT tsquery FROM parsed)) DESC, ${chunks.id}
+  WHERE ${chunks.tsv} @@ ${tsquery}::tsquery AND ${filter}
+  ORDER BY ts_rank_cd(${chunks.tsv}, ${tsquery}::tsquery) DESC, ${chunks.id}
   LIMIT ${limit}
 `;
 
