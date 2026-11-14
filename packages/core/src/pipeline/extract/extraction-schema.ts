@@ -3,8 +3,10 @@ import { ENTITY_IDENTIFIER_TYPES } from '../../domain/enums.ts';
 import {
   MAX_ENTITY_CONTEXT_LENGTH,
   MAX_ENTITY_NAME_LENGTH,
+  MAX_FACT_LENGTH,
   MAX_IDENTIFIER_VALUE_LENGTH,
   MAX_IDENTIFIERS_PER_MENTION,
+  MAX_SUBJECT_NAME_LENGTH,
 } from '../../domain/limits.ts';
 import { entityKindSchema, subjectKindSchema } from '../../domain/schemas.ts';
 import { isoDateSchema } from '../../domain/values.ts';
@@ -17,8 +19,6 @@ import { coreValueSchema, valueSchemaForFields } from '../../registry/values.ts'
 export const MAX_QUOTE_LENGTH = 300;
 export const MAX_TITLE_LENGTH = 200;
 export const MAX_SUMMARY_LENGTH = 600;
-export const MAX_FACT_LENGTH = 500;
-export const MAX_LABEL_LENGTH = 200;
 
 /** What an element the model got wrong parses to, instead of failing the whole output. */
 export const REJECTED: unique symbol = Symbol('rejected');
@@ -63,14 +63,14 @@ export const factSchema = z.object({
   valid_from: isoDateSchema.optional(),
   valid_to: isoDateSchema.optional(),
   entities: z.array(z.string().trim().min(1).max(MAX_ENTITY_NAME_LENGTH)).optional(),
-  subjects: z.array(z.string().trim().min(1).max(MAX_LABEL_LENGTH)).optional(),
+  subjects: z.array(z.string().trim().min(1).max(MAX_SUBJECT_NAME_LENGTH)).optional(),
   ...evidence,
 });
 export type ExtractedFact = z.output<typeof factSchema>;
 
 export const subjectCandidateSchema = z.object({
   kind: subjectKindSchema,
-  name: z.string().trim().min(1).max(MAX_LABEL_LENGTH),
+  name: z.string().trim().min(1).max(MAX_SUBJECT_NAME_LENGTH),
   identifier: z.string().trim().min(1).max(MAX_IDENTIFIER_VALUE_LENGTH).optional(),
 });
 export type SubjectCandidate = z.output<typeof subjectCandidateSchema>;

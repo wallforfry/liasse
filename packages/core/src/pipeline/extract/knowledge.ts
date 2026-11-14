@@ -1,3 +1,4 @@
+import { MAX_FACTS_PER_DOCUMENT, MAX_SUBJECTS_PER_DOCUMENT } from '../../domain/limits.ts';
 import { keyDateSchema } from '../../domain/values.ts';
 import { KEY_DATES_FIELD } from '../../registry/core-fields.ts';
 import { ownValue } from '../../registry/own.ts';
@@ -8,7 +9,6 @@ import type {
   KnowledgeSubjectCandidate,
   KnowledgeTrace,
 } from '../deps.ts';
-import { MAX_FACTS } from '../prompts/extraction.ts';
 import type { ExtractionTrace } from './assemble.ts';
 import { type EntityResolutions, mentionKey } from './entities.ts';
 import {
@@ -19,8 +19,6 @@ import {
 } from './extraction-schema.ts';
 import { factSupport, type SupportedFact } from './support.ts';
 import { type Evidence, isListReading, type Readings, type VerifiedValue } from './read-output.ts';
-
-export const MAX_SUBJECT_CANDIDATES = 10;
 
 export type ReadFact = SupportedFact<ExtractedFact>;
 
@@ -49,7 +47,7 @@ export const readFacts = (
       const supported = page === undefined ? undefined : factSupport(fact, language);
       return supported === undefined || page === undefined ? [] : [{ ...supported, page }];
     })
-    .slice(0, MAX_FACTS);
+    .slice(0, MAX_FACTS_PER_DOCUMENT);
   return { facts, rejected: returned.length - facts.length };
 };
 
@@ -90,7 +88,7 @@ const keyDatesOf = (core: Readings, trace: ExtractionTrace): readonly KnowledgeK
 const subjectsOf = (output: ExtractionOutput): readonly KnowledgeSubjectCandidate[] =>
   (output.subjects ?? [])
     .flatMap((raw) => subjectCandidateSchema.safeParse(raw).data ?? [])
-    .slice(0, MAX_SUBJECT_CANDIDATES)
+    .slice(0, MAX_SUBJECTS_PER_DOCUMENT)
     .map(({ kind, name, identifier }) => ({
       kind,
       name,
