@@ -1,6 +1,8 @@
 import { z } from 'zod';
 import type { JsonObject } from '../db/columns.ts';
 import { changeKindSchema, keyDateKindSchema, subjectKindSchema } from '../domain/schemas.ts';
+import type { DeletedDocument } from '../ingest/delete-document.ts';
+import type { Transaction } from '../ingest/existing-document.ts';
 import { type ApiContext } from './context.ts';
 import { ApiError, documentNotFound, notImplemented } from './errors.ts';
 
@@ -65,6 +67,11 @@ export interface ApiFeatures {
   readonly upcoming?: (options: UpcomingOptions) => Promise<JsonObject>;
   readonly listChanges?: (options: ListChangesOptions) => Promise<JsonObject>;
   readonly applyChange?: (id: string, decision: ChangeDecision) => Promise<JsonObject | undefined>;
+  /**
+   * Runs in the transaction of a deletion, for what must follow it outside Liasse: the
+   * Hindsight sync queues its forget there, so it commits with the tombstone.
+   */
+  readonly onDocumentDeleted?: (tx: Transaction, document: DeletedDocument) => Promise<void>;
 }
 
 const NOT_FOUND_CODE = 'document_not_found';

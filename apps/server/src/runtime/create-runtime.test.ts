@@ -1,5 +1,6 @@
 import { once } from 'node:events';
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { createServer as createHttpServer } from 'node:http';
 import { createServer } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -140,6 +141,57 @@ describe('createRuntime', () => {
     await waitUntil(async () => (await database.db.$count(documents)) === 1);
     const [row] = await database.db.select().from(documents);
     expect(row).toMatchObject({ source: 'watch', originalName: 'dropped.pdf' });
+  });
+
+  it('binds Hindsight once HINDSIGHT_URL is set: a deletion forgets what the bank holds', async () => {
+    const calls: string[] = [];
+    const hindsight = createHttpServer((request, response) => {
+      calls.push(`${request.method ?? ''} ${request.url ?? ''}`);
+      request.resume();
+      response.writeHead(200, { 'content-type': 'application/json' });
+      response.end(
+        JSON.stringify({ success: true, message: '', document_id: '', memory_units_deleted: 1 }),
+      );
+    });
+    hindsight.listen(0, '127.0.0.1');
+    await once(hindsight, 'listening');
+    const address = hindsight.address();
+    if (address === null || typeof address === 'string') throw new Error('no port');
+    try {
+      const runtime = await start({ HINDSIGHT_URL: `http://127.0.0.1:${String(address.port)}` });
+      expect(lines.some((line) => line.includes('are sent to Hindsight at 127.0.0.1'))).toBe(true);
+      const form = new FormData();
+      form.append('file', new File([syntheticPdf('sent to the bank')], 'sent.pdf'));
+      const uploaded = await call(runtime, '/documents', { method: 'POST', body: form });
+      const { id } = z.object({ id: z.string() }).parse(await uploaded.json());
+      // As if its facts had been retained: the bank may hold them.
+      await database.db.update(documents).set({ hindsightHeldSince: new Date() });
+
+      expect((await call(runtime, `/documents/${id}`, { method: 'DELETE' })).status).toBe(204);
+      await waitUntil(() => calls.length === 1);
+      expect(calls).toEqual([`DELETE /v1/default/banks/documents/documents/${id}`]);
+      await waitUntil(async () => {
+        const [row] = await database.db
+          .select({ heldSince: documents.hindsightHeldSince })
+          .from(documents);
+        return row?.heldSince === null;
+      });
+    } finally {
+      hindsight.close();
+      await once(hindsight, 'close');
+    }
+  });
+
+  it('queues no Hindsight sync without HINDSIGHT_URL', async () => {
+    const runtime = await start();
+    const form = new FormData();
+    form.append('file', new File([syntheticPdf('kept local')], 'local.pdf'));
+    const uploaded = await call(runtime, '/documents', { method: 'POST', body: form });
+    const { id } = z.object({ id: z.string() }).parse(await uploaded.json());
+    await database.db.update(documents).set({ hindsightHeldSince: new Date() });
+    expect((await call(runtime, `/documents/${id}`, { method: 'DELETE' })).status).toBe(204);
+    const kinds = await database.db.select({ kind: jobs.kind }).from(jobs);
+    expect(kinds.map(({ kind }) => kind)).not.toContain('hindsight_sync');
   });
 
   it('binds handlers, their concurrency, features and notices through one seam', async () => {
