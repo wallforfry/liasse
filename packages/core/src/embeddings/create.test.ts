@@ -5,9 +5,19 @@ import { EMBEDDING_PROVIDERS } from '../domain/enums.ts';
 import { SYNTHETIC_ENV } from '../testing/synthetic-env.ts';
 import { createEmbedder } from './create.ts';
 import { DEFAULT_LOCAL_EMBEDDING_MODEL } from './local.ts';
+import { startModelProcess } from './model-process.ts';
 
 const embeddingConfig = (env: Readonly<Record<string, string>> = {}) =>
   loadConfig({ ...SYNTHETIC_ENV, ...env }).embedding;
+
+const isRunning = (pid: number): boolean => {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch {
+    return false;
+  }
+};
 
 const REMOTE = {
   EMBEDDING_MODEL: 'synthetic-embedding-model',
@@ -26,6 +36,26 @@ describe('createEmbedder', () => {
     });
     expect(embedder.countTokens).toBeTypeOf('function');
     await expect(close()).resolves.toBeUndefined();
+  });
+
+  it('ends the model process of the local embedder on close', async () => {
+    const { embedder, close } = await createEmbedder(embeddingConfig(), {
+      local: {
+        loadModel: () =>
+          Promise.resolve(
+            startModelProcess({
+              entry: new URL('./model-child.fixture.ts', import.meta.url),
+              args: [],
+              execArgv: ['--experimental-strip-types', '--disable-warning=ExperimentalWarning'],
+            }),
+          ),
+      },
+    });
+    // The stand-in model answers this text with the id of its process.
+    const [pid = Number.NaN] = (await embedder.countTokens?.(['pid'])) ?? [];
+    expect(isRunning(pid)).toBe(true);
+    await close();
+    expect(isRunning(pid)).toBe(false);
   });
 
   it('checks the dimension of the local model at creation', async () => {

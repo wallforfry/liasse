@@ -1,4 +1,4 @@
-export { type ConfiguredEmbedder, createEmbedder } from './create.ts';
+export { type ConfiguredEmbedder, createEmbedder, type CreateEmbedderOptions } from './create.ts';
 export {
   EmbeddingCacheDirError,
   EmbeddingModelDimensionError,

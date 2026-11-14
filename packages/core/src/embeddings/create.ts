@@ -4,12 +4,17 @@ import {
   createProviderEmbedder,
   type ProviderEmbedderOptions,
 } from '../models/providers/embedder.ts';
-import { createLocalEmbedder } from './local.ts';
+import { createLocalEmbedder, type LocalEmbedderOptions } from './local.ts';
 
 export interface ConfiguredEmbedder {
   readonly embedder: Embedder;
   // Releases what the embedder holds, such as the process of the local model.
   readonly close: () => Promise<void>;
+}
+
+export interface CreateEmbedderOptions extends ProviderEmbedderOptions {
+  // How the local embedder runs its model; the child process of the model by default.
+  readonly local?: Pick<LocalEmbedderOptions, 'loadModel' | 'idleMs' | 'requestTimeoutMs'>;
 }
 
 const unsupported = (config: never): never => {
@@ -20,11 +25,11 @@ const unsupported = (config: never): never => {
 // member of the enumeration does not compile until it has a branch here.
 export const createEmbedder = async (
   config: Config['embedding'],
-  options: ProviderEmbedderOptions = {},
+  { local, ...options }: CreateEmbedderOptions = {},
 ): Promise<ConfiguredEmbedder> => {
   switch (config.provider) {
     case 'local': {
-      const embedder = createLocalEmbedder(config);
+      const embedder = createLocalEmbedder({ ...config, ...local });
       return { embedder, close: embedder.close };
     }
     case 'openai':
