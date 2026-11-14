@@ -82,6 +82,7 @@ describe('htmlToText', () => {
 
   it('does not end a tag at a > inside a quoted attribute value', () => {
     expect(convert('<p title="a>S9">t')).toBe('t');
+    expect(convert('<p title = "a>S9">t')).toBe('t');
     expect(convert('<p title=\'a>S9\' class="b>c">t')).toBe('t');
     expect(convert('<a href="https://example.com/?a>b">link</a>')).toBe(
       'link (https://example.com/?a>b)',
