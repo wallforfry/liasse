@@ -31,7 +31,7 @@ export const runShutdown = async (
 
 export interface ShutdownTargets {
   readonly signals: {
-    readonly once: (signal: ShutdownSignal, listener: () => void) => unknown;
+    readonly on: (signal: ShutdownSignal, listener: () => void) => unknown;
   };
   /** Stops everything. Resolves to false when something could not be stopped cleanly. */
   readonly stop: () => Promise<boolean>;
@@ -39,24 +39,38 @@ export interface ShutdownTargets {
   readonly exit: (code: number) => void;
 }
 
+// Exit code of a shutdown cut short by a second signal, as of one that did not stop cleanly.
+const FORCED_EXIT_CODE = 1;
+
+/**
+ * The first SIGTERM or SIGINT stops everything, then exits with 0, or 1 when a step
+ * failed. Any second one, the same or the other, exits at once with 1: it is the way out
+ * of a shutdown that hangs.
+ */
 export const installShutdown = ({ signals, stop, exit }: ShutdownTargets): void => {
-  // Both signals share one shutdown: SIGINT arriving after SIGTERM must not stop twice.
-  // Listeners are registered once, so repeating a signal falls back to Node's default
-  // and ends the process at once, which is the way out of a shutdown that hangs.
   let started = false;
+  let exited = false;
+  const exitOnce = (code: number): void => {
+    if (exited) return;
+    exited = true;
+    exit(code);
+  };
   const shutdown = (): void => {
-    if (started) return;
+    if (started) {
+      exitOnce(FORCED_EXIT_CODE);
+      return;
+    }
     started = true;
     stop().then(
       (clean) => {
-        exit(clean ? 0 : 1);
+        exitOnce(clean ? 0 : 1);
       },
       () => {
-        exit(1);
+        exitOnce(1);
       },
     );
   };
   SHUTDOWN_SIGNALS.forEach((signal) => {
-    signals.once(signal, shutdown);
+    signals.on(signal, shutdown);
   });
 };

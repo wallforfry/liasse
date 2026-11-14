@@ -57,14 +57,28 @@ describe('installShutdown', () => {
     expect(events).toEqual(['stop', 'exit 0']);
   });
 
-  it('stops exactly once when signals repeat', async () => {
+  // The way out of a shutdown that hangs: any second termination signal, the same one
+  // or the other, ends the process at once without waiting for the stop.
+  it.each([
+    ['SIGTERM', 'SIGINT'],
+    ['SIGINT', 'SIGTERM'],
+    ['SIGTERM', 'SIGTERM'],
+    ['SIGINT', 'SIGINT'],
+  ])('forces the exit on %s then %s', (first, second) => {
+    const { signals, events } = setup();
+    signals.emit(first);
+    expect(events).toEqual(['stop']);
+    signals.emit(second);
+    expect(events).toEqual(['stop', 'exit 1']);
+  });
+
+  it('stops once, and exits once, whatever follows', async () => {
     const { signals, events, finish } = setup();
     signals.emit('SIGTERM');
     signals.emit('SIGINT');
-    signals.emit('SIGTERM');
-    await finish(true);
     signals.emit('SIGINT');
-    expect(events).toEqual(['stop', 'exit 0']);
+    await finish(true);
+    expect(events).toEqual(['stop', 'exit 1']);
   });
 
   it('exits with code 1 when something could not be stopped', async () => {
