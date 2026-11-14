@@ -57,6 +57,21 @@ export class HindsightSyncLockLostError extends Error {
   }
 }
 
+/**
+ * The forget went through, but a retain of the document whose sync lost its lock, or
+ * gave up waiting for an answer, may still reach Hindsight for `retainingMs`. The record
+ * that the bank may hold facts stays until then; the queue forgets again after it.
+ */
+export class HindsightRetainInFlightError extends Error {
+  override readonly name = 'HindsightRetainInFlightError';
+  readonly retainingMs: number;
+
+  constructor(retainingMs: number) {
+    super('A retain of the document may still reach Hindsight');
+    this.retainingMs = retainingMs;
+  }
+}
+
 export class HindsightUrlError extends StartupError {
   override readonly name = 'HindsightUrlError';
 

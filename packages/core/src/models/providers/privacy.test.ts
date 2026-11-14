@@ -3,7 +3,7 @@ import { loadConfig } from '../../config/load.ts';
 import { SYNTHETIC_ENV } from '../../testing/synthetic-env.ts';
 import type { HostResolver } from './locality.ts';
 import { describeModelPrivacy } from './privacy.ts';
-import { SYNTHETIC_API_KEY } from './wire-fixtures.ts';
+import { SYNTHETIC_API_KEY } from '../../testing/provider-wire.ts';
 
 // The DNS of the test: a Compose service on a private address and a name that does not
 // resolve; any other name is public.

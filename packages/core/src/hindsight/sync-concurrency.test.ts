@@ -13,10 +13,16 @@ import { createTestDatabase, type TestDatabase } from '../testing/test-database.
 import { createHindsightClient } from './client.ts';
 import { flagsNothing } from './detector.test-helper.ts';
 import { type SyncSession, withDocumentSyncLock } from './document-lock.ts';
-import { HindsightError, HindsightSyncBusyError, HindsightSyncLockLostError } from './errors.ts';
+import {
+  HindsightError,
+  HindsightRetainInFlightError,
+  HindsightSyncBusyError,
+  HindsightSyncLockLostError,
+} from './errors.ts';
 import { type HindsightStub, startHindsightStub, type StubOverride } from './stub.test-helper.ts';
 import { type HindsightSyncDeps, syncDocumentToHindsight } from './sync-document.ts';
 import { recordForgotten, recordRetained, recordRetainStarted } from './sync-state.ts';
+import { outlastRetains } from './sync-state.test-helper.ts';
 
 const OUTAGE = { status: 503, body: { detail: 'synthetic outage' } } as const;
 
@@ -205,13 +211,15 @@ describe('the Hindsight sync under concurrency', () => {
           ),
         );
       const before = await recordOf(id);
-      expect(await withoutLock((session) => recordRetainStarted(session, id))).toBe(false);
+      expect(await withoutLock((session) => recordRetainStarted(session, id, 60_000))).toBe(false);
       await withoutLock((session) => recordForgotten(session, id));
       expect(await recordOf(id)).toEqual(before);
       await withDocumentSyncLock(database.db, id, (session) => recordForgotten(session, id));
       expect(await recordOf(id)).toEqual({ mayHold: false, hashed: false });
 
-      await withDocumentSyncLock(database.db, id, (session) => recordRetainStarted(session, id));
+      await withDocumentSyncLock(database.db, id, (session) =>
+        recordRetainStarted(session, id, 60_000),
+      );
       await withoutLock((session) => recordRetained(session, id, 'a'.repeat(64)));
       expect(await recordOf(id)).toEqual({ mayHold: true, hashed: false });
       await withDocumentSyncLock(database.db, id, (session) =>
@@ -239,17 +247,81 @@ describe('the Hindsight sync under concurrency', () => {
       await received.opened;
       await breakLockConnection();
       await change(id);
-      // Hindsight does not hold the facts yet: it answers "Document not found".
-      expect(await actionOf(id)).toBe('forgotten');
-      expect(await recordOf(id)).toEqual({ mayHold: false, hashed: false });
+      // Hindsight does not hold the facts yet: it answers "Document not found". The
+      // retain in flight may still land, so the record stays.
+      await expect(sync(id)).rejects.toBeInstanceOf(HindsightRetainInFlightError);
+      expect(await recordOf(id)).toEqual({ mayHold: true, hashed: false });
 
       proceed.open();
       await expect(retaining).rejects.toBeInstanceOf(HindsightSyncLockLostError);
       expect(remote(id)).toBeDefined();
       expect(await recordOf(id)).toEqual({ mayHold: true, hashed: false });
 
+      await expect(sync(id)).rejects.toBeInstanceOf(HindsightRetainInFlightError);
+      expect(remote(id)).toBeUndefined();
+      expect(await recordOf(id)).toEqual({ mayHold: true, hashed: false });
+
+      await outlastRetains(database.db, id);
+      expect(await actionOf(id)).toBe('forgotten');
+      expect(await recordOf(id)).toEqual({ mayHold: false, hashed: false });
+    });
+
+    // The sequence of #42: the retain lands after the forget, and its sync can write
+    // nothing at all afterwards, neither on its connection nor through its pool.
+    it('keeps the record when the sync of the retain cannot write after it lands', async () => {
+      const id = await documentWithFact();
+      const client = postgres(database.url, { max: 2, onnotice: () => undefined });
+      const doomed = drizzle(client, { schema });
+      const { received, proceed } = holdFirst('POST');
+      const retaining = syncDocumentToHindsight(deps(doomed), id);
+      await received.opened;
+      await breakLockConnection();
+      await flagPrivate(id);
+      // The forget: what it answers is the concern of the test above.
+      await sync(id).catch(() => undefined);
+      await client.end({ timeout: 0 });
+
+      proceed.open();
+      await expect(retaining).rejects.toThrow();
+      expect(remote(id)).toBeDefined();
+      expect(await recordOf(id)).toEqual({ mayHold: true, hashed: false });
+
+      await outlastRetains(database.db, id);
       expect(await actionOf(id)).toBe('forgotten');
       expect(remote(id)).toBeUndefined();
+      expect(await recordOf(id)).toEqual({ mayHold: false, hashed: false });
+    });
+
+    it('keeps the bound of an overtaken retain through a later one that was answered', async () => {
+      const id = await documentWithFact('The older fact.');
+      const { received, proceed } = holdFirst('POST');
+      const older = sync(id);
+      await received.opened;
+      await breakLockConnection();
+      await replaceFacts(id, 'The newer fact.');
+      expect(await actionOf(id)).toBe('retained');
+      await flagPrivate(id);
+      await expect(sync(id)).rejects.toBeInstanceOf(HindsightRetainInFlightError);
+
+      proceed.open();
+      await expect(older).rejects.toBeInstanceOf(HindsightSyncLockLostError);
+      expect(remote(id)).toBe(`[doc:${id}] The older fact.`);
+      expect(await recordOf(id)).toEqual({ mayHold: true, hashed: false });
+
+      await outlastRetains(database.db, id);
+      expect(await actionOf(id)).toBe('forgotten');
+      expect(remote(id)).toBeUndefined();
+    });
+
+    it('lets a forget clear the record once a retain it overtook was answered', async () => {
+      const id = await documentWithFact();
+      const { received, proceed } = holdFirst('POST');
+      const retaining = sync(id);
+      await received.opened;
+      await flagPrivate(id);
+      proceed.open();
+      await expect(retaining).resolves.toMatchObject({ action: 'retained' });
+      expect(await actionOf(id)).toBe('forgotten');
       expect(await recordOf(id)).toEqual({ mayHold: false, hashed: false });
     });
 

@@ -2,10 +2,10 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { z } from 'zod';
 import { classificationSchema } from '../../pipeline/classify/classification-schema.ts';
 import { extractionOutputSchema } from '../../pipeline/extract/extraction-schema.ts';
-import { anthropicJsonText, NATIVE_GENERATION } from './native-fixtures.ts';
-import { type StubServer, startStubServer } from './stub-server.ts';
+import { anthropicJsonText, NATIVE_GENERATION } from './native.fixture.ts';
+import { type StubServer, startStubServer } from '../../testing/provider-stub-server.ts';
 import { createTextModel } from './text-model.ts';
-import { chatCompletion, llmConfig, SYNTHETIC_API_KEY } from './wire-fixtures.ts';
+import { chatCompletion, llmConfig, SYNTHETIC_API_KEY } from '../../testing/provider-wire.ts';
 
 // The shapes the specification mandates for extraction: optional core fields, a nullable
 // value, a format the strict modes do not know, and `extra` with free keys.

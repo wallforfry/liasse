@@ -1,6 +1,8 @@
 export { DEFAULT_RETRY_POLICY, type RetryPolicy } from './backoff.ts';
 export { enqueue, type EnqueueInput, type JobExecutor } from './enqueue.ts';
 export {
+  DeferJobError,
+  type DeferJobOptions,
   DuplicateJobHandlerError,
   InvalidWorkersOptionsError,
   JobLockLostError,
@@ -8,7 +10,7 @@ export {
   PermanentJobError,
   WorkersStoppingError,
 } from './errors.ts';
-export type { JobFailure } from './execution.ts';
+export type { JobDeferral, JobFailure } from './execution.ts';
 export {
   handle,
   type JobContext,

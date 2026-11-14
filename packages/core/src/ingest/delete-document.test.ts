@@ -84,6 +84,7 @@ describe('deleteDocument and the delete_file job', () => {
         fileDeletedAt: new Date('2026-01-01T00:00:00Z'),
         hindsightHeldSince: new Date('2026-02-01T00:00:00Z'),
         hindsightSentHash: 'synthetic-hash',
+        hindsightRetainUntil: new Date('2026-02-01T00:06:00Z'),
       })
       .where(eq(documents.id, id));
     const before = await documentRow(id);
@@ -120,6 +121,8 @@ describe('deleteDocument and the delete_file job', () => {
       // Kept: the only trace that Hindsight may still hold facts and owes a forget.
       hindsightHeldSince: new Date('2026-02-01T00:00:00Z'),
       hindsightSentHash: null,
+      // Kept with it: a retain in flight may still land.
+      hindsightRetainUntil: new Date('2026-02-01T00:06:00Z'),
     });
     expect(updatedAt.getTime()).toBeGreaterThanOrEqual(before.updatedAt.getTime());
   });
