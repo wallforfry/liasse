@@ -1,6 +1,7 @@
 import { PermanentJobError } from '../jobs/errors.ts';
 import { ModelOutputError, ModelProviderError } from '../models/errors.ts';
 import { StorageObjectNotFoundError } from '../storage/errors.ts';
+import { IndexingConflictError } from '../search/indexing.ts';
 import { TextExtractionError } from '../text/errors.ts';
 import { TextProcessError } from './text-process/extract-in-child.ts';
 
@@ -45,7 +46,9 @@ export const documentErrorCode = (error: unknown): string => {
   if (error instanceof ModelProviderError) return 'model_provider_failed';
   if (error instanceof ModelOutputError) return 'model_output_invalid';
   if (error instanceof StorageObjectNotFoundError) return 'file_missing';
-  if (error instanceof PipelineConflictError) return 'processing_conflict';
+  if (error instanceof PipelineConflictError || error instanceof IndexingConflictError) {
+    return 'processing_conflict';
+  }
   return 'internal_error' satisfies PipelineErrorCode;
 };
 

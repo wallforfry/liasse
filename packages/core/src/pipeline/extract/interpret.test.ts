@@ -280,6 +280,37 @@ describe('interpret', () => {
     expect(document.rejected).toBe(2);
   });
 
+  it('never keeps a fact in which an identifier can still be detected once masked', async () => {
+    // A masker that only replaces the first identifier it finds in a text.
+    const firstOnly = (text: string): string => text.replace(SYNTHETIC_IBAN, '****6789');
+    const fact = (text: string) => ({
+      text,
+      subjects: ['Home'],
+      page: 2,
+      quote: `IBAN ${SYNTHETIC_IBAN}`,
+      confidence: 0.9,
+    });
+    const { document } = await read(
+      {
+        core: {},
+        fields: {},
+        extra: {},
+        facts: [
+          fact(`Paid on ${SYNTHETIC_IBAN}.`),
+          fact(`Paid on ${SYNTHETIC_IBAN}, then on ${SYNTHETIC_IBAN}.`),
+          { ...fact('About two accounts.'), subjects: [`${SYNTHETIC_IBAN} ${SYNTHETIC_IBAN}`] },
+        ],
+      },
+      TYPE,
+      [],
+      firstOnly,
+    );
+    expect(document.knowledge.facts).toMatchObject([
+      { text: 'Paid on ****6789.', quote: 'IBAN ****6789' },
+    ]);
+    expect(JSON.stringify(document.knowledge)).not.toContain(SYNTHETIC_IBAN);
+  });
+
   it('keeps at most five facts, each with a quote in the text and a coherent validity', async () => {
     const fact = (text: string, extra: object = {}) => ({
       text,

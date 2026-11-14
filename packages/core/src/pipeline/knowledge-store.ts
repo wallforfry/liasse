@@ -16,7 +16,11 @@ const traceColumnsOf = ({ model, schemaVersion, page, quote, confidence }: Knowl
  * names a fact gives are not stored, `facts.subject_ids` stays empty), embeds no fact
  * and computes no notice deadline: the knowledge layer does, and replaces it.
  */
-export const storeKnowledge: PersistKnowledge = async (tx, { id }, { keyDates, facts: found }) => {
+export const storeKnowledge: PersistKnowledge = async (
+  tx,
+  { id, language },
+  { keyDates, facts: found },
+) => {
   await tx.delete(documentDates).where(eq(documentDates.documentId, id));
   await tx.delete(facts).where(eq(facts.documentId, id));
   if (keyDates.length > 0) {
@@ -35,6 +39,7 @@ export const storeKnowledge: PersistKnowledge = async (tx, { id }, { keyDates, f
       found.map((fact) => ({
         documentId: id,
         text: fact.text,
+        language,
         validFrom: fact.validFrom,
         validTo: fact.validTo,
         entityIds: fact.entityIds,

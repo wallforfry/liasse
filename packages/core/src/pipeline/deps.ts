@@ -6,6 +6,7 @@ import type {
   SchemaLanguage,
   SubjectKind,
 } from '../domain/enums.ts';
+import type { LanguageCode } from '../domain/languages.ts';
 import type { EntityProvenance } from '../domain/provenance.ts';
 import type { Transaction } from '../ingest/existing-document.ts';
 import type { Embedder, TextModel, VisionModel } from '../models/ports.ts';
@@ -13,12 +14,11 @@ import type { Storage } from '../storage/port.ts';
 import type { ExtractedText, ExtractTextDeps, ExtractTextInput } from '../text/types.ts';
 import type { TextProcessLimits } from './text-process/limits.ts';
 
-// The pipeline depends on entity resolution, sensitive-identifier masking and indexing
-// through the narrow shapes below, so it compiles before those features are merged. Each
-// is the signature of the function that is bound to it in one place, once they are:
+// The pipeline depends on entity resolution and on sensitive-identifier masking through
+// the narrow shapes below, so it compiles before that feature is merged. Each is the
+// signature of the function that is bound to it in one place, once it is:
 // `resolveEntity`, `withEntityLock` and `missingEntityIds` of `@liasse/core/entities`,
-// `findSensitiveIdentifiers` and `maskSensitiveIdentifier` of the same, `indexDocument`
-// of `@liasse/core/search`.
+// `findSensitiveIdentifiers` and `maskSensitiveIdentifier` of the same.
 
 export interface EntityMentionInput {
   readonly name: string;
@@ -91,6 +91,8 @@ export interface Knowledge {
 export interface KnowledgeDocument {
   readonly id: string;
   readonly private: boolean;
+  /** `core.language` as it is being written: what `indexDocument` gives the pages. */
+  readonly language: LanguageCode | null;
 }
 
 /**
@@ -132,7 +134,8 @@ export interface PipelineDeps {
   readonly settings: PipelineSettings;
   readonly entities: EntityResolver;
   readonly maskSensitive: MaskSensitive;
-  readonly indexDocument: IndexDocument;
+  /** `indexDocument` of `@liasse/core/search`, with the embedder above, by default. */
+  readonly indexDocument?: IndexDocument;
   /** `storeKnowledge` by default. */
   readonly persistKnowledge?: PersistKnowledge;
   /** Called after a document is indexed, at least once: it must be idempotent. */

@@ -73,18 +73,26 @@ const maskSection = (mask: MaskSensitive, section: AssembledSection): MaskedSect
   };
 };
 
+// A fact is free text of the model, and it leaves the installation when facts are
+// exported. One in which the detector still finds an identifier once masked (two written
+// across each other, a masked form that is itself detectable) is not kept.
+const isClean = (mask: MaskSensitive, texts: readonly string[]): boolean =>
+  texts.every((text) => mask(text) === text);
+
 const maskKnowledge = (mask: MaskSensitive, knowledge: Knowledge): Knowledge => ({
   keyDates: knowledge.keyDates.map((keyDate) => ({
     ...keyDate,
     label: mask(keyDate.label),
     quote: mask(keyDate.quote),
   })),
-  facts: knowledge.facts.map((fact) => ({
-    ...fact,
-    text: mask(fact.text),
-    quote: mask(fact.quote),
-    subjects: fact.subjects.map(mask),
-  })),
+  facts: knowledge.facts
+    .map((fact) => ({
+      ...fact,
+      text: mask(fact.text),
+      quote: mask(fact.quote),
+      subjects: fact.subjects.map(mask),
+    }))
+    .filter(({ text, quote, subjects }) => isClean(mask, [text, quote, ...subjects])),
   subjects: knowledge.subjects.map(({ identifier, ...subject }) => ({
     ...subject,
     name: mask(subject.name),

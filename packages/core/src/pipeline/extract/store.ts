@@ -2,6 +2,7 @@ import { eq } from 'drizzle-orm';
 import { documents } from '../../db/schema/documents.ts';
 import { docTypes } from '../../db/schema/registry.ts';
 import type { DocumentStatus } from '../../domain/enums.ts';
+import { languageCodeSchema } from '../../domain/values.ts';
 import { PROVENANCE_ENTITY_ID_KEY } from '../../domain/provenance.ts';
 import type { Transaction } from '../../ingest/existing-document.ts';
 import { writeIfLive } from '../../ingest/live-write.ts';
@@ -90,7 +91,11 @@ const write = async (
     .where(eq(documents.id, documentId));
   await (deps.persistKnowledge ?? storeKnowledge)(
     tx,
-    { id: documentId, private: stored.private },
+    {
+      id: documentId,
+      private: stored.private,
+      language: languageCodeSchema.safeParse(merged.core.language).data ?? null,
+    },
     fresh.knowledge,
   );
   return 'stored';

@@ -2,6 +2,7 @@ import { eq } from 'drizzle-orm';
 import { documents } from '../db/schema/documents.ts';
 import type { DocumentStatus } from '../domain/enums.ts';
 import { readPipelineProvenance } from '../domain/provenance.ts';
+import { DocumentNotFoundError, indexDocument } from '../search/indexing.ts';
 import { runClassificationStage } from './classification-stage.ts';
 import { settledStatus } from './confidence.ts';
 import type { PipelineDeps } from './deps.ts';
@@ -34,13 +35,22 @@ const settle = (
       .where(eq(documents.id, documentId));
   });
 
+// The indexer refuses a tombstone: a document deleted meanwhile has nothing to index,
+// and the stage that follows finds it gone.
+const index = async (deps: PipelineDeps, documentId: string): Promise<void> => {
+  const run = deps.indexDocument ?? ((id: string) => indexDocument(deps, id));
+  await run(documentId).catch((error: unknown) => {
+    if (!(error instanceof DocumentNotFoundError)) throw error;
+  });
+};
+
 /** Indexes the document, then gives it the status its confidence calls for. */
 export const indexAndSettle = async (
   deps: PipelineDeps,
   documentId: string,
   from: readonly DocumentStatus[],
 ): Promise<void> => {
-  await deps.indexDocument(documentId);
+  await index(deps, documentId);
   await settle(deps, documentId, from);
 };
 
@@ -86,6 +96,6 @@ export const reextractDocument = async (
 export const reindexDocument = async (deps: PipelineDeps, documentId: string): Promise<void> => {
   const document = await loadDocument(deps.db, documentId);
   if (document === undefined || !SETTLED.includes(document.status)) return;
-  await deps.indexDocument(documentId);
+  await index(deps, documentId);
   await deps.afterIndexed?.(documentId);
 };

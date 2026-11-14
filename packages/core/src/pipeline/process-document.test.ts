@@ -1,6 +1,6 @@
 import { eq } from 'drizzle-orm';
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
-import { documentPages } from '../db/schema/documents.ts';
+import { chunks, documentPages } from '../db/schema/documents.ts';
 import { documentDates, facts } from '../db/schema/knowledge.ts';
 import { docTypes, entities } from '../db/schema/registry.ts';
 import { PIPELINE_PROVENANCE_KEY } from '../domain/provenance.ts';
@@ -62,6 +62,7 @@ const OUTPUT = {
     document_date: at('2026-10-03', 'dated 03/10/2026'),
     amount: at({ value: 84.2, currency: 'EUR' }, 'Total 84,20 EUR'),
     reference: at(`SYN-2026-001 ${SYNTHETIC_IBAN}`, 'Invoice SYN-2026-001'),
+    language: at('en', 'Invoice SYN-2026-001'),
     key_dates: [
       at(
         { kind: 'renewal', date: '2027-03-01', label: `Renewal, paid to ${SYNTHETIC_IBAN}` },
@@ -261,7 +262,7 @@ describe('processDocument', () => {
       id,
       live(),
     ).catch(() => undefined);
-    expect(received[0]).toEqual({ id, private: false });
+    expect(received[0]).toEqual({ id, private: false, language: 'en' });
     expect(received[1]).toMatchObject({
       subjects: [
         {
@@ -278,6 +279,40 @@ describe('processDocument', () => {
       core: {},
       title: null,
     });
+  });
+
+  it('indexes with the real indexer by default, in the language of the document', async () => {
+    const id = await harness.ingest('really indexed');
+    const { indexDocument: _fake, ...defaults } = depsFor();
+    await processDocument(defaults, id, live());
+    const stored = await harness.db.select().from(chunks).where(eq(chunks.documentId, id));
+    expect(stored.length).toBeGreaterThan(0);
+    expect(stored.every(({ language, embedding }) => language === 'en' && embedding !== null)).toBe(
+      true,
+    );
+    expect((await harness.db.select().from(documentPages)).map(({ language }) => language)).toEqual(
+      ['en', 'en'],
+    );
+    expect((await harness.db.select().from(facts)).map(({ language }) => language)).toEqual(['en']);
+    expect(await harness.document(id)).toMatchObject({ status: 'indexed' });
+  });
+
+  it('lets a deletion during the indexing win, without failing the job', async () => {
+    const id = await harness.ingest('deleted before indexing');
+    const { indexDocument: _fake, ...defaults } = depsFor(OUTPUT, {
+      persistKnowledge: () => Promise.resolve(),
+      afterIndexed: () => Promise.reject(new Error('a deleted document has no hook')),
+    });
+    const embedder = {
+      ...defaults.embedder,
+      embed: async (texts: readonly string[], kind: 'query' | 'passage') => {
+        if (kind === 'passage') await deleteDocument({ db: harness.db }, id);
+        return defaults.embedder.embed(texts, kind);
+      },
+    };
+    await processDocument({ ...defaults, embedder }, id, live());
+    expect(await harness.document(id)).toMatchObject({ status: 'deleted' });
+    expect(await harness.db.select().from(chunks)).toEqual([]);
   });
 
   it('records how the text, the type and the extraction were obtained', async () => {
