@@ -100,6 +100,51 @@ describe('the features the runtime binds', () => {
     });
   });
 
+  it('keeps private documents out of the knowledge tools unless include_private is true', async () => {
+    const runtime = await start();
+    const letter = await upload(runtime, LETTER.lines, 'letter.pdf');
+    const contract = await upload(runtime, OLD_CONTRACT.lines, 'contract.pdf');
+    await waitUntil(async () => (await linksDetected(letter)) && (await linksDetected(contract)));
+    for (const id of [letter, contract]) {
+      expect((await correct(runtime, id, { private: true })).status).toBe(200);
+    }
+
+    const tool = (name: string, args: Readonly<Record<string, unknown>>) =>
+      callTool(runtime, name, args);
+    const both = async (name: string, args: Readonly<Record<string, unknown>>) => ({
+      hidden: await tool(name, args),
+      shown: await tool(name, { ...args, include_private: true }),
+    });
+
+    const byQuery = await both('get_subject', { query: 'Home insurance contract' });
+    expect(byQuery.hidden).toMatchObject({ found: false });
+    const { id: subjectId } = z
+      .object({ subject: z.object({ id: z.string() }) })
+      .parse(byQuery.shown).subject;
+    const byId = await both('get_subject', { id: subjectId });
+    expect([byId.hidden, byId.shown]).toMatchObject([{ found: false }, { found: true }]);
+
+    const ofSubject = await both('timeline', { subject: subjectId });
+    expect(ofSubject.hidden).toMatchObject({ items: [] });
+    const shownItems = z
+      .object({ items: z.array(z.object({ document: z.object({ id: z.string() }).optional() })) })
+      .parse(ofSubject.shown).items;
+    expect(shownItems.map(({ document }) => document?.id)).toContain(letter);
+
+    const { entities } = z
+      .object({ entities: z.tuple([z.object({ id: z.string() })]) })
+      .parse(await tool('list_entities', { query: 'Synthetic Insurance', include_private: true }));
+    const ofEntity = await both('timeline', { entity: entities[0].id });
+    expect(ofEntity.hidden).toMatchObject({ items: [] });
+    expect(ofEntity.shown).toMatchObject({
+      items: [{ kind: 'document', document: { id: contract } }],
+    });
+
+    const facts = await both('recall', { query: 'next review' });
+    expect(facts.hidden).toEqual({ facts: [] });
+    expect(facts.shown).toMatchObject({ facts: [{ documentId: letter }] });
+  });
+
   it('detects links once a document is indexed: a superseded contract has no date to come', async () => {
     const runtime = await start();
     const old = await upload(runtime, OLD_CONTRACT.lines, 'old.pdf');
