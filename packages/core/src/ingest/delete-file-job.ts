@@ -2,12 +2,12 @@ import { eq } from 'drizzle-orm';
 import { z } from 'zod';
 import type { Database } from '../db/client.ts';
 import { documents } from '../db/schema/documents.ts';
+import { isLiveStatus } from '../domain/enums.ts';
 import { handle, type RegisteredHandler } from '../jobs/handlers.ts';
 import { defineJobKind } from '../jobs/kinds.ts';
 import { parseStorageKey } from '../storage/key.ts';
 import type { Storage } from '../storage/port.ts';
 import { lockFile } from './file-lock.ts';
-import { isLiveStatus } from './live-document.ts';
 
 // A storage outage must not leave the file of a deleted document behind: with the
 // default backoff, eight attempts span about ten minutes.

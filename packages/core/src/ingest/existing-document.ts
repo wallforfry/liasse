@@ -1,11 +1,15 @@
 import { eq, sql } from 'drizzle-orm';
 import type { Database } from '../db/client.ts';
 import { documents } from '../db/schema/documents.ts';
-import type { SupportedMime, DocumentSource, DocumentStatus } from '../domain/enums.ts';
+import {
+  type DocumentSource,
+  type DocumentStatus,
+  isLiveStatus,
+  type SupportedMime,
+} from '../domain/enums.ts';
 import { enqueue } from '../jobs/enqueue.ts';
 import type { StorageKey } from '../storage/key.ts';
 import type { Storage } from '../storage/port.ts';
-import { isLiveStatus } from './live-document.ts';
 import { processDocumentJob } from './process-document-job.ts';
 
 export type Transaction = Parameters<Parameters<Database['transaction']>[0]>[0];

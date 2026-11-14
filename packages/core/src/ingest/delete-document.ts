@@ -1,12 +1,11 @@
 import { and, eq, or, sql } from 'drizzle-orm';
 import type { Database } from '../db/client.ts';
-import { chunks, documentPages, documents } from '../db/schema/documents.ts';
+import { chunks, documentPages, documents, isLiveDocument } from '../db/schema/documents.ts';
 import { jobs } from '../db/schema/jobs.ts';
 import { documentDates, documentLinks, facts } from '../db/schema/knowledge.ts';
 import { enqueue } from '../jobs/enqueue.ts';
 import { deleteFileJob } from './delete-file-job.ts';
 import type { Transaction } from './existing-document.ts';
-import { isLiveDocument } from './live-document.ts';
 import { processDocumentJob } from './process-document-job.ts';
 
 export interface DeleteDocumentDeps {

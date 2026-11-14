@@ -9,7 +9,6 @@ export {
 } from './errors.ts';
 export type { IngestResult } from './existing-document.ts';
 export { type IngestDeps, ingestFile, type IngestInput } from './ingest-file.ts';
-export { isLiveDocument, isLiveStatus } from './live-document.ts';
 export { detectMimeType } from './mime.ts';
 export { processDocumentJob } from './process-document-job.ts';
 export type { FileContent } from './read-content.ts';

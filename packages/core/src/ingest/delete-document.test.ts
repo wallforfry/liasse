@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
 import { eq, sql } from 'drizzle-orm';
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
-import { chunks, documentPages, documents } from '../db/schema/documents.ts';
+import { chunks, documentPages, documents, isLiveDocument } from '../db/schema/documents.ts';
 import { jobs } from '../db/schema/jobs.ts';
 import { documentDates, documentLinks, facts } from '../db/schema/knowledge.ts';
 import { startWorkers } from '../jobs/workers.ts';
@@ -13,7 +13,6 @@ import { deleteDocument } from './delete-document.ts';
 import { createDeleteFileHandler } from './delete-file-job.ts';
 import { createIngestHarness, type IngestHarness } from './harness.test-helper.ts';
 import { ingestFile } from './ingest-file.ts';
-import { isLiveDocument } from './live-document.ts';
 
 const sha256Of = (bytes: Uint8Array): string => createHash('sha256').update(bytes).digest('hex');
 const keyOf = (bytes: Uint8Array) => storageKeyOf(sha256Of(bytes));

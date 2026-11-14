@@ -10,6 +10,11 @@ export const DOCUMENT_STATUSES = [
 ] as const;
 export type DocumentStatus = (typeof DOCUMENT_STATUSES)[number];
 
+export const TOMBSTONE_STATUS = 'deleted' satisfies DocumentStatus;
+
+/** False for the tombstone of a deleted document, which is not a document any more. */
+export const isLiveStatus = (status: DocumentStatus): boolean => status !== TOMBSTONE_STATUS;
+
 export const DOCUMENT_SOURCES = ['watch', 'api', 'mcp'] as const;
 export type DocumentSource = (typeof DOCUMENT_SOURCES)[number];
 
