@@ -29,7 +29,7 @@ You need Node 22 or later, pnpm, Docker and poppler (`poppler-utils` on Debian a
 
 ```sh
 pnpm install
-pnpm db:up            # Postgres with pgvector on 127.0.0.1:54329
+pnpm db:up            # Postgres with pgvector on 127.0.0.1:54329, S3 test server on 127.0.0.1:54330
 cp .env.example .env
 pnpm lint && pnpm typecheck && pnpm test && pnpm build
 pnpm --filter @liasse/server dev
