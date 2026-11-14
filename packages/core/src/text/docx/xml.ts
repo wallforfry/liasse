@@ -35,17 +35,64 @@ const decodeEntities = (text: string): string => decodeCharacterReferences(text,
 
 const NO_ATTRIBUTES: Readonly<Record<string, string>> = Object.freeze({});
 
-// Sticky: each attribute is matched where the previous one ended and the scan stops at the
-// first thing that is not one. An unanchored search would retry from every offset of a
-// long run without `=`, which is quadratic. Parsing is synchronous, so sharing the
-// `lastIndex` of one pattern is safe.
-const ATTRIBUTE = /\s*([^\s=]+)\s*=\s*(?:"([^"]*)"|'([^']*)')/y;
+// Told how many characters each step of the scan reads. Only tests pass one: the sum is
+// the work of the scan, which a clock cannot measure on a loaded machine. The work a
+// regular expression does inside one search cannot be counted, which is why the scan is
+// made of steps that each read a known number of characters instead of one pattern.
+export type ScanProbe = (examined: number) => void;
 
-const parseAttributes = (source: string): Readonly<Record<string, string>> => {
+// Sticky and without alternative: each matches one run where it is asked to, in one pass.
+// Parsing is synchronous, so sharing the `lastIndex` of a pattern is safe.
+const SPACES = /\s*/y;
+const NAME = /[^\s=]*/y;
+
+const runLength = (run: RegExp, source: string, from: number, probe?: ScanProbe): number => {
+  run.lastIndex = from;
+  const length = run.exec(source)?.[0].length ?? 0;
+  probe?.(length + 1);
+  return length;
+};
+
+interface Attribute {
+  readonly name: string;
+  readonly value: string;
+  readonly end: number;
+}
+
+// The attribute that starts at `from`: `name = "value"` or `name = 'value'`, spaces
+// optional. `undefined` for anything else.
+const readAttribute = (source: string, from: number, probe?: ScanProbe): Attribute | undefined => {
+  const nameStart = from + runLength(SPACES, source, from, probe);
+  const nameEnd = nameStart + runLength(NAME, source, nameStart, probe);
+  const equals = nameEnd + runLength(SPACES, source, nameEnd, probe);
+  if (nameEnd === nameStart || source[equals] !== '=') return undefined;
+  const opening = equals + 1 + runLength(SPACES, source, equals + 1, probe);
+  const quote = source[opening];
+  if (quote !== '"' && quote !== "'") return undefined;
+  const closing = source.indexOf(quote, opening + 1);
+  probe?.((closing === -1 ? source.length : closing) - opening);
+  if (closing === -1) return undefined;
+  return {
+    name: source.slice(nameStart, nameEnd),
+    value: source.slice(opening + 1, closing),
+    end: closing + 1,
+  };
+};
+
+// Each attribute is read where the previous one ended and the scan stops at the first
+// thing that is not one. Looking for the next attribute further on would retry from every
+// offset of a long run without `=`, which is quadratic.
+export const parseAttributes = (
+  source: string,
+  probe?: ScanProbe,
+): Readonly<Record<string, string>> => {
   const attributes: [string, string][] = [];
-  ATTRIBUTE.lastIndex = 0;
-  for (let match = ATTRIBUTE.exec(source); match !== null; match = ATTRIBUTE.exec(source)) {
-    attributes.push([match[1] ?? '', decodeEntities(match[2] ?? match[3] ?? '')]);
+  for (
+    let attribute = readAttribute(source, 0, probe);
+    attribute !== undefined;
+    attribute = readAttribute(source, attribute.end, probe)
+  ) {
+    attributes.push([attribute.name, decodeEntities(attribute.value)]);
   }
   return attributes.length === 0 ? NO_ATTRIBUTES : Object.fromEntries(attributes);
 };
