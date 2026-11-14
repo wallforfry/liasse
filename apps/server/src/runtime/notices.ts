@@ -1,6 +1,6 @@
 import type { Config } from '@liasse/core/config';
 import { describeEmbeddingWindow } from '@liasse/core/embeddings';
-import { describeModelPrivacy } from '@liasse/core/models';
+import { describeModelPrivacy, type HostLookup } from '@liasse/core/models';
 
 const LOOPBACK_HOSTS: readonly string[] = ['127.0.0.1', '::1', 'localhost'];
 const WILDCARD_HOSTS: readonly string[] = ['0.0.0.0', '::'];
@@ -33,8 +33,13 @@ const describeOptionalParts = ({ pipeline, hindsight, auth }: Config): string =>
  * content goes, how chunks are sized, who can reach the listener, what is enabled.
  * No line holds a secret or a rejected value.
  */
-export const startupNotices = async (config: Config): Promise<readonly string[]> => {
-  const { warning } = await describeModelPrivacy(config);
+export const startupNotices = async (
+  config: Config,
+  lookup?: HostLookup,
+): Promise<readonly string[]> => {
+  // The warning names a self-hosted endpoint whose name did not resolve: it counts as
+  // external until the next start.
+  const { warning } = await describeModelPrivacy(config, lookup);
   return [
     warning,
     describeEmbeddingWindow(config.embedding),

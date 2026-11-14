@@ -11,7 +11,7 @@ export {
   type RemoteEmbeddingConfig,
 } from './providers/embedder.ts';
 export type { LlmConfig } from './providers/language-call.ts';
-export type { HostResolver } from './providers/locality.ts';
+export type { HostLookup, HostResolver } from './providers/locality.ts';
 export { describeModelPrivacy, type ModelPrivacy } from './providers/privacy.ts';
 export { createTextModel } from './providers/text-model.ts';
 export { createVisionModel } from './providers/vision-model.ts';
