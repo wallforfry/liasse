@@ -2,11 +2,8 @@ import { recordMergeProposal, type RecordedProposal } from '../entities/proposal
 import { ok, type Result } from '../registry/result.ts';
 import type { KnowledgeWriteContext } from './context.ts';
 import type { SubjectMergeError } from './subject-errors.ts';
-import {
-  sharedGlobalSubjectIdentifiers,
-  type SubjectIdentifier,
-  viewSubjectIdentifier,
-} from './subject-identifiers.ts';
+import { sharedGlobalSubjectIdentifiers } from './subject-identifier-rules.ts';
+import { type SubjectIdentifier, viewSubjectIdentifier } from './subject-identifiers.ts';
 import { withSubjectLock } from './subject-lock.ts';
 import { findMergeableSubjects, type SubjectPair } from './subject-merge.ts';
 import { sharesSubjectLabel } from './subject-merge-candidates.ts';

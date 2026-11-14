@@ -1,5 +1,4 @@
 import { nameTokens } from '../domain/entity-name.ts';
-import { MIN_ADDRESS_NUMBERS, MIN_ADDRESS_TOKENS } from '../domain/limits.ts';
 
 // Ways of writing the same word of an address. Only forms that mean one thing are listed:
 // "st" is a street and a saint, and is left as written.
@@ -42,14 +41,52 @@ const tokensOf = (address: string): readonly string[] =>
 // spellings this does not bring together stay two addresses, and at worst two subjects.
 export const addressKey = (address: string): string => tokensOf(address).join(' ');
 
-const hasDigit = (token: string): boolean => /\p{Nd}/u.test(token);
+// The words that start the name of a street, after its number, in the schema languages.
+// prettier-ignore
+const STREET_TYPES: ReadonlySet<string> = new Set([
+  'rue', 'avenue', 'boulevard', 'route', 'chemin', 'impasse', 'square', 'place', 'allee',
+  'quai', 'cours', 'passage', 'voie', 'sentier', 'faubourg', 'rond', 'cite', 'promenade',
+  'road', 'lane', 'street', 'way', 'drive', 'court', 'terrace', 'close', 'crescent',
+  'via', 'viale', 'piazza', 'corso', 'vicolo', 'strada', 'largo',
+  'calle', 'avenida', 'paseo', 'plaza', 'carrer', 'camino', 'ronda',
+  'strasse',
+]);
 
-// An address written in full: a number in the street and a postal code, and words with
-// them. Only such an address says on its own which property a document is about. "Rue
-// des Lilas, Lyon" is the street of many homes.
+// Endings of a German street name, which its number follows: "Hauptstrasse 5".
+const STREET_ENDINGS = ['strasse', 'weg', 'platz', 'allee', 'gasse', 'ring', 'damm', 'ufer'];
+
+const HOUSE_NUMBER = /^\d{1,4}[a-z]?$/;
+const POSTAL_CODE = /^\d{4,5}$/;
+
+const isStreetEnding = (token: string): boolean =>
+  STREET_ENDINGS.some((ending) => token.endsWith(ending));
+
+// How far after its number the type of a street may come: past a repetition index ("12
+// bis rue", "7 B rue") and the name of a street written first ("221 Baker Street").
+const STREET_TYPE_REACH = 4;
+
+// Where the street and its house number end, when the address starts with them: a number
+// then a street ("12 bis rue des Lilas", "221 Baker Street"), or a German street then its
+// number ("Hauptstrasse 5", "Berliner Strasse 5"). Undefined otherwise: a number inside
+// the name of a street ("rue du 11 Novembre 1918"), a building, an apartment or a
+// post-office box ("BP 123") is not the number of a house.
+const endOfHouseNumber = (tokens: readonly string[]): number | undefined => {
+  const [first = '', second = ''] = tokens;
+  if (HOUSE_NUMBER.test(first)) {
+    const type = tokens
+      .slice(1, 1 + STREET_TYPE_REACH)
+      .findIndex((token) => STREET_TYPES.has(token));
+    return type === -1 ? undefined : 1 + type;
+  }
+  const street = [first, second].findIndex(isStreetEnding);
+  return street !== -1 && HOUSE_NUMBER.test(tokens[street + 1] ?? '') ? street + 1 : undefined;
+};
+
+// An address written in full: a house number in its street, then a postal code. Only such
+// an address says on its own which property a document is about. "Rue des Lilas, Lyon"
+// is the street of many homes, and so is "Rue du 11 Novembre 1918, 69003 Lyon".
 export const isCompleteAddress = (key: string): boolean => {
   const tokens = key.split(' ');
-  return (
-    tokens.length >= MIN_ADDRESS_TOKENS && tokens.filter(hasDigit).length >= MIN_ADDRESS_NUMBERS
-  );
+  const street = endOfHouseNumber(tokens);
+  return street !== undefined && tokens.slice(street + 1).some((token) => POSTAL_CODE.test(token));
 };

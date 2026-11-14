@@ -6,13 +6,13 @@ import {
 } from '../entities/similarity.ts';
 import type { Embedding, TextModel } from '../models/ports.ts';
 import { arbitrateSubject } from './subject-arbitrate.ts';
-import { mergeSubjectIdentifiers } from './subject-identifiers.ts';
+import { type Attachment, enrichSubject, type SubjectOrigin } from './subject-enrichment.ts';
+import { scopedToIssuer } from './subject-identifiers.ts';
 import { isDistinctiveLabel } from './subject-label.ts';
 import {
   matchSubjectExactly,
   mayDesignateSubject,
   subjectIdentifiersFor,
-  withSubjectAliases,
 } from './subject-match.ts';
 import type { SubjectMention } from './subject-mention.ts';
 import {
@@ -20,10 +20,8 @@ import {
   loadSubjects,
   type SimilarSubject,
   similarSubjects,
-  type Subject,
   type SubjectReader,
   type SubjectTransaction,
-  updateSubjectNames,
 } from './subject-store.ts';
 
 // What the text model answered about a mention, and about which candidates.
@@ -97,14 +95,6 @@ export const arbitrateOutsideLock = async (
   return { offered: idsOf(decision.candidates), chosen: chosen?.subject.id };
 };
 
-interface Attachment {
-  readonly subject: Subject;
-  readonly match: EntityMatchRule;
-  readonly confidence: number;
-  // Labels the subject is now known under as well.
-  readonly aliases: readonly string[];
-}
-
 // Normalization drops case and accents, so an equal label is not quite an identity.
 const EXACT_CONFIDENCE = { identifier: 1, name: 0.99, alias: 0.99 } as const;
 
@@ -140,35 +130,23 @@ const bySimilarity = async (
       };
 };
 
-const enrich = async (
-  tx: SubjectTransaction,
-  { subject, aliases }: Attachment,
-  mention: SubjectMention,
-  everySubject: readonly Subject[],
-): Promise<void> => {
-  const names = {
-    aliases: withSubjectAliases(subject, aliases),
-    identifiers: mergeSubjectIdentifiers(
-      subject.identifiers,
-      subjectIdentifiersFor(subject, everySubject, mention.identifiers),
-    ),
-  };
-  const unchanged =
-    names.aliases.length === subject.aliases.length &&
-    names.identifiers.length === subject.identifiers.length;
-  if (!unchanged) await updateSubjectNames(tx, subject.id, names);
-};
-
 /**
  * Attaches a mention to the subject it designates, creating the subject when none does:
  * identifier, then normalized label, then similarity, in that order. Runs under the
- * subject lock, in the transaction that writes the subject id it answers with.
+ * subject lock, in the transaction that writes the subject id it answers with. What the
+ * mention adds to the subject depends on its document (see `enrichSubject`); a subject a
+ * private document creates is private.
  */
 export const resolveSubjectUnderLock = async (
   tx: SubjectTransaction,
   resolvable: ResolvableSubject,
+  origin: SubjectOrigin,
 ): Promise<SubjectResolution> => {
-  const { mention, embedding } = resolvable;
+  const { embedding } = resolvable;
+  const mention = {
+    ...resolvable.mention,
+    identifiers: scopedToIssuer(resolvable.mention.identifiers, origin.issuerId),
+  };
   const everySubject = await loadSubjects(tx);
   const exact = matchSubjectExactly(
     everySubject.filter(({ kind }) => kind === mention.kind),
@@ -176,7 +154,7 @@ export const resolveSubjectUnderLock = async (
   );
   const attachment: Attachment | undefined =
     exact === undefined
-      ? await bySimilarity(tx, resolvable)
+      ? await bySimilarity(tx, { ...resolvable, mention })
       : { ...exact, confidence: EXACT_CONFIDENCE[exact.match], aliases: [] };
   if (attachment === undefined) {
     const created = await insertSubject(tx, {
@@ -184,10 +162,11 @@ export const resolveSubjectUnderLock = async (
       canonicalName: mention.name,
       identifiers: subjectIdentifiersFor(undefined, everySubject, mention.identifiers),
       embedding,
+      private: origin.private,
     });
     return { subjectId: created.id, match: 'created', confidence: 1 };
   }
-  await enrich(tx, attachment, mention, everySubject);
+  await enrichSubject(tx, attachment, mention, everySubject, { origin, embedding });
   return {
     subjectId: attachment.subject.id,
     match: attachment.match,

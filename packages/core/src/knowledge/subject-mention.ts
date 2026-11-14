@@ -5,9 +5,8 @@ import type { KnowledgeSubject } from './input.ts';
 import {
   haveConflictingSubjectIdentifiers,
   mergeSubjectIdentifiers,
-  storeSubjectIdentifier,
-  type SubjectIdentifier,
-} from './subject-identifiers.ts';
+} from './subject-identifier-rules.ts';
+import { storeSubjectIdentifier, type SubjectIdentifier } from './subject-identifiers.ts';
 import { subjectLabelKey } from './subject-label.ts';
 
 // A candidate subject of a document, ready to be resolved. The clear value of an IBAN or

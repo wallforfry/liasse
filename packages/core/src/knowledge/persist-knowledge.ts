@@ -1,5 +1,7 @@
 import { and, eq } from 'drizzle-orm';
+import { z } from 'zod';
 import { documents, isLiveDocument } from '../db/schema/documents.ts';
+import { PROVENANCE_ENTITY_ID_KEY } from '../domain/provenance.ts';
 import { languageCodeSchema } from '../domain/values.ts';
 import { missingEntityIds } from '../entities/entity-store.ts';
 import type { IdentifierKey } from '../entities/sensitive.ts';
@@ -8,14 +10,22 @@ import type { KnowledgeDocument, KnowledgeInput } from './input.ts';
 import { replaceKeyDates } from './key-dates.ts';
 import { type PreparedKnowledge, prepareWithoutModels } from './prepare-knowledge.ts';
 import { type ResolvableSubject, resolveSubjectUnderLock } from './resolve-subject.ts';
+import type { SubjectOrigin } from './subject-enrichment.ts';
 import { subjectLabelKey } from './subject-label.ts';
+import { blankOrphanSubjects } from './subject-orphans.ts';
 import { withSubjectLock } from './subject-lock.ts';
 import { findSubjectsByIds, type SubjectTransaction } from './subject-store.ts';
 
 interface LockedDocument {
   readonly private: boolean;
   readonly language: string | null;
+  // The entity that issued the document: the scope of the contract numbers it writes.
+  readonly issuerId: string | undefined;
+  // The subjects the document concerned before this extraction.
+  readonly subjectIds: readonly string[];
 }
+
+const issuerIdSchema = z.object({ [PROVENANCE_ENTITY_ID_KEY]: z.string().min(1) });
 
 // A tombstone gets nothing back: the row is read with the tombstone rule, and locked, so
 // a deletion either committed before or waits for this transaction.
@@ -24,7 +34,12 @@ const lockDocument = async (
   documentId: string,
 ): Promise<LockedDocument | undefined> => {
   const [row] = await tx
-    .select({ private: documents.private, core: documents.core })
+    .select({
+      private: documents.private,
+      core: documents.core,
+      provenance: documents.provenance,
+      subjectIds: documents.subjectIds,
+    })
     .from(documents)
     .where(and(eq(documents.id, documentId), isLiveDocument))
     .for('update');
@@ -33,6 +48,8 @@ const lockDocument = async (
     : {
         private: row.private,
         language: languageCodeSchema.safeParse(row.core.language).data ?? null,
+        issuerId: issuerIdSchema.safeParse(row.provenance.issuer).data?.[PROVENANCE_ENTITY_ID_KEY],
+        subjectIds: row.subjectIds,
       };
 };
 
@@ -68,10 +85,11 @@ interface ResolvedSubjects {
 const resolveSubjects = async (
   tx: SubjectTransaction,
   subjects: readonly ResolvableSubject[],
+  origin: SubjectOrigin,
 ): Promise<ResolvedSubjects> => {
   const labelled: (readonly [labelKey: string, subjectId: string])[] = [];
   for (const resolvable of subjects) {
-    const { subjectId } = await resolveSubjectUnderLock(tx, resolvable);
+    const { subjectId } = await resolveSubjectUnderLock(tx, resolvable, origin);
     labelled.push([resolvable.mention.labelKey, subjectId]);
   }
   const ids = [...new Set(labelled.map(([, subjectId]) => subjectId))];
@@ -115,22 +133,37 @@ const toFactRows = async (
  *
  * The caller has taken the subject lock (`withSubjectLock`, the lock of the entities)
  * before the row of the document. It is taken again here, which costs nothing when it is
- * held, and candidates are resolved under it, so every subject id written exists.
+ * held, and candidates are resolved under it, so every subject id written exists. A
+ * subject the document no longer concerns, and that no other live document concerns, is
+ * blanked (`blankOrphanSubjects`).
  */
 export const persistKnowledge = (
   tx: SubjectTransaction,
   { id }: KnowledgeDocument,
   knowledge: PreparedKnowledge,
-): Promise<void> =>
+): Promise<PersistedKnowledge> =>
   withSubjectLock(tx, async (locked) => {
     const document = await lockDocument(locked, id);
-    if (document === undefined) return;
+    if (document === undefined) return { rejectedValues: knowledge.rejectedValues };
     const usable = withoutExternalEmbeddings(knowledge, document);
-    const { ids, byLabelKey } = await resolveSubjects(locked, usable.subjects);
+    const { ids, byLabelKey } = await resolveSubjects(locked, usable.subjects, {
+      issuerId: document.issuerId,
+      private: document.private,
+    });
     await replaceKeyDates(locked, id, usable.keyDates);
     await replaceFacts(locked, id, document.language, await toFactRows(locked, usable, byLabelKey));
     await locked.update(documents).set({ subjectIds: ids }).where(eq(documents.id, id));
+    await blankOrphanSubjects(
+      locked,
+      document.subjectIds.filter((subjectId) => !ids.includes(subjectId)),
+    );
+    return { rejectedValues: knowledge.rejectedValues };
   });
+
+export interface PersistedKnowledge {
+  // Values of the section dropped as not valid, for the trace of the extraction.
+  readonly rejectedValues: number;
+}
 
 export interface PersistKnowledgeDeps {
   readonly identifierKey: IdentifierKey;
@@ -151,7 +184,7 @@ export const createPersistKnowledge =
     tx: SubjectTransaction,
     document: KnowledgeDocument,
     knowledge: KnowledgeInput | PreparedKnowledge,
-  ): Promise<void> =>
+  ): Promise<PersistedKnowledge> =>
     persistKnowledge(
       tx,
       document,

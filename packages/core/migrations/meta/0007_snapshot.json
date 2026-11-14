@@ -1,5 +1,5 @@
 {
-  "id": "31eeee12-c9c8-4bff-b064-6f2ece09366b",
+  "id": "5de065b3-7a42-416f-a550-8af11b8b40a6",
   "prevId": "0d641342-dfc4-4d96-8e0c-a61cc43137e1",
   "version": "7",
   "dialect": "postgresql",
@@ -1145,6 +1145,13 @@
           "type": "vector(__EMBEDDING_DIM__)",
           "primaryKey": false,
           "notNull": false
+        },
+        "private": {
+          "name": "private",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
         },
         "created_at": {
           "name": "created_at",

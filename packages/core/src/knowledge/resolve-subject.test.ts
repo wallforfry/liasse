@@ -1,6 +1,7 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { subjects } from '../db/schema/knowledge.ts';
 import type { SubjectKind } from '../domain/enums.ts';
+import { ID_PREFIXES, newId } from '../domain/ids.ts';
 import {
   atSimilarity,
   SYNTHETIC_IBAN,
@@ -14,9 +15,13 @@ import {
   resolveSubjectUnderLock,
   type SubjectVerdict,
 } from './resolve-subject.ts';
+import type { SubjectOrigin } from './subject-enrichment.ts';
 import { withSubjectLock } from './subject-lock.ts';
 import { prepareSubjectMentions } from './subject-mention.ts';
 import { candidate, seedSubject, subjectRow } from './support.test-helper.ts';
+
+const ISSUER = newId(ID_PREFIXES.entity);
+const OTHER_ISSUER = newId(ID_PREFIXES.entity);
 
 describe('subject resolution', () => {
   let database: TestDatabase;
@@ -39,13 +44,14 @@ describe('subject resolution', () => {
     name: string,
     identifier?: string,
     { embedding, verdict }: Models = {},
+    origin: Partial<SubjectOrigin> = {},
   ) =>
     withSubjectLock(database.db, (tx) =>
-      resolveSubjectUnderLock(tx, {
-        mention: mentionOf(kind, name, identifier),
-        embedding,
-        verdict,
-      }),
+      resolveSubjectUnderLock(
+        tx,
+        { mention: mentionOf(kind, name, identifier), embedding, verdict },
+        { issuerId: undefined, private: false, ...origin },
+      ),
     );
 
   const count = () => database.db.$count(subjects);
@@ -137,44 +143,93 @@ describe('subject resolution', () => {
     });
   });
 
-  it('creates a second contract for the same label with another contract number', async () => {
+  it('creates a second contract for the same label with another number of the same issuer', async () => {
     await seedSubject(database.db, {
       kind: 'contract',
       name: 'Home insurance',
       identifier: 'HAB-00417',
+      issuerId: ISSUER,
     });
-    expect(await resolve('contract', 'Home insurance', 'HAB-00999')).toMatchObject({
-      match: 'created',
-    });
+    expect(
+      await resolve('contract', 'Home insurance', 'HAB-00999', {}, { issuerId: ISSUER }),
+    ).toMatchObject({ match: 'created' });
   });
 
-  it('lets a contract number attach only when it is long and one subject carries it', async () => {
+  it('lets a contract number attach only when it is long, of its issuer, and one subject carries it', async () => {
     const short = await seedSubject(database.db, {
       kind: 'contract',
       name: 'Phone plan',
       identifier: 'A-12',
+      issuerId: ISSUER,
     });
-    expect(await resolve('contract', 'Mobile subscription', 'A12')).toMatchObject({
-      match: 'created',
-    });
+    expect(
+      await resolve('contract', 'Mobile subscription', 'A12', {}, { issuerId: ISSUER }),
+    ).toMatchObject({ match: 'created' });
     const first = await seedSubject(database.db, {
       kind: 'contract',
       name: 'Energy contract',
       identifier: 'CT-778899',
+      issuerId: ISSUER,
     });
-    expect(await resolve('contract', 'Gas supply', 'ct 778899')).toMatchObject({
-      subjectId: first,
-      match: 'identifier',
-    });
+    expect(
+      await resolve('contract', 'Gas supply', 'ct 778899', {}, { issuerId: ISSUER }),
+    ).toMatchObject({ subjectId: first, match: 'identifier' });
     await seedSubject(database.db, {
       kind: 'contract',
       name: 'Water contract',
       identifier: 'CT-778899',
+      issuerId: ISSUER,
     });
-    expect(await resolve('contract', 'Heating supply', 'CT778899')).toMatchObject({
+    expect(
+      await resolve('contract', 'Heating supply', 'CT778899', {}, { issuerId: ISSUER }),
+    ).toMatchObject({ match: 'created' });
+    expect(short).toMatch(/^sub_/);
+  });
+
+  it('never attaches by a contract number of another issuer, or of an unknown one', async () => {
+    const energy = await seedSubject(database.db, {
+      kind: 'contract',
+      name: 'Energy contract',
+      identifier: 'CT-778899',
+      issuerId: ISSUER,
+    });
+    const other = await resolve(
+      'contract',
+      'Water contract',
+      'CT-778899',
+      {},
+      {
+        issuerId: OTHER_ISSUER,
+      },
+    );
+    expect(other.match).toBe('created');
+    expect((await subjectRow(database.db, other.subjectId))?.identifiers).toEqual({
+      items: [{ type: 'contract_number', value: 'CT778899', issuer_id: OTHER_ISSUER }],
+    });
+    expect(await resolve('contract', 'Heating supply', 'CT-778899')).toMatchObject({
       match: 'created',
     });
-    expect(short).toMatch(/^sub_/);
+    // Two issuers may give the same number: neither tells the other subject apart, and
+    // the label decides.
+    expect(
+      await resolve(
+        'contract',
+        'energy contract',
+        'CT-778899',
+        {},
+        {
+          issuerId: newId(ID_PREFIXES.entity),
+        },
+      ),
+    ).toMatchObject({ subjectId: energy, match: 'name' });
+  });
+
+  it('keeps two homes on a street whose name holds numbers apart', async () => {
+    const street = 'Rue du 11 Novembre 1918, 69003 Lyon';
+    const houseA = await resolve('property', 'House A', street);
+    const houseB = await resolve('property', 'House B', street);
+    expect(houseB.match).toBe('created');
+    expect(houseB.subjectId).not.toBe(houseA.subjectId);
   });
 
   it('attaches a property by its full address alone, and never by a street', async () => {

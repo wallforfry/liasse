@@ -6,7 +6,7 @@ import {
   MAX_KEY_DATE_LABEL_LENGTH,
   MAX_KEY_DATES_PER_DOCUMENT,
   MAX_KNOWLEDGE_QUOTE_LENGTH,
-  MAX_NOTICE_PERIOD_AMOUNT,
+  MAX_NOTICE_PERIOD,
   MAX_SUBJECT_NAME_LENGTH,
   MAX_SUBJECTS_PER_DOCUMENT,
 } from '../domain/limits.ts';
@@ -69,11 +69,16 @@ export type KnowledgeSubject = z.output<typeof knowledgeSubjectSchema>;
 
 // The notice period a contract states: "2 months" is `{ amount: 2, unit: 'months' }`. The
 // notice deadline is computed from it, never taken from the model.
-export const noticePeriodSchema = z.strictObject({
-  amount: z.int().min(1).max(MAX_NOTICE_PERIOD_AMOUNT),
-  unit: noticePeriodUnitSchema,
-  confidence: confidenceSchema,
-});
+export const noticePeriodSchema = z
+  .strictObject({
+    amount: z.int().min(1),
+    unit: noticePeriodUnitSchema,
+    confidence: confidenceSchema,
+  })
+  .refine(({ amount, unit }) => amount <= MAX_NOTICE_PERIOD[unit], {
+    path: ['amount'],
+    message: 'expected a notice period of at most five years',
+  });
 export type NoticePeriod = z.output<typeof noticePeriodSchema>;
 
 export const knowledgeSchema = z.strictObject({
@@ -82,7 +87,16 @@ export const knowledgeSchema = z.strictObject({
   subjects: z.array(knowledgeSubjectSchema).max(MAX_SUBJECTS_PER_DOCUMENT),
   noticePeriod: noticePeriodSchema.optional(),
 });
-export type Knowledge = z.output<typeof knowledgeSchema>;
+
+// A notice period is one value among the knowledge of a document: one the model got wrong
+// is dropped alone and counted, as a rejected value of the extraction is.
+const receivedSchema = knowledgeSchema.extend({ noticePeriod: z.unknown().optional() });
+
+export interface Knowledge extends Omit<z.output<typeof knowledgeSchema>, 'noticePeriod'> {
+  readonly noticePeriod?: NoticePeriod;
+  // Values of the section that were dropped as not valid.
+  readonly rejectedValues: number;
+}
 
 type DeepReadonly<Value> = Value extends readonly (infer Item)[]
   ? readonly DeepReadonly<Item>[]
@@ -104,8 +118,13 @@ export class InvalidKnowledgeError extends Error {
 }
 
 export const parseKnowledge = (input: unknown): Knowledge => {
-  const parsed = knowledgeSchema.safeParse(input);
+  const parsed = receivedSchema.safeParse(input);
   // Zod's issues name the paths and the rules, never the rejected values.
   if (!parsed.success) throw new InvalidKnowledgeError(z.prettifyError(parsed.error));
-  return parsed.data;
+  const { noticePeriod: received, ...rest } = parsed.data;
+  if (received === undefined) return { ...rest, rejectedValues: 0 };
+  const noticePeriod = noticePeriodSchema.safeParse(received);
+  return noticePeriod.success
+    ? { ...rest, noticePeriod: noticePeriod.data, rejectedValues: 0 }
+    : { ...rest, rejectedValues: 1 };
 };

@@ -1,9 +1,11 @@
 import { and, arrayContains, eq, inArray, sql, type SQL } from 'drizzle-orm';
 import type { PgColumn } from 'drizzle-orm/pg-core';
 import { documents, isLiveDocument } from '../db/schema/documents.ts';
-import { facts } from '../db/schema/knowledge.ts';
+import { facts, subjects } from '../db/schema/knowledge.ts';
 import { typeChanges } from '../db/schema/registry.ts';
 import { PROVENANCE_ENTITY_ID_KEY } from '../domain/provenance.ts';
+import { lockDocumentRows } from '../ingest/live-write.ts';
+import { ISSUER_ID_KEY } from '../knowledge/subject-identifiers.ts';
 import type { EntityReader, EntityTransaction } from './entity-store.ts';
 import type { MergeChangeKind } from './proposal-store.ts';
 
@@ -15,6 +17,7 @@ import type { MergeChangeKind } from './proposal-store.ts';
 //   depth (the entry of a list field is an array). The value itself, in `core` or
 //   `fields`, is the name as the document writes it and holds no id.
 // - `facts.entity_ids`.
+// - `subjects.identifiers`: `issuer_id` of a contract number.
 // - `type_changes.payload` of a `merge_entity` proposal, pending or rejected.
 
 // Every `entity_id` of a provenance, whatever the field: the entry of a plain field, and
@@ -79,10 +82,27 @@ const rewriteProvenance = async (
   targetId: string,
 ): Promise<void> => {
   const member = entityIdMember(sourceId);
+  const naming = contains(documents.provenance, member);
+  await lockDocumentRows(tx, naming);
   await tx
     .update(documents)
     .set({ provenance: replaced(documents.provenance, member, entityIdMember(targetId)) })
-    .where(contains(documents.provenance, member));
+    .where(naming);
+};
+
+const issuerMember = (id: string): string => `${quoted(ISSUER_ID_KEY)}: ${quoted(id)}`;
+
+// A contract number of a subject is scoped to the entity that issued it.
+const rewriteSubjectIssuers = async (
+  tx: EntityTransaction,
+  sourceId: string,
+  targetId: string,
+): Promise<void> => {
+  const member = issuerMember(sourceId);
+  await tx
+    .update(subjects)
+    .set({ identifiers: replaced(subjects.identifiers, member, issuerMember(targetId)) })
+    .where(contains(subjects.identifiers, member));
 };
 
 // The ids of an array column once the source is the target. A row about both names the
@@ -140,5 +160,6 @@ export const rewriteEntityReferences = async (
 ): Promise<void> => {
   await rewriteProvenance(tx, sourceId, targetId);
   await rewriteFacts(tx, sourceId, targetId);
+  await rewriteSubjectIssuers(tx, sourceId, targetId);
   await rewritePendingMerges(tx, 'merge_entity', sourceId, targetId);
 };

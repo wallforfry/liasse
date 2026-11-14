@@ -1,9 +1,6 @@
 import { z } from 'zod';
 import type { SubjectIdentifierType, SubjectKind } from '../domain/enums.ts';
-import {
-  MIN_ATTACHING_CONTRACT_NUMBER_LENGTH,
-  MIN_LICENSE_PLATE_LENGTH,
-} from '../domain/limits.ts';
+import { MIN_LICENSE_PLATE_LENGTH } from '../domain/limits.ts';
 import { isValidCardNumber } from '../entities/card-number.ts';
 import { findSensitiveIdentifiers } from '../entities/detect-sensitive.ts';
 import { isValidIban } from '../entities/iban.ts';
@@ -15,20 +12,30 @@ import {
   SENSITIVE_IDENTIFIER_TYPES,
   type SensitiveIdentifierType,
 } from '../entities/sensitive.ts';
-import { addressKey, isCompleteAddress } from './address.ts';
+import { addressKey } from './address.ts';
 
-const CLEAR_TYPES = [
+const CONTRACT_NUMBER = 'contract_number' satisfies SubjectIdentifierType;
+
+// The key of the entity that issued a contract number, inside `subjects.identifiers`.
+// `entities/references.ts` rewrites it when that entity is merged.
+export const ISSUER_ID_KEY = 'issuer_id';
+
+const PLAIN_TYPES = [
   'license_plate',
   'vin',
-  'contract_number',
   'address',
 ] as const satisfies readonly SubjectIdentifierType[];
-type ClearType = (typeof CLEAR_TYPES)[number];
 
 // An identifier as `subjects.identifiers` holds it. An IBAN or a card number has no value:
-// its last characters and its keyed hash, as on an entity.
+// its last characters and its keyed hash, as on an entity. A contract number is only
+// unique for the entity that issued it, which it carries when the document says.
 const storedSchema = z.discriminatedUnion('type', [
-  z.strictObject({ type: z.enum(CLEAR_TYPES), value: z.string().min(1) }),
+  z.strictObject({ type: z.enum(PLAIN_TYPES), value: z.string().min(1) }),
+  z.strictObject({
+    type: z.literal(CONTRACT_NUMBER),
+    value: z.string().min(1),
+    [ISSUER_ID_KEY]: z.string().min(1).optional(),
+  }),
   z.strictObject({
     type: z.enum(SENSITIVE_IDENTIFIER_TYPES),
     last4: z.string(),
@@ -58,7 +65,7 @@ const compact = (value: string): string =>
 const hasDigit = (value: string): boolean => /\p{Nd}/u.test(value);
 
 // In characters, not in UTF-16 units: a letter outside the basic plane counts once.
-const lengthOf = (value: string): number => Array.from(value).length;
+export const lengthOf = (value: string): number => Array.from(value).length;
 
 // ISO 3779: seventeen characters, without I, O and Q.
 const VIN = /^(?=.*\d)(?=.*[A-Z])[A-HJ-NPR-Z0-9]{17}$/;
@@ -66,36 +73,45 @@ const VIN = /^(?=.*\d)(?=.*[A-Z])[A-HJ-NPR-Z0-9]{17}$/;
 const MAX_LICENSE_PLATE_LENGTH = 12;
 const MIN_CONTRACT_NUMBER_LENGTH = 3;
 
-const clear = (type: ClearType, value: string): readonly SubjectIdentifier[] => [{ type, value }];
-
 // A value too short for what it claims to be, or without a digit, is a fragment: it is
 // neither stored nor matched.
 const vehicleIdentifier = (value: string): readonly SubjectIdentifier[] => {
-  if (VIN.test(value)) return clear('vin', value);
+  if (VIN.test(value)) return [{ type: 'vin', value }];
   const isPlate =
     lengthOf(value) >= MIN_LICENSE_PLATE_LENGTH &&
     lengthOf(value) <= MAX_LICENSE_PLATE_LENGTH &&
     hasDigit(value);
-  return isPlate ? clear('license_plate', value) : [];
+  return isPlate ? [{ type: 'license_plate', value }] : [];
 };
 
-const numberIdentifier = (value: string): readonly SubjectIdentifier[] =>
-  lengthOf(value) >= MIN_CONTRACT_NUMBER_LENGTH && hasDigit(value)
-    ? clear('contract_number', value)
-    : [];
+const numberIdentifier = (
+  value: string,
+  issuerId: string | undefined,
+): readonly SubjectIdentifier[] => {
+  if (lengthOf(value) < MIN_CONTRACT_NUMBER_LENGTH || !hasDigit(value)) return [];
+  return [
+    issuerId === undefined
+      ? { type: CONTRACT_NUMBER, value }
+      : { type: CONTRACT_NUMBER, value, [ISSUER_ID_KEY]: issuerId },
+  ];
+};
 
 const addressIdentifier = (written: string): readonly SubjectIdentifier[] => {
   const key = addressKey(written);
-  return key === '' ? [] : clear('address', key);
+  return key === '' ? [] : [{ type: 'address', value: key }];
 };
 
+type Reader = (written: string, issuerId: string | undefined) => readonly SubjectIdentifier[];
+
+const NUMBER: Reader = (written, issuerId) => numberIdentifier(compact(written), issuerId);
+
 // A dependent is a person: nothing a document prints identifies one here.
-const BY_KIND: Readonly<Record<SubjectKind, (written: string) => readonly SubjectIdentifier[]>> = {
+const BY_KIND: Readonly<Record<SubjectKind, Reader>> = {
   vehicle: (written) => vehicleIdentifier(compact(written)),
   property: addressIdentifier,
-  contract: (written) => numberIdentifier(compact(written)),
-  employment: (written) => numberIdentifier(compact(written)),
-  account: (written) => numberIdentifier(compact(written)),
+  contract: NUMBER,
+  employment: NUMBER,
+  account: NUMBER,
   dependent: () => [],
 };
 
@@ -117,95 +133,43 @@ const sensitiveIn = (written: string): Sensitive | undefined => {
 /**
  * The identifier of a candidate subject as it is stored: none when the value is a
  * fragment. What the value is decides before the kind does: an IBAN or a card number is
- * masked whatever subject it is given for, so neither reaches the column in clear.
+ * masked whatever subject it is given for, so neither reaches the column in clear. A
+ * contract, job or account number carries the entity that issued the document.
  */
 export const storeSubjectIdentifier = (
   key: IdentifierKey,
   kind: SubjectKind,
   written: string | undefined,
+  issuerId?: string,
 ): readonly SubjectIdentifier[] => {
   if (written === undefined) return [];
   const sensitive = sensitiveIn(written);
-  if (sensitive === undefined) return BY_KIND[kind](written);
+  if (sensitive === undefined) return BY_KIND[kind](written, issuerId);
   const { last4, hash } = maskSensitiveIdentifier(key, sensitive.type, sensitive.value);
   return [{ type: sensitive.type, last4, hash }];
 };
 
-// Two stored identifiers with the same identity are the same identifier.
-export const subjectIdentifierIdentity = (identifier: SubjectIdentifier): string =>
-  'hash' in identifier
-    ? `${identifier.type}:${identifier.hash}`
+// The identifiers of a mention once the issuer of its document is known: the contract
+// numbers of the document are those of its issuer.
+export const scopedToIssuer = (
+  identifiers: readonly SubjectIdentifier[],
+  issuerId: string | undefined,
+): readonly SubjectIdentifier[] =>
+  issuerId === undefined
+    ? identifiers
+    : identifiers.map((identifier) =>
+        identifier.type === CONTRACT_NUMBER
+          ? { ...identifier, [ISSUER_ID_KEY]: issuerId }
+          : identifier,
+      );
+
+// Two stored identifiers with the same identity are the same identifier. A contract
+// number of one issuer is not the same number as that of another.
+export const subjectIdentifierIdentity = (identifier: SubjectIdentifier): string => {
+  if ('hash' in identifier) return `${identifier.type}:${identifier.hash}`;
+  return identifier.type === CONTRACT_NUMBER
+    ? `${identifier.type}:${identifier[ISSUER_ID_KEY] ?? ''}:${identifier.value}`
     : `${identifier.type}:${identifier.value}`;
-
-const GLOBAL_TYPES: readonly SubjectIdentifierType[] = [
-  'license_plate',
-  'vin',
-  'iban',
-  'card_number',
-];
-
-// An identifier that names one subject whoever wrote it. A contract number is scoped to
-// its issuer and an address to its precision: neither is global.
-export const isGlobalSubjectIdentifier = ({ type }: SubjectIdentifier): boolean =>
-  GLOBAL_TYPES.includes(type);
-
-// An identifier that can say on its own which subject a document is about, as long as one
-// subject carries it: a global one, a contract number long enough, an address in full.
-export const isAttachingSubjectIdentifier = (identifier: SubjectIdentifier): boolean => {
-  if (identifier.type === 'contract_number') {
-    return lengthOf(identifier.value) >= MIN_ATTACHING_CONTRACT_NUMBER_LENGTH;
-  }
-  return identifier.type === 'address'
-    ? isCompleteAddress(identifier.value)
-    : isGlobalSubjectIdentifier(identifier);
-};
-
-// An address that is not whole is not a different address: it may be the same place,
-// written short.
-const tellsApart = (identifier: SubjectIdentifier): boolean =>
-  identifier.type !== 'address' || isCompleteAddress(identifier.value);
-
-// True when both lists hold a value of one type and share none: two plates, two contract
-// numbers, two full addresses. The two cannot describe the same subject for sure.
-export const haveConflictingSubjectIdentifiers = (
-  left: readonly SubjectIdentifier[],
-  right: readonly SubjectIdentifier[],
-): boolean => {
-  const [ours, theirs] = [left.filter(tellsApart), right.filter(tellsApart)];
-  return [...new Set(ours.map(({ type }) => type))].some((type) => {
-    const others = theirs.filter((identifier) => identifier.type === type);
-    const identities = new Set(others.map(subjectIdentifierIdentity));
-    return (
-      others.length > 0 &&
-      !ours.some(
-        (identifier) =>
-          identifier.type === type && identities.has(subjectIdentifierIdentity(identifier)),
-      )
-    );
-  });
-};
-
-export const mergeSubjectIdentifiers = (
-  known: readonly SubjectIdentifier[],
-  added: readonly SubjectIdentifier[],
-): readonly SubjectIdentifier[] => [
-  ...new Map(
-    [...known, ...added].map((identifier) => [subjectIdentifierIdentity(identifier), identifier]),
-  ).values(),
-];
-
-export const sharedGlobalSubjectIdentifiers = (
-  left: readonly SubjectIdentifier[],
-  right: readonly SubjectIdentifier[],
-): readonly SubjectIdentifier[] => {
-  const identities = new Set(
-    right.filter(isGlobalSubjectIdentifier).map(subjectIdentifierIdentity),
-  );
-  return left.filter(
-    (identifier) =>
-      isGlobalSubjectIdentifier(identifier) &&
-      identities.has(subjectIdentifierIdentity(identifier)),
-  );
 };
 
 // True when the identifier is the value as someone writes it: a plate with or without
@@ -224,7 +188,7 @@ export interface SubjectIdentifierView {
   readonly value: string;
 }
 
-// What a reader of the subject gets: the hash stays inside.
+// What a reader of the subject gets: the hash and the issuer stay inside.
 export const viewSubjectIdentifier = (identifier: SubjectIdentifier): SubjectIdentifierView =>
   'hash' in identifier
     ? { type: identifier.type, value: maskEnding(identifier.last4) }

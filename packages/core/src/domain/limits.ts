@@ -1,3 +1,5 @@
+import type { NoticePeriodUnit } from './enums.ts';
+
 // pgvector cannot build an HNSW index over a `vector` column wider than 2000 dimensions.
 export const MAX_EMBEDDING_DIM = 2000;
 
@@ -84,22 +86,26 @@ export const MAX_KEY_DATE_LABEL_LENGTH = 200;
 export const MAX_SUBJECTS_PER_DOCUMENT = 10;
 export const MAX_SUBJECT_NAME_LENGTH = 200;
 export const MAX_KNOWLEDGE_QUOTE_LENGTH = 300;
-// A notice period longer than this is a misreading, not a clause.
-export const MAX_NOTICE_PERIOD_AMOUNT = 1000;
+// A notice period longer than five years is a misreading, not a clause.
+export const MAX_NOTICE_PERIOD: Readonly<Record<NoticePeriodUnit, number>> = {
+  days: 1826,
+  weeks: 260,
+  months: 60,
+};
 
 // Under these lengths a value is a fragment, not an identifier of a subject. A contract
 // number follows the rule of the customer numbers of entities.
 export const MIN_LICENSE_PLATE_LENGTH = 4;
 export const MIN_ATTACHING_CONTRACT_NUMBER_LENGTH = MIN_ATTACHING_CUSTOMER_NUMBER_LENGTH;
-// An address says which property it is only when it is whole: a street number, a postal
-// code, and words between them.
-export const MIN_ADDRESS_TOKENS = 4;
-export const MIN_ADDRESS_NUMBERS = 2;
 
 // Link detection, as the specification sets it: candidates dated within this many months
 // of the document. Their number is bounded so that the one call stays small.
 export const LINK_WINDOW_MONTHS = 12;
 export const MAX_LINK_CANDIDATES = 12;
+// The candidates ranked before the places are given out, and the places one type takes
+// while documents of other types are there.
+export const LINK_CANDIDATE_POOL = 100;
+export const MAX_LINK_CANDIDATES_PER_TYPE = 6;
 export const MAX_LINK_RATIONALE_LENGTH = 300;
 // A link changes the state of a document, which hides its deadlines: one the text model is
 // not sure of is not kept.

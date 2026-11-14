@@ -1,5 +1,5 @@
 import { sql } from 'drizzle-orm';
-import { check, date, index, pgTable, text, uniqueIndex } from 'drizzle-orm/pg-core';
+import { boolean, check, date, index, pgTable, text, uniqueIndex } from 'drizzle-orm/pg-core';
 import { ID_PREFIXES, newId } from '../../domain/ids.ts';
 import {
   createdAt,
@@ -81,6 +81,9 @@ export const subjects = pgTable('subjects', {
   aliases: textArray('aliases'),
   identifiers: jsonObject('identifiers'),
   embedding: embeddingVector('embedding'),
+  // True while only private documents have named it: it is then shown to no reader who
+  // did not ask for private documents.
+  private: boolean('private').notNull().default(false),
   createdAt: createdAt(),
   updatedAt: updatedAt(),
 });

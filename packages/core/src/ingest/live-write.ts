@@ -1,4 +1,4 @@
-import { and, asc, eq, inArray } from 'drizzle-orm';
+import { and, asc, eq, inArray, type SQL } from 'drizzle-orm';
 import type { Database } from '../db/client.ts';
 import { documents, isLiveDocument } from '../db/schema/documents.ts';
 import type { Transaction } from './existing-document.ts';
@@ -66,3 +66,18 @@ export const writeIfBothLive = <Result>(
     if (live.length !== distinct.length) return { written: false };
     return { written: true, result: await write(tx) };
   });
+
+/**
+ * Locks the rows of the documents that match, in the order of their ids, before a write
+ * that updates them all, such as the rewrite of a merge. An UPDATE locks its rows in the
+ * order it meets them; a writer of a link locks its pair in id order. Taken in different
+ * orders, the two would each wait for a row the other holds.
+ */
+export const lockDocumentRows = async (tx: Transaction, condition: SQL): Promise<void> => {
+  await tx
+    .select({ id: documents.id })
+    .from(documents)
+    .where(condition)
+    .orderBy(asc(documents.id))
+    .for('no key update');
+};

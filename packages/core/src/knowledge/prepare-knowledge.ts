@@ -20,6 +20,8 @@ export interface PreparedKnowledge {
   // True when the embeddings come from a provider outside the installation: they are not
   // stored if the document turns out to be private once its row is locked.
   readonly embeddedExternally: boolean;
+  // Values of the section dropped as not valid, for the trace of the extraction.
+  readonly rejectedValues: number;
 }
 
 /**
@@ -44,6 +46,7 @@ export const prepareWithoutModels = (
       verdict: undefined,
     })),
     embeddedExternally: false,
+    rejectedValues: knowledge.rejectedValues,
   };
 };
 

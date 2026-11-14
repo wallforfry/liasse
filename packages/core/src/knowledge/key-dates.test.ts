@@ -101,15 +101,44 @@ describe('planKeyDates', () => {
 });
 
 describe('the knowledge input', () => {
-  it('refuses a notice period that is not an amount and a unit', () => {
-    const parse = (noticePeriod: unknown) => () => parseKnowledge({ ...knowledge(), noticePeriod });
-    expect(parse({ amount: 2, unit: 'months', confidence: 1 })).not.toThrow();
-    expect(parse({ amount: 0, unit: 'months', confidence: 1 })).toThrow(InvalidKnowledgeError);
-    expect(parse({ amount: 1.5, unit: 'months', confidence: 1 })).toThrow(InvalidKnowledgeError);
-    expect(parse({ amount: 2, unit: 'years', confidence: 1 })).toThrow(InvalidKnowledgeError);
-    expect(parse({ amount: 2, unit: 'months', confidence: 2 })).toThrow(InvalidKnowledgeError);
-    expect(parse({ amount: 100_000, unit: 'days', confidence: 1 })).toThrow(InvalidKnowledgeError);
-    expect(parse('2 months')).toThrow(InvalidKnowledgeError);
+  it('drops a notice period that is not a valid amount and unit, counts it, and keeps the rest', () => {
+    const due = keyDate('due', '2026-10-18', 'Due');
+    const parse = (noticePeriod: unknown) =>
+      parseKnowledge({ ...knowledge({ keyDates: [due] }), noticePeriod });
+    expect(parse({ amount: 2, unit: 'months', confidence: 1 })).toMatchObject({
+      noticePeriod: { amount: 2, unit: 'months' },
+      rejectedValues: 0,
+    });
+    for (const invalid of [
+      { amount: 0, unit: 'months', confidence: 1 },
+      { amount: -2, unit: 'months', confidence: 1 },
+      { amount: 1.5, unit: 'months', confidence: 1 },
+      { amount: 2, unit: 'years', confidence: 1 },
+      { amount: 2, unit: 'months', confidence: 2 },
+      '2 months',
+    ]) {
+      const parsed = parse(invalid);
+      expect(parsed.noticePeriod).toBeUndefined();
+      expect(parsed.rejectedValues).toBe(1);
+      expect(parsed.keyDates).toEqual([due]);
+    }
+    expect(parse(undefined)).toMatchObject({ rejectedValues: 0 });
+  });
+
+  it.each([
+    ['months', 60, true],
+    ['months', 61, false],
+    ['weeks', 260, true],
+    ['weeks', 261, false],
+    ['days', 1826, true],
+    ['days', 1827, false],
+  ] as const)('bounds a notice period in %s at five years: %i kept %s', (unit, amount, kept) => {
+    const parsed = parseKnowledge({
+      ...knowledge(),
+      noticePeriod: { amount, unit, confidence: 1 },
+    });
+    expect(parsed.noticePeriod !== undefined).toBe(kept);
+    expect(parsed.rejectedValues).toBe(kept ? 0 : 1);
   });
 
   it('refuses a date that is not a calendar date, and never echoes a rejected value', () => {

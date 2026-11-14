@@ -8,6 +8,8 @@ import { addressKey, isCompleteAddress } from './address.ts';
 import {
   haveConflictingSubjectIdentifiers,
   isAttachingSubjectIdentifier,
+} from './subject-identifier-rules.ts';
+import {
   isWrittenAs,
   parseSubjectIdentifiers,
   storeSubjectIdentifier,
@@ -38,12 +40,35 @@ describe('addressKey', () => {
     expect(addressKey('3 rue du 12 Septembre')).not.toBe(addressKey('12 rue du 3 Septembre'));
   });
 
-  it('holds an address as complete with a street number and a postal code only', () => {
-    expect(isCompleteAddress(addressKey('12 rue des Lilas, 69003 Lyon'))).toBe(true);
-    expect(isCompleteAddress(addressKey('12 rue des Lilas, Lyon'))).toBe(false);
-    expect(isCompleteAddress(addressKey('rue des Lilas, 69003 Lyon'))).toBe(false);
-    expect(isCompleteAddress(addressKey('12 69003'))).toBe(false);
-    expect(isCompleteAddress(addressKey(''))).toBe(false);
+  it.each([
+    ['12 rue des Lilas, 69003 Lyon', true],
+    ['12 bis rue des Lilas, 69003 Lyon', true],
+    ['12B rue des Lilas, 69003 Lyon', true],
+    ['3 ter avenue Foch, 75116 Paris', true],
+    ['7 quater bd Voltaire, 75011 Paris', true],
+    ['221 Baker Street, 10115 London', true],
+    ['Hauptstraße 5, 10115 Berlin', true],
+    ['Hauptstr. 5a, 10115 Berlin', true],
+    ['12 rue des Lilas, Lyon', false],
+    ['rue des Lilas, 69003 Lyon', false],
+    ['12 69003', false],
+    ['', false],
+    // A number in the name of the street is not the number of a house.
+    ['Rue du 11 Novembre 1918, 69003 Lyon', false],
+    ['Avenue du 8 Mai 1945, Lyon', false],
+    // A building, an apartment or a post-office box is not a house number.
+    ['Résidence Les Pins, Bât 2, 69003 Lyon', false],
+    ['Bât 2, rue des Lilas, 69003 Lyon', false],
+    ['Appartement 12, 69003 Lyon', false],
+    ['BP 123, 69003 Lyon', false],
+    ['CS 30012, 69003 Lyon Cedex', false],
+    // The postal code comes after the street.
+    ['69003 rue des Lilas', false],
+    // A house number has at most four digits, and a street follows it.
+    ['12345 avenue Foch, 75116 Paris', false],
+    ['12 Les Pins, 69003 Lyon', false],
+  ] as const)('holds %j as complete: %s', (written, complete) => {
+    expect(isCompleteAddress(addressKey(written))).toBe(complete);
   });
 });
 
@@ -142,12 +167,15 @@ const fail = (): never => {
 };
 
 describe('the rules on subject identifiers', () => {
-  it('lets a plate, a long contract number and a full address attach on their own', () => {
-    const attaches = (kind: Parameters<typeof store>[0], written: string) =>
-      store(kind, written).some(isAttachingSubjectIdentifier);
+  it('lets a plate, a long contract number of a known issuer and a full address attach on their own', () => {
+    const attaches = (kind: Parameters<typeof store>[0], written: string, issuerId?: string) =>
+      storeSubjectIdentifier(TEST_IDENTIFIER_KEY, kind, written, issuerId).some(
+        isAttachingSubjectIdentifier,
+      );
     expect(attaches('vehicle', 'AB-123-CD')).toBe(true);
-    expect(attaches('contract', 'HAB-00417')).toBe(true);
-    expect(attaches('contract', 'H-417')).toBe(false);
+    expect(attaches('contract', 'HAB-00417', 'ent_issuer')).toBe(true);
+    expect(attaches('contract', 'HAB-00417')).toBe(false);
+    expect(attaches('contract', 'H-417', 'ent_issuer')).toBe(false);
     expect(attaches('property', '12 rue des Lilas, 69003 Lyon')).toBe(true);
     expect(attaches('property', 'rue des Lilas, Lyon')).toBe(false);
     expect(attaches('account', SYNTHETIC_IBAN)).toBe(true);
@@ -163,6 +191,13 @@ describe('the rules on subject identifiers', () => {
     );
     expect(conflict(store('vehicle', 'AB-123-CD'), [])).toBe(false);
     expect(conflict(store('contract', 'H-417'), store('contract', 'H-418'))).toBe(true);
+    const numberOf = (written: string, issuerId: string) =>
+      storeSubjectIdentifier(TEST_IDENTIFIER_KEY, 'contract', written, issuerId);
+    expect(conflict(numberOf('H-417', 'ent_a'), numberOf('H-418', 'ent_a'))).toBe(true);
+    expect(conflict(numberOf('H-417', 'ent_a'), numberOf('H-418', 'ent_b'))).toBe(true);
+    expect(conflict(numberOf('H-417', 'ent_a'), store('contract', 'H-418'))).toBe(true);
+    // The holder quotes the number the insurer gave: one number, one contract.
+    expect(conflict(numberOf('H-417', 'ent_a'), numberOf('H-417', 'ent_b'))).toBe(false);
     expect(
       conflict(
         store('property', '12 rue des Lilas, 69003 Lyon'),

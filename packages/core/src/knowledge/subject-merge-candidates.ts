@@ -3,8 +3,8 @@ import {
   haveConflictingSubjectIdentifiers,
   isGlobalSubjectIdentifier,
   sharedGlobalSubjectIdentifiers,
-  subjectIdentifierIdentity,
-} from './subject-identifiers.ts';
+} from './subject-identifier-rules.ts';
+import { subjectIdentifierIdentity } from './subject-identifiers.ts';
 import { isDistinctiveLabel, subjectLabelKey } from './subject-label.ts';
 import { loadSubjects, type Subject } from './subject-store.ts';
 

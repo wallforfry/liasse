@@ -92,6 +92,7 @@ describe('merging subjects', () => {
       id: target,
       kind: 'vehicle',
       canonicalName: 'Renault Clio',
+      private: false,
       aliases: ['Clio', 'Family car', 'The car'],
       identifiers: [
         { type: 'license_plate', value: 'AB123CD' },

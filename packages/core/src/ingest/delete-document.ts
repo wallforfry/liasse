@@ -5,6 +5,8 @@ import { jobs } from '../db/schema/jobs.ts';
 import { documentDates, documentLinks, facts } from '../db/schema/knowledge.ts';
 import { enqueue } from '../jobs/enqueue.ts';
 import { lockLinkedDocuments, recomputeDocumentStates } from '../knowledge/document-state.ts';
+import { withSubjectLock } from '../knowledge/subject-lock.ts';
+import { blankOrphanSubjects } from '../knowledge/subject-orphans.ts';
 import { deleteFileJob } from './delete-file-job.ts';
 import type { Transaction } from './existing-document.ts';
 import { lockFile } from './file-lock.ts';
@@ -85,26 +87,37 @@ const cancelQueuedProcessing = async (tx: Transaction, id: string): Promise<void
  *
  * The links of the document go with it, and the state of a document rests on the links
  * that point at it: the documents this one superseded or terminated get their state
- * computed again in the same transaction, so none stays superseded by a tombstone.
+ * computed again in the same transaction, so none stays superseded by a tombstone. A
+ * subject no live document concerns any more is blanked. Both are writes of subject and
+ * document rows: they run under the subject lock, taken after the lock of the hash and
+ * before any row, as every writer of a document and its subjects takes them.
  */
 export const deleteDocument = ({ db }: DeleteDocumentDeps, id: string): Promise<boolean> =>
-  db.transaction(async (tx) => {
-    const [live] = await tx
+  db.transaction(async (outer) => {
+    const [live] = await outer
       .select({ sha256: documents.sha256 })
       .from(documents)
       .where(and(eq(documents.id, id), isLiveDocument));
     if (live === undefined) return false;
-    await lockFile(tx, live.sha256);
-    const linked = await lockLinkedDocuments(tx, id);
-    const [tombstone] = await tx
-      .update(documents)
-      .set(BLANK_CONTENT)
-      .where(and(eq(documents.id, id), isLiveDocument))
-      .returning({ id: documents.id });
-    if (tombstone === undefined) return false;
-    await deleteDerivedRows(tx, id);
-    await recomputeDocumentStates(tx, linked);
-    await cancelQueuedProcessing(tx, id);
-    await enqueue(tx, { kind: deleteFileJob, payload: { documentId: id } });
-    return true;
+    await lockFile(outer, live.sha256);
+    return withSubjectLock(outer, async (tx) => {
+      const linked = await lockLinkedDocuments(tx, id);
+      // The row is held from here on: what it says it concerns stays so until the commit.
+      const [concerned] = await tx
+        .select({ subjectIds: documents.subjectIds })
+        .from(documents)
+        .where(eq(documents.id, id));
+      const [tombstone] = await tx
+        .update(documents)
+        .set(BLANK_CONTENT)
+        .where(and(eq(documents.id, id), isLiveDocument))
+        .returning({ id: documents.id });
+      if (tombstone === undefined) return false;
+      await deleteDerivedRows(tx, id);
+      await recomputeDocumentStates(tx, linked);
+      await blankOrphanSubjects(tx, concerned?.subjectIds ?? []);
+      await cancelQueuedProcessing(tx, id);
+      await enqueue(tx, { kind: deleteFileJob, payload: { documentId: id } });
+      return true;
+    });
   });

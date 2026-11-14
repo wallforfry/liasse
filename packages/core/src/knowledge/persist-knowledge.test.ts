@@ -361,6 +361,23 @@ describe('persistKnowledge', () => {
     expect(await database.db.$count(documentDates, eq(documentDates.label, 'never'))).toBe(0);
   });
 
+  it('stores the rest of a section whose notice period is out of bounds, and says so', async () => {
+    const persist = createPersistKnowledge({ identifierKey: TEST_IDENTIFIER_KEY });
+    const document = await insertSyntheticDocument(database.db);
+    const outcome = await database.db.transaction((tx) =>
+      persist(
+        tx,
+        { id: document.id, private: false },
+        knowledge({
+          keyDates: [keyDate('renewal', '2027-03-01', 'Renewal')],
+          noticePeriod: { amount: 0, unit: 'months', confidence: 1 },
+        }),
+      ),
+    );
+    expect(outcome).toEqual({ rejectedValues: 1 });
+    expect((await datesOf(database.db, document.id)).map(({ kind }) => kind)).toEqual(['renewal']);
+  });
+
   it('refuses knowledge that is not valid, before any model is called', async () => {
     const embedder = recordingEmbedder();
     const invalid = knowledge({ facts: [fact('A fact.'), fact('   ')] });

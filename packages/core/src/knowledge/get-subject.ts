@@ -121,16 +121,20 @@ const designatedBy = (subjects: readonly Subject[], query: string): readonly Sub
 
 const toRef = ({ id, kind, canonicalName }: Subject) => ({ id, kind, name: canonicalName });
 
+// A subject a reader may see: one a visible document concerns, and, unless the reader
+// asked for private documents, one a public document has named.
+const shownTo =
+  (visible: ReadonlySet<string>, includePrivate: boolean) =>
+  (subject: Subject): boolean =>
+    visible.has(subject.id) && (includePrivate || !subject.private);
+
 const findByQuery = async (
   db: Database,
   query: string,
   includePrivate: boolean,
 ): Promise<readonly Subject[]> => {
   const visible = await visibleSubjectIds(db, includePrivate);
-  return designatedBy(
-    (await loadSubjects(db)).filter(({ id }) => visible.has(id)),
-    query,
-  );
+  return designatedBy((await loadSubjects(db)).filter(shownTo(visible, includePrivate)), query);
 };
 
 // An id that is not well-formed names no subject, and is never sent to the database.
@@ -141,7 +145,8 @@ const findById = async (
 ): Promise<readonly Subject[]> => {
   const subject = isId(ID_PREFIXES.subject, id) ? await findSubjectById(db, id) : undefined;
   if (subject === undefined) return [];
-  return (await visibleSubjectIds(db, includePrivate, [id])).has(id) ? [subject] : [];
+  const visible = await visibleSubjectIds(db, includePrivate, [id]);
+  return shownTo(visible, includePrivate)(subject) ? [subject] : [];
 };
 
 /**

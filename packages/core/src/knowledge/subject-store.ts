@@ -1,4 +1,4 @@
-import { and, asc, cosineDistance, eq, inArray, isNotNull, sql } from 'drizzle-orm';
+import { and, asc, cosineDistance, eq, inArray, isNotNull, type SQL, sql } from 'drizzle-orm';
 import { subjects } from '../db/schema/knowledge.ts';
 import type { SubjectKind } from '../domain/enums.ts';
 import type { EntityReader, EntityTransaction } from '../entities/entity-store.ts';
@@ -19,6 +19,8 @@ export interface Subject {
   readonly canonicalName: string;
   readonly aliases: readonly string[];
   readonly identifiers: readonly SubjectIdentifier[];
+  // Only private documents have named it.
+  readonly private: boolean;
 }
 
 // The embedding is left out: no reader of a subject needs its few hundred numbers.
@@ -28,6 +30,7 @@ const SUBJECT_COLUMNS = {
   canonicalName: subjects.canonicalName,
   aliases: subjects.aliases,
   identifiers: subjects.identifiers,
+  private: subjects.private,
 } as const;
 
 interface SubjectRow extends Omit<Subject, 'identifiers'> {
@@ -120,6 +123,7 @@ export interface NewSubject {
   readonly canonicalName: string;
   readonly identifiers: readonly SubjectIdentifier[];
   readonly embedding: Embedding | undefined;
+  readonly private: boolean;
 }
 
 const written = (rows: readonly SubjectRow[]): Subject => {
@@ -161,23 +165,60 @@ export const updateSubjectNames = async (
       .returning(SUBJECT_COLUMNS),
   );
 
-// The target takes the names given and, when it has none, the embedding of the source;
-// the source row is then deleted. References to the source are the caller's to rewrite.
+// Everything a subject is known by, replaced at once: when it stops being private, what
+// only private documents said of it goes.
+export interface SubjectIdentity extends SubjectNames {
+  readonly canonicalName: string;
+  readonly private: boolean;
+}
+
+export const replaceSubjectIdentity = async (
+  tx: SubjectTransaction,
+  id: string,
+  { identifiers, ...identity }: SubjectIdentity,
+  embedding: Embedding | undefined,
+): Promise<Subject> =>
+  written(
+    await tx
+      .update(subjects)
+      .set({
+        ...identity,
+        identifiers: toSubjectIdentifiersColumn(identifiers),
+        embedding: embedding ?? null,
+      })
+      .where(eq(subjects.id, id))
+      .returning(SUBJECT_COLUMNS),
+  );
+
+// Whose embedding the target of a merge keeps: its own, the source's, or its own and,
+// when it has none, the source's.
+export type MergedEmbedding = 'target' | 'source' | 'either';
+
+const absorbedEmbedding = (sourceId: string) =>
+  sql`(SELECT absorbed.embedding FROM ${subjects} AS absorbed WHERE absorbed.id = ${sourceId})`;
+
+const EMBEDDINGS: Readonly<Record<MergedEmbedding, (sourceId: string) => SQL>> = {
+  target: () => sql`${subjects.embedding}`,
+  source: absorbedEmbedding,
+  either: (sourceId) => sql`COALESCE(${subjects.embedding}, ${absorbedEmbedding(sourceId)})`,
+};
+
+// The target takes the identity given and the embedding chosen; the source row is then
+// deleted. References to the source are the caller's to rewrite.
 export const absorbSubject = async (
   tx: SubjectTransaction,
   sourceId: string,
   targetId: string,
-  { aliases, identifiers }: SubjectNames,
+  { identifiers, ...identity }: SubjectIdentity,
+  embedding: MergedEmbedding,
 ): Promise<Subject> => {
   const merged = written(
     await tx
       .update(subjects)
       .set({
-        aliases,
+        ...identity,
         identifiers: toSubjectIdentifiersColumn(identifiers),
-        embedding: sql`COALESCE(${subjects.embedding}, (
-          SELECT absorbed.embedding FROM ${subjects} AS absorbed WHERE absorbed.id = ${sourceId}
-        ))`,
+        embedding: EMBEDDINGS[embedding](sourceId),
       })
       .where(eq(subjects.id, targetId))
       .returning(SUBJECT_COLUMNS),

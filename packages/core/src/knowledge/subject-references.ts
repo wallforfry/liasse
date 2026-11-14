@@ -2,6 +2,7 @@ import { arrayContains } from 'drizzle-orm';
 import { documents } from '../db/schema/documents.ts';
 import { facts } from '../db/schema/knowledge.ts';
 import { replacedInArray, rewritePendingMerges } from '../entities/references.ts';
+import { lockDocumentRows } from '../ingest/live-write.ts';
 import type { SubjectTransaction } from './subject-store.ts';
 
 // Every place a subject id lives outside `subjects`. None of them has a foreign key
@@ -18,10 +19,12 @@ const rewriteDocuments = async (
   sourceId: string,
   targetId: string,
 ): Promise<void> => {
+  const concerning = arrayContains(documents.subjectIds, [sourceId]);
+  await lockDocumentRows(tx, concerning);
   await tx
     .update(documents)
     .set({ subjectIds: replacedInArray(documents.subjectIds, sourceId, targetId) })
-    .where(arrayContains(documents.subjectIds, [sourceId]));
+    .where(concerning);
 };
 
 const rewriteFacts = async (
