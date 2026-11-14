@@ -55,6 +55,14 @@ describe('GET /openapi.json', () => {
     expect(text).not.toContain('storage_key');
   });
 
+  it('documents the answers of the knowledge routes from the schemas that define them', () => {
+    const { paths } = documentSchema.parse(raw);
+    const answer = (path: string) => JSON.stringify(paths[path]?.get?.responses);
+    expect(answer('/subjects')).toContain('documentCount');
+    expect(answer('/upcoming')).toContain('notice_deadline');
+    expect(answer('/subjects')).toContain('truncated');
+  });
+
   it('declares the two credentials and marks /health alone as public', () => {
     const { paths, components } = documentSchema.parse(raw);
     expect(Object.keys(components.securitySchemes).toSorted()).toEqual(['bearerAuth', 'signedUrl']);

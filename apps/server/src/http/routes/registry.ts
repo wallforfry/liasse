@@ -10,9 +10,11 @@ import {
   listEntitiesRequestSchema,
   listSubjects,
   listSubjectsOptionsSchema,
+  listSubjectsOutputSchema,
   typeListSchema,
   upcoming,
   upcomingOptionsSchema,
+  upcomingOutputSchema,
 } from '@liasse/core/api';
 import { Hono } from 'hono';
 import { z } from 'zod';
@@ -57,8 +59,8 @@ const upcomingQuery = z
 
 const changesQuery = z.strictObject({ kind: text }).pipe(listChangesOptionsSchema);
 
-// The modules behind these routes define their answers; until they are bound here, the
-// contract only says an object comes back.
+// Consolidation is not part of this build: until it is, the contract of its routes only
+// says an object comes back.
 const pending = z.looseObject({});
 
 export const registryRoutes = ({ api, authenticated }: RouteDeps): Hono<AppEnv> =>
@@ -90,7 +92,10 @@ export const registryRoutes = ({ api, authenticated }: RouteDeps): Hono<AppEnv> 
       operation({
         summary: 'List or search subjects',
         tag: 'Knowledge',
-        responses: { 200: jsonResponse('The subjects.', pending), ...failures(400, 501) },
+        responses: {
+          200: jsonResponse('The subjects.', listSubjectsOutputSchema),
+          ...failures(400, 501),
+        },
       }),
       authenticated,
       valid('query', subjectsQuery),
@@ -101,7 +106,10 @@ export const registryRoutes = ({ api, authenticated }: RouteDeps): Hono<AppEnv> 
       operation({
         summary: 'Key dates in a window',
         tag: 'Knowledge',
-        responses: { 200: jsonResponse('The dates, sorted.', pending), ...failures(400, 501) },
+        responses: {
+          200: jsonResponse('The dates, sorted.', upcomingOutputSchema),
+          ...failures(400, 501),
+        },
       }),
       authenticated,
       valid('query', upcomingQuery),

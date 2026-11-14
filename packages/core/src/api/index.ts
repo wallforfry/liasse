@@ -68,6 +68,9 @@ export {
   listEntitiesRequestSchema,
 } from './list-entities.ts';
 export { queryDocuments, queryResultSchema } from './query-documents.ts';
+// What the routes of the bound knowledge features answer, as the knowledge layer defines it.
+export { listSubjectsOutputSchema } from '../knowledge/list-subjects.ts';
+export { upcomingOutputSchema } from '../knowledge/upcoming.ts';
 export {
   searchDocuments,
   type SearchRequest,
