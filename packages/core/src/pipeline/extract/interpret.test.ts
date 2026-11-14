@@ -233,6 +233,32 @@ describe('interpret', () => {
     ]);
   });
 
+  // An id is 26 characters of base32: a detector can take a run of them for an account
+  // number, and a masked id designates nothing.
+  it('masks the quote of a provenance entry and none of its identifiers', async () => {
+    const greedy = (text: string): string =>
+      text.replace(/ent_|synthetic-model|Synthetic Energy SA/g, '****');
+    const { document } = await read(
+      {
+        core: { reference: at('SYN-1', 'Synthetic Energy SA\nInvoice SYN-1') },
+        fields: { broker: at('Synthetic Energy SA', 'Synthetic Energy SA') },
+        extra: {},
+      },
+      TYPE,
+      [],
+      greedy,
+    );
+    expect(document.provenance.broker).toEqual({
+      entity_id: 'ent_****',
+      match: 'created',
+      confidence: 1,
+    });
+    expect(document.provenance.reference).toMatchObject({
+      model: 'synthetic-model',
+      quote: '****\nInvoice SYN-1',
+    });
+  });
+
   it('does not keep a number that is a sensitive identifier', async () => {
     const maskCards = (text: string): string => text.replace(/4242 ?4242 ?4242 ?4242/g, '****4242');
     const { document } = await read(

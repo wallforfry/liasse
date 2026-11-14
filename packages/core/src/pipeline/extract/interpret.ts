@@ -11,7 +11,7 @@ import {
   MAX_TITLE_LENGTH,
 } from './extraction-schema.ts';
 import { factEntityNames, readFacts, toKnowledge } from './knowledge.ts';
-import { maskDeep, maskValues } from './masking.ts';
+import { maskQuotes, maskValues } from './masking.ts';
 import { createQuoteIndex } from './quotes.ts';
 import { readOutput } from './read-output.ts';
 
@@ -53,8 +53,10 @@ const without = <Value>(
 ): Readonly<Record<string, Value>> =>
   Object.fromEntries(Object.entries(record).filter(([name]) => !names.includes(name)));
 
-const maskRecord = (mask: MaskSensitive, record: Values): Values =>
-  Object.fromEntries(Object.entries(record).map(([name, value]) => [name, maskDeep(mask)(value)]));
+const maskEntries = (mask: MaskSensitive, record: Values): Values =>
+  Object.fromEntries(
+    Object.entries(record).map(([name, value]) => [name, maskQuotes(mask)(value)]),
+  );
 
 interface MaskedSection extends AssembledSection {
   readonly dropped: readonly string[];
@@ -64,7 +66,7 @@ const maskSection = (mask: MaskSensitive, section: AssembledSection): MaskedSect
   const { values, dropped } = maskValues(mask, section.values);
   return {
     values,
-    provenance: maskRecord(mask, without(section.provenance, dropped)),
+    provenance: maskEntries(mask, without(section.provenance, dropped)),
     confidences: without(section.confidences, dropped),
     rejected: section.rejected + dropped.length,
     dropped,

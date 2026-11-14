@@ -23,7 +23,7 @@ import { createSensitiveMasker } from './sensitive-masker.ts';
 export const SYNTHETIC_IBAN = 'DE37 9999 9999 0123 4567 89';
 export const SYNTHETIC_IBAN_MASKED = '****6789';
 
-const IBAN = /[A-Z]{2}\d{2}(?: ?[A-Z0-9]){11,30}/g;
+const IBAN = /(?<![A-Za-z0-9])[A-Z]{2}\d{2}(?: ?[A-Z0-9]){11,30}(?![A-Za-z0-9])/g;
 
 const isIban = (candidate: string): boolean => {
   const compact = candidate.replace(/ /g, '');

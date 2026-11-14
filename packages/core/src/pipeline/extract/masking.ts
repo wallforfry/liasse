@@ -13,6 +13,24 @@ export const maskDeep =
     );
   };
 
+const QUOTE_KEY = 'quote';
+
+// In a provenance entry only the quote comes from the document. An entity id or a model
+// name is an identifier of the installation: a detector that took a run of its
+// characters for an account number would turn it into another, unknown, identifier.
+export const maskQuotes =
+  (mask: MaskSensitive) =>
+  (entry: unknown): unknown => {
+    if (Array.isArray(entry)) return entry.map(maskQuotes(mask));
+    if (!isPlainRecord(entry)) return entry;
+    return Object.fromEntries(
+      Object.entries(entry).map(([key, inner]) => [
+        key,
+        key === QUOTE_KEY && typeof inner === 'string' ? mask(inner) : maskQuotes(mask)(inner),
+      ]),
+    );
+  };
+
 // A card number is all digits and fits in a number. A number has no masked form that
 // would still be a number, so a value that holds one is not kept at all.
 const holdsSensitiveNumber = (mask: MaskSensitive, value: unknown): boolean => {
