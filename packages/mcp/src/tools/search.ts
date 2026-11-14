@@ -1,4 +1,5 @@
-import { queryDocuments, searchDocuments, searchRequestSchema } from '@liasse/core/api';
+import { queryDocuments, searchDocuments } from '@liasse/core/api';
+import { searchRequestSchema } from '@liasse/core/contract';
 import { MAX_QUERY_ENTITY_NAME_LENGTH, MAX_QUERY_ENTITY_NAMES } from '@liasse/core/domain';
 import { queryDslJsonSchema } from '@liasse/core/query';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';

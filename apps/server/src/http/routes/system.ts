@@ -1,6 +1,6 @@
 import { readStats } from '@liasse/core/api';
+import { healthSchema } from '@liasse/core/contract';
 import { Hono } from 'hono';
-import { z } from 'zod';
 import { jsonResponse, operation } from '../describe.ts';
 import type { AppEnv } from '../env.ts';
 import {
@@ -12,8 +12,6 @@ import {
 import type { RouteDeps } from './deps.ts';
 
 const TAG = 'System';
-
-const healthSchema = z.object({ status: z.enum(['ok', 'unavailable']) });
 
 export interface SystemRouteDeps extends RouteDeps {
   readonly ping: () => Promise<void>;

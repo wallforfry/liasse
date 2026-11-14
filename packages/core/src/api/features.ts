@@ -1,53 +1,16 @@
-import { z } from 'zod';
+import type { DocumentCorrection, DocumentPart } from '../contract/documents.ts';
+import type {
+  ChangeDecision,
+  ListChangesOptions,
+  ListSubjectsOptions,
+  UpcomingOptions,
+} from '../contract/registry.ts';
 import type { JsonObject } from '../db/columns.ts';
-import { changeKindSchema, keyDateKindSchema, subjectKindSchema } from '../domain/schemas.ts';
 import type { DeletedDocument } from '../ingest/delete-document.ts';
 import type { Transaction } from '../ingest/existing-document.ts';
 import { type ApiContext } from './context.ts';
 import { ApiError, documentNotFound, notImplemented } from './errors.ts';
-import type { DocumentPart } from './get-document.ts';
 import type { KnowledgeFeatures } from './knowledge.ts';
-
-const jsonObjectSchema = z.record(z.string(), z.unknown());
-const isoDate = z.iso.date();
-
-// What a caller may correct, by the `update_document` tool of the specification. The
-// pipeline validates the values against the registry: this only bounds the envelope.
-export const documentCorrectionSchema = z.strictObject({
-  type: z.string().min(1).optional(),
-  core: jsonObjectSchema.optional(),
-  fields: jsonObjectSchema.optional(),
-  private: z.boolean().optional(),
-});
-export type DocumentCorrection = z.output<typeof documentCorrectionSchema>;
-
-export const listSubjectsOptionsSchema = z.strictObject({
-  query: z.string().trim().min(1).optional(),
-  kind: subjectKindSchema.optional(),
-});
-export type ListSubjectsOptions = z.output<typeof listSubjectsOptionsSchema>;
-
-export const upcomingOptionsSchema = z.strictObject({
-  from: isoDate,
-  to: isoDate,
-  kinds: z.array(keyDateKindSchema).min(1).optional(),
-  types: z.array(z.string().min(1)).min(1).optional(),
-  subject: z.string().min(1).optional(),
-  current_only: z.boolean().default(true),
-});
-export type UpcomingOptions = z.output<typeof upcomingOptionsSchema>;
-
-export const listChangesOptionsSchema = z.strictObject({
-  kind: changeKindSchema.optional(),
-});
-export type ListChangesOptions = z.output<typeof listChangesOptionsSchema>;
-
-export const CHANGE_DECISIONS = ['apply', 'reject'] as const;
-export const changeDecisionSchema = z.strictObject({
-  decision: z.enum(CHANGE_DECISIONS),
-  note: z.string().trim().min(1).max(2000).optional(),
-});
-export type ChangeDecision = z.output<typeof changeDecisionSchema>;
 
 interface CorrectionProblem {
   readonly code: string;

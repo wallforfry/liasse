@@ -1,18 +1,16 @@
+import { correctDocument, CORRECTED_PARTS, getDocument, uploadDocument } from '@liasse/core/api';
 import {
-  correctDocument,
-  CORRECTED_PARTS,
   documentCorrectionSchema,
-  getDocument,
   getDocumentOptionsSchema,
   idSchema,
-  uploadDocument,
-} from '@liasse/core/api';
+  ingestRequestSchema,
+} from '@liasse/core/contract';
 import { liveDocumentStatusSchema } from '@liasse/core/domain';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import { type McpDeps, UNTRUSTED } from '../deps.ts';
 import { toolAnswer } from '../outcome.ts';
-import { ingestInputSchema, toUpload } from './ingest-input.ts';
+import { toUpload } from './ingest-input.ts';
 
 const READ_ONLY = { readOnlyHint: true, openWorldHint: false } as const;
 
@@ -67,7 +65,7 @@ export const registerDocumentTools = (server: McpServer, { api, report }: McpDep
     'ingest',
     {
       description: INGEST_DESCRIPTION,
-      inputSchema: ingestInputSchema,
+      inputSchema: ingestRequestSchema,
       annotations: { readOnlyHint: false, idempotentHint: true, openWorldHint: false },
     },
     async (input) => toolAnswer('ingest', report, async () => uploadDocument(api, toUpload(input))),

@@ -1,4 +1,4 @@
-import { idSchema } from '@liasse/core/api';
+import { idSchema } from '@liasse/core/contract';
 import { z } from 'zod';
 
 // A query string only carries text. These read the text of one parameter into the value

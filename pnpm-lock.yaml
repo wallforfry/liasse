@@ -60,6 +60,9 @@ importers:
         specifier: ^4.6.7
         version: 4.6.7
     devDependencies:
+      '@liasse/sdk':
+        specifier: workspace:*
+        version: link:../../packages/sdk
       '@modelcontextprotocol/sdk':
         specifier: 1.32.2
         version: 1.32.2(zod@4.6.7)
@@ -155,7 +158,14 @@ importers:
         specifier: ^4.6.7
         version: 4.6.7
 
-  packages/sdk: {}
+  packages/sdk:
+    dependencies:
+      '@liasse/core':
+        specifier: workspace:*
+        version: link:../core
+      zod:
+        specifier: ^4.6.7
+        version: 4.6.7
 
 packages:
 

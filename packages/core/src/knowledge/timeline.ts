@@ -1,75 +1,18 @@
 import { and, asc, eq, type SQL, sql } from 'drizzle-orm';
-import { z } from 'zod';
+import {
+  type Timeline,
+  type TimelineInput,
+  type TimelineItem,
+  timelineInputSchema,
+} from '../contract/knowledge-reads.ts';
 import type { Database } from '../db/client.ts';
 import { documents } from '../db/schema/documents.ts';
 import { facts } from '../db/schema/knowledge.ts';
 import { docTypes } from '../db/schema/registry.ts';
-import { DEFAULT_TIMELINE_LIMIT, MAX_TIMELINE_LIMIT } from '../domain/limits.ts';
-import { documentStateSchema } from '../domain/schemas.ts';
-import { isoDateSchema } from '../domain/values.ts';
 import { namesEntity } from '../entities/references.ts';
 import type { KnowledgeReadContext } from './context.ts';
 import { statedDocumentDate } from './document-day.ts';
-import {
-  documentRefSchema,
-  effectiveState,
-  holdsId,
-  untrustedText,
-  visibleDocument,
-} from './read-shared.ts';
-
-export const timelineInputSchema = z
-  .strictObject({
-    // The id of a subject, or the id of an entity: one of the two.
-    subject: z.string().min(1).optional(),
-    entity: z.string().min(1).optional(),
-    from: isoDateSchema.optional(),
-    to: isoDateSchema.optional(),
-    includePrivate: z.boolean().default(false),
-    limit: z.int().min(1).max(MAX_TIMELINE_LIMIT).default(DEFAULT_TIMELINE_LIMIT),
-  })
-  .refine(({ subject, entity }) => (subject === undefined) !== (entity === undefined), {
-    message: 'expected either a subject or an entity',
-  })
-  .refine(({ from, to }) => from === undefined || to === undefined || from <= to, {
-    path: ['to'],
-    message: 'expected the end of the window on or after its start',
-  });
-export type TimelineInput = z.input<typeof timelineInputSchema>;
-
-export const timelineFactSchema = z.strictObject({
-  id: z.string(),
-  text: untrustedText,
-  validFrom: isoDateSchema.nullable(),
-  validTo: isoDateSchema.nullable(),
-  // The document the fact was read in.
-  documentId: z.string(),
-});
-
-// The date of a document is the one it states; the date of a fact is the start of its
-// validity, or the date of its document. Null when neither is known: such an item comes
-// last, and is left out of a window.
-export const timelineItemSchema = z.discriminatedUnion('kind', [
-  z.strictObject({
-    kind: z.literal('document'),
-    date: isoDateSchema.nullable(),
-    document: documentRefSchema,
-    state: documentStateSchema,
-  }),
-  z.strictObject({
-    kind: z.literal('fact'),
-    date: isoDateSchema.nullable(),
-    fact: timelineFactSchema,
-  }),
-]);
-export type TimelineItem = z.output<typeof timelineItemSchema>;
-
-export const timelineOutputSchema = z.strictObject({
-  items: z.array(timelineItemSchema).readonly(),
-  // True when the chronology holds more items than the limit.
-  truncated: z.boolean(),
-});
-export type Timeline = z.output<typeof timelineOutputSchema>;
+import { effectiveState, holdsId, visibleDocument } from './read-shared.ts';
 
 interface Scope {
   readonly ofDocument: SQL;

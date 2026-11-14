@@ -1,14 +1,11 @@
+import { applyChange, describeTypes, listChanges, listEntities } from '@liasse/core/api';
 import {
-  applyChange,
   changeDecisionSchema,
-  describeTypes,
   describeTypesOptionsSchema,
   idSchema,
-  listChanges,
   listChangesOptionsSchema,
-  listEntities,
   listEntitiesRequestSchema,
-} from '@liasse/core/api';
+} from '@liasse/core/contract';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import { type McpDeps, UNTRUSTED } from '../deps.ts';

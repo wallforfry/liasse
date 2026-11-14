@@ -1,5 +1,6 @@
 import { and, asc, eq, gte, inArray, lte, or, sql } from 'drizzle-orm';
 import { z } from 'zod';
+import type { Upcoming } from '../contract/knowledge.ts';
 import { documents } from '../db/schema/documents.ts';
 import { documentDates } from '../db/schema/knowledge.ts';
 import { docTypes } from '../db/schema/registry.ts';
@@ -9,18 +10,15 @@ import {
   MAX_SLUG_LENGTH,
   MAX_UPCOMING_LIMIT,
 } from '../domain/limits.ts';
-import { documentStateSchema, keyDateKindSchema } from '../domain/schemas.ts';
+import { keyDateKindSchema } from '../domain/schemas.ts';
 import { isoDateSchema } from '../domain/values.ts';
 import { ofType } from '../search/filters.ts';
 import type { KnowledgeReadContext } from './context.ts';
 import {
-  documentRefSchema,
   effectiveState,
   holdsId,
   loadSubjectRefs,
-  subjectRefSchema,
   subjectRefsOf,
-  untrustedText,
   visibleDocument,
 } from './read-shared.ts';
 
@@ -48,25 +46,6 @@ export const upcomingInputSchema = z
     message: 'expected the end of the window on or after its start',
   });
 export type UpcomingInput = z.input<typeof upcomingInputSchema>;
-
-export const upcomingDateSchema = z.strictObject({
-  date: isoDateSchema,
-  kind: keyDateKindSchema,
-  label: untrustedText,
-  // True for a date Liasse computed, such as a notice deadline: no model wrote it.
-  computed: z.boolean(),
-  document: documentRefSchema,
-  subjects: z.array(subjectRefSchema).readonly(),
-  state: documentStateSchema,
-});
-export type UpcomingDate = z.output<typeof upcomingDateSchema>;
-
-export const upcomingOutputSchema = z.strictObject({
-  dates: z.array(upcomingDateSchema).readonly(),
-  // True when the window holds more dates than the limit: narrow it, or raise the limit.
-  truncated: z.boolean(),
-});
-export type Upcoming = z.output<typeof upcomingOutputSchema>;
 
 const CURRENT = 'current';
 

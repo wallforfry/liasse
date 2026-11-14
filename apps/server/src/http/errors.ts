@@ -6,7 +6,6 @@ import {
 } from '@liasse/core/api';
 import { HTTPException } from 'hono/http-exception';
 import type { ContentfulStatusCode } from 'hono/utils/http-status';
-import { z } from 'zod';
 import { describeError, type Logger } from '../log.ts';
 import type { AppContext } from './env.ts';
 
@@ -19,15 +18,6 @@ const STATUS_OF_KIND: Readonly<Record<ApiErrorKind, ContentfulStatusCode>> = {
   unavailable: 503,
   not_implemented: 501,
 };
-
-// The body of every failure. Written here alone: no stack, no statement, no file path.
-export const errorSchema = z.object({
-  error: z.looseObject({
-    code: z.string().describe('Stable, for programs.'),
-    message: z.string().describe('For people; may change.'),
-    request_id: z.string(),
-  }),
-});
 
 export interface Failure {
   readonly status: ContentfulStatusCode;

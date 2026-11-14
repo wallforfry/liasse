@@ -1,38 +1,14 @@
-import { z } from 'zod';
+import type {
+  GetSubjectInput,
+  GetSubjectOptions,
+  RecallInput,
+  RecallOptions,
+  TimelineInput,
+  TimelineOptions,
+} from '../contract/knowledge-reads.ts';
 import type { JsonObject } from '../db/columns.ts';
-import { type GetSubjectInput, getSubjectInputSchema } from '../knowledge/get-subject.ts';
-import { type RecallInput, recallInputSchema } from '../knowledge/recall.ts';
-import { type TimelineInput, timelineInputSchema } from '../knowledge/timeline.ts';
 import type { ApiContext } from './context.ts';
 import { notImplemented } from './errors.ts';
-
-const PRIVATE_DESCRIPTION = 'Private documents are left out unless this is true.';
-
-// The inputs of the knowledge reads as they travel: the field schemas are those of the
-// knowledge layer, under snake_case names. The rules that tie two fields together (a
-// subject or an entity, a window in order) stay with the knowledge layer, which parses
-// what it is given.
-const { includePrivate: timelinePrivate, ...timelineFields } = timelineInputSchema.shape;
-export const timelineOptionsSchema = z.strictObject({
-  ...timelineFields,
-  include_private: timelinePrivate.describe(PRIVATE_DESCRIPTION),
-});
-export type TimelineOptions = z.output<typeof timelineOptionsSchema>;
-
-const { includePrivate: recallPrivate, ...recallFields } = recallInputSchema.shape;
-export const recallOptionsSchema = z.strictObject({
-  ...recallFields,
-  include_private: recallPrivate.describe(PRIVATE_DESCRIPTION),
-});
-export type RecallOptions = z.output<typeof recallOptionsSchema>;
-
-const { includePrivate: subjectPrivate, asOf, ...subjectFields } = getSubjectInputSchema.shape;
-export const getSubjectOptionsSchema = z.strictObject({
-  ...subjectFields,
-  as_of: asOf,
-  include_private: subjectPrivate.describe(PRIVATE_DESCRIPTION),
-});
-export type GetSubjectOptions = z.output<typeof getSubjectOptionsSchema>;
 
 /** The knowledge reads, bound by the composition root; see `ApiFeatures`. */
 export interface KnowledgeFeatures {

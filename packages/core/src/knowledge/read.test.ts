@@ -4,11 +4,17 @@ import { documents } from '../db/schema/documents.ts';
 import { facts } from '../db/schema/knowledge.ts';
 import { ID_PREFIXES, newId } from '../domain/ids.ts';
 import { createTestDatabase, type TestDatabase } from '../testing/test-database.ts';
-import { getSubject, getSubjectOutputSchema } from './get-subject.ts';
-import { recall, recallOutputSchema } from './recall.ts';
+import { getSubject } from './get-subject.ts';
+import { recall } from './recall.ts';
 import { buildScenario, type Scenario } from './scenario.test-helper.ts';
-import { timeline, timelineOutputSchema } from './timeline.ts';
-import { upcoming, upcomingInputSchema, upcomingOutputSchema } from './upcoming.ts';
+import { timeline } from './timeline.ts';
+import {
+  getSubjectOutputSchema,
+  recallOutputSchema,
+  timelineOutputSchema,
+} from '../contract/knowledge-reads.ts';
+import { upcomingOutputSchema } from '../contract/knowledge.ts';
+import { upcoming, upcomingInputSchema } from './upcoming.ts';
 
 const Q1 = { from: '2026-01-01', to: '2026-03-31' } as const;
 
