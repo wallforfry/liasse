@@ -46,38 +46,40 @@ const CARD_SEPARATOR = '([^\\S\\r\\n]{1,2}|[.-])';
 const digits = (count: number): string => `\\d{${String(count)}}`;
 
 // The separator is captured after the first group and must be the one after each other.
+// It is the second group of the pattern: the first one is the whole candidate.
 const grouped = ([first = 0, ...rest]: readonly number[]): string =>
   [
     digits(first),
-    ...rest.map((size, index) => (index === 0 ? CARD_SEPARATOR : '\\1') + digits(size)),
+    ...rest.map((size, index) => (index === 0 ? CARD_SEPARATOR : '\\2') + digits(size)),
   ].join('');
 
 // The ways a card number is printed: in the groups of its network, or unbroken. Digits
 // that only add up to a card number across unrelated numbers are not one. The longest
-// form comes first, so a longer number is not cut to a shorter one that starts it.
+// form comes first, so a longer number is not cut to a shorter one that starts it. Each
+// form is looked for ahead of every position without consuming the text: a card number
+// that follows another group of digits starts inside a candidate that is not one.
 const CARD_FORMS: readonly RegExp[] = [
   grouped([4, 4, 4, 4, 3]),
   grouped([4, 4, 4, 4]),
   grouped([4, 6, 5]),
   '\\d{15,19}',
-].map((form) => new RegExp(`${NOT_BEFORE}${form}${NOT_AFTER}`, 'g'));
+].map((form) => new RegExp(`${NOT_BEFORE}(?=(${form}${NOT_AFTER}))`, 'g'));
 
 const overlaps = (left: SensitiveMatch, right: SensitiveMatch): boolean =>
   left.start < right.end && right.start < left.end;
 
 const cardsOfForm = (text: string, form: RegExp): readonly SensitiveMatch[] =>
-  [...text.matchAll(form)].flatMap(({ 0: value, index }) =>
+  [...text.matchAll(form)].flatMap(({ 1: value = '', index }) =>
     isValidCardNumber(compactSensitive('card_number', value))
       ? [{ type: 'card_number', start: index, end: index + value.length, value }]
       : [],
   );
 
+// Where two card numbers overlap, the one of the earlier form, then the one that starts
+// first, is kept.
 const findCardNumbers = (text: string): readonly SensitiveMatch[] =>
-  CARD_FORMS.reduce<readonly SensitiveMatch[]>(
-    (found, form) => [
-      ...found,
-      ...cardsOfForm(text, form).filter((match) => !found.some((kept) => overlaps(kept, match))),
-    ],
+  CARD_FORMS.flatMap((form) => cardsOfForm(text, form)).reduce<readonly SensitiveMatch[]>(
+    (kept, match) => (kept.some((other) => overlaps(other, match)) ? kept : [...kept, match]),
     [],
   );
 

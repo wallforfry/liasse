@@ -205,6 +205,24 @@ describe('findSensitiveIdentifiers on what documents really print', () => {
     expect(findSensitiveIdentifiers(text)).toEqual([]);
   });
 
+  it('finds a card number that follows another group of four digits', () => {
+    expect(single('Ticket 2026 4242 4242 4242 4242')).toMatchObject({
+      type: 'card_number',
+      value: '4242 4242 4242 4242',
+    });
+    expect(single('2026 2027 4242 4242 4242 4242 2028')).toMatchObject({
+      value: '4242 4242 4242 4242',
+    });
+  });
+
+  it('finds every card number of 2000 lines that start with a number of four digits', () => {
+    const lines = Array.from(
+      { length: 2000 },
+      (_, index) => `${String(1000 + index)} 4242 4242 4242 4242`,
+    );
+    expect(lines.filter((line) => findSensitiveIdentifiers(line).length !== 1)).toEqual([]);
+  });
+
   // The generator of the review: 2000 rows of 8 numbers of 1 to 5 digits.
   it('takes no row of unrelated numbers for a card number', () => {
     let seed = 12345;
