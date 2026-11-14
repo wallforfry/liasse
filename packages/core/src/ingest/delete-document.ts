@@ -1,4 +1,4 @@
-import { and, eq, or, sql } from 'drizzle-orm';
+import { and, eq, sql } from 'drizzle-orm';
 import type { Database } from '../db/client.ts';
 import { chunks, documentPages, documents, isLiveDocument } from '../db/schema/documents.ts';
 import { jobs } from '../db/schema/jobs.ts';
@@ -33,18 +33,29 @@ const BLANK_CONTENT = {
   confidence: null,
   manualFields: [],
   subjectIds: [],
+  watchRequeues: 0,
+  fileDeletedAt: null,
 } as const;
 
-// The row stays, so the cascade of its foreign keys does not run. A table that
-// references `documents` must be emptied here.
+/**
+ * Every column that references `documents.id`. The row of a deleted document stays, so
+ * the cascade of these foreign keys does not run: `deleteDocument` deletes through this
+ * list instead. A test compares it with the foreign keys of the Postgres catalog, so a
+ * new table that references `documents` fails until it is listed here.
+ */
+export const DOCUMENT_REFERENCES = [
+  documentPages.documentId,
+  chunks.documentId,
+  documentDates.documentId,
+  facts.documentId,
+  documentLinks.fromDocumentId,
+  documentLinks.toDocumentId,
+] as const;
+
 const deleteDerivedRows = async (tx: Transaction, id: string): Promise<void> => {
-  await tx.delete(documentPages).where(eq(documentPages.documentId, id));
-  await tx.delete(chunks).where(eq(chunks.documentId, id));
-  await tx.delete(documentDates).where(eq(documentDates.documentId, id));
-  await tx.delete(facts).where(eq(facts.documentId, id));
-  await tx
-    .delete(documentLinks)
-    .where(or(eq(documentLinks.fromDocumentId, id), eq(documentLinks.toDocumentId, id)));
+  for (const reference of DOCUMENT_REFERENCES) {
+    await tx.delete(reference.table).where(eq(reference, id));
+  }
 };
 
 const cancelQueuedProcessing = async (tx: Transaction, id: string): Promise<void> => {

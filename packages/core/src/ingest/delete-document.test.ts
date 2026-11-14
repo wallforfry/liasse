@@ -1,15 +1,16 @@
 import { createHash } from 'node:crypto';
-import { eq, sql } from 'drizzle-orm';
+import { eq, getTableName, sql } from 'drizzle-orm';
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 import { chunks, documentPages, documents, isLiveDocument } from '../db/schema/documents.ts';
 import { jobs } from '../db/schema/jobs.ts';
 import { documentDates, documentLinks, facts } from '../db/schema/knowledge.ts';
+import { docTypes } from '../db/schema/registry.ts';
 import { startWorkers } from '../jobs/workers.ts';
 import { storageKeyOf } from '../storage/key.ts';
 import type { Storage } from '../storage/port.ts';
 import { createGate, sleep, waitUntil } from '../testing/async.ts';
 import { syntheticPdf } from '../testing/synthetic-files.ts';
-import { deleteDocument } from './delete-document.ts';
+import { deleteDocument, DOCUMENT_REFERENCES } from './delete-document.ts';
 import { createDeleteFileHandler } from './delete-file-job.ts';
 import { createIngestHarness, type IngestHarness } from './harness.test-helper.ts';
 import { ingestFile } from './ingest-file.ts';
@@ -51,13 +52,23 @@ describe('deleteDocument and the delete_file job', () => {
     await harness.dispose();
   });
 
+  // Every column is given a value a tombstone must not keep, and the whole row is then
+  // compared: a column added to `documents` breaks this test until `deleteDocument`
+  // says what becomes of it.
   it('turns the document into a tombstone that keeps its hash and none of its content', async () => {
     const bytes = syntheticPdf('deleted');
     const { id } = await ingest(bytes, 'tax-notice.pdf');
+    const [type] = await harness.database.db
+      .insert(docTypes)
+      .values({ slug: 'synthetic_type', description: 'Synthetic type' })
+      .returning();
     await harness.database.db
       .update(documents)
       .set({
         status: 'indexed',
+        state: 'superseded',
+        typeId: type?.id ?? null,
+        schemaVersion: 3,
         title: 'Synthetic title',
         summary: 'Synthetic summary.',
         core: { reference: 'synthetic' },
@@ -69,30 +80,43 @@ describe('deleteDocument and the delete_file job', () => {
         manualFields: ['core.reference'],
         subjectIds: ['sub_synthetic'],
         private: true,
+        watchRequeues: 1,
+        fileDeletedAt: new Date('2026-01-01T00:00:00Z'),
       })
       .where(eq(documents.id, id));
+    const before = await documentRow(id);
+    expect(before).toMatchObject({ hint: 'synthetic hint', originalName: 'tax-notice.pdf' });
 
     expect(await deleteDocument(harness.deps, id)).toBe(true);
-    expect(await documentRow(id)).toMatchObject({
+    const { updatedAt, ...tombstone } = await documentRow(id);
+    expect(tombstone).toEqual({
       id,
-      status: 'deleted',
       sha256: sha256Of(bytes),
       storageKey: keyOf(bytes),
+      mime: 'application/pdf',
+      source: 'api',
+      ingestedAt: before.ingestedAt,
+      status: 'deleted',
+      state: 'current',
       originalName: '',
       hint: null,
-      title: null,
-      summary: null,
+      typeId: null,
+      schemaVersion: null,
       core: {},
       fields: {},
       extra: {},
       provenance: {},
+      title: null,
+      summary: null,
+      private: false,
       error: null,
       confidence: null,
-      typeId: null,
-      schemaVersion: null,
       manualFields: [],
       subjectIds: [],
+      watchRequeues: 0,
+      fileDeletedAt: null,
     });
+    expect(updatedAt.getTime()).toBeGreaterThanOrEqual(before.updatedAt.getTime());
   });
 
   it('deletes the rows derived from the document and leaves those of the others', async () => {
@@ -258,5 +282,21 @@ describe('deleteDocument and the delete_file job', () => {
       .from(documents)
       .where(isLiveDocument);
     expect(listed).toEqual([{ id: live.id }]);
+  });
+
+  it('empties every table that references documents, as the catalog lists them', async () => {
+    const foreignKeys = await harness.database.db.execute<{ reference: string }>(sql`
+      SELECT referencing.relname || '.' || attribute.attname AS reference
+      FROM pg_constraint AS key
+      JOIN pg_class AS referencing ON referencing.oid = key.conrelid
+      JOIN pg_attribute AS attribute
+        ON attribute.attrelid = key.conrelid AND attribute.attnum = ANY (key.conkey)
+      WHERE key.contype = 'f' AND key.confrelid = 'documents'::regclass
+      ORDER BY reference`);
+    const covered = DOCUMENT_REFERENCES.map(
+      (column) => `${getTableName(column.table)}.${column.name}`,
+    );
+    expect(foreignKeys.length).toBeGreaterThan(0);
+    expect(foreignKeys.map(({ reference }) => reference)).toEqual([...covered].sort());
   });
 });
