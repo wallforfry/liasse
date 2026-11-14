@@ -31,7 +31,7 @@ describe('normalizeEntityName', () => {
   it('keeps the letters and digits of every script', () => {
     expect(normalizeEntityName('Ромашка LLC')).toEqual(['ромашка']);
     expect(normalizeEntityName('中国银行 2024')).toEqual(['中国银行', '2024']);
-    expect(normalizeEntityName('Ελληνική Τράπεζα SA')).toEqual(['ελληνικη', 'τραπεζα']);
+    expect(normalizeEntityName('Ελληνική Τράπεζα SA')).toEqual(['ελληνική', 'τράπεζα']);
   });
 
   it('gives no token for a name without any letter or digit', () => {
@@ -54,6 +54,38 @@ describe('entityNameKey', () => {
     ['Ελληνική Τράπεζα SA', 'SA'],
   ])('keeps %s and %s apart', (left, right) => {
     expect(entityNameKey(left)).not.toBe(entityNameKey(right));
+  });
+
+  it.each([
+    ['東京ガス', '東京カス'],
+    ['サトウ商事', 'サドウ商事'],
+    ['バンク', 'パンク'],
+    ['राम ट्रेडर्स', 'रोम ट्रेडर्स'],
+    ['กิน', 'กัน'],
+    ['Зайка', 'Заика'],
+    ['Ёлка', 'Елка'],
+    ['Τράπεζα Πόλης', 'Τραπεζα Πολης'],
+  ])(
+    'keeps %s and %s apart: a mark outside the Latin script is part of the word',
+    (left, right) => {
+      expect(entityNameKey(left)).not.toBe(entityNameKey(right));
+    },
+  );
+
+  it('keeps a word whole around the marks of its script', () => {
+    expect(normalizeEntityName('राम ट्रेडर्स')).toEqual(['राम', 'ट्रेडर्स']);
+    expect(normalizeEntityName('กิน กัน')).toEqual(['กิน', 'กัน']);
+  });
+
+  it.each([
+    ['Société Générale', 'Societe Generale'],
+    ['Việt Tiến', 'Viet Tien'],
+    ['Ｓｙｎｔｈｅｔｉｃ　Ｅｎｅｒｇｙ', 'synthetic energy'],
+    ['Zo\u0308e\u0301 Labs', 'Zoe Labs'],
+    ['ｶﾞｽ', 'ガス'],
+    ['Q\u0301uest X\u0303', 'Quest X'],
+  ])('folds %s like %s', (left, right) => {
+    expect(entityNameKey(left)).toBe(entityNameKey(right));
   });
 
   it('is the same for two spellings of a name in another script', () => {

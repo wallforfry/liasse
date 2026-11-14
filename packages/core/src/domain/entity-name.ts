@@ -5,16 +5,25 @@ const LEGAL_FORMS: ReadonlySet<string> = new Set([
   'gmbh', 'ag', 'kg', 'ug', 'bv', 'nv', 'spa', 'srl', 'sl', 'ab', 'as', 'oy',
 ]);
 
-// Dotted abbreviations such as "S.A." or "Inc." must end up as one token. Letters and
-// digits of every script are kept: a name must not lose the word that tells it apart
-// because that word is not written in Latin letters.
+// "No accents" is a rule about Latin letters, where a diacritic is a variant of spelling.
+// In other scripts a mark makes another word: a voiced kana, a Devanagari or Thai vowel
+// sign, the breve of a Cyrillic letter, a Greek tonos. So a Latin letter loses its
+// combining marks, and nothing else does.
+const withoutLatinDiacritics = (text: string): string =>
+  text.replace(/\p{Script=Latin}\p{M}*/gu, (letter) =>
+    letter.normalize('NFD').replace(/\p{M}/gu, ''),
+  );
+
+// Compatibility forms are folded first, by NFKC: full-width and half-width characters,
+// ligatures and the like become the plain ones, and every letter comes out composed with
+// its marks. Dotted abbreviations such as "S.A." or "Inc." must end up as one token.
+// Letters, marks and digits of every script make the words: a name must not lose what
+// tells it apart because it is not written in Latin letters.
 const tokenize = (name: string): readonly string[] =>
-  name
-    .normalize('NFKD')
-    .replace(/\p{M}/gu, '')
+  withoutLatinDiacritics(name.normalize('NFKC'))
     .replace(/\./g, '')
     .toLowerCase()
-    .split(/[^\p{L}\p{N}]+/u)
+    .split(/[^\p{L}\p{N}\p{M}]+/u)
     .filter((token) => token !== '');
 
 const withoutLegalForm = (tokens: readonly string[]): readonly string[] => {
