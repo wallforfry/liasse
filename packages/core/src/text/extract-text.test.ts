@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { SUPPORTED_MIMES } from '../domain/enums.ts';
+import { z } from 'zod';
+import { SUPPORTED_MIMES, type SupportedMime } from '../domain/enums.ts';
 import { createFakeVisionModel } from '../testing/fake-vision-model.ts';
 import { buildSyntheticPng } from '../testing/synthetic-png.ts';
 import { extractText } from './extract-text.ts';
@@ -27,6 +28,15 @@ describe('extractText', () => {
 
   it('caps scanned PDFs at 100 pages by default', () => {
     expect(DEFAULT_TEXT_LIMITS.maxVisionPages).toBe(100);
+  });
+
+  it('refuses a MIME type that slipped past validation', async () => {
+    const vision = createFakeVisionModel();
+    // A caller that skipped the schema: the type says supported, the value is not.
+    const mime = z.custom<SupportedMime>().parse('text/plain');
+    await expect(
+      extractText({ bytes: buildSyntheticPng(8, 8), mime }, { vision }),
+    ).rejects.toMatchObject({ name: 'TextExtractionError', code: 'unsupported_mime' });
   });
 });
 
