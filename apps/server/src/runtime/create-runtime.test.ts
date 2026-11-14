@@ -7,7 +7,7 @@ import { loadConfig } from '@liasse/core/config';
 import { documents, facts, jobs } from '@liasse/core/db';
 import { StartupError } from '@liasse/core/domain';
 import { enqueueHindsightSync } from '@liasse/core/hindsight';
-import { defineJobKind, enqueue, handle } from '@liasse/core/jobs';
+import { DeferJobError, defineJobKind, enqueue, handle } from '@liasse/core/jobs';
 import {
   createGate,
   insertSyntheticDocument,
@@ -32,6 +32,10 @@ const fastJob = defineJobKind({
   name: 'synthetic_fast',
   schema: z.object({ label: z.string() }),
 });
+
+class SyntheticWaitError extends Error {
+  override readonly name = 'SyntheticWaitError';
+}
 
 describe('createRuntime', () => {
   const harness = useRuntimeHarness();
@@ -248,6 +252,49 @@ describe('createRuntime', () => {
       return rows.every(({ status }) => status === 'succeeded');
     });
     expect(peak).toBe(1);
+  });
+
+  it('logs a deferred job as deferred, once, and never as failed', async () => {
+    let runs = 0;
+    const bind: Bind = (parts) => {
+      const defaults = bindWithFakes(parts);
+      return {
+        ...defaults,
+        handlers: [
+          ...defaults.handlers,
+          handle(fastJob, () => {
+            runs += 1;
+            return runs === 1
+              ? Promise.reject(
+                  new DeferJobError('synthetic deferral', {
+                    delayMs: 10,
+                    cause: new SyntheticWaitError(),
+                  }),
+                )
+              : Promise.resolve();
+          }),
+        ],
+      };
+    };
+    await start({}, { bind });
+    const id = await enqueue(harness.database().db, {
+      kind: fastJob,
+      payload: { label: 'synthetic-payload-marker' },
+    });
+    await waitUntil(async () => {
+      const [row] = await harness
+        .database()
+        .db.select({ status: jobs.status })
+        .from(jobs)
+        .where(eq(jobs.id, id));
+      return row?.status === 'succeeded';
+    });
+    const queueLines = harness.lines().filter((line) => line.includes(id));
+    expect(queueLines).toEqual([
+      `{"event":"job_deferred","job_id":"${id}","kind":"synthetic_fast","attempt":1,"delay_ms":10,"error":"SyntheticWaitError"}`,
+    ]);
+    expect(harness.lines().some((line) => line.includes('job_failed'))).toBe(false);
+    expect(harness.lines().some((line) => line.includes('synthetic-payload-marker'))).toBe(false);
   });
 
   it('gives a job in flight until the deadline, then returns it to the queue', async () => {
