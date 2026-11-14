@@ -19,12 +19,19 @@
     "./score": "./src/score/index.ts"
   },
   "scripts": {
+    "calibrate": "node --env-file-if-exists=../.env --conditions=@liasse/source --experimental-strip-types src/calibrate/cli.ts",
+    "compare": "node --conditions=@liasse/source --experimental-strip-types src/harness/compare-cli.ts",
     "generate": "node --conditions=@liasse/source --experimental-strip-types src/generate/cli.ts",
+    "harness": "node --env-file-if-exists=../.env --conditions=@liasse/source --experimental-strip-types src/harness/cli.ts",
     "typecheck": "tsc --noEmit -p tsconfig.json"
   },
   "devDependencies": {
     "@liasse/core": "workspace:*",
+    "@liasse/sdk": "workspace:*",
+    "@liasse/server": "workspace:*",
+    "@modelcontextprotocol/sdk": "1.32.2",
     "@types/heic-decode": "^2.0.1",
+    "drizzle-orm": "^0.45.4",
     "heic-decode": "^2.1.0",
     "jpeg-js": "^0.4.4",
     "zod": "^4.6.7"

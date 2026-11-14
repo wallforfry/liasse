@@ -8,6 +8,13 @@
   "engines": {
     "node": ">=22.12.0"
   },
+  "exports": {
+    "./runtime": {
+      "@liasse/source": "./src/runtime/create-runtime.ts",
+      "types": "./dist/runtime/create-runtime.d.ts",
+      "default": "./dist/runtime/create-runtime.js"
+    }
+  },
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
     "dev": "node --env-file-if-exists=../../.env --conditions=@liasse/source --experimental-strip-types src/main.ts",
