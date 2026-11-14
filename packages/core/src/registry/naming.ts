@@ -1,3 +1,5 @@
+import { significantEntityTokens } from '../domain/entity-name.ts';
+import type { SchemaLanguage } from '../domain/enums.ts';
 import { MAX_FIELD_NAME_LENGTH, MAX_SLUG_LENGTH } from '../domain/limits.ts';
 import { CORE_FIELD_NAMES } from './core-fields.ts';
 
@@ -18,26 +20,42 @@ export interface NamingViolation {
 
 const SNAKE_CASE = /^[a-z][a-z0-9]*(_[a-z0-9]+)*$/;
 
-const MONTHS = [
-  'january',
-  'february',
-  'march',
-  'april',
-  'may',
-  'june',
-  'july',
-  'august',
-  'september',
-  'october',
-  'november',
-  'december',
-] as const;
+// The date words a slug may not carry, per schema language: the twelve months and their
+// usual short forms, in ASCII. English is always checked, whatever the configuration.
+// `satisfies` makes a schema language without its row a compile error.
+// prettier-ignore
+export const MONTH_WORDS = {
+  en: [
+    'january', 'february', 'march', 'april', 'may', 'june',
+    'july', 'august', 'september', 'october', 'november', 'december',
+    'jan', 'feb', 'mar', 'apr', 'jun', 'jul', 'aug', 'sep', 'sept', 'oct', 'nov', 'dec',
+  ],
+  fr: [
+    'janvier', 'fevrier', 'mars', 'avril', 'mai', 'juin',
+    'juillet', 'aout', 'septembre', 'octobre', 'novembre', 'decembre',
+    'janv', 'fevr', 'avr', 'juil', 'sept', 'oct', 'nov', 'dec',
+  ],
+  de: [
+    'januar', 'februar', 'marz', 'maerz', 'april', 'mai', 'juni',
+    'juli', 'august', 'september', 'oktober', 'november', 'dezember',
+    'jan', 'feb', 'mrz', 'apr', 'jun', 'jul', 'aug', 'sep', 'sept', 'okt', 'nov', 'dez',
+  ],
+  es: [
+    'enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio',
+    'julio', 'agosto', 'septiembre', 'setiembre', 'octubre', 'noviembre', 'diciembre',
+    'ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'sept', 'oct', 'nov', 'dic',
+  ],
+  it: [
+    'gennaio', 'febbraio', 'marzo', 'aprile', 'maggio', 'giugno',
+    'luglio', 'agosto', 'settembre', 'ottobre', 'novembre', 'dicembre',
+    'gen', 'feb', 'mar', 'apr', 'mag', 'giu', 'lug', 'ago', 'set', 'ott', 'nov', 'dic',
+  ],
+} as const satisfies Readonly<Record<SchemaLanguage, readonly string[]>>;
 
-const MONTH_TOKENS: ReadonlySet<string> = new Set([
-  ...MONTHS,
-  ...MONTHS.map((month) => month.slice(0, 3)),
-  'sept',
-]);
+const ALWAYS_CHECKED: SchemaLanguage = 'en';
+
+const monthWords = (language: SchemaLanguage): ReadonlySet<string> =>
+  new Set<string>([...MONTH_WORDS[ALWAYS_CHECKED], ...MONTH_WORDS[language]]);
 
 const violation = (rule: NamingRule, message: string): NamingViolation => ({ rule, message });
 
@@ -81,29 +99,49 @@ export const fieldNameViolations = (name: string): readonly NamingViolation[] =>
 export const aliasViolations = (alias: string): readonly NamingViolation[] =>
   shapeViolations('Alias', alias, MAX_SLUG_LENGTH);
 
+export interface SlugContext {
+  readonly schemaLanguage: SchemaLanguage;
+  // Canonical names and aliases of the known entities, as stored.
+  readonly entityNames: readonly string[];
+  // Slugs of the types the registry already holds.
+  readonly typeSlugs: readonly string[];
+}
+
+// A shorter entity word inside a longer word is too often a coincidence: an operator
+// called Free must not hold back `freelance_contract`.
+const MIN_LENGTH_MATCHED_INSIDE_A_WORD = 6;
+
+// A slug may not carry a significant word of a known entity name. One exception keeps
+// generic words usable: a word some type slug already uses belongs to the vocabulary of
+// the registry, and an entity that happens to be called Contract or Energy does not take
+// it back. Nothing else tells such a word from a name without a dictionary.
 const entityViolations = (
   slug: string,
-  entityNames: readonly (readonly string[])[],
+  { entityNames, typeSlugs }: SlugContext,
 ): readonly NamingViolation[] => {
-  const delimited = `_${slug}_`;
-  return entityNames
-    .filter((tokens) => delimited.includes(`_${tokens.join('_')}_`))
-    .map((tokens) =>
+  const words = slug.split('_');
+  const vocabulary = new Set(typeSlugs.flatMap((typeSlug) => typeSlug.split('_')));
+  const carries = (token: string): boolean =>
+    words.some(
+      (word) =>
+        word === token ||
+        (token.length >= MIN_LENGTH_MATCHED_INSIDE_A_WORD && word.includes(token)),
+    );
+  return [...new Set(entityNames.flatMap(significantEntityTokens))]
+    .filter((token) => !vocabulary.has(token) && carries(token))
+    .map((token) =>
       violation(
         'entity',
-        `Slug "${slug}" contains the entity name "${tokens.join('_')}": a type is generic and never names an issuer or a recipient.`,
+        `Slug "${slug}" contains "${token}", a word of a known entity name: a type is generic and never names an issuer or a recipient.`,
       ),
     );
 };
 
-// `entityNames` holds the normalized tokens of every known entity name and alias.
-export const slugViolations = (
-  slug: string,
-  entityNames: readonly (readonly string[])[],
-): readonly NamingViolation[] => {
+export const slugViolations = (slug: string, context: SlugContext): readonly NamingViolation[] => {
   const shape = shapeViolations('Slug', slug, MAX_SLUG_LENGTH);
   if (shape.some(({ rule }) => rule === 'snake_case')) return shape;
-  const months = slug.split('_').filter((token) => MONTH_TOKENS.has(token));
+  const forbidden = monthWords(context.schemaLanguage);
+  const months = slug.split('_').filter((word) => forbidden.has(word));
   return [
     ...shape,
     ...(/\d/.test(slug)
@@ -120,6 +158,6 @@ export const slugViolations = (
         `Slug "${slug}" contains the month "${month}": a type is generic and never carries a date.`,
       ),
     ),
-    ...entityViolations(slug, entityNames),
+    ...entityViolations(slug, context),
   ];
 };

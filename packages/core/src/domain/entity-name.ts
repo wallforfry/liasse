@@ -21,7 +21,27 @@ const withoutLegalForm = (tokens: readonly string[]): readonly string[] => {
   return first === -1 ? tokens : tokens.slice(first, last + 1);
 };
 
+// Function words of the schema languages, three characters or more: shorter ones never
+// count as significant anyway.
+// prettier-ignore
+const FUNCTION_WORDS: ReadonlySet<string> = new Set([
+  'the', 'and', 'for',
+  'les', 'des', 'une', 'aux', 'sur', 'pour', 'par',
+  'der', 'die', 'das', 'und', 'von', 'fur',
+  'del', 'los', 'las', 'con', 'por', 'para',
+  'dei', 'degli', 'della', 'delle', 'per',
+]);
+
+const MIN_SIGNIFICANT_LENGTH = 3;
+
 // Lowercase ASCII tokens of an entity name, without accents and without the legal form
 // around it. A name made only of legal-form words keeps them, so it never becomes empty.
 export const normalizeEntityName = (name: string): readonly string[] =>
   withoutLegalForm(tokenize(name));
+
+// The words of an entity name that say something about the entity: no legal form, no
+// function word, nothing under three characters.
+export const significantEntityTokens = (name: string): readonly string[] =>
+  normalizeEntityName(name).filter(
+    (token) => token.length >= MIN_SIGNIFICANT_LENGTH && !FUNCTION_WORDS.has(token),
+  );

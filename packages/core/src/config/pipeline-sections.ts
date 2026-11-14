@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { autoApplyModeSchema } from '../domain/schemas.ts';
+import { autoApplyModeSchema, schemaLanguageSchema } from '../domain/schemas.ts';
 import { decimal, integer, text } from './fields.ts';
 
 export const pipelineSection = z
@@ -8,10 +8,7 @@ export const pipelineSection = z
     AUTO_APPLY: autoApplyModeSchema.default('safe'),
     CONFIDENCE_THRESHOLD: decimal(0, 1).default(0.7),
     MAX_NEW_TYPES_PER_DAY: integer(0, 1000).default(5),
-    SCHEMA_LANGUAGE: z
-      .string()
-      .regex(/^[a-z]{2}$/, 'expected an ISO 639-1 code such as en')
-      .default('en'),
+    SCHEMA_LANGUAGE: schemaLanguageSchema.default('en'),
     WORKERS: integer(1, 64).default(2),
   })
   .transform((env) =>

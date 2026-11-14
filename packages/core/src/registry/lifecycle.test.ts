@@ -43,7 +43,12 @@ describe('type lifecycle', () => {
 
   beforeAll(async () => {
     database = await createTestDatabase();
-    context = { db: database.db, embedder: createFakeEmbedder(), maxNewTypesPerDay: 1000 };
+    context = {
+      db: database.db,
+      embedder: createFakeEmbedder(),
+      maxNewTypesPerDay: 1000,
+      schemaLanguage: 'en',
+    };
   });
 
   afterAll(async () => {

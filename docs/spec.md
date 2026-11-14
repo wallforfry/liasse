@@ -375,7 +375,7 @@ A single Node binary, configured through environment variables, shipped as a mul
 | `AUTO_APPLY` | `safe` | `none`, `safe`, `all` |
 | `CONFIDENCE_THRESHOLD` | `0.7` | Below: `needs_review` |
 | `MAX_NEW_TYPES_PER_DAY` | `5` | Beyond: closest type + `needs_review` |
-| `SCHEMA_LANGUAGE` | `en` | Language of generated slugs and field names |
+| `SCHEMA_LANGUAGE` | `en` | Language of generated slugs and field names: `en`, `fr`, `de`, `es` or `it` |
 | `HINDSIGHT_URL` / `HINDSIGHT_BANK` / `HINDSIGHT_API_KEY` | empty | Optional integration |
 | `API_TOKENS` | — | Bearer tokens (list) for API and MCP |
 | `UI_PASSWORD` | empty | Enables the web UI (plain value or `$argon2id$…` hash) |

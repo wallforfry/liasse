@@ -41,6 +41,21 @@ describe('loadConfig value parsing', () => {
     ).toBe(expected);
   });
 
+  it.each(['en', 'fr', 'de', 'es', 'it'])('accepts the schema language %s', (language) => {
+    expect(
+      loadConfig({ ...SYNTHETIC_ENV, SCHEMA_LANGUAGE: language }).pipeline.schemaLanguage,
+    ).toBe(language);
+  });
+
+  it.each(['pt', 'EN', 'eng', 'english'])(
+    'rejects the schema language %j, which has no naming table',
+    (language) => {
+      expect(() => loadConfig({ ...SYNTHETIC_ENV, SCHEMA_LANGUAGE: language })).toThrow(
+        /^Invalid configuration:\n {2}- SCHEMA_LANGUAGE: /,
+      );
+    },
+  );
+
   it('rejects a number outside its range', () => {
     expect(() => loadConfig({ ...SYNTHETIC_ENV, PORT: '70000', WORKERS: '0' })).toThrow(
       /PORT: Too big.*\n.*WORKERS: Too small/,

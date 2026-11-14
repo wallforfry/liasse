@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { normalizeEntityName } from './entity-name.ts';
+import { normalizeEntityName, significantEntityTokens } from './entity-name.ts';
 
 describe('normalizeEntityName', () => {
   it('lowercases, removes accents and splits on anything that is not a letter or a digit', () => {
@@ -30,5 +30,26 @@ describe('normalizeEntityName', () => {
 
   it('gives no token for a name without any ASCII letter or digit', () => {
     expect(normalizeEntityName('***')).toEqual([]);
+  });
+});
+
+describe('significantEntityTokens', () => {
+  it('keeps the words of at least three characters', () => {
+    expect(significantEntityTokens('Jane Doe')).toEqual(['jane', 'doe']);
+    expect(significantEntityTokens('EDF')).toEqual(['edf']);
+    expect(significantEntityTokens('BP')).toEqual([]);
+  });
+
+  it('drops the legal form and the function words', () => {
+    expect(significantEntityTokens('Électricité de Synthèse SA')).toEqual([
+      'electricite',
+      'synthese',
+    ]);
+    expect(significantEntityTokens('The Bank of the North Ltd')).toEqual(['bank', 'north']);
+    expect(significantEntityTokens('Caisse des Dépôts et pour les Autres')).toEqual([
+      'caisse',
+      'depots',
+      'autres',
+    ]);
   });
 });

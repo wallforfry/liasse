@@ -90,5 +90,10 @@ export const EMBEDDING_PROVIDERS = [
 ] as const;
 export type EmbeddingProvider = (typeof EMBEDDING_PROVIDERS)[number];
 
+// The languages type slugs and field names may be generated in. Each one needs its table
+// of date words in the registry naming rules, which the compiler checks.
+export const SCHEMA_LANGUAGES = ['en', 'fr', 'de', 'es', 'it'] as const;
+export type SchemaLanguage = (typeof SCHEMA_LANGUAGES)[number];
+
 export const AUTO_APPLY_MODES = ['none', 'safe', 'all'] as const;
 export type AutoApplyMode = (typeof AUTO_APPLY_MODES)[number];

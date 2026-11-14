@@ -19,9 +19,11 @@ export { addAlias, markMerged, setStatus } from './lifecycle.ts';
 export {
   aliasViolations,
   fieldNameViolations,
+  MONTH_WORDS,
   NAMING_RULES,
   type NamingRule,
   type NamingViolation,
+  type SlugContext,
   slugViolations,
 } from './naming.ts';
 export {

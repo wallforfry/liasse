@@ -43,6 +43,7 @@ describe('createType', () => {
     db: database.db,
     embedder: createFakeEmbedder(),
     maxNewTypesPerDay: 1000,
+    schemaLanguage: 'en',
     now: () => new Date('2026-01-15T10:00:00.000Z'),
     ...overrides,
   });
@@ -124,8 +125,10 @@ describe('createType', () => {
     ['october_bill', ['month']],
     ['edf_october', ['month', 'entity']],
     ['edf_bill', ['entity']],
-    ['electricite_de_synthese_bill', ['entity']],
-    ['jane_doe_payslip', ['entity']],
+    ['electricite_de_synthese_bill', ['entity', 'entity']],
+    ['jane_doe_payslip', ['entity', 'entity']],
+    ['doe_agreement', ['entity']],
+    ['synthese_report', ['entity']],
   ])('rejects the slug %s', async (slug, rules) => {
     const error = await errorOf(draft(slug));
     expect(error).toMatchObject({ code: 'invalid_slug', slug });
@@ -133,6 +136,24 @@ describe('createType', () => {
       rules,
     );
     expect(await database.db.$count(docTypes, eq(docTypes.slug, slug))).toBe(0);
+  });
+
+  it('refuses the months of the configured schema language, and still the English ones', async () => {
+    const french = { schemaLanguage: 'fr' } as const;
+    expect(await errorOf(draft('bill_octobre'), french)).toMatchObject({
+      code: 'invalid_slug',
+      violations: [{ rule: 'month' }],
+    });
+    expect(await errorOf(draft('bill_october'), french)).toMatchObject({ code: 'invalid_slug' });
+    expect((await createType(draft('gas_bill'), context(french))).ok).toBe(true);
+    expect((await createType(draft('bill_octobre'), context())).ok).toBe(true);
+  });
+
+  it('lets an entity word through once a type slug uses it', async () => {
+    await database.db.insert(entities).values({ kind: 'org', canonicalName: 'Warranty' });
+    expect(await errorOf(draft('warranty'))).toMatchObject({ code: 'invalid_slug' });
+    await database.db.insert(docTypes).values({ slug: 'extended_warranty', description: 'x' });
+    expect((await createType(draft('warranty'), context())).ok).toBe(true);
   });
 
   it.each(['', '   ', 'x'.repeat(MAX_TYPE_DESCRIPTION_LENGTH + 1)])(

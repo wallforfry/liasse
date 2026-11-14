@@ -12,6 +12,7 @@ import {
   KEY_DATE_KINDS,
   LINK_KINDS,
   LLM_PROVIDERS,
+  SCHEMA_LANGUAGES,
   STORAGE_DRIVERS,
   SUBJECT_KINDS,
   TYPE_STATUSES,
@@ -32,3 +33,4 @@ export const storageDriverSchema = z.enum(STORAGE_DRIVERS);
 export const llmProviderSchema = z.enum(LLM_PROVIDERS);
 export const embeddingProviderSchema = z.enum(EMBEDDING_PROVIDERS);
 export const autoApplyModeSchema = z.enum(AUTO_APPLY_MODES);
+export const schemaLanguageSchema = z.enum(SCHEMA_LANGUAGES);

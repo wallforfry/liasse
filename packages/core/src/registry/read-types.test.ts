@@ -46,7 +46,12 @@ describe('reading the registry', () => {
 
   beforeAll(async () => {
     database = await createTestDatabase();
-    context = { db: database.db, embedder: createFakeEmbedder(), maxNewTypesPerDay: 1000 };
+    context = {
+      db: database.db,
+      embedder: createFakeEmbedder(),
+      maxNewTypesPerDay: 1000,
+      schemaLanguage: 'en',
+    };
     for (const [slug, description] of Object.entries(DESCRIPTIONS)) {
       const created = await createType(
         { slug, description, fields: { reference_code: { type: 'identifier' } } },

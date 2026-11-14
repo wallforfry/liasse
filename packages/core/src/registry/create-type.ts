@@ -1,6 +1,6 @@
 import { and, count, gte, lt } from 'drizzle-orm';
 import { docTypes, entities } from '../db/schema/registry.ts';
-import { normalizeEntityName } from '../domain/entity-name.ts';
+import type { SchemaLanguage } from '../domain/enums.ts';
 import { MAX_TYPE_DESCRIPTION_LENGTH } from '../domain/limits.ts';
 import type { RegistryContext } from './context.ts';
 import {
@@ -12,7 +12,7 @@ import {
   type RegistryError,
 } from './errors.ts';
 import { checkTypeFields, type TypeFields } from './fields.ts';
-import { slugViolations } from './naming.ts';
+import { type SlugContext, slugViolations } from './naming.ts';
 import { err, ok, type Result } from './result.ts';
 import {
   findLiveTypeByName,
@@ -37,16 +37,27 @@ interface TypeDraft {
   readonly fields: TypeFields;
 }
 
-const knownEntityNames = async (reader: RegistryReader): Promise<readonly (readonly string[])[]> =>
-  (await reader.select({ name: entities.canonicalName, aliases: entities.aliases }).from(entities))
-    .flatMap(({ name, aliases }) => [name, ...aliases])
-    .map(normalizeEntityName);
+const slugContext = async (
+  reader: RegistryReader,
+  schemaLanguage: SchemaLanguage,
+): Promise<SlugContext> => {
+  const known = await reader
+    .select({ name: entities.canonicalName, aliases: entities.aliases })
+    .from(entities);
+  const types = await reader.select({ slug: docTypes.slug }).from(docTypes);
+  return {
+    schemaLanguage,
+    entityNames: known.flatMap(({ name, aliases }) => [name, ...aliases]),
+    typeSlugs: types.map(({ slug }) => slug),
+  };
+};
 
 const checkDraft = async (
   input: CreateTypeInput,
   reader: RegistryReader,
+  schemaLanguage: SchemaLanguage,
 ): Promise<Result<TypeDraft, RegistryError>> => {
-  const violations = slugViolations(input.slug, await knownEntityNames(reader));
+  const violations = slugViolations(input.slug, await slugContext(reader, schemaLanguage));
   if (violations.length > 0) return err(invalidSlug(input.slug, violations));
   const description = input.description.trim();
   if (description === '' || description.length > MAX_TYPE_DESCRIPTION_LENGTH) {
@@ -125,9 +136,9 @@ const checkCreatable = async (
 
 export const createType = async (
   input: CreateTypeInput,
-  { db, embedder, maxNewTypesPerDay, now = () => new Date() }: RegistryContext,
+  { db, embedder, maxNewTypesPerDay, schemaLanguage, now = () => new Date() }: RegistryContext,
 ): Promise<Result<RegisteredType, RegistryError>> => {
-  const draft = await checkDraft(input, db);
+  const draft = await checkDraft(input, db, schemaLanguage);
   if (!draft.ok) return draft;
   // The embedder may be a remote call: it runs outside the lock, and only for a request
   // that would pass at this point. The same checks run again under the lock.
