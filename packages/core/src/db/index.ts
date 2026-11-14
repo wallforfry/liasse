@@ -10,3 +10,4 @@ export { PgvectorVersionError } from './pgvector-version.ts';
 export { PostgresVersionError } from './postgres-version.ts';
 export { withReservedConnection } from './reserved.ts';
 export * from './schema/index.ts';
+export { sqlStateOf } from './sql-state.ts';

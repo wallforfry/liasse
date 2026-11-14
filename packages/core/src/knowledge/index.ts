@@ -2,14 +2,7 @@ export { addressKey, isCompleteAddress } from './address.ts';
 export type { KnowledgeContext, KnowledgeReadContext, KnowledgeWriteContext } from './context.ts';
 export { type DetectedLinks, detectLinks, type DetectLinksDeps } from './detect-links.ts';
 export { recomputeDocumentStates } from './document-state.ts';
-export {
-  type GetSubjectInput,
-  getSubject,
-  getSubjectInputSchema,
-  type GetSubjectOutput,
-  getSubjectOutputSchema,
-  type SubjectDetails,
-} from './get-subject.ts';
+export { getSubject } from './get-subject.ts';
 export {
   InvalidKnowledgeError,
   type Knowledge,
@@ -39,15 +32,7 @@ export {
   prepareKnowledge,
   prepareWithoutModels,
 } from './prepare-knowledge.ts';
-export {
-  type Recall,
-  recall,
-  type RecallContext,
-  type RecalledFact,
-  type RecallInput,
-  recallInputSchema,
-  recallOutputSchema,
-} from './recall.ts';
+export { recall, type RecallContext } from './recall.ts';
 export type { SubjectResolution } from './resolve-subject.ts';
 export type { SubjectKindMismatch, SubjectMergeError, SubjectNotFound } from './subject-errors.ts';
 export { type SubjectIdentifier, type SubjectIdentifierView } from './subject-identifiers.ts';
@@ -67,12 +52,5 @@ export {
 } from './subject-merge-proposals.ts';
 export { deriveSubjectState, type SubjectDocumentState } from './subject-state.ts';
 export { missingSubjectIds, type Subject, type SubjectTransaction } from './subject-store.ts';
-export {
-  type Timeline,
-  timeline,
-  type TimelineInput,
-  timelineInputSchema,
-  type TimelineItem,
-  timelineOutputSchema,
-} from './timeline.ts';
+export { timeline } from './timeline.ts';
 export { upcoming, type UpcomingInput, upcomingInputSchema } from './upcoming.ts';

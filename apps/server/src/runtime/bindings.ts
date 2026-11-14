@@ -17,7 +17,14 @@ import {
 } from '@liasse/core/hindsight';
 import { createDeleteFileHandler, requeueFileDeletions } from '@liasse/core/ingest';
 import type { RegisteredHandler } from '@liasse/core/jobs';
-import { createKnowledgeHandlers, listSubjects, upcoming } from '@liasse/core/knowledge';
+import {
+  createKnowledgeHandlers,
+  getSubject,
+  listSubjects,
+  recall,
+  timeline,
+  upcoming,
+} from '@liasse/core/knowledge';
 import type { Embedder, TextModel, VisionModel } from '@liasse/core/models';
 import {
   correctDocument,
@@ -92,6 +99,9 @@ const featuresOf = (deps: PipelineDeps, hindsight: HindsightIntegration): ApiFea
   listSubjects: (options) => listSubjects({ db: deps.db }, options),
   upcoming: ({ current_only: currentOnly, ...window }) =>
     upcoming({ db: deps.db }, { ...window, currentOnly }),
+  timeline: (input) => timeline({ db: deps.db }, input),
+  recall: (input) => recall({ db: deps.db, embedder: deps.embedder }, input),
+  getSubject: (input) => getSubject({ db: deps.db }, input),
   listChanges: (options) => listChanges({ db: deps.db }, options),
   applyChange: (id, decision) => applyChange({ db: deps.db }, id, decision),
   ...(hindsight.enabled
