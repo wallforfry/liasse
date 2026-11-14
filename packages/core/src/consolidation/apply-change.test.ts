@@ -100,11 +100,9 @@ describe('deciding a change', () => {
       true,
     );
     expect(await decideChange(db(), change, 'apply', 'Applied automatically.')).toMatchObject({
-      decided: {
-        change: { status: 'rejected', note: expect.stringContaining('Applied automatically.') },
-        refusal: { code: 'kind_mismatch' },
-      },
+      decided: { change: { status: 'rejected' }, refusal: { code: 'kind_mismatch' } },
     });
+    expect((await statusOf(change))?.note).toMatch(/^Applied automatically\. Not applicable: /);
     expect(await db().$count(entities, eq(entities.id, person))).toBe(1);
   });
 
