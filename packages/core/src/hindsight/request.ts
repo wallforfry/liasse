@@ -11,6 +11,10 @@ export interface RequestPolicy {
   readonly retryDelayMs: number;
 }
 
+/** The longest `send` can take: every attempt to its timeout, and the delays between them. */
+export const requestWindowMs = ({ timeoutMs, retries, retryDelayMs }: RequestPolicy): number =>
+  timeoutMs * (retries + 1) + retryDelayMs * (2 ** retries - 1);
+
 export interface HindsightRequest<Result> {
   readonly operation: HindsightOperation;
   readonly method: 'POST' | 'DELETE';

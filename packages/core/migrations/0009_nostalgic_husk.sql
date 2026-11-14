@@ -1,0 +1,1 @@
+ALTER TABLE "documents" ADD COLUMN "hindsight_retain_until" timestamp with time zone;

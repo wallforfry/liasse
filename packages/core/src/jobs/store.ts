@@ -120,6 +120,15 @@ export const releaseJob = (db: Database, lease: JobLease): Promise<boolean> =>
     attempts: sql`${jobs.attempts} - 1`,
   });
 
+/** Runs the job again after `delayMs`, without counting the attempt. */
+export const deferJob = (db: Database, lease: JobLease, delayMs: number): Promise<boolean> =>
+  settle(db, lease, {
+    status: 'queued',
+    lockedAt: null,
+    attempts: sql`${jobs.attempts} - 1`,
+    runAfter: sql`now() + ${elapsed(delayMs)}`,
+  });
+
 export const renewJobLock = (db: Database, lease: JobLease): Promise<boolean> =>
   settle(db, lease, { lockedAt: sql`now()` });
 

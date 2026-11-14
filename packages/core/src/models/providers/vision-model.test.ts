@@ -1,9 +1,18 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { ModelOutputError } from '../errors.ts';
 import type { VisionModel } from '../ports.ts';
-import { type StubHandler, type StubServer, startStubServer } from './stub-server.ts';
+import {
+  type StubHandler,
+  type StubServer,
+  startStubServer,
+} from '../../testing/provider-stub-server.ts';
 import { createVisionModel } from './vision-model.ts';
-import { chatCompletion, llmConfig, RESOLVED_MODEL, SYNTHETIC_API_KEY } from './wire-fixtures.ts';
+import {
+  chatCompletion,
+  llmConfig,
+  RESOLVED_MODEL,
+  SYNTHETIC_API_KEY,
+} from '../../testing/provider-wire.ts';
 
 const PROMPT = 'Transcribe the page into Markdown.';
 const page = { image: new Uint8Array([1, 2, 3]), mime: 'image/png', prompt: PROMPT };

@@ -6,6 +6,29 @@ export class PermanentJobError extends Error {
   override readonly name: string = 'PermanentJobError';
 }
 
+export interface DeferJobOptions {
+  /** The first delay of the retry policy when left out. */
+  readonly delayMs?: number;
+  /** The error that keeps the job from running now. */
+  readonly cause?: unknown;
+}
+
+/**
+ * Thrown by a handler whose job cannot run yet, for a reason that is not a failure of
+ * the job: a resource another job holds, a state that settles on its own. The job runs
+ * again after the delay and the attempt is not counted. The condition must end by
+ * itself: a job that keeps deferring is never failed by the queue.
+ */
+export class DeferJobError extends Error {
+  override readonly name: string = 'DeferJobError';
+  readonly delayMs: number | undefined;
+
+  constructor(message: string, { delayMs, cause }: DeferJobOptions = {}) {
+    super(message, cause === undefined ? undefined : { cause });
+    this.delayMs = delayMs;
+  }
+}
+
 // Only paths and Zod's messages are kept: a payload may carry document content.
 export class JobPayloadError extends PermanentJobError {
   override readonly name = 'JobPayloadError';
