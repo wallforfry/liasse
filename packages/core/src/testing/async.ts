@@ -1,7 +1,8 @@
 const POLL_INTERVAL_MS = 10;
 // Long on purpose: the wait ends as soon as the condition holds, so the bound only
-// decides how long a missing effect takes to fail, never whether a slow one passes.
-const DEFAULT_TIMEOUT_MS = 60_000;
+// decides how long a missing effect takes to fail, never whether a slow one passes. It
+// stays under the test timeout of the core project, so the failure names the wait.
+const DEFAULT_TIMEOUT_MS = 20_000;
 
 // For effects that land asynchronously (a job run by a worker, a file seen by a watcher).
 // It rejects when the condition never holds, so a missing effect fails the test.
