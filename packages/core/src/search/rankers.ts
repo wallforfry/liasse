@@ -41,16 +41,12 @@ export const fullTextCandidates = ({ query, filter, limit }: RankRequest): SQL =
 export const rankByFullText: ChunkRanker = async (db, request) =>
   toRankedChunks(await db.execute(fullTextCandidates(request)));
 
-// The inner ORDER BY holds the distance alone, the only form the HNSW index can serve; the
-// outer one breaks ties between equal distances.
-export const vectorCandidates = (
-  embedding: readonly number[],
-  { filter, limit }: Pick<RankRequest, 'filter' | 'limit'>,
-): SQL => sql`
+type NearestRequest = Pick<RankRequest, 'filter' | 'limit'>;
+
+const nearestChunks = (distance: SQL, { filter, limit }: NearestRequest): SQL => sql`
   SELECT chunk_id, document_id
   FROM (
-    SELECT ${chunks.id} AS chunk_id, ${chunks.documentId} AS document_id,
-      ${chunks.embedding} <=> ${`[${embedding.join(',')}]`}::vector AS distance
+    SELECT ${chunks.id} AS chunk_id, ${chunks.documentId} AS document_id, ${distance} AS distance
     FROM ${chunks}
     JOIN ${documents} ON ${documents.id} = ${chunks.documentId}
     WHERE ${chunks.embedding} IS NOT NULL AND ${filter}
@@ -60,9 +56,35 @@ export const vectorCandidates = (
   ORDER BY distance, chunk_id
 `;
 
+const cosineDistance = (embedding: readonly number[]): SQL =>
+  sql`${chunks.embedding} <=> ${`[${embedding.join(',')}]`}::vector`;
+
+// The inner ORDER BY holds the distance alone, the only form the HNSW index can serve; the
+// outer one breaks ties between equal distances.
+export const vectorCandidates = (embedding: readonly number[], request: NearestRequest): SQL =>
+  nearestChunks(cosineDistance(embedding), request);
+
+// The same ordering in a form no index can serve: Postgres filters first, then sorts what is
+// left by its exact distance.
+export const exactVectorCandidates = (embedding: readonly number[], request: NearestRequest): SQL =>
+  nearestChunks(sql`(${cosineDistance(embedding)}) + 0`, request);
+
 // pgvector stops an HNSW scan after `hnsw.ef_search` candidates (40 by default) and applies the
 // limit and the filter to those only. An iterative scan (pgvector 0.8 and later) resumes it
-// until the limit is met, so a large limit or a selective filter does not starve the result.
+// until the limit is met or `hnsw.max_scan_tuples` tuples (20,000 by default) were visited.
+export const scanVectorIndex = (
+  db: Database,
+  embedding: readonly number[],
+  request: NearestRequest,
+): Promise<readonly RankedChunk[]> =>
+  db.transaction(async (tx) => {
+    await tx.execute(sql`SELECT set_config('hnsw.iterative_scan', 'relaxed_order', true)`);
+    return toRankedChunks(await tx.execute(vectorCandidates(embedding, request)));
+  });
+
+// A scan that comes back short either met every chunk that passes the filter, or gave up on a
+// filter too selective for it. Both leave few enough chunks for an exact ordering, which then
+// replaces the scan.
 export const rankByVector =
   (embedder: Embedder): ChunkRanker =>
   async (db, request) => {
@@ -70,8 +92,8 @@ export const rankByVector =
     if (embedding === undefined) {
       throw new Error(`Embedder ${embedder.model} returned no embedding for the query`);
     }
-    return db.transaction(async (tx) => {
-      await tx.execute(sql`SELECT set_config('hnsw.iterative_scan', 'relaxed_order', true)`);
-      return toRankedChunks(await tx.execute(vectorCandidates(embedding, request)));
-    });
+    const scanned = await scanVectorIndex(db, embedding, request);
+    return scanned.length >= request.limit
+      ? scanned
+      : toRankedChunks(await db.execute(exactVectorCandidates(embedding, request)));
   };

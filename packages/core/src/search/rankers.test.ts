@@ -1,6 +1,6 @@
 import { type SQL, sql } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { createDb } from '../db/client.ts';
+import { createDb, type Database } from '../db/client.ts';
 import { chunks } from '../db/schema/documents.ts';
 import type { Embedder, EmbeddingKind } from '../models/ports.ts';
 import { createFakeEmbedder } from '../testing/fake-embedder.ts';
@@ -14,6 +14,7 @@ import {
   rankByFullText,
   rankByVector,
   type RankRequest,
+  scanVectorIndex,
   vectorCandidates,
 } from './rankers.ts';
 
@@ -208,14 +209,21 @@ describe('chunk rankers', () => {
   });
 });
 
-describe('rankByVector through the HNSW index', () => {
-  let database: TestDatabase;
-  let indexOnly: ReturnType<typeof createDb>;
+describe('the vector ranker on an HNSW index', () => {
   const embedder = createFakeEmbedder();
-  const RARE_STATUS = 'needs_review';
+  // A filter on a JSON field: the planner cannot estimate it, nor serve it from an index, so it
+  // keeps the HNSW scan and applies the filter to what the scan returns.
+  const RARE = { dateFrom: '2030-01-01' } as const;
+  const RARE_CORE = { document_date: '2030-06-15' };
+  const QUERY = 'word0 word1 word2 word3 word4 word5 word6 word7';
+  const databases: TestDatabase[] = [];
+  const handles: ReturnType<typeof createDb>[] = [];
 
-  beforeAll(async () => {
-    database = await createTestDatabase();
+  // 150 chunks, the last five of which are the farthest from the query and the only ones that
+  // pass the filter. The returned handle plans through the index, even on a table this small.
+  const indexOnlyDatabase = async (settings: readonly string[] = []) => {
+    const database = await createTestDatabase();
+    databases.push(database);
     // Each text shares seven of its eight words with the next one: distinct distances and a
     // well-connected graph, unlike near-duplicate vectors, which HNSW may leave unreachable.
     const window = (start: number): string =>
@@ -224,36 +232,105 @@ describe('rankByVector through the HNSW index', () => {
     const embeddings = await embedder.embed(texts, 'passage');
     for (const [index, text] of texts.entries()) {
       const { id } = await insertSyntheticDocument(database.db, {
-        status: index >= 145 ? RARE_STATUS : 'indexed',
+        core: index >= 145 ? RARE_CORE : {},
       });
       await database.db
         .insert(chunks)
         .values({ documentId: id, pageFrom: 1, pageTo: 1, text, embedding: embeddings[index] });
     }
-    // A session setting, so that the ranker's own transaction plans through the index even on
-    // a table this small.
     const name = new URL(database.url).pathname.slice(1);
-    await database.db.execute(sql.raw(`ALTER DATABASE "${name}" SET enable_seqscan = off`));
-    indexOnly = createDb(database.url);
-  });
+    for (const setting of ['enable_seqscan = off', ...settings]) {
+      await database.db.execute(sql.raw(`ALTER DATABASE "${name}" SET ${setting}`));
+    }
+    const handle = createDb(database.url);
+    handles.push(handle);
+    return handle.db;
+  };
 
   afterAll(async () => {
-    await indexOnly.close();
-    await database.dispose();
+    await Promise.all(handles.map((handle) => handle.close()));
+    await Promise.all(databases.map((database) => database.dispose()));
   });
 
-  const rank = (filters: SearchFilters, limit: number) =>
-    rankByVector(embedder)(indexOnly.db, {
-      query: 'word0 word1 word2 word3 word4 word5 word6 word7',
-      filter: documentFilter(filters, true),
-      limit,
+  const request = (filters: SearchFilters, limit: number): RankRequest => ({
+    query: QUERY,
+    filter: documentFilter(filters, true),
+    limit,
+  });
+
+  const scan = async (db: Database, filters: SearchFilters, limit: number) => {
+    const [embedding = []] = await embedder.embed([QUERY], 'query');
+    return scanVectorIndex(db, embedding, request(filters, limit));
+  };
+
+  describe('within the tuples one scan may visit', () => {
+    let db: Database;
+
+    beforeAll(async () => {
+      db = await indexOnlyDatabase();
     });
 
-  it('returns as many candidates as asked, beyond the 40 of one HNSW scan', async () => {
-    expect(await rank({}, 100)).toHaveLength(100);
+    it('scans beyond the 40 candidates of a single pass', async () => {
+      expect(await scan(db, {}, 100)).toHaveLength(100);
+    });
+
+    it('keeps scanning until a selective filter is satisfied', async () => {
+      expect(await scan(db, RARE, 100)).toHaveLength(5);
+    });
   });
 
-  it('keeps scanning until a selective filter is satisfied', async () => {
-    expect(await rank({ status: RARE_STATUS }, 100)).toHaveLength(5);
+  describe('beyond the tuples one scan may visit', () => {
+    const CHUNKS = 3000;
+    let db: Database;
+
+    // Random vectors, five of which belong to the documents that pass the filter: a scan that stops
+    // early has no reason to have met them.
+    beforeAll(async () => {
+      const database = await createTestDatabase();
+      databases.push(database);
+      await database.db.execute(sql`
+        INSERT INTO documents (id, sha256, storage_key, mime, original_name, source, core)
+        SELECT 'doc_bulk_' || i, 'synthetic-sha256-' || i, 'synthetic/' || i, 'application/pdf',
+          'synthetic-' || i || '.pdf', 'api',
+          CASE WHEN i <= 5 THEN ${JSON.stringify(RARE_CORE)}::jsonb ELSE '{}'::jsonb END
+        FROM generate_series(1, ${CHUNKS}) AS i
+      `);
+      await database.db.execute(sql`
+        INSERT INTO chunks (id, document_id, page_from, page_to, text, embedding)
+        SELECT 'chk_bulk_' || i, 'doc_bulk_' || i, 1, 1, 'synthetic',
+          (SELECT array_agg(random() - 0.5) FROM generate_series(1, 384) AS axis WHERE axis + i > 0)::vector
+        FROM generate_series(1, ${CHUNKS}) AS i
+      `);
+      const name = new URL(database.url).pathname.slice(1);
+      for (const setting of ['enable_seqscan = off', 'hnsw.max_scan_tuples = 200']) {
+        await database.db.execute(sql.raw(`ALTER DATABASE "${name}" SET ${setting}`));
+      }
+      const handle = createDb(database.url);
+      handles.push(handle);
+      db = handle.db;
+    });
+
+    it('the index scan alone misses chunks that pass the filter', async () => {
+      expect((await scan(db, RARE, 100)).length).toBeLessThan(5);
+    });
+
+    it('falls back to an exact ordering of the filtered chunks', async () => {
+      const ranked = await rankByVector(embedder)(db, request(RARE, 100));
+      const [query = []] = await embedder.embed([QUERY], 'query');
+      const rare = await db
+        .select({ id: chunks.id, embedding: chunks.embedding })
+        .from(chunks)
+        .where(
+          sql`${chunks.documentId} IN ('doc_bulk_1', 'doc_bulk_2', 'doc_bulk_3', 'doc_bulk_4', 'doc_bulk_5')`,
+        );
+      const cosine = (vector: readonly number[] | null): number =>
+        (vector ?? []).reduce((sum, value, index) => sum + value * (query[index] ?? 0), 0) /
+        Math.hypot(...(vector ?? []));
+      expect(ranked.map((chunk) => chunk.chunkId)).toEqual(
+        rare
+          .toSorted((left, right) => cosine(right.embedding) - cosine(left.embedding))
+          .map((chunk) => chunk.id),
+      );
+    });
   });
 });
