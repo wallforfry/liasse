@@ -78,5 +78,9 @@ export const describeStorageContract = (
       await under.storage.put(key, new Uint8Array());
       expect(await under.storage.get(key)).toHaveLength(0);
     });
+
+    it('passes its own startup check', async () => {
+      await expect(under.storage.check()).resolves.toBeUndefined();
+    });
   });
 };

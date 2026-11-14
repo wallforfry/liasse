@@ -11,4 +11,11 @@ export interface Storage {
   readonly exists: (key: StorageKey) => Promise<boolean>;
   /** Idempotent: deleting an absent key succeeds. */
   readonly delete: (key: StorageKey) => Promise<void>;
+  /**
+   * For startup: resolves when files can be stored. Rejects with
+   * `StorageMisconfiguredError` when the configuration is at fault (no such bucket,
+   * refused credentials, a directory that cannot be written), with `StorageError` when
+   * the storage could not be reached.
+   */
+  readonly check: () => Promise<void>;
 }

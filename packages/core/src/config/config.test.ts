@@ -149,7 +149,26 @@ describe('loadConfig', () => {
       endpoint: undefined,
       accessKeyId: 'synthetic-id',
       secretAccessKey: 'synthetic-secret',
+      requestTimeoutMs: 30_000,
+      minUploadBytesPerSecond: 65_536,
     });
+  });
+
+  it('reads the deadline and the minimum upload rate of the s3 driver', () => {
+    const config = loadConfig({
+      ...SYNTHETIC_ENV,
+      STORAGE_DRIVER: 's3',
+      S3_BUCKET: 'liasse',
+      S3_ACCESS_KEY_ID: 'synthetic-id',
+      S3_SECRET_ACCESS_KEY: 'synthetic-secret',
+      S3_REQUEST_TIMEOUT: '2m',
+      S3_MIN_UPLOAD_RATE: '8192',
+    });
+    expect(config.storage).toMatchObject({
+      requestTimeoutMs: 120_000,
+      minUploadBytesPerSecond: 8192,
+    });
+    expect(problemsOf({ ...SYNTHETIC_ENV, S3_MIN_UPLOAD_RATE: '0' })).toHaveLength(1);
   });
 
   it('requires a bucket and a key pair for the s3 driver', () => {

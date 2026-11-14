@@ -17,6 +17,11 @@ export const databaseSection = z
   })
   .transform((env) => Object.freeze({ url: env.DATABASE_URL }));
 
+// In bytes per second. An upload slower than this is given up; 64 KiB/s lets a 50 MiB
+// file take a little under fourteen minutes.
+const DEFAULT_S3_MIN_UPLOAD_RATE = 64 * 1024;
+const MAX_S3_MIN_UPLOAD_RATE = 1024 * 1024 * 1024;
+
 const storageFields = z.object({
   STORAGE_DRIVER: storageDriverSchema.default('fs'),
   STORAGE_PATH: text.default('/data/files'),
@@ -25,6 +30,8 @@ const storageFields = z.object({
   S3_ENDPOINT: z.url().optional(),
   S3_ACCESS_KEY_ID: text.optional(),
   S3_SECRET_ACCESS_KEY: text.optional(),
+  S3_REQUEST_TIMEOUT: duration.prefault('30s'),
+  S3_MIN_UPLOAD_RATE: integer(1, MAX_S3_MIN_UPLOAD_RATE).default(DEFAULT_S3_MIN_UPLOAD_RATE),
 });
 
 const S3_REQUIRED_KEYS = ['S3_BUCKET', 'S3_ACCESS_KEY_ID', 'S3_SECRET_ACCESS_KEY'] as const;
@@ -56,6 +63,8 @@ export const storageSection = storageFields.transform((env, ctx) => {
     endpoint: env.S3_ENDPOINT,
     accessKeyId: env.S3_ACCESS_KEY_ID,
     secretAccessKey: env.S3_SECRET_ACCESS_KEY,
+    requestTimeoutMs: env.S3_REQUEST_TIMEOUT,
+    minUploadBytesPerSecond: env.S3_MIN_UPLOAD_RATE,
   });
 });
 

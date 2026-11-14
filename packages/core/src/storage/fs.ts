@@ -2,7 +2,7 @@ import { randomBytes } from 'node:crypto';
 import { open, readFile, rm, stat } from 'node:fs/promises';
 import { dirname, join, relative } from 'node:path';
 import { type DurableFs, nodeDurableFs } from './durable-fs.ts';
-import { StorageObjectNotFoundError } from './errors.ts';
+import { StorageMisconfiguredError, StorageObjectNotFoundError } from './errors.ts';
 import type { StorageKey } from './key.ts';
 import { isFileNotFound } from './node-errors.ts';
 import type { Storage } from './port.ts';
@@ -80,6 +80,21 @@ export const createFsStorage = (root: string, fs: DurableFs = nodeDurableFs): St
     },
     delete: async (key) => {
       await rm(pathOf(key), { force: true });
+    },
+    // Writing is the capability `put` needs; the mode bits of the directory would not
+    // tell on a read-only mount.
+    check: async () => {
+      const probe = join(root, `.write-check-${randomBytes(8).toString('hex')}`);
+      try {
+        await fs.makeDirectory(root);
+        await fs.writeFile(probe, new Uint8Array());
+      } catch (error) {
+        throw new StorageMisconfiguredError(
+          'The directory of the file storage (STORAGE_PATH) cannot be created or written',
+          { cause: error },
+        );
+      }
+      await rm(probe, { force: true });
     },
   };
 };

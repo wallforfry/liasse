@@ -1,6 +1,6 @@
 import { randomBytes } from 'node:crypto';
 import { AwsClient } from 'aws4fetch';
-import type { S3StorageOptions } from '../storage/s3.ts';
+import type { S3StorageOptions } from '../storage/s3-transport.ts';
 
 // These match the `s3` service of docker-compose.dev.yml and of the CI workflow.
 export const DEFAULT_TEST_S3_ENDPOINT = 'http://127.0.0.1:54330';

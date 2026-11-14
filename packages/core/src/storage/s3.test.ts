@@ -2,7 +2,7 @@ import { createServer, type Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createTestBucket, type TestBucket } from '../testing/test-bucket.ts';
-import { StorageError, StorageObjectNotFoundError } from './errors.ts';
+import { StorageError, StorageMisconfiguredError, StorageObjectNotFoundError } from './errors.ts';
 import { createS3Storage } from './s3.ts';
 import { bytesOf, describeStorageContract, keyOf } from './contract.test-helper.ts';
 
@@ -47,15 +47,58 @@ describe('s3 storage', () => {
     expect(await createS3Storage(bucket.options).exists(keyOf(bytes))).toBe(false);
   });
 
-  it('reports a bucket that does not exist as a failure, not as an absent file', async () => {
+  it('reports a bucket that does not exist as a misconfiguration, on every operation', async () => {
     const storage = createS3Storage({ ...bucket.options, bucket: 'liasse-test-never-created' });
     const bytes = bytesOf('synthetic file for a missing bucket');
-    const failure = await storage.put(keyOf(bytes), bytes).then(
+    const key = keyOf(bytes);
+    await expect(storage.put(key, bytes)).rejects.toBeInstanceOf(StorageMisconfiguredError);
+    await expect(storage.get(key)).rejects.toBeInstanceOf(StorageMisconfiguredError);
+    await expect(storage.getStream(key)).rejects.toBeInstanceOf(StorageMisconfiguredError);
+    await expect(storage.exists(key)).rejects.toBeInstanceOf(StorageMisconfiguredError);
+    await expect(storage.delete(key)).rejects.toBeInstanceOf(StorageMisconfiguredError);
+    await expect(storage.check()).rejects.toBeInstanceOf(StorageMisconfiguredError);
+  });
+
+  it('passes its startup check on a reachable bucket', async () => {
+    await expect(createS3Storage(bucket.options).check()).resolves.toBeUndefined();
+  });
+
+  it('fails its startup check on refused credentials, without echoing them', async () => {
+    const storage = createS3Storage({ ...bucket.options, secretAccessKey: 'synthetic-wrong' });
+    const failure = await storage.check().then(
       () => undefined,
       (error: unknown) => error,
     );
-    expect(failure).toBeInstanceOf(StorageError);
-    expect(failure).not.toBeInstanceOf(StorageObjectNotFoundError);
+    expect(failure).toBeInstanceOf(StorageMisconfiguredError);
+    expect(String(failure)).not.toContain('synthetic-wrong');
+  });
+
+  it('fails its startup check on a server it cannot reach', async () => {
+    const storage = createS3Storage({ ...bucket.options, endpoint: 'http://127.0.0.1:9' });
+    await expect(storage.check()).rejects.toBeInstanceOf(StorageError);
+  });
+
+  it('gives an upload a deadline that grows with its size', async () => {
+    const server = createServer((request, response) => {
+      request.resume();
+      setTimeout(() => response.writeHead(200).end(), 500);
+    });
+    const endpoint = await listen(server);
+    try {
+      const storage = createS3Storage({
+        ...bucket.options,
+        endpoint,
+        requestTimeoutMs: 100,
+        minUploadBytesPerSecond: 1000,
+      });
+      const large = new Uint8Array(8000).fill(7);
+      await expect(storage.put(keyOf(large), large)).resolves.toBeUndefined();
+      const small = bytesOf('synthetic small upload');
+      await expect(storage.put(keyOf(small), small)).rejects.toBeInstanceOf(StorageError);
+    } finally {
+      server.closeAllConnections();
+      server.close();
+    }
   });
 
   it('addresses objects path-style under the configured endpoint', async () => {

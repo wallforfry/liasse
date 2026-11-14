@@ -1,3 +1,13 @@
+import { StartupError } from '../domain/errors.ts';
+
+/**
+ * The storage is set up wrongly (no such bucket, refused credentials, a directory that
+ * cannot be written): retrying cannot help, the operator must fix the configuration.
+ */
+export class StorageMisconfiguredError extends StartupError {
+  override readonly name = 'StorageMisconfiguredError';
+}
+
 export class StorageError extends Error {
   override readonly name: string = 'StorageError';
 }
