@@ -16,6 +16,7 @@ export { MAX_SNIPPETS_PER_DOCUMENT } from './grouping.ts';
 export {
   DocumentNotFoundError,
   indexDocument,
+  IndexingConflictError,
   type IndexingDeps,
   type IndexingResult,
 } from './indexing.ts';

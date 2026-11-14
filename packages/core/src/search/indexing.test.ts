@@ -6,7 +6,7 @@ import type { Embedder, EmbeddingKind } from '../models/ports.ts';
 import { createFakeEmbedder } from '../testing/fake-embedder.ts';
 import { insertSyntheticDocument, type NewDocumentRow } from '../testing/fixtures.ts';
 import { createTestDatabase, type TestDatabase } from '../testing/test-database.ts';
-import { DocumentNotFoundError, indexDocument } from './indexing.ts';
+import { DocumentNotFoundError, indexDocument, IndexingConflictError } from './indexing.ts';
 
 interface EmbedCall {
   readonly texts: readonly string[];
@@ -286,6 +286,96 @@ describe('indexDocument', () => {
     await database.db.update(documents).set({ private: true }).where(eq(documents.id, id));
     await indexDocument({ db: database.db, embedder }, id);
     expect((await storedChunks(id)).map((chunk) => chunk.embedding)).toEqual([null]);
+  });
+
+  describe('when the document changes while it is being embedded', () => {
+    // Runs `change` during the embedding calls whose number `when` accepts.
+    const interrupted = (
+      change: () => Promise<unknown>,
+      when: (call: number) => boolean,
+      options: { readonly isLocal?: boolean } = {},
+    ) => {
+      let calls = 0;
+      const embedder: Embedder = {
+        ...createFakeEmbedder(options),
+        embed: async (texts, kind) => {
+          calls += 1;
+          if (when(calls)) await change();
+          return createFakeEmbedder().embed(texts, kind);
+        },
+      };
+      return { embedder, callCount: () => calls };
+    };
+    const firstCallOnly = (call: number): boolean => call === 1;
+
+    const rewritePage = (id: string, text: string) => () =>
+      database.db.update(documentPages).set({ text }).where(eq(documentPages.documentId, id));
+
+    it('indexes the pages as they are when it commits, not as it first read them', async () => {
+      const id = await documentWithPages(['First version']);
+      const { embedder, callCount } = interrupted(rewritePage(id, 'Second version'), firstCallOnly);
+      await indexDocument({ db: database.db, embedder }, id);
+      expect((await storedChunks(id)).map((chunk) => chunk.text)).toEqual(['Second version']);
+      expect(callCount()).toBe(2);
+    });
+
+    it('stores no embedding for a document flagged private while a remote embedder works', async () => {
+      const id = await documentWithPages(['Avis d’imposition']);
+      const { embedder, callCount } = interrupted(
+        () => database.db.update(documents).set({ private: true }).where(eq(documents.id, id)),
+        firstCallOnly,
+        { isLocal: false },
+      );
+      expect(await indexDocument({ db: database.db, embedder }, id)).toEqual({
+        chunkCount: 1,
+        embedded: false,
+      });
+      expect((await storedChunks(id)).map((chunk) => chunk.embedding)).toEqual([null]);
+      expect(callCount()).toBe(1);
+    });
+
+    it.each([
+      ['title', { title: 'Renamed' }],
+      ['language', { core: { language: 'fr' } }],
+    ])('starts again when the %s changes', async (_, change) => {
+      const id = await documentWithPages(['Les factures impayées'], { title: 'Original' });
+      const { embedder, callCount } = interrupted(
+        () => database.db.update(documents).set(change).where(eq(documents.id, id)),
+        firstCallOnly,
+      );
+      await indexDocument({ db: database.db, embedder }, id);
+      expect(callCount()).toBe(2);
+    });
+
+    it('gives up with a retryable error when the document never stops changing', async () => {
+      const id = await documentWithPages(['Stable version']);
+      await indexDocument({ db: database.db, embedder: createFakeEmbedder() }, id);
+      const before = await storedChunks(id);
+      let version = 0;
+      const { embedder, callCount } = interrupted(
+        () => {
+          version += 1;
+          return rewritePage(id, `Version ${String(version)}`)();
+        },
+        () => true,
+      );
+      const failure = indexDocument({ db: database.db, embedder }, id);
+      await expect(failure).rejects.toBeInstanceOf(IndexingConflictError);
+      await expect(failure).rejects.toMatchObject({ retryable: true, documentId: id });
+      expect(callCount()).toBe(3);
+      expect(await storedChunks(id)).toEqual(before);
+    });
+
+    it('reports a document deleted meanwhile as not found', async () => {
+      const id = await documentWithPages(['Soon deleted']);
+      const { embedder } = interrupted(
+        () => database.db.delete(documents).where(eq(documents.id, id)),
+        firstCallOnly,
+      );
+      await expect(indexDocument({ db: database.db, embedder }, id)).rejects.toBeInstanceOf(
+        DocumentNotFoundError,
+      );
+    });
   });
 
   it('does not ask a remote embedder to count the tokens of a private document', async () => {
