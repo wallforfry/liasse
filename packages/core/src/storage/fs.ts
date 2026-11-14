@@ -1,6 +1,6 @@
 import { randomBytes } from 'node:crypto';
 import { open, readFile, rm, stat } from 'node:fs/promises';
-import { dirname, join, relative } from 'node:path';
+import { dirname, join, relative, resolve } from 'node:path';
 import { type DurableFs, nodeDurableFs } from './durable-fs.ts';
 import { StorageMisconfiguredError, StorageObjectNotFoundError } from './errors.ts';
 import type { StorageKey } from './key.ts';
@@ -30,7 +30,10 @@ const directoriesToSync = (
   return upwards(directory);
 };
 
-export const createFsStorage = (root: string, fs: DurableFs = nodeDurableFs): Storage => {
+export const createFsStorage = (configuredRoot: string, fs: DurableFs = nodeDurableFs): Storage => {
+  // The walk up to the root compares paths: `/data/files/` or `./files` written as
+  // configured would never match, and every ancestor up to `/` would be synced.
+  const root = resolve(configuredRoot);
   const pathOf = (key: StorageKey): string => join(root, key);
 
   return {
@@ -43,6 +46,8 @@ export const createFsStorage = (root: string, fs: DurableFs = nodeDurableFs): St
       const temporary = `${target}.${randomBytes(8).toString('hex')}.tmp`;
       try {
         await fs.writeFile(temporary, bytes);
+        // Before the rename: a name must never point at content that is not on disk.
+        await fs.syncFile(temporary);
         await fs.rename(temporary, target);
       } catch (error) {
         await rm(temporary, { force: true });
@@ -78,8 +83,16 @@ export const createFsStorage = (root: string, fs: DurableFs = nodeDurableFs): St
         throw error;
       }
     },
+    // Without the sync, a power loss can bring a removed file back after its deletion
+    // was reported done.
     delete: async (key) => {
-      await rm(pathOf(key), { force: true });
+      const target = pathOf(key);
+      await fs.removeFile(target);
+      try {
+        await fs.syncDirectory(dirname(target));
+      } catch (error) {
+        if (!isFileNotFound(error)) throw error;
+      }
     },
     // Writing is the capability `put` needs; the mode bits of the directory would not
     // tell on a read-only mount.
