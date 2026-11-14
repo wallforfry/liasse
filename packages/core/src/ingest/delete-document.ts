@@ -12,12 +12,24 @@ import type { Transaction } from './existing-document.ts';
 import { lockFile } from './file-lock.ts';
 import { processDocumentJob } from './process-document-job.ts';
 
+export interface DeletedDocument {
+  readonly id: string;
+}
+
 export interface DeleteDocumentDeps {
   readonly db: Database;
+  /**
+   * Runs in the transaction of the deletion, once the document is a tombstone, for what
+   * must follow it outside Liasse. What it queues commits with the deletion, and what
+   * it throws undoes the deletion.
+   */
+  readonly onDeleted?: (tx: Transaction, document: DeletedDocument) => Promise<void>;
 }
 
 // Everything that says what the document was. The hash and the storage key stay: the
 // first recognises the same bytes later, the second is what `delete_file` removes.
+// `hindsight_held_since` stays as well: it says nothing of the content, and it is the
+// only trace that Hindsight may still hold facts of the document and owes a forget.
 const BLANK_CONTENT = {
   status: 'deleted',
   state: 'current',
@@ -38,6 +50,7 @@ const BLANK_CONTENT = {
   subjectIds: [],
   watchRequeues: 0,
   fileDeletedAt: null,
+  hindsightSentHash: null,
 } as const;
 
 /**
@@ -92,7 +105,10 @@ const cancelQueuedProcessing = async (tx: Transaction, id: string): Promise<void
  * document rows: they run under the subject lock, taken after the lock of the hash and
  * before any row, as every writer of a document and its subjects takes them.
  */
-export const deleteDocument = ({ db }: DeleteDocumentDeps, id: string): Promise<boolean> =>
+export const deleteDocument = (
+  { db, onDeleted }: DeleteDocumentDeps,
+  id: string,
+): Promise<boolean> =>
   db.transaction(async (outer) => {
     const [live] = await outer
       .select({ sha256: documents.sha256 })
@@ -118,6 +134,7 @@ export const deleteDocument = ({ db }: DeleteDocumentDeps, id: string): Promise<
       await blankOrphanSubjects(tx, concerned?.subjectIds ?? []);
       await cancelQueuedProcessing(tx, id);
       await enqueue(tx, { kind: deleteFileJob, payload: { documentId: id } });
+      await onDeleted?.(tx, { id });
       return true;
     });
   });

@@ -39,6 +39,11 @@ export const openDocumentFile = async (
  * deleted included: a deletion sent twice finds nothing the second time, which is the
  * state the caller asked for.
  */
-export const removeDocument = async ({ db }: Pick<ApiContext, 'db'>, id: string): Promise<void> => {
-  if (!(await deleteDocument({ db }, id))) throw documentNotFound();
+export const removeDocument = async (
+  { db, features }: Pick<ApiContext, 'db' | 'features'>,
+  id: string,
+): Promise<void> => {
+  const { onDocumentDeleted } = features;
+  const deps = onDocumentDeleted === undefined ? { db } : { db, onDeleted: onDocumentDeleted };
+  if (!(await deleteDocument(deps, id))) throw documentNotFound();
 };

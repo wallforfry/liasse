@@ -1,6 +1,8 @@
 import type { ApiFeatures } from '@liasse/core/api';
 import type { Config } from '@liasse/core/config';
 import type { Database } from '@liasse/core/db';
+import { findSensitiveIdentifiers } from '@liasse/core/entities';
+import { createHindsightIntegration, describeHindsight } from '@liasse/core/hindsight';
 import { createDeleteFileHandler, requeueFileDeletions } from '@liasse/core/ingest';
 import type { RegisteredHandler } from '@liasse/core/jobs';
 import type { Embedder, TextModel, VisionModel } from '@liasse/core/models';
@@ -42,22 +44,34 @@ export type Bind = (parts: RuntimeParts) => Bindings;
  * - the pipeline (`@liasse/core/pipeline`): `createPipelineHandlers(deps)` in
  *   `handlers`, `failAbandonedDocuments(db)` in `startupTasks`, `correctDocument` in
  *   `features`, a concurrency of 1 for its indexing kind (the embedder is one model
- *   process), and the notice below goes;
- * - Hindsight (`@liasse/core/hindsight`): its sync handler and its concurrency,
- *   `requeueHindsightForgets` in `startupTasks`, `describeHindsight` in `notices`;
+ *   process), `afterIndexed: (id) => hindsight.enqueueSync(db, id)` in its deps (a
+ *   correction that changes `private` queues the same sync), and the notice below goes;
  * - the knowledge layer and consolidation: `listSubjects`, `upcoming`, `listChanges`
  *   and `applyChange` in `features`.
  */
-export const bindFeatures: Bind = ({ db, storage }) => ({
-  handlers: [createDeleteFileHandler({ db, storage })],
-  perKindConcurrency: {},
-  features: {},
-  startupTasks: [
-    { name: 'queueing the file removals still owed', run: () => requeueFileDeletions({ db }) },
-  ],
-  notices: [
-    'Notice: document processing is not part of this build. Uploaded documents are stored ' +
-      'and stay "received"; correcting a document, subjects, upcoming dates and ' +
-      'consolidation changes answer 501.',
-  ],
-});
+export const bindFeatures: Bind = ({ config, db, storage }) => {
+  const hindsight = createHindsightIntegration(config.hindsight, {
+    db,
+    isSensitive: (text) => findSensitiveIdentifiers(text).length > 0,
+  });
+  const hindsightNotice = describeHindsight(config);
+  return {
+    handlers: [createDeleteFileHandler({ db, storage }), ...hindsight.handlers],
+    perKindConcurrency: { ...hindsight.perKindConcurrency },
+    features: hindsight.enabled
+      ? { onDocumentDeleted: (tx, { id }) => hindsight.enqueueSync(tx, id) }
+      : {},
+    startupTasks: [
+      { name: 'queueing the file removals still owed', run: () => requeueFileDeletions({ db }) },
+      ...(hindsight.enabled
+        ? [{ name: 'queueing the Hindsight forgets still owed', run: hindsight.requeueForgets }]
+        : []),
+    ],
+    notices: [
+      'Notice: document processing is not part of this build. Uploaded documents are stored ' +
+        'and stay "received"; correcting a document, subjects, upcoming dates and ' +
+        'consolidation changes answer 501.',
+      ...(hindsightNotice === undefined ? [] : [hindsightNotice]),
+    ],
+  };
+};

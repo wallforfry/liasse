@@ -295,5 +295,22 @@ describe('documents of the API', () => {
       expect(await failureOf(openDocumentFile(harness.context, id))).toMatchObject(notFound);
       expect(await failureOf(removeDocument(harness.context, id))).toMatchObject(notFound);
     });
+
+    it('runs the deletion hook of the features on the tombstone, and not for nothing', async () => {
+      const { id } = await upload('deleted with a hook');
+      const seen: { readonly id: string; readonly status: string | undefined }[] = [];
+      const context = harness.withFeatures({
+        onDocumentDeleted: async (tx, document) => {
+          const [row] = await tx
+            .select({ status: documents.status })
+            .from(documents)
+            .where(eq(documents.id, document.id));
+          seen.push({ id: document.id, status: row?.status });
+        },
+      });
+      await removeDocument(context, id);
+      await failureOf(removeDocument(context, id));
+      expect(seen).toEqual([{ id, status: 'deleted' }]);
+    });
   });
 });

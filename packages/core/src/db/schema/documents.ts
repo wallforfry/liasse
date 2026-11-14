@@ -57,6 +57,14 @@ export const documents = pgTable(
     // Set on a tombstone once its stored file is removed. Null on a tombstone means
     // the removal is still owed, whatever became of its job.
     fileDeletedAt: instant('file_deleted_at'),
+    // Set, and committed, before the first request that can put facts of this document
+    // in Hindsight, and cleared only once Hindsight confirmed it holds none. Not null
+    // means the bank may hold facts of the document, whatever became of the request or
+    // of the document: a tombstone keeps it, since it is what says a forget is owed.
+    hindsightHeldSince: instant('hindsight_held_since'),
+    // Hash of the facts Hindsight confirmed it retained, and of the bank they went to:
+    // what lets an unchanged sync make no request. Null says nothing about the bank.
+    hindsightSentHash: text('hindsight_sent_hash'),
     ingestedAt: instant('ingested_at').notNull().defaultNow(),
     updatedAt: updatedAt(),
   },

@@ -52,6 +52,11 @@
       "types": "./dist/formats/index.d.ts",
       "default": "./dist/formats/index.js"
     },
+    "./hindsight": {
+      "@liasse/source": "./src/hindsight/index.ts",
+      "types": "./dist/hindsight/index.d.ts",
+      "default": "./dist/hindsight/index.js"
+    },
     "./ingest": {
       "@liasse/source": "./src/ingest/index.ts",
       "types": "./dist/ingest/index.d.ts",

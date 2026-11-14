@@ -249,17 +249,20 @@ describe('loadConfig', () => {
     ['a fragment', 'https://llm.example.com/v1#secret-9f3a'],
     ['an empty fragment', 'https://llm.example.com/secret-9f3a#'],
     ['another scheme', 'ftp://llm.example.com/secret-9f3a'],
-  ])('rejects a model base URL with %s, without echoing it', (_case, url) => {
+  ])('rejects a model or Hindsight base URL with %s, without echoing it', (_case, url) => {
     const problems = problemsOf({
       ...SYNTHETIC_ENV,
       LLM_BASE_URL: url,
       EMBEDDING_PROVIDER: 'ollama',
       EMBEDDING_MODEL: 'embedding-model',
       EMBEDDING_BASE_URL: url,
+      HINDSIGHT_URL: url,
     });
+    const rule = 'expected an http or https URL without credentials, query string or fragment';
     expect(problems).toEqual([
-      'LLM_BASE_URL: expected an http or https URL without credentials, query string or fragment',
-      'EMBEDDING_BASE_URL: expected an http or https URL without credentials, query string or fragment',
+      `LLM_BASE_URL: ${rule}`,
+      `EMBEDDING_BASE_URL: ${rule}`,
+      `HINDSIGHT_URL: ${rule}`,
     ]);
   });
 
@@ -269,6 +272,19 @@ describe('loadConfig', () => {
       expect(loadConfig({ ...SYNTHETIC_ENV, LLM_BASE_URL: url }).llm.baseUrl).toBe(url);
     },
   );
+
+  it('reads the Hindsight bank and key, and ignores them without HINDSIGHT_URL', () => {
+    const settings = { HINDSIGHT_BANK: 'household', HINDSIGHT_API_KEY: 'synthetic-hindsight-key' };
+    expect(loadConfig({ ...SYNTHETIC_ENV, ...settings }).hindsight).toBeUndefined();
+    expect(
+      loadConfig({ ...SYNTHETIC_ENV, ...settings, HINDSIGHT_URL: 'https://hindsight.example.test' })
+        .hindsight,
+    ).toEqual({
+      url: 'https://hindsight.example.test',
+      bank: 'household',
+      apiKey: 'synthetic-hindsight-key',
+    });
+  });
 
   it('lists every problem of every section in one error', () => {
     const problems = problemsOf({

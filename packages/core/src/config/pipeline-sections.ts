@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { DEFAULT_MAX_VISION_PAGES } from '../domain/limits.ts';
 import { autoApplyModeSchema, schemaLanguageSchema } from '../domain/schemas.ts';
-import { decimal, integer, text } from './fields.ts';
+import { baseUrl, decimal, integer, text } from './fields.ts';
 
 const MEBIBYTE = 1024 * 1024;
 const DEFAULT_MAX_FILE_SIZE = 50 * MEBIBYTE;
@@ -34,7 +34,7 @@ export const pipelineSection = z
 
 export const hindsightSection = z
   .object({
-    HINDSIGHT_URL: z.url().optional(),
+    HINDSIGHT_URL: baseUrl.optional(),
     HINDSIGHT_BANK: text.default('documents'),
     HINDSIGHT_API_KEY: text.optional(),
   })
