@@ -1,4 +1,4 @@
-import { and, eq, sql } from 'drizzle-orm';
+import { and, eq, lt, sql } from 'drizzle-orm';
 import type { Database } from '../db/client.ts';
 import { documents } from '../db/schema/documents.ts';
 import {
@@ -7,6 +7,7 @@ import {
   isLiveStatus,
   type SupportedMime,
 } from '../domain/enums.ts';
+import { MAX_WATCH_REQUEUES } from '../domain/limits.ts';
 import { enqueue } from '../jobs/enqueue.ts';
 import type { StorageKey } from '../storage/key.ts';
 import type { Storage } from '../storage/port.ts';
@@ -85,12 +86,24 @@ const reviveTombstone = async (
       originalName: file.filename,
       source: file.source,
       hint: file.hint ?? null,
+      watchRequeues: 0,
+      fileDeletedAt: null,
       ingestedAt: sql`now()`,
     })
     .where(and(eq(documents.id, id), eq(documents.status, tombstone.status)));
   await queueProcessing(tx, id);
   return { id, status: 'received', duplicate: false, fileRestored: false };
 };
+
+// The watched folder hands every file back at each restart. Queueing a failed document
+// again each time would spend model calls without end on one that cannot succeed, so
+// the folder gets a bounded number of tries. An upload or an MCP call is a person
+// asking: it always queues, and gives the folder its tries back.
+const mayRequeue = (source: DocumentSource) =>
+  source === 'watch' ? lt(documents.watchRequeues, MAX_WATCH_REQUEUES) : undefined;
+
+const requeueCount = (source: DocumentSource) =>
+  source === 'watch' ? sql`${documents.watchRequeues} + 1` : 0;
 
 // The bytes at hand are those of the document, by their hash: handing them back is
 // the way to repair a stored file that was lost, and to try a failed document again.
@@ -109,13 +122,16 @@ const repairLiveDocument = async (
   // meanwhile, and its tombstone must neither get its file back nor be queued again.
   if (!(await stillIn(tx, existing))) return undefined;
   if (fileMissing) await storage.put(file.storageKey, file.bytes);
-  if (status !== 'failed') return { id, status, duplicate: true, fileRestored: fileMissing };
-  await tx
+  const unchanged = { id, status, duplicate: true, fileRestored: fileMissing };
+  if (status !== 'failed') return unchanged;
+  const requeued = await tx
     .update(documents)
-    .set({ status: 'received', error: null })
-    .where(and(eq(documents.id, id), eq(documents.status, status)));
+    .set({ status: 'received', error: null, watchRequeues: requeueCount(file.source) })
+    .where(and(eq(documents.id, id), eq(documents.status, status), mayRequeue(file.source)))
+    .returning({ id: documents.id });
+  if (requeued.length === 0) return unchanged;
   await queueProcessing(tx, id);
-  return { id, status: 'received', duplicate: true, fileRestored: fileMissing };
+  return { ...unchanged, status: 'received' };
 };
 
 const ATTEMPTS = 3;

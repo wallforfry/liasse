@@ -16,3 +16,7 @@ export const MAX_HINT_LENGTH = 2000;
 
 // The longest file name the common file systems accept.
 export const MAX_FILENAME_LENGTH = 255;
+
+// How many times the watched folder may queue a failed document again by itself. A
+// person handing the file back through the API or MCP resets the count.
+export const MAX_WATCH_REQUEUES = 1;

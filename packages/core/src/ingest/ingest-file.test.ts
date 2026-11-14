@@ -144,6 +144,66 @@ describe('ingestFile', () => {
     ]);
   });
 
+  describe('a document that keeps failing', () => {
+    const bytes = syntheticPdf('keeps failing');
+
+    const failAgain = async (id: string): Promise<void> => {
+      await harness.database.db
+        .update(documents)
+        .set({ status: 'failed', error: 'synthetic failure' })
+        .where(eq(documents.id, id));
+      await harness.database.db.delete(jobs);
+    };
+
+    const handBack = (source: 'watch' | 'api' | 'mcp') =>
+      ingestFile(harness.deps, { bytes, filename: 'a.pdf', source });
+
+    it('is queued again once by the watched folder, then left failed at every restart', async () => {
+      const { id } = await handBack('watch');
+      await failAgain(id);
+      expect(await handBack('watch')).toMatchObject({ id, status: 'received', duplicate: true });
+      expect(await jobRows()).toHaveLength(1);
+
+      await failAgain(id);
+      for (const restart of [1, 2, 3]) {
+        expect(await handBack('watch'), `restart ${String(restart)}`).toEqual({
+          id,
+          status: 'failed',
+          duplicate: true,
+          fileRestored: false,
+        });
+      }
+      expect(await jobRows()).toEqual([]);
+      expect(await documentRows()).toMatchObject([
+        { status: 'failed', error: 'synthetic failure' },
+      ]);
+    });
+
+    it.each(['api', 'mcp'] as const)(
+      'is queued again whenever %s hands it back, which gives the folder one more try',
+      async (source) => {
+        const { id } = await handBack('watch');
+        await failAgain(id);
+        await handBack('watch');
+        await failAgain(id);
+
+        for (const upload of [1, 2]) {
+          expect(await handBack(source), `upload ${String(upload)}`).toMatchObject({
+            id,
+            status: 'received',
+            duplicate: true,
+          });
+          expect(await jobRows()).toHaveLength(1);
+          await failAgain(id);
+        }
+
+        expect(await handBack('watch')).toMatchObject({ status: 'received' });
+        await failAgain(id);
+        expect(await handBack('watch')).toMatchObject({ status: 'failed' });
+      },
+    );
+  });
+
   it('does not bring a deleted document back from the watched folder', async () => {
     const bytes = syntheticPdf('deleted, still in the folder');
     const first = await ingestFile(harness.deps, { bytes, filename: 'a.pdf', source: 'watch' });
