@@ -2,7 +2,7 @@ import { z } from 'zod';
 import type { EmbeddingProvider, LlmProvider } from '../domain/enums.ts';
 import { MAX_EMBEDDING_DIM } from '../domain/limits.ts';
 import { embeddingProviderSchema, llmProviderSchema } from '../domain/schemas.ts';
-import { type CrossFieldProblem, integer, reportProblems, text } from './fields.ts';
+import { type CrossFieldProblem, duration, integer, reportProblems, text } from './fields.ts';
 
 type ModelProvider = LlmProvider | EmbeddingProvider;
 
@@ -37,6 +37,7 @@ export const llmSection = z
     LLM_BASE_URL: z.url().optional(),
     VISION_MODEL: text,
     TEXT_MODEL: text,
+    LLM_TIMEOUT: duration.prefault('5m'),
   })
   .transform((env, ctx) => {
     const problems = providerAccessProblems({
@@ -55,6 +56,7 @@ export const llmSection = z
       baseUrl: env.LLM_BASE_URL,
       visionModel: env.VISION_MODEL,
       textModel: env.TEXT_MODEL,
+      timeoutMs: env.LLM_TIMEOUT,
     });
   });
 
@@ -65,6 +67,7 @@ export const embeddingSection = z
     EMBEDDING_DIM: integer(1, MAX_EMBEDDING_DIM).default(384),
     EMBEDDING_API_KEY: text.optional(),
     EMBEDDING_BASE_URL: z.url().optional(),
+    EMBEDDING_TIMEOUT: duration.prefault('1m'),
   })
   .transform((env, ctx) => {
     if (env.EMBEDDING_PROVIDER === 'local') {
@@ -100,5 +103,6 @@ export const embeddingSection = z
       dimension: env.EMBEDDING_DIM,
       apiKey: env.EMBEDDING_API_KEY,
       baseUrl: env.EMBEDDING_BASE_URL,
+      timeoutMs: env.EMBEDDING_TIMEOUT,
     });
   });
