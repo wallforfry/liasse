@@ -107,6 +107,8 @@ Knowledge-layer tables are described in [Knowledge layer](#knowledge-layer).
 }
 ```
 
+A value corrected through `update_document` has the entry `{"manual": true}` (with `entity_id`, `match` and `confidence` for an entity name) and its field is listed in `manual_fields`, with `@type` when the type itself was chosen by hand: no extraction writes such a field again. One key of `provenance` is not a field name: `@pipeline` records how the text (`method`, `vision_model`, attachment counts), the type (`model`, `confidence`, `outcome`: existing, new, fallback or untyped) and the extraction (`model`, `schema_version`, `truncated`, `rejected_values`) were obtained.
+
 **Brokerless job queue**: `SELECT … FOR UPDATE SKIP LOCKED` on `jobs`, workers in the same process. Embeddings via `pgvector` (dimension fixed at install time).
 
 ## Ingestion pipeline
@@ -148,7 +150,11 @@ or `"decision": "new"` with `new_type` = `{slug, description, parent_slug, field
 
 **Knowledge.** The same extraction call also produces key dates, 1 to 5 facts and candidate subjects. Link detection is a separate call, limited to candidate documents (same issuer, subject or reference, within 12 months).
 
-**Confidence.** A document's confidence is the minimum of the classification confidence and the mean confidence of the filled core fields. Below `CONFIDENCE_THRESHOLD`, it moves to `needs_review` but stays indexed and queryable.
+**Quote verification.** A quote is compared with the page after removing only what carries no meaning: Unicode composition, case, typographic quotes and dashes, and whitespace of any kind (a quote may run over a line break). It must have at least 3 characters and at most 300. It is looked for on the page the model names, then on the others, nearest first, and the provenance records the page it stands on. A date whose year, or an amount whose digits, is absent from its own quote is rejected too. A rejected value is dropped alone and counted; an identifier given for an entity is only used when it is written in the text.
+
+**Confidence.** A document's confidence is the minimum of the classification confidence and the mean confidence of the filled core fields. A core value that was rejected counts with a confidence of 0, a core value corrected by hand with 1, and a document with no core value has a confidence of 0. Below `CONFIDENCE_THRESHOLD`, it moves to `needs_review` but stays indexed and queryable; so does a document that got the closest type, or none, because a new type was refused or over quota.
+
+**Limits.** Text extraction runs in a child process ended at 768 MiB of resident memory or 120 s of CPU time (`text_memory_limit`, `text_cpu_limit`). One extraction call carries about 60,000 tokens of the document (240,000 characters); a longer document is cut there and the cut is recorded (`provenance["@pipeline"].extraction.truncated`). A `process_document` job runs at most 3 times, each model call making up to 3 provider attempts; a document whose job will not run again ends `failed` with a short code in `error`, never a message.
 
 **Target cost**: 1 vision call per page for a scan, 3 text calls per document (classification, extraction, links), 1 embedding call per chunk.
 
