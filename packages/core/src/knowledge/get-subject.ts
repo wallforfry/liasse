@@ -107,7 +107,7 @@ export const getSubject = async (
     },
     state: deriveSubjectState(found.kind, states),
     documents: listed,
-    documentCount,
-    nextDates: next.dates,
+    document_count: documentCount,
+    next_dates: next.dates,
   };
 };

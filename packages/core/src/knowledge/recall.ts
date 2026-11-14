@@ -45,11 +45,11 @@ const validAt = (at: string | undefined): SQL =>
 const FACT_COLUMNS = {
   id: facts.id,
   text: facts.text,
-  validFrom: facts.validFrom,
-  validTo: facts.validTo,
-  documentId: facts.documentId,
-  entityIds: facts.entityIds,
-  subjectIds: facts.subjectIds,
+  valid_from: facts.validFrom,
+  valid_to: facts.validTo,
+  document_id: facts.documentId,
+  entity_ids: facts.entityIds,
+  subject_ids: facts.subjectIds,
 } as const;
 
 type StoredFact = Omit<RecalledFact, 'match'>;
@@ -112,8 +112,8 @@ const relatedFacts = async (
   filter: SQL,
   limit: number,
 ): Promise<readonly StoredFact[]> => {
-  const entityIds = [...new Set(direct.flatMap((fact) => fact.entityIds))];
-  const subjectIds = [...new Set(direct.flatMap((fact) => fact.subjectIds))];
+  const entityIds = [...new Set(direct.flatMap((fact) => fact.entity_ids))];
+  const subjectIds = [...new Set(direct.flatMap((fact) => fact.subject_ids))];
   const related = or(overlaps(facts.entityIds, entityIds), overlaps(facts.subjectIds, subjectIds));
   if (related === undefined || limit === 0) return [];
   return db

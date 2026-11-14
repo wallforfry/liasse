@@ -48,10 +48,10 @@ export type TimelineInput = z.input<typeof timelineInputSchema>;
 export const timelineFactSchema = z.strictObject({
   id: z.string(),
   text: untrustedText,
-  validFrom: isoDateSchema.nullable(),
-  validTo: isoDateSchema.nullable(),
+  valid_from: isoDateSchema.nullable(),
+  valid_to: isoDateSchema.nullable(),
   // The document the fact was read in.
-  documentId: z.string(),
+  document_id: z.string(),
 });
 
 // The date of a document is the one it states; the date of a fact is the start of its
@@ -93,12 +93,12 @@ export const RECALL_MATCHES = ['direct', 'related'] as const;
 export const recalledFactSchema = z.strictObject({
   id: z.string(),
   text: untrustedText,
-  validFrom: isoDateSchema.nullable(),
-  validTo: isoDateSchema.nullable(),
+  valid_from: isoDateSchema.nullable(),
+  valid_to: isoDateSchema.nullable(),
   // The document the fact was read in.
-  documentId: z.string(),
-  entityIds: z.array(z.string()).readonly(),
-  subjectIds: z.array(z.string()).readonly(),
+  document_id: z.string(),
+  entity_ids: z.array(z.string()).readonly(),
+  subject_ids: z.array(z.string()).readonly(),
   // `direct` for a fact the query found, `related` for one that shares an entity or a
   // subject with such a fact.
   match: z.enum(RECALL_MATCHES),
@@ -146,9 +146,9 @@ export const subjectDetailsSchema = z.strictObject({
   state: documentStateSchema,
   // The most recent first, at most `MAX_SUBJECT_DOCUMENTS`.
   documents: z.array(subjectDocumentSchema).readonly(),
-  documentCount: z.int().min(0),
+  document_count: z.int().min(0),
   // The first key dates on or after `asOf`, those of ended documents left out.
-  nextDates: z.array(upcomingDateSchema).readonly(),
+  next_dates: z.array(upcomingDateSchema).readonly(),
 });
 export type SubjectDetails = z.output<typeof subjectDetailsSchema>;
 

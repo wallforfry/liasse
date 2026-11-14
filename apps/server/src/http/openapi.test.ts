@@ -58,7 +58,7 @@ describe('GET /openapi.json', () => {
   it('documents the answers of the knowledge routes from the schemas that define them', () => {
     const { paths } = documentSchema.parse(raw);
     const answer = (path: string) => JSON.stringify(paths[path]?.get?.responses);
-    expect(answer('/subjects')).toContain('documentCount');
+    expect(answer('/subjects')).toContain('document_count');
     expect(answer('/upcoming')).toContain('notice_deadline');
     expect(answer('/subjects')).toContain('truncated');
   });

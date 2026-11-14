@@ -71,7 +71,7 @@ describe('the features the runtime binds', () => {
     const subjects = await call(runtime, '/subjects?kind=contract');
     expect(subjects.status).toBe(200);
     expect(await subjects.json()).toMatchObject({
-      subjects: [{ kind: 'contract', name: 'Home insurance contract', documentCount: 1 }],
+      subjects: [{ kind: 'contract', name: 'Home insurance contract', document_count: 1 }],
       truncated: false,
     });
     expect(await datesOf(runtime, '')).toEqual(['2027-03-15 due']);
@@ -96,7 +96,7 @@ describe('the features the runtime binds', () => {
       items: [{ kind: 'document', document: { id } }],
     });
     expect(await callTool(runtime, 'recall', { query: 'next review' })).toMatchObject({
-      facts: [{ text: 'The next review is due on 15/03/2027.', documentId: id }],
+      facts: [{ text: 'The next review is due on 15/03/2027.', document_id: id }],
     });
   });
 
@@ -142,7 +142,7 @@ describe('the features the runtime binds', () => {
 
     const facts = await both('recall', { query: 'next review' });
     expect(facts.hidden).toEqual({ facts: [] });
-    expect(facts.shown).toMatchObject({ facts: [{ documentId: letter }] });
+    expect(facts.shown).toMatchObject({ facts: [{ document_id: letter }] });
   });
 
   it('detects links once a document is indexed: a superseded contract has no date to come', async () => {

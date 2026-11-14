@@ -31,7 +31,7 @@ export const listedSubjectSchema = z.strictObject({
   name: untrustedText,
   aliases: z.array(untrustedText).readonly(),
   // The visible documents that concern it.
-  documentCount: z.int().min(1),
+  document_count: z.int().min(1),
 });
 export type ListedSubject = z.output<typeof listedSubjectSchema>;
 

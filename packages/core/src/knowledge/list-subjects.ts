@@ -62,7 +62,7 @@ export const listSubjects = async (
       kind: subjectKind,
       name: canonicalName,
       aliases,
-      documentCount: counts.get(id) ?? 0,
+      document_count: counts.get(id) ?? 0,
     })),
     truncated: matching.length > limit,
   };
