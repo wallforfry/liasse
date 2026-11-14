@@ -1,12 +1,11 @@
-import { execFile } from 'node:child_process';
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import { promisify } from 'node:util';
-import { isAbortError, TextExtractionError } from '../errors.ts';
+import { TextExtractionError } from '../errors.ts';
 import type { PageImage } from '../transcribe.ts';
 import type { PdfRendererOptions } from '../types.ts';
-
-const run = promisify(execFile);
+import { readJpegSize } from './jpeg-size.ts';
+import { readPageLongEdgePt } from './page-size.ts';
+import { runPoppler, type PopplerRunOptions } from './poppler.ts';
 
 export const PDF_RENDER_DPI = 200;
 // Scanned pages are photographs, usually stored as JPEG in the PDF already: PNG would
@@ -15,115 +14,85 @@ export const PDF_RENDER_DPI = 200;
 const JPEG_QUALITY = 90;
 const RENDERED_MIME = 'image/jpeg';
 const OWNER_ONLY = 0o600;
-const MAX_REPORTED_STDERR = 300;
-
 const POINTS_PER_INCH = 72;
 
-export interface PdfPageToRender {
-  readonly number: number;
-  readonly longEdgePt: number;
-}
-
 export interface PdfPageRenderer {
-  readonly renderPage: (page: PdfPageToRender) => Promise<PageImage>;
+  readonly renderPage: (page: number) => Promise<PageImage>;
 }
 
-export interface PdfRenderRequest extends PdfRendererOptions {
+export interface PdfRenderRequest extends PdfRendererOptions, PopplerRunOptions {
   readonly bytes: Uint8Array;
-  readonly timeoutMs: number;
   readonly maxEdgePx: number;
-  readonly signal: AbortSignal | undefined;
 }
-
-const hasProperty = <K extends string>(value: unknown, key: K): value is Record<K, unknown> =>
-  typeof value === 'object' && value !== null && key in value;
-
-const toRenderError = (error: unknown, command: string, timeoutMs: number): unknown => {
-  if (isAbortError(error)) return error;
-  if (hasProperty(error, 'code') && error.code === 'ENOENT') {
-    return new TextExtractionError(
-      'pdf_renderer_missing',
-      `The command ${command} was not found; install poppler-utils to read scanned PDFs`,
-      { cause: error },
-    );
-  }
-  if (hasProperty(error, 'killed') && error.killed === true) {
-    return new TextExtractionError(
-      'pdf_renderer_timeout',
-      `Rendering a PDF page took longer than ${String(timeoutMs)} ms`,
-      { cause: error },
-    );
-  }
-  const stderr =
-    hasProperty(error, 'stderr') && typeof error.stderr === 'string' ? error.stderr.trim() : '';
-  return new TextExtractionError(
-    'pdf_renderer_failed',
-    `Rendering a PDF page failed${stderr === '' ? '' : `: ${stderr.slice(0, MAX_REPORTED_STDERR)}`}`,
-    { cause: error },
-  );
-};
 
 // 200 dpi while the page fits the pixel budget. A larger page is scaled so that its long
 // edge is the budget: the memory `pdftoppm` needs grows with the raster, and a page of a
-// few hundred bytes can declare any size.
+// few hundred bytes can declare any size. `-scale-to` would also enlarge a small page,
+// hence the choice between the two.
 const resolutionArguments = (longEdgePt: number, maxEdgePx: number): readonly string[] =>
   (longEdgePt * PDF_RENDER_DPI) / POINTS_PER_INCH > maxEdgePx
     ? ['-scale-to', String(maxEdgePx)]
     : ['-r', String(PDF_RENDER_DPI)];
 
-const readRenderedPage = async (output: string, command: string): Promise<Uint8Array> => {
-  try {
-    return Uint8Array.from(await readFile(output));
-  } catch (error) {
+// What came out is checked whatever was asked for: a file that is no image, or one larger
+// than the budget, never reaches the vision model.
+const readRenderedPage = async (
+  output: string,
+  { command, maxEdgePx }: PdfRenderRequest,
+): Promise<Uint8Array> => {
+  const image = await readFile(output).catch(() => new Uint8Array(0));
+  const size = readJpegSize(image);
+  if (size === undefined) {
     throw new TextExtractionError(
       'pdf_renderer_no_output',
-      `The command ${command} exited without writing the page it was asked for`,
-      { cause: error },
+      `The command ${command} exited without writing the image of the page it was asked for`,
     );
   }
+  if (Math.max(size.width, size.height) > maxEdgePx) {
+    throw new TextExtractionError(
+      'pdf_page_unrenderable',
+      `The command ${command} rendered a page of ${String(size.width)}x${String(size.height)} pixels, more than the limit of ${String(maxEdgePx)} on its long edge`,
+    );
+  }
+  return Uint8Array.from(image);
 };
 
 const renderPage = async (
   directory: string,
   input: string,
-  { number, longEdgePt }: PdfPageToRender,
-  { command, timeoutMs, signal, maxEdgePx }: PdfRenderRequest,
+  page: number,
+  request: PdfRenderRequest,
 ): Promise<PageImage> => {
-  const prefix = join(directory, `page-${String(number)}`);
+  const prefix = join(directory, `page-${String(page)}`);
   const output = `${prefix}.jpg`;
+  const longEdgePt = await readPageLongEdgePt(request.infoCommand, input, page, request);
   const args = [
-    ...resolutionArguments(longEdgePt, maxEdgePx),
-    // pdfjs measures the visible box of a page; without this flag `pdftoppm` renders the
-    // media box, which can be far larger than the size the resolution was chosen for.
+    ...resolutionArguments(longEdgePt, request.maxEdgePx),
+    // The size was read from the crop box, which is what a reader shows; `pdftoppm`
+    // renders the media box unless told otherwise.
     '-cropbox',
     '-jpeg',
     '-jpegopt',
     `quality=${String(JPEG_QUALITY)}`,
     '-f',
-    String(number),
+    String(page),
     '-l',
-    String(number),
+    String(page),
     '-singlefile',
     input,
     prefix,
   ];
-  const options = {
-    timeout: timeoutMs,
-    killSignal: 'SIGKILL',
-    ...(signal === undefined ? {} : { signal }),
-  } as const;
   try {
-    await run(command, args, options).catch((error: unknown) => {
-      throw toRenderError(error, command, timeoutMs);
-    });
-    return { image: await readRenderedPage(output, command), mime: RENDERED_MIME };
+    await runPoppler(request.command, args, request);
+    return { image: await readRenderedPage(output, request), mime: RENDERED_MIME };
   } finally {
     await rm(output, { force: true });
   }
 };
 
-// `pdftoppm` reads a file, so the PDF is written to a directory only this user can enter
-// (`mkdtemp` creates it with mode 0700), removed whatever happens in `use`.
+// poppler reads a file, so the PDF is written to a directory only this user can enter
+// (`mkdtemp` creates it with mode 0700), removed whatever happens in `use`. Only a process
+// killed in the middle of an extraction leaves one behind.
 export const withPdfPageRenderer = async <T>(
   request: PdfRenderRequest,
   use: (renderer: PdfPageRenderer) => Promise<T>,

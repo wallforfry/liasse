@@ -8,6 +8,7 @@ import { extractPdf } from './pdf/extract-pdf.ts';
 import type { ExtractedText, ExtractTextDeps, ExtractTextInput } from './types.ts';
 
 const DEFAULT_PDFTOPPM_COMMAND = 'pdftoppm';
+const DEFAULT_PDFINFO_COMMAND = 'pdfinfo';
 
 // The parameter is `never` when every supported type has its case, so a type added to the
 // domain list without one stops compiling; at run time it catches a value that was
@@ -31,7 +32,12 @@ export const extractText = async (
     vision: deps.vision,
     signal: deps.signal,
     limits: resolveTextLimits(deps.limits),
-    pdfRenderer: { command: DEFAULT_PDFTOPPM_COMMAND, tempRoot: tmpdir(), ...deps.pdfRenderer },
+    pdfRenderer: {
+      command: DEFAULT_PDFTOPPM_COMMAND,
+      infoCommand: DEFAULT_PDFINFO_COMMAND,
+      tempRoot: tmpdir(),
+      ...deps.pdfRenderer,
+    },
   };
   switch (mime) {
     case 'application/pdf':

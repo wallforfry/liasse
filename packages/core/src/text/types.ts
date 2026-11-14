@@ -18,6 +18,8 @@ export interface ExtractTextInput {
 export interface PdfRendererOptions {
   // The `pdftoppm` executable, looked up in PATH unless it is a path.
   readonly command: string;
+  // The `pdfinfo` executable of the same poppler, asked for the size of a page.
+  readonly infoCommand: string;
   // Where the private directory holding the PDF and its rendered pages is created.
   readonly tempRoot: string;
 }

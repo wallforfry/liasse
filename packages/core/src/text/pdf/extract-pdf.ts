@@ -4,8 +4,8 @@ import { normalizeText } from '../normalize.ts';
 import { toExtractedText, type PageText } from '../result.ts';
 import { transcribePageImage } from '../transcribe.ts';
 import type { ExtractedText, ExtractionContext } from '../types.ts';
-import { readPdfPages } from './native-text.ts';
-import { withPdfPageRenderer, type PdfPageToRender } from './render.ts';
+import { readPdfTextLayer } from './native-text.ts';
+import { withPdfPageRenderer } from './render.ts';
 
 // A document is native when its pages hold this many characters on average.
 export const NATIVE_PDF_MIN_CHARS_PER_PAGE = 100;
@@ -13,7 +13,8 @@ export const NATIVE_PDF_MIN_CHARS_PER_PAGE = 100;
 // document, or a page whose only text is a page number or a stamp.
 export const NATIVE_PAGE_MIN_CHARS = 20;
 
-interface PdfPage extends PdfPageToRender {
+interface PdfPage {
+  readonly number: number;
   readonly text: string;
   // Whitespace is not counted: a text layer made of spacing only is not usable text.
   readonly characters: number;
@@ -57,7 +58,8 @@ const transcribePages = async (
   };
   const transcribed = await withPdfPageRenderer(request, (renderer) =>
     mapWithConcurrency(pages, limits.visionConcurrency, async (page) => {
-      const { text, model } = await transcribePageImage(await renderer.renderPage(page), context);
+      const image = await renderer.renderPage(page.number);
+      const { text, model } = await transcribePageImage(image, context);
       return [page.number, { text, visionModel: model }] as const;
     }),
   );
@@ -68,15 +70,10 @@ export const extractPdf = async (
   bytes: Uint8Array,
   context: ExtractionContext,
 ): Promise<ExtractedText> => {
-  const layers = await readPdfPages(bytes, context.limits, context.signal);
-  const pages = layers.map(({ text, longEdgePt }, index): PdfPage => {
-    const normalized = normalizeText(text);
-    return {
-      number: index + 1,
-      longEdgePt,
-      text: normalized,
-      characters: countCharacters(normalized),
-    };
+  const layer = await readPdfTextLayer(bytes, context.limits, context.signal);
+  const pages = layer.map((raw, index): PdfPage => {
+    const text = normalizeText(raw);
+    return { number: index + 1, text, characters: countCharacters(text) };
   });
   const forVision = pagesForVision(pages, context.limits.maxVisionPages);
   const transcribed =

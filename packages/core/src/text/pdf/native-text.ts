@@ -30,38 +30,24 @@ const assertPageCount = (pages: number, { maxPdfPages }: TextLimits): void => {
   }
 };
 
-export interface PdfPageLayer {
-  // The text layer as stored; '' for a page without one.
-  readonly text: string;
-  // The longer edge of the visible box of the page, in points.
-  readonly longEdgePt: number;
-}
-
-const readPage = async (document: PdfDocument, pageNumber: number): Promise<PdfPageLayer> => {
+const readPage = async (document: PdfDocument, pageNumber: number): Promise<string> => {
   const page = await document.getPage(pageNumber);
   try {
     const { items } = await page.getTextContent();
-    const [left = 0, bottom = 0, right = 0, top = 0] = page.view;
-    return {
-      text: items
-        .map((item) => ('str' in item ? `${item.str}${item.hasEOL ? '\n' : ''}` : ''))
-        .join(''),
-      // `UserUnit` scales the page. Counting it can only overestimate the size, which
-      // lowers the resolution; ignoring it would let a renderer that honours it exceed
-      // the pixel budget.
-      longEdgePt: Math.max(Math.abs(right - left), Math.abs(top - bottom)) * page.userUnit,
-    };
+    return items
+      .map((item) => ('str' in item ? `${item.str}${item.hasEOL ? '\n' : ''}` : ''))
+      .join('');
   } finally {
     page.cleanup();
   }
 };
 
-// Returns the text layer and the size of every page, in page order.
-export const readPdfPages = async (
+// Returns the text layer of every page, in page order; a page without one gives ''.
+export const readPdfTextLayer = async (
   bytes: Uint8Array,
   limits: TextLimits,
   signal: AbortSignal | undefined,
-): Promise<readonly PdfPageLayer[]> => {
+): Promise<readonly string[]> => {
   const pdfjs = await loadPdfjs();
   // pdfjs takes ownership of the buffer it is given, and the caller still needs its own.
   const loading = pdfjs.getDocument({
@@ -72,7 +58,7 @@ export const readPdfPages = async (
   try {
     const document = await loading.promise;
     assertPageCount(document.numPages, limits);
-    const pages: PdfPageLayer[] = [];
+    const pages: string[] = [];
     for (let pageNumber = 1; pageNumber <= document.numPages; pageNumber += 1) {
       signal?.throwIfAborted();
       pages.push(await readPage(document, pageNumber));

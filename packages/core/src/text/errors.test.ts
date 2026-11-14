@@ -7,6 +7,7 @@ describe('TextExtractionError', () => {
       (code) => new TextExtractionError(code, 'synthetic').retryable,
     );
     expect(retryable).toEqual(['pdf_renderer_timeout', 'pdf_renderer_failed']);
+    expect(TEXT_EXTRACTION_ERROR_CODES).toContain('pdf_page_unrenderable');
   });
 
   it('keeps its code, message and cause', () => {
