@@ -2,6 +2,7 @@ import type { Database } from '../db/client.ts';
 import { DEFAULT_RETRY_POLICY, type RetryPolicy } from './backoff.ts';
 import { JOBS_CHANNEL } from './enqueue.ts';
 import { startDispatcher } from './dispatcher.ts';
+import { InvalidWorkersOptionsError } from './errors.ts';
 import type { Execution, JobFailure } from './execution.ts';
 import { createHandlerRegistry, type RegisteredHandler } from './handlers.ts';
 import { recoverStaleJobs } from './store.ts';
@@ -53,7 +54,19 @@ const DEFAULTS = {
   abortGraceMs: 5000,
 } as const;
 const LOCK_RENEWALS_PER_TIMEOUT = 3;
+const MIN_RENEWALS_PER_TIMEOUT = 2;
 const RECOVERIES_PER_TIMEOUT = 2;
+
+// A renewal period close to the visibility timeout lets one late renewal hand a live
+// job to another worker: at least two renewals must fit in the timeout.
+const lockRenewalOf = (requested: number | undefined, visibilityTimeoutMs: number): number => {
+  if (requested === undefined) return visibilityTimeoutMs / LOCK_RENEWALS_PER_TIMEOUT;
+  if (requested > 0 && requested <= visibilityTimeoutMs / MIN_RENEWALS_PER_TIMEOUT)
+    return requested;
+  throw new InvalidWorkersOptionsError(
+    `lockRenewalMs must be positive and at most half of visibilityTimeoutMs (${String(visibilityTimeoutMs)} ms)`,
+  );
+};
 
 const settledWithin = async (
   executions: readonly Execution[],
@@ -78,6 +91,7 @@ export const startWorkers = async (options: WorkersOptions): Promise<Workers> =>
   const { db } = options;
   const onError = options.onError ?? (() => undefined);
   const visibilityTimeoutMs = options.visibilityTimeoutMs ?? DEFAULTS.visibilityTimeoutMs;
+  const lockRenewalMs = lockRenewalOf(options.lockRenewalMs, visibilityTimeoutMs);
   const handlers = createHandlerRegistry(options.handlers);
   const wake = createWakeSignal();
 
@@ -98,7 +112,7 @@ export const startWorkers = async (options: WorkersOptions): Promise<Workers> =>
       db,
       handlers,
       retry: options.retry ?? DEFAULT_RETRY_POLICY,
-      lockRenewalMs: options.lockRenewalMs ?? visibilityTimeoutMs / LOCK_RENEWALS_PER_TIMEOUT,
+      lockRenewalMs,
       onJobFailed: options.onJobFailed ?? (() => undefined),
       onError,
     },

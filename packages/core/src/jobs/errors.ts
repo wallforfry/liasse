@@ -24,6 +24,10 @@ export class DuplicateJobHandlerError extends StartupError {
   }
 }
 
+export class InvalidWorkersOptionsError extends StartupError {
+  override readonly name = 'InvalidWorkersOptionsError';
+}
+
 /** Abort reason given to a handler still running when `stop()` reaches its deadline. */
 export class WorkersStoppingError extends Error {
   override readonly name = 'WorkersStoppingError';

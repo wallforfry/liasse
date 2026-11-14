@@ -2,6 +2,7 @@ export { DEFAULT_RETRY_POLICY, type RetryPolicy } from './backoff.ts';
 export { enqueue, type EnqueueInput, type JobExecutor } from './enqueue.ts';
 export {
   DuplicateJobHandlerError,
+  InvalidWorkersOptionsError,
   JobLockLostError,
   JobPayloadError,
   PermanentJobError,

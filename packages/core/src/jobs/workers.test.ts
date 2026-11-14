@@ -2,7 +2,11 @@ import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 import { jobs } from '../db/schema/jobs.ts';
 import { createGate, sleep, waitUntil } from '../testing/async.ts';
 import { enqueue } from './enqueue.ts';
-import { DuplicateJobHandlerError, PermanentJobError } from './errors.ts';
+import {
+  DuplicateJobHandlerError,
+  InvalidWorkersOptionsError,
+  PermanentJobError,
+} from './errors.ts';
 import type { JobFailure } from './execution.ts';
 import { handle, type JobContext } from './handlers.ts';
 import { jobById, labelJob, otherJob } from './kinds.test-helper.ts';
@@ -186,6 +190,18 @@ describe('workers: running, retrying and limiting jobs', () => {
     await expect(start({ handlers: [handler, handler] })).rejects.toBeInstanceOf(
       DuplicateJobHandlerError,
     );
+  });
+
+  it('refuses a lock renewal that is not well below the visibility timeout', async () => {
+    const handlers = [handle(labelJob, () => Promise.resolve())];
+    for (const lockRenewalMs of [501, 1000, 5000, 0, -1, Number.NaN]) {
+      await expect(
+        start({ handlers, visibilityTimeoutMs: 1000, lockRenewalMs }),
+        String(lockRenewalMs),
+      ).rejects.toBeInstanceOf(InvalidWorkersOptionsError);
+    }
+    const workers = await start({ handlers, visibilityTimeoutMs: 1000, lockRenewalMs: 500 });
+    await expect(workers.stop()).resolves.toEqual({ aborted: [], abandoned: [] });
   });
 
   it('never runs more jobs at once than its concurrency, all kinds together', async () => {
