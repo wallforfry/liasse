@@ -12,8 +12,8 @@ import {
   SYNTHETIC_API_KEY,
 } from './wire-fixtures.ts';
 
-const INSTRUCTIONS = 'Transcribe the page into Markdown.';
-const page = { image: new Uint8Array([1, 2, 3]), mime: 'image/png' };
+const PROMPT = 'Transcribe the page into Markdown.';
+const page = { image: new Uint8Array([1, 2, 3]), mime: 'image/png', prompt: PROMPT };
 
 const servers: StubServer[] = [];
 
@@ -31,7 +31,7 @@ const start = async (
     LLM_BASE_URL: `${server.url}/v1`,
     LLM_API_KEY: SYNTHETIC_API_KEY,
   });
-  return { server, model: createVisionModel(config, INSTRUCTIONS) };
+  return { server, model: createVisionModel(config) };
 };
 
 describe('createVisionModel', () => {
@@ -43,7 +43,7 @@ describe('createVisionModel', () => {
     });
   });
 
-  it('sends the instructions and the page image to the vision model, at temperature 0', async () => {
+  it('sends the prompt of the request and the page image to the vision model, at temperature 0', async () => {
     const { server, model } = await start(() => chatCompletion('# Invoice 42'));
     await model.transcribePage({ ...page, mime: 'image/jpeg' });
     expect(server.requests).toHaveLength(1);
@@ -51,7 +51,7 @@ describe('createVisionModel', () => {
       model: 'vision-model',
       temperature: 0,
       messages: [
-        { role: 'system', content: INSTRUCTIONS },
+        { role: 'system', content: PROMPT },
         {
           role: 'user',
           content: [{ type: 'image_url', image_url: { url: 'data:image/jpeg;base64,AQID' } }],

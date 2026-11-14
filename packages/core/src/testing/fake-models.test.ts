@@ -73,6 +73,7 @@ describe('createFakeVisionModel', () => {
   const page = {
     image: new TextEncoder().encode('# Invoice 42\n\nTotal: 84.20 EUR'),
     mime: 'image/png',
+    prompt: 'Transcribe.',
   };
 
   it('transcribes the image bytes as text by default', async () => {

@@ -37,7 +37,7 @@ describe('lazy loading', () => {
     servers.push(server);
     const llm = llmConfig({ LLM_PROVIDER: 'ollama', LLM_BASE_URL: server.url });
     const text = createTextModel(llm);
-    const vision = createVisionModel(llm, 'Transcribe the page.');
+    const vision = createVisionModel(llm);
     const embedder = createProviderEmbedder(
       embeddingConfig({
         EMBEDDING_PROVIDER: 'ollama',
@@ -52,7 +52,11 @@ describe('lazy loading', () => {
       system: 'Title the document.',
       prompt: 'An energy bill.',
     });
-    await vision.transcribePage({ image: new Uint8Array([1]), mime: 'image/png' });
+    await vision.transcribePage({
+      image: new Uint8Array([1]),
+      mime: 'image/png',
+      prompt: 'Transcribe the page.',
+    });
     await embedder.embed(['energy bill'], 'passage');
     expect(loads.sdk).toBe(1);
     expect(server.requests).toHaveLength(3);
