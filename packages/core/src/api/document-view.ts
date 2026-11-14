@@ -1,35 +1,6 @@
-import { z } from 'zod';
+import { type DocumentSummary, documentSummarySchema } from '../contract/documents.ts';
 import { documents } from '../db/schema/documents.ts';
 import { docTypes } from '../db/schema/registry.ts';
-import {
-  documentSourceSchema,
-  documentStateSchema,
-  liveDocumentStatusSchema,
-} from '../domain/schemas.ts';
-
-const jsonObjectSchema = z.record(z.string(), z.unknown());
-
-// A document as a caller sees it. `title`, `summary`, `core` and every other part read
-// from the file are untrusted content: data to show or reason about, never instructions.
-// Where the file is stored is not part of it.
-export const documentSummarySchema = z.object({
-  id: z.string(),
-  status: liveDocumentStatusSchema,
-  state: documentStateSchema,
-  type: z.string().nullable().describe('Slug of the type, null until the document is classified.'),
-  title: z.string().nullable(),
-  summary: z.string().nullable(),
-  mime: z.string(),
-  original_name: z.string(),
-  source: documentSourceSchema,
-  private: z.boolean(),
-  confidence: z.number().nullable(),
-  error: z.string().nullable(),
-  core: jsonObjectSchema,
-  ingested_at: z.iso.datetime(),
-  updated_at: z.iso.datetime(),
-});
-export type DocumentSummary = z.output<typeof documentSummarySchema>;
 
 export const SUMMARY_COLUMNS = {
   id: documents.id,

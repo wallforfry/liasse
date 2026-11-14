@@ -15,15 +15,6 @@ const STATUS_OF_KIND: Readonly<Record<ApiErrorKind, ContentfulStatusCode>> = {
   not_implemented: 501,
 };
 
-// The body of every failure. Written here alone: no stack, no statement, no file path.
-export const errorSchema = z.object({
-  error: z.looseObject({
-    code: z.string().describe('Stable, for programs.'),
-    message: z.string().describe('For people; may change.'),
-    request_id: z.string(),
-  }),
-});
-
 export interface Failure {
   readonly status: ContentfulStatusCode;
   readonly code: string;

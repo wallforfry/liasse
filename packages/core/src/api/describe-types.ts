@@ -1,35 +1,10 @@
-import { z } from 'zod';
-import { typeStatusSchema } from '../domain/schemas.ts';
-import { fieldDefinitionSchema } from '../registry/primitives.ts';
+import {
+  type DescribeTypesOptions,
+  describeTypesOptionsSchema,
+  type TypeList,
+} from '../contract/registry.ts';
 import { listTypes } from '../registry/read-types.ts';
 import type { ApiContext } from './context.ts';
-
-export const describeTypesOptionsSchema = z.strictObject({
-  status: typeStatusSchema.optional().describe('Without it, every type that is not merged.'),
-  include_examples: z.boolean().default(false),
-  include_private: z
-    .boolean()
-    .default(false)
-    .describe('Whether the document counts include private documents.'),
-});
-export type DescribeTypesOptions = z.input<typeof describeTypesOptionsSchema>;
-
-export const typeListSchema = z.object({
-  types: z.array(
-    z.object({
-      slug: z.string(),
-      description: z.string(),
-      parent_slug: z.string().nullable(),
-      version: z.int(),
-      status: typeStatusSchema,
-      aliases: z.array(z.string()),
-      fields: z.record(z.string(), fieldDefinitionSchema),
-      document_count: z.int(),
-      examples: z.array(z.string()).optional().describe('Titles of documents of the type.'),
-    }),
-  ),
-});
-export type TypeList = z.output<typeof typeListSchema>;
 
 /** The registry. Descriptions and example titles come from documents: untrusted content. */
 export const describeTypes = async (

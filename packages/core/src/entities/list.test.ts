@@ -4,7 +4,8 @@ import { TOMBSTONE_STATUS } from '../domain/enums.ts';
 import { ID_PREFIXES, newId } from '../domain/ids.ts';
 import { insertSyntheticDocument } from '../testing/fixtures.ts';
 import { createTestDatabase, type TestDatabase } from '../testing/test-database.ts';
-import { getEntity, listEntities, type ListEntitiesOptions } from './list.ts';
+import type { ListEntitiesOptions } from './list-options.ts';
+import { getEntity, listEntities } from './list.ts';
 import { seedEntity, SYNTHETIC_IBAN } from './support.test-helper.ts';
 
 describe('listEntities', () => {
