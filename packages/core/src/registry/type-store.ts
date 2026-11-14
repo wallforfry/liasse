@@ -1,5 +1,7 @@
 import { and, arrayContains, eq, ne, or, sql } from 'drizzle-orm';
+import { PgTransaction } from 'drizzle-orm/pg-core';
 import type { Database } from '../db/client.ts';
+import { assertReadCommitted, READ_COMMITTED } from '../db/isolation.ts';
 import { docTypes } from '../db/schema/registry.ts';
 import type { TypeStatus } from '../domain/enums.ts';
 import type { Embedding } from '../models/ports.ts';
@@ -49,22 +51,40 @@ export const toRegisteredType = ({ schema, ...row }: TypeRow): RegisteredType =>
   fields: parseTypeSchema(schema),
 });
 
+// A database, or a transaction the caller has opened and will commit itself.
+export type RegistryExecutor = Database | RegistryTransaction;
+
+const isTransaction = (executor: RegistryExecutor): executor is RegistryTransaction =>
+  executor instanceof PgTransaction;
+
+const LOCK = sql`SELECT pg_advisory_xact_lock(hashtext('liasse.registry'))`;
+
 // Every registry write runs under this one lock. Quota, name uniqueness across slugs and
 // aliases, hierarchy depth and version bumps all read before they write, and no unique
 // index can express them; writes are rare enough that serializing them costs nothing.
-export const withRegistryLock = <Outcome>(
-  db: Database,
+//
+// Given a transaction, the lock is taken in it and held until the caller commits or rolls
+// back, and the work runs in a savepoint: a consolidation change moves documents and
+// writes the registry in one transaction.
+export const withRegistryLock = async <Outcome>(
+  executor: RegistryExecutor,
   work: (tx: RegistryTransaction) => Promise<Outcome>,
-): Promise<Outcome> =>
-  db.transaction(
+): Promise<Outcome> => {
+  if (isTransaction(executor)) {
+    await assertReadCommitted(executor, 'Types');
+    await executor.execute(LOCK);
+    return executor.transaction(work);
+  }
+  return executor.transaction(
     async (tx) => {
-      await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext('liasse.registry'))`);
+      await tx.execute(LOCK);
       return work(tx);
     },
     // A snapshot taken before the lock was granted would hide what the previous holder
     // committed, so the level is set here whatever the default of the database.
-    { isolationLevel: 'read committed' },
+    { isolationLevel: READ_COMMITTED },
   );
+};
 
 const firstType = (rows: readonly TypeRow[]): RegisteredType | undefined => {
   const [row] = rows;

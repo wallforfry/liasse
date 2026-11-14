@@ -1,5 +1,5 @@
 import { isDeepStrictEqual } from 'node:util';
-import type { RegistryReadContext } from './context.ts';
+import type { RegistryWriteContext } from './context.ts';
 import {
   fieldFailure,
   invalidFields,
@@ -24,7 +24,7 @@ type FieldChange = (fields: TypeFields) => Result<Readonly<Record<string, unknow
 // no re-extraction. Documents keep the `schema_version` they were extracted with.
 const changeFields = (
   typeId: string,
-  { db }: RegistryReadContext,
+  { db }: RegistryWriteContext,
   change: FieldChange,
 ): Promise<Result<RegisteredType, RegistryError>> =>
   withRegistryLock(db, async (tx) => {
@@ -59,7 +59,7 @@ export const addField = (
   typeId: string,
   name: string,
   definition: unknown,
-  context: RegistryReadContext,
+  context: RegistryWriteContext,
 ): Promise<Result<RegisteredType, RegistryError>> =>
   changeFields(typeId, context, (fields) => {
     const proposed = checkDefinition(name, definition);
@@ -81,7 +81,7 @@ export const renameField = (
   typeId: string,
   from: string,
   to: string,
-  context: RegistryReadContext,
+  context: RegistryWriteContext,
 ): Promise<Result<RegisteredType, RegistryError>> =>
   changeFields(typeId, context, (fields) => {
     const definition = ownValue(fields, from);
@@ -94,7 +94,7 @@ export const retypeField = (
   typeId: string,
   name: string,
   definition: unknown,
-  context: RegistryReadContext,
+  context: RegistryWriteContext,
 ): Promise<Result<RegisteredType, RegistryError>> =>
   changeFields(typeId, context, (fields) => {
     const existing = ownValue(fields, name);
@@ -115,7 +115,7 @@ export const retypeField = (
 export const removeField = (
   typeId: string,
   name: string,
-  context: RegistryReadContext,
+  context: RegistryWriteContext,
 ): Promise<Result<RegisteredType, RegistryError>> =>
   changeFields(typeId, context, (fields) =>
     ownValue(fields, name) === undefined ? err(notFound(name)) : ok(without(fields, name)),
