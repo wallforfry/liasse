@@ -1,6 +1,6 @@
 import { eq } from 'drizzle-orm';
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
-import { documents } from '../db/schema/documents.ts';
+import { documentPages, documents } from '../db/schema/documents.ts';
 import { jobs } from '../db/schema/jobs.ts';
 import { entities } from '../db/schema/registry.ts';
 import {
@@ -15,10 +15,13 @@ import { insertSyntheticDocument } from '../testing/fixtures.ts';
 import { correctDocument } from './correct-document.ts';
 import {
   createPipelineHarness,
+  live,
   type PipelineHarness,
+  scriptedModel,
   SYNTHETIC_IBAN,
   SYNTHETIC_IBAN_MASKED,
 } from './harness.test-helper.ts';
+import { reextractDocument } from './process-document.ts';
 
 const EXTRACTED = { model: 'm', schema_version: 1, confidence: 0.9, page: 1, quote: 'q' };
 
@@ -210,13 +213,13 @@ describe('correctDocument', () => {
     expect(await harness.document(id)).toMatchObject({ status: 'deleted', private: false });
   });
 
-  it('changes the type: drops the fields of the old one and queues a re-extraction', async () => {
+  it('changes the type: the extraction it owes is recorded and queued', async () => {
     const type = await bill();
     const payslip = await seedType('payslip', {
       employer: { type: 'entity' },
       net_pay: { type: 'money' },
     });
-    const id = await settled(type.id, { manualFields: ['meter_id', 'reference'] });
+    const id = await settled(type.id, { manualFields: ['reference'] });
     const result = await correctDocument(harness.deps(), {
       id,
       type: 'payslip',
@@ -226,14 +229,77 @@ describe('correctDocument', () => {
     const document = await harness.document(id);
     expect(document).toMatchObject({
       typeId: payslip.id,
-      schemaVersion: 1,
+      // Until an extraction for the new type succeeds: behind its type, and unvouched.
+      schemaVersion: null,
+      confidence: null,
       fields: { net_pay: { value: 1200, currency: 'EUR' } },
       core: { reference: 'SYN-1' },
       manualFields: ['reference', 'net_pay', MANUAL_TYPE_FIELD],
     });
-    expect(document.provenance).not.toHaveProperty('meter_id');
     expect(document.provenance[PIPELINE_PROVENANCE_KEY]).toEqual({ type: MANUAL_PROVENANCE });
     expect(await queued()).toEqual([{ kind: 'reextract_document', payload: { documentId: id } }]);
+  });
+
+  // Verdict R3: nothing is lost. A value a person set cannot come back from the text.
+  it('moves the values of the old fields to `extra`, with their provenance and manual marks', async () => {
+    const type = await bill();
+    await seedType('water_bill', {
+      volume: { type: 'number' },
+      tags: { type: 'list', items: { type: 'text' } },
+    });
+    const id = await settled(type.id, {
+      fields: { meter_id: 'MANUAL-METER', tags: ['kept'], broker: 'Synthetic Broker' },
+      provenance: {
+        meter_id: MANUAL_PROVENANCE,
+        tags: [EXTRACTED],
+        broker: { entity_id: 'ent_BROKER', match: 'created', confidence: 1 },
+      },
+      manualFields: ['meter_id'],
+    });
+    await correctDocument(harness.deps(), { id, type: 'water_bill' });
+    const document = await harness.document(id);
+    // A field of the new type with the same name and a valid value stays a field.
+    expect(document.fields).toEqual({ tags: ['kept'] });
+    expect(document.extra).toEqual({
+      usage: 350,
+      meter_id: 'MANUAL-METER',
+      broker: 'Synthetic Broker',
+    });
+    expect(document.provenance).toMatchObject({
+      meter_id: MANUAL_PROVENANCE,
+      tags: [EXTRACTED],
+      broker: { entity_id: 'ent_BROKER' },
+    });
+    expect(document.manualFields).toEqual(['meter_id', MANUAL_TYPE_FIELD]);
+    // The re-extraction for the new type keeps the manual value; the text can give the
+    // others back.
+    await harness.db
+      .insert(documentPages)
+      .values({ documentId: id, page: 1, text: 'Volume 42 m3' });
+    const reextracting = scriptedModel({
+      extract: () => ({
+        core: {},
+        fields: { volume: { value: 42, page: 1, quote: 'Volume 42 m3', confidence: 0.9 } },
+        extra: { meter_id: { value: '42', page: 1, quote: 'Volume 42 m3', confidence: 0.9 } },
+      }),
+    });
+    await reextractDocument(harness.deps({ textModel: reextracting }), id, live());
+    expect(await harness.document(id)).toMatchObject({
+      fields: { volume: 42 },
+      extra: { meter_id: 'MANUAL-METER' },
+      provenance: { meter_id: MANUAL_PROVENANCE },
+    });
+  });
+
+  // Verdict R1: only a correction of the type, the core or the fields is a review.
+  it.each([
+    ['an empty patch', {}],
+    ['a patch of the private flag alone', { private: true }],
+  ])('leaves a document flagged for review after %s', async (_case, patch) => {
+    const type = await bill();
+    const id = await settled(type.id);
+    await correctDocument(harness.deps(), { id, ...patch });
+    expect(await harness.document(id)).toMatchObject({ status: 'needs_review' });
   });
 
   it('marks a type a person confirmed as manual without touching the fields', async () => {

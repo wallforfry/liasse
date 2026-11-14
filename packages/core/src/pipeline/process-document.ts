@@ -22,6 +22,9 @@ const settle = (
   from: readonly DocumentStatus[],
 ): Promise<boolean> =>
   writeFromStatus(db, documentId, from, async (tx, current) => {
+    // A change of type during the indexing put the extraction back to do: the document
+    // is not settled, and the next step extracts it for its new type.
+    if (current.confidence === null) return;
     await tx
       .update(documents)
       .set({

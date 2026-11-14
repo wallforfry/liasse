@@ -39,6 +39,9 @@ const pick = (record: Values, names: readonly string[]): Values =>
     }),
   );
 
+const meanOf = (values: readonly number[]): readonly number[] =>
+  values.length === 0 ? [] : [values.reduce((sum, value) => sum + value, 0) / values.length];
+
 const omit = (record: Values, names: readonly string[]): Values =>
   Object.fromEntries(Object.entries(record).filter(([name]) => !names.includes(name)));
 
@@ -76,16 +79,22 @@ export const mergeWithStored = (
   const manual = stored.manualFields.filter((name) => name !== MANUAL_TYPE_FIELD);
   const manualCore = manual.filter((name) => CORE_FIELD_NAMES.includes(name));
   const manualFields = manual.filter((name) => ownValue(type?.fields ?? {}, name) !== undefined);
+  // A manual value in `extra` is one a person set on a field of an earlier type.
+  const manualExtra = manual.filter(
+    (name) => !manualCore.includes(name) && !manualFields.includes(name),
+  );
   const core = withManual(fresh.core, stored.core, manualCore);
   const fields = withManual(fresh.fields, stored.fields, manualFields);
-  const { extra } = fresh;
+  const extra = withManual(fresh.extra, stored.extra, manualExtra);
   const keep = (name: string): boolean => keepProvenanceOfUnchanged || manual.includes(name);
   const entries = (values: Values, storedValues: Values): Values =>
     provenanceOf(values, storedValues, fresh.provenance, stored.provenance, keep);
   const pipeline = readPipelineProvenance(stored.provenance);
+  // One entry per filled core field: a list field such as `key_dates` weighs by the mean
+  // of its items. A value that was rejected counts as one field at 0.
   const coreConfidences = [
     ...Object.keys(core).flatMap((name) =>
-      manualCore.includes(name) ? [1] : (ownValue(fresh.coreConfidences, name) ?? []),
+      manualCore.includes(name) ? [1] : meanOf(ownValue(fresh.coreConfidences, name) ?? []),
     ),
     ...Array.from({ length: fresh.rejectedCore }, () => 0),
   ];

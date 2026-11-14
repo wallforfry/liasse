@@ -360,6 +360,93 @@ describe('extraction and re-extraction', () => {
     expect(await harness.document(id)).toMatchObject({ status: 'failed', error: 'no_text' });
   });
 
+  // Verdict P7: the correction lands while the extracted document is being indexed.
+  it('extracts for a type a person chose while the document was being indexed', async () => {
+    await seedType();
+    const water = await createType(
+      {
+        slug: 'water_bill',
+        description: 'Bill from a water supplier',
+        fields: { volume: { type: 'number' } },
+      },
+      registry(),
+    );
+    if (!water.ok) throw new Error(water.error.message);
+    const type = await seedType('power_bill');
+    const id = await classified(type.id);
+    const asked = model((call) =>
+      call === 1 ? FIRST : { ...FIRST, fields: { volume: at(350, '350 kWh') } },
+    );
+    let corrected = false;
+    await processDocument(
+      harness.deps({
+        textModel: asked,
+        indexDocument: async () => {
+          if (corrected) return;
+          corrected = true;
+          const result = await correctDocument(harness.deps(), { id, type: 'water_bill' });
+          if (!result.ok) throw new Error('the correction was refused');
+        },
+      }),
+      id,
+      live(),
+    );
+    expect(asked.calls).toHaveLength(2);
+    expect(await harness.document(id)).toMatchObject({
+      typeId: water.value.id,
+      schemaVersion: water.value.version,
+      fields: { volume: 350 },
+      status: 'indexed',
+    });
+  });
+
+  // Verdict P2: what a failed re-extraction leaves must still say an extraction is owed.
+  it('keeps the owed extraction recorded when the re-extraction fails', async () => {
+    const type = await seedType();
+    await seedType('water_bill');
+    const id = await indexed(type.id);
+    await correctDocument(harness.deps(), { id, type: 'water_bill' });
+    const failing = createFakeTextModel(() => {
+      throw new Error('the model is down');
+    });
+    for (let attempt = 1; attempt <= 3; attempt += 1) {
+      await expect(
+        reextractDocument(harness.deps({ textModel: failing }), id, live()),
+      ).rejects.toThrow('the model is down');
+    }
+    expect(await harness.document(id)).toMatchObject({ schemaVersion: null, confidence: null });
+    // The next one that succeeds settles it, for the new type.
+    await reextractDocument(harness.deps({ textModel: model(() => FIRST) }), id, live());
+    expect(await harness.document(id)).toMatchObject({ schemaVersion: 1, status: 'indexed' });
+    expect((await harness.document(id)).confidence).not.toBeNull();
+  });
+
+  // Each key date is one item of one core field: they weigh as one field in the mean.
+  it('counts the key dates as one core field in the confidence', async () => {
+    const type = await seedType();
+    const id = await classified(type.id);
+    const keyDate = (confidence: number) => ({
+      value: { kind: 'due', date: '2026-10-18', label: 'Payment' },
+      page: 2,
+      quote: 'due 18/10/2026',
+      confidence,
+    });
+    await harness.db
+      .update(documentPages)
+      .set({ text: `${PAGE_TWO}\ndue 18/10/2026` })
+      .where(eq(documentPages.page, 2));
+    const output = {
+      core: {
+        reference: at('SYN-2026-001', 'Invoice SYN-2026-001', 1),
+        language: at('fr', 'Invoice SYN-2026-001', 1),
+        key_dates: [keyDate(0.4), keyDate(0.4), keyDate(0.4)],
+      },
+    };
+    await processDocument(harness.deps({ textModel: model(() => output) }), id, live());
+    // Mean of 1, 1 and 0.4 over three fields, not of 1, 1, 0.4, 0.4 and 0.4.
+    expect((await harness.document(id)).confidence).toBeCloseTo(0.8, 5);
+  });
+
   it('fails a classified document that has no stored text', async () => {
     const { id } = await insertSyntheticDocument(harness.db, { status: 'classified' });
     await expect(processDocument(harness.deps(), id, live())).rejects.toMatchObject({
