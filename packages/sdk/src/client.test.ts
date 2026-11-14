@@ -7,12 +7,13 @@ interface Sent {
   readonly init: RequestInit | undefined;
 }
 
-// A server that answers every request with the same response, and remembers what it got.
-const answering = (respond: () => Response) => {
+// A server that answers each request by its URL, and remembers what it got.
+const answering = (respond: (url: string) => Response) => {
   const sent: Sent[] = [];
   const fetch: typeof globalThis.fetch = async (input, init) => {
-    sent.push({ url: input instanceof Request ? input.url : String(input), init });
-    return Promise.resolve(respond());
+    const url = input instanceof Request ? input.url : String(input);
+    sent.push({ url, init });
+    return Promise.resolve(respond(url));
   };
   return { fetch, sent };
 };
@@ -20,10 +21,11 @@ const answering = (respond: () => Response) => {
 const json = (body: unknown, status = 200): Response => Response.json(body, { status });
 
 const EMPTY_LIST = { documents: [], total: 0, has_more: false };
+const NO_DATES = { dates: [], truncated: false };
 
 describe('createLiasseClient', () => {
   it('sends the token and resolves routes under the path prefix of the base URL', async () => {
-    const server = answering(() => json(EMPTY_LIST));
+    const server = answering((url) => json(url.includes('/upcoming') ? NO_DATES : EMPTY_LIST));
     const client = createLiasseClient({
       baseUrl: 'https://proxy.example.com/liasse',
       token: 'synthetic-token',
@@ -97,6 +99,19 @@ describe('createLiasseClient', () => {
     const error: unknown = await client.listDocuments().catch((e: unknown) => e);
     expect(error).toBeInstanceOf(LiasseResponseError);
     expect(error).toMatchObject({ status: 200, cause: { name: 'ZodError' } });
+  });
+
+  it('holds the answers of subjects and key dates to their schemas', async () => {
+    const server = answering(() => json({ dates: [] }));
+    const client = createLiasseClient({
+      baseUrl: 'http://x.test',
+      token: 't',
+      fetch: server.fetch,
+    });
+    await expect(client.upcoming({ from: '2027-01-01', to: '2027-12-31' })).rejects.toBeInstanceOf(
+      LiasseResponseError,
+    );
+    await expect(client.listSubjects()).rejects.toBeInstanceOf(LiasseResponseError);
   });
 
   it('rejects a body that is not JSON as a LiasseResponseError', async () => {

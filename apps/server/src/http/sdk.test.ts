@@ -88,7 +88,7 @@ describe('the TypeScript SDK', () => {
     const invalid = await refusal(client.listDocuments({ limit: 0 }));
     expect(invalid).toMatchObject({ status: 400, code: 'invalid_request' });
     expect(invalid.details).toHaveProperty('issues');
-    expect(await refusal(client.listSubjects())).toMatchObject({
+    expect(await refusal(client.listChanges())).toMatchObject({
       status: 501,
       code: 'not_implemented',
     });

@@ -17,15 +17,19 @@ import {
   type ListEntitiesRequest,
   type listChangesOptionsSchema,
   type listSubjectsOptionsSchema,
+  listSubjectsOutputSchema,
   type queryDslSchema,
   type QueryResultEnvelope,
   queryResultSchema,
   type SearchRequest,
   type SearchResults,
+  type SubjectList,
   searchResultsSchema,
   type TypeList,
   typeListSchema,
+  type Upcoming,
   type upcomingOptionsSchema,
+  upcomingOutputSchema,
   type UploadResult,
   uploadResultSchema,
 } from '@liasse/core/contract';
@@ -66,8 +70,9 @@ export interface LiasseClient {
   readonly query: (request: QueryRequest) => Promise<QueryResultEnvelope>;
   readonly listTypes: (options?: DescribeTypesOptions) => Promise<TypeList>;
   readonly listEntities: (options?: ListEntitiesRequest) => Promise<EntityListView>;
-  readonly listSubjects: (options?: ListSubjectsRequest) => Promise<FeatureResult>;
-  readonly upcoming: (options: UpcomingRequest) => Promise<FeatureResult>;
+  readonly listSubjects: (options?: ListSubjectsRequest) => Promise<SubjectList>;
+  /** Key dates of a window, both days included, sorted by date. */
+  readonly upcoming: (options: UpcomingRequest) => Promise<Upcoming>;
   readonly listChanges: (options?: ListChangesRequest) => Promise<FeatureResult>;
   readonly decideChange: (id: string, decision: ChangeDecisionRequest) => Promise<FeatureResult>;
 }
@@ -111,8 +116,8 @@ export const createLiasseClient = (options: ClientOptions): LiasseClient => {
     query: async (request) => post(queryResultSchema, '/query', request),
     listTypes: async (query = {}) => get(typeListSchema, '/types', query),
     listEntities: async (query = {}) => get(entityListSchema, '/entities', query),
-    listSubjects: async (query = {}) => get(featureResultSchema, '/subjects', query),
-    upcoming: async (query) => get(featureResultSchema, '/upcoming', query),
+    listSubjects: async (query = {}) => get(listSubjectsOutputSchema, '/subjects', query),
+    upcoming: async (query) => get(upcomingOutputSchema, '/upcoming', query),
     listChanges: async (query = {}) => get(featureResultSchema, '/changes', query),
     decideChange: async (id, decision) =>
       post(featureResultSchema, `/changes/${encodeURIComponent(id)}`, decision),
