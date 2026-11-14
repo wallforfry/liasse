@@ -241,7 +241,7 @@ describe('extraction and re-extraction', () => {
     await markMerged(source.id, target.id, { db: harness.db });
     const asked = model(() => FIRST);
     await processDocument(harness.deps({ textModel: asked }), id, live());
-    expect(asked.calls[0]?.prompt).toContain('The document is of the type energy_bill');
+    expect(asked.calls[0]?.prompt).toContain('Type: energy_bill');
     expect(await harness.document(id)).toMatchObject({ typeId: target.id, status: 'indexed' });
   });
 
@@ -334,7 +334,7 @@ describe('extraction and re-extraction', () => {
     );
     await processDocument(harness.deps({ textModel: racing }), id, live());
     expect(racing.calls).toHaveLength(2);
-    expect(racing.calls[1]?.prompt).toContain('The document is of the type lease');
+    expect(racing.calls[1]?.prompt).toContain('Type: lease');
     expect(await harness.document(id)).toMatchObject({ typeId: lease.id, status: 'indexed' });
     // A type chosen by a person is certain: the confidence is the one of the core.
     expect((await harness.document(id)).confidence).toBeCloseTo(0.9, 5);

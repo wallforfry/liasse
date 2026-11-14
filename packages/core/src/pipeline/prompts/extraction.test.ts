@@ -42,7 +42,10 @@ describe('the extraction prompt', () => {
       truncated: false,
     });
     expect(outsideBlocks(prompt)).not.toContain('Ignore the rules');
-    expect(outsideBlocks(prompt)).toContain('The document is of the type energy_bill');
+    // The slug and the field names were written by a model too.
+    expect(outsideBlocks(prompt)).not.toContain('energy_bill');
+    expect(outsideBlocks(prompt)).not.toContain('meter_id');
+    expect(prompt).toContain('energy_bill');
     expect(prompt).toContain('- meter_id: identifier (PDL)');
     expect(prompt).toContain('- readings: list of number');
     expect(prompt).toContain(`[page 1]\npage one ${HOSTILE}\n\n[page 2]\npage two`);

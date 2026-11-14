@@ -3,7 +3,9 @@ import { createType } from '../../registry/create-type.ts';
 import type { RegistryError } from '../../registry/errors.ts';
 import { resolveType } from '../../registry/read-types.ts';
 import type { RegisteredType } from '../../registry/type-store.ts';
+import { maskOf } from '../bindings.ts';
 import type { PipelineDeps } from '../deps.ts';
+import { maskDeep } from '../extract/masking.ts';
 import { classificationPrompt, classificationSystemPrompt } from '../prompts/classification.ts';
 import type { Candidate } from './candidates.ts';
 import {
@@ -22,6 +24,11 @@ export interface TypeQuestion {
   readonly opening: string;
   readonly candidates: readonly Candidate[];
   readonly hint: string | null;
+  /**
+   * False for a private document when the embedder is outside the installation: the
+   * description of a new type is embedded, and it was written from the document.
+   */
+  readonly mayCreate: boolean;
 }
 
 interface Answer {
@@ -62,16 +69,23 @@ const ask = async (
 
 // A slug the registry already holds, under that name or as an alias, is the type the
 // model was after: it was not among the candidates, and is used as it is.
+//
+// The description and the definitions are text the model wrote after reading the
+// document; they reach `describe_types` and every later prompt, so a sensitive
+// identifier in them is masked before the registry sees them. The registry bounds their
+// lengths. Field names and slugs are snake_case: no identifier the detector knows fits.
 const create = async (
-  { db, embedder, settings, now }: PipelineDeps,
+  deps: PipelineDeps,
   { new_type: proposal }: NewTypeDecision,
 ): Promise<Settled> => {
+  const { db, embedder, settings, now } = deps;
+  const mask = maskOf(deps);
   const created = await createType(
     {
       slug: proposal.slug,
-      description: proposal.description,
+      description: mask(proposal.description),
       parentSlug: proposal.parent_slug,
-      fields: proposal.fields,
+      fields: maskDeep(mask)(proposal.fields),
     },
     {
       db,
@@ -117,7 +131,8 @@ const fallback = (candidates: readonly Candidate[], model: string): TypeDecision
 
 /**
  * One classification call, and a second one only when the registry refused the proposed
- * type for a reason the model can correct: the reason is given back to it once.
+ * type for a reason the model can correct: the reason is given back to it once. A new
+ * type that may not be created is answered like a full quota.
  */
 export const decideType = async (
   deps: PipelineDeps,
@@ -125,6 +140,9 @@ export const decideType = async (
   signal: AbortSignal,
 ): Promise<TypeDecision> => {
   const first = await ask(deps, question, signal);
+  if (first.decision.decision === 'new' && !question.mayCreate) {
+    return fallback(question.candidates, first.model);
+  }
   const settled = await settle(deps, question.candidates, first.decision);
   if ('type' in settled) return assignment(settled, first);
   if (settled.refused.code === 'quota_exceeded') return fallback(question.candidates, first.model);

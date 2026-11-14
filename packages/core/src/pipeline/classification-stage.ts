@@ -47,6 +47,11 @@ export const runClassificationStage = async (
   }
   const opening = openingOf(await loadPages(deps.db, document.id), CLASSIFICATION_OPENING_TOKENS);
   const candidates = await findCandidates(deps, opening, document.private);
-  const decision = await decideType(deps, { opening, candidates, hint: document.hint }, signal);
+  const mayCreate = !document.private || deps.embedder.isLocal;
+  const decision = await decideType(
+    deps,
+    { opening, candidates, hint: document.hint, mayCreate },
+    signal,
+  );
   await storeDecision(deps, document.id, decision);
 };

@@ -47,13 +47,15 @@ export interface ExtractionPromptInput {
   readonly truncated: boolean;
 }
 
-// The description, the enum values and the identifier formats of a type were written by
-// a model that had read other documents: they are delimited like a document.
+// The slug, the description, the field names, the enum values and the identifier
+// formats of a type were written by a model that had read other documents: they are
+// delimited like a document.
 const typeSection = ({ slug, description, fields }: ExtractionPromptType): string =>
   [
-    `The document is of the type ${slug}. Its description and its fields, as the registry holds them:`,
+    'The type of the document, its description and its fields, as the registry holds them:',
     wrapUntrusted(
       [
+        `Type: ${slug}`,
         description,
         ...Object.entries(fields).map(
           ([name, definition]) => `- ${name}: ${describeField(definition)}`,

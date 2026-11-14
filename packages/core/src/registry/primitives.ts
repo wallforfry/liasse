@@ -1,5 +1,9 @@
 import { z } from 'zod';
-import { MAX_ENUM_VALUES, MAX_IDENTIFIER_FORMAT_LENGTH } from '../domain/limits.ts';
+import {
+  MAX_ENUM_VALUE_LENGTH,
+  MAX_ENUM_VALUES,
+  MAX_IDENTIFIER_FORMAT_LENGTH,
+} from '../domain/limits.ts';
 import { isoDateSchema, moneySchema, periodSchema } from '../domain/values.ts';
 
 const textValue = z.string().min(1);
@@ -8,7 +12,7 @@ const hasNoDuplicate = (values: readonly string[]): boolean =>
   new Set(values).size === values.length;
 
 const enumValues = z
-  .array(z.string().min(1))
+  .array(z.string().min(1).max(MAX_ENUM_VALUE_LENGTH))
   .min(1)
   .max(MAX_ENUM_VALUES)
   .refine(hasNoDuplicate, 'expected distinct enum values')
