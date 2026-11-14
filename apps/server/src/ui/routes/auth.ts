@@ -21,6 +21,7 @@ const LOGIN_FORM_TTL_SECONDS = 60 * 60;
 // A password and a token.
 const MAX_LOGIN_FORM_BYTES = 8 * 1024;
 const HOME = `${UI_ROOT}/documents`;
+const BUSY_RETRY_SECONDS = 1;
 
 export interface AuthRouteDeps {
   readonly sessions: SessionStore;
@@ -47,7 +48,7 @@ const cookieOptions = (secure: boolean, path: string, maxAgeSeconds: number): Co
 const answerLogin = (
   context: Context<UiEnv>,
   token: string,
-  status: 200 | 401 | 403 | 429,
+  status: 200 | 401 | 403 | 429 | 503,
   notices: readonly Markup[] = [],
 ): Response | Promise<Response> =>
   context.html(publicPage('Log in', loginPage(token, notices)), status);
@@ -97,7 +98,14 @@ export const authRoutes = ({
         ]);
       }
       const { password } = body;
-      if (typeof password !== 'string' || !(await checkPassword(password))) {
+      const verdict = typeof password === 'string' ? await checkPassword(password) : 'mismatch';
+      if (verdict === 'busy') {
+        context.header('Retry-After', String(BUSY_RETRY_SECONDS));
+        return answerLogin(context, cookieToken, 503, [
+          notice('Too many logins are being checked. Try again in a moment.', 'error'),
+        ]);
+      }
+      if (verdict === 'mismatch') {
         return answerLogin(context, cookieToken, 401, [notice('Wrong password.', 'error')]);
       }
       // A browser holds one session: the one it logged in with before ends here.

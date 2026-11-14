@@ -3,8 +3,9 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { z } from 'zod';
 import { createHttpHarness, type HttpHarness, TEST_TOKEN } from '../http/harness.test-helper.ts';
 import { loadConfig } from '@liasse/core/config';
-import { createGate, SYNTHETIC_ENV } from '@liasse/core/testing';
+import { createGate, sleep, SYNTHETIC_ENV, waitUntil } from '@liasse/core/testing';
 import { createLoginLimit } from './login-limit.ts';
+import { createPasswordCheck } from './password.ts';
 import {
   cookiesOf,
   formRequest,
@@ -93,6 +94,44 @@ describe('web UI access', () => {
       expect((await submitLogin(app, 'synthetic-other-password')).status).toBe(401);
     });
 
+    it('answers 503 without hashing while two argon2id hashes are in flight', async () => {
+      const gate = createGate();
+      const hashed: string[] = [];
+      const hash = await argon2id({
+        password: 'synthetic-held-password',
+        salt: new Uint8Array(16).fill(3),
+        memorySize: 64,
+        iterations: 1,
+        parallelism: 1,
+        hashLength: 32,
+        outputType: 'encoded',
+      });
+      const password = loadConfig({ ...SYNTHETIC_ENV, UI_PASSWORD: hash }).auth.ui?.password;
+      if (password === undefined) throw new Error('expected a UI password');
+      const app = uiApp(harness, {
+        checkPassword: createPasswordCheck(password, {
+          hash: async (presented) => {
+            hashed.push(presented);
+            await gate.opened;
+            return new Uint8Array(32);
+          },
+        }),
+      });
+      const attempt = (client: string) =>
+        submitLogin(app, `synthetic-${client}`, { [TEST_CLIENT_HEADER]: client });
+      const first = attempt('client-h1');
+      const second = attempt('client-h2');
+      await waitUntil(() => hashed.length === 2);
+      // Bounded, so a missing cap fails at once instead of waiting on the held hashes.
+      const third = await Promise.race([attempt('client-h3'), sleep(5000).then(() => undefined)]);
+      expect(third?.status).toBe(503);
+      expect(third?.headers.get('Retry-After')).toBe('1');
+      expect(third === undefined ? undefined : cookiesOf(third).liasse_session).toBeUndefined();
+      expect(hashed).toEqual(['synthetic-client-h1', 'synthetic-client-h2']);
+      gate.open();
+      expect((await Promise.all([first, second])).map(({ status }) => status)).toEqual([401, 401]);
+    });
+
     it('admits five attempts a minute per address, then answers 429', async () => {
       const clock = { now: 1_000_000 };
       const app = uiApp(harness, { loginLimit: createLoginLimit({ now: () => clock.now }) });
@@ -164,10 +203,14 @@ describe('web UI access', () => {
         },
       });
       const session = await signIn(app);
-      const response = await session.get('/ui/changes');
+      // Bounded here, so a missing deadline fails at once rather than at the suite timeout.
+      const response = await Promise.race([
+        session.get('/ui/changes'),
+        sleep(5000).then(() => undefined),
+      ]);
       gate.open();
-      expect(response.status).toBe(504);
-      expect(await response.text()).toContain('took too long');
+      expect(response?.status).toBe(504);
+      expect(await response?.text()).toContain('took too long');
     });
 
     it('ends the session when its lifetime is over', async () => {

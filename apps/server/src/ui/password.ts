@@ -2,7 +2,22 @@ import { createHash, timingSafeEqual } from 'node:crypto';
 import type { Argon2idHash, UiPassword } from '@liasse/core/config';
 import { argon2id } from 'hash-wasm';
 
-export type PasswordCheck = (presented: string) => Promise<boolean>;
+/** `busy` when the check was not made: too many hashes are being computed already. */
+export type PasswordVerdict = 'match' | 'mismatch' | 'busy';
+
+export type PasswordCheck = (presented: string) => Promise<PasswordVerdict>;
+
+export type Argon2idHasher = (presented: string, expected: Argon2idHash) => Promise<Uint8Array>;
+
+// Every attempt holds the memory of its hash (up to 64 MiB) and queues behind the others
+// on the event loop; past this many, an attempt is answered at once without hashing.
+export const MAX_HASHES_IN_FLIGHT = 2;
+
+export interface PasswordCheckOptions {
+  readonly maxInFlight?: number;
+  /** hash-wasm by default; a test holds the computation open. */
+  readonly hash?: Argon2idHasher;
+}
 
 const digest = (value: string | Uint8Array): Buffer => createHash('sha256').update(value).digest();
 
@@ -10,7 +25,9 @@ const digest = (value: string | Uint8Array): Buffer => createHash('sha256').upda
 export const sameSecret = (left: string | Uint8Array, right: string | Uint8Array): boolean =>
   timingSafeEqual(digest(left), digest(right));
 
-const argon2idOf = async (presented: string, expected: Argon2idHash): Promise<Uint8Array> =>
+const verdictOf = (matches: boolean): PasswordVerdict => (matches ? 'match' : 'mismatch');
+
+const hashWithWasm: Argon2idHasher = (presented, expected) =>
   argon2id({
     password: presented,
     salt: expected.salt,
@@ -21,8 +38,26 @@ const argon2idOf = async (presented: string, expected: Argon2idHash): Promise<Ui
     outputType: 'binary',
   });
 
-/** Checks a password against `UI_PASSWORD`, a plain value or an argon2id hash. */
-export const createPasswordCheck = (password: UiPassword): PasswordCheck =>
-  password.kind === 'plain'
-    ? (presented) => Promise.resolve(sameSecret(presented, password.value))
-    : async (presented) => sameSecret(await argon2idOf(presented, password), password.hash);
+/**
+ * Checks a password against `UI_PASSWORD`. A plain value costs nothing to compare; an
+ * argon2id hash is computed at most `maxInFlight` times at once, whatever the number of
+ * clients, so the login limit per client is not the only bound on that work.
+ */
+export const createPasswordCheck = (
+  password: UiPassword,
+  { maxInFlight = MAX_HASHES_IN_FLIGHT, hash = hashWithWasm }: PasswordCheckOptions = {},
+): PasswordCheck => {
+  if (password.kind === 'plain') {
+    return (presented) => Promise.resolve(verdictOf(sameSecret(presented, password.value)));
+  }
+  let inFlight = 0;
+  return async (presented) => {
+    if (inFlight >= maxInFlight) return 'busy';
+    inFlight += 1;
+    try {
+      return verdictOf(sameSecret(await hash(presented, password), password.hash));
+    } finally {
+      inFlight -= 1;
+    }
+  };
+};

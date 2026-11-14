@@ -15,7 +15,7 @@ import {
   uiHeaders,
 } from './guards.ts';
 import { createLoginLimit, type LoginLimit } from './login-limit.ts';
-import { createPasswordCheck } from './password.ts';
+import { createPasswordCheck, type PasswordCheck } from './password.ts';
 import { authRoutes } from './routes/auth.ts';
 import { changePages } from './routes/changes.ts';
 import { documentPages } from './routes/documents.ts';
@@ -32,6 +32,8 @@ export interface UiOptions {
   /** The socket address by default; a test names its own. */
   readonly clientAddress?: (context: Context) => string;
   readonly loginLimit?: LoginLimit;
+  /** Built from `password` by default; a test holds the hashing open. */
+  readonly checkPassword?: PasswordCheck;
   readonly now?: () => number;
 }
 
@@ -66,6 +68,7 @@ export const createUi = ({
   clientAddress = socketAddress,
   now = Date.now,
   loginLimit = createLoginLimit({ now }),
+  checkPassword = createPasswordCheck(password),
 }: UiDependencies): Hono<UiEnv> => {
   const sessions = createSessionStore({ ttlMs: sessionTtlMs, now });
   const session = requireSession(sessions);
@@ -84,7 +87,7 @@ export const createUi = ({
     '/',
     authRoutes({
       sessions,
-      checkPassword: createPasswordCheck(password),
+      checkPassword,
       loginLimit,
       clientAddress,
       sessionTtlMs,
