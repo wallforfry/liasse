@@ -15,6 +15,7 @@ import {
   embeddingVector,
   instant,
   jsonObject,
+  searchLanguage,
   searchVector,
   textArray,
   updatedAt,
@@ -86,6 +87,7 @@ export const documentPages = pgTable(
       .references(() => documents.id, { onDelete: 'cascade' }),
     page: integer('page').notNull(),
     text: text('text').notNull(),
+    language: searchLanguage(),
     tsv: searchVector('tsv', 'text'),
   },
   (table) => [
@@ -107,11 +109,13 @@ export const chunks = pgTable(
     pageFrom: integer('page_from').notNull(),
     pageTo: integer('page_to').notNull(),
     text: text('text').notNull(),
+    language: searchLanguage(),
     embedding: embeddingVector('embedding'),
     tsv: searchVector('tsv', 'text'),
   },
   (table) => [
     index('chunks_document_id_idx').on(table.documentId),
+    index('chunks_language_idx').on(table.language),
     index('chunks_tsv_idx').using('gin', table.tsv),
     index('chunks_embedding_idx').using('hnsw', table.embedding.op('vector_cosine_ops')),
     check(

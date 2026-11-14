@@ -112,6 +112,7 @@ describe('documents, document_pages and chunks', () => {
       {
         documentId: id,
         page: 1,
+        language: null,
         text: 'Relevé d’électricité',
         tsv: "'d':2 'electricite':3 'releve':1",
       },

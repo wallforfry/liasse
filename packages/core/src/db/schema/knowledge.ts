@@ -5,6 +5,7 @@ import {
   createdAt,
   embeddingVector,
   jsonObject,
+  searchLanguage,
   searchVector,
   textArray,
   traceColumns,
@@ -89,6 +90,7 @@ export const facts = pgTable(
       .notNull()
       .references(() => documents.id, { onDelete: 'cascade' }),
     text: text('text').notNull(),
+    language: searchLanguage(),
     validFrom: date('valid_from', { mode: 'string' }),
     validTo: date('valid_to', { mode: 'string' }),
     entityIds: textArray('entity_ids'),

@@ -87,8 +87,8 @@ Eleven Postgres tables: documents, text pages, chunks, types, entities, change l
 | Table | Role | Key columns |
 | --- | --- | --- |
 | `documents` | One ingested document | `id`, `sha256` (unique), `storage_key`, `mime`, `original_name`, `hint`, `source` (watch/api/mcp), `status`, `type_id`, `schema_version`, `core` (jsonb), `fields` (jsonb), `extra` (jsonb), `provenance` (jsonb), `title`, `summary`, `private`, `watch_requeues`, `file_deleted_at`, `ingested_at` |
-| `document_pages` | Full text per page | `document_id`, `page`, `text`, `tsv` (tsvector) |
-| `chunks` | Search units | `id`, `document_id`, `page_from`, `page_to`, `text`, `embedding` (vector), `tsv` |
+| `document_pages` | Full text per page | `document_id`, `page`, `text`, `language`, `tsv` (tsvector) |
+| `chunks` | Search units | `id`, `document_id`, `page_from`, `page_to`, `text`, `language`, `embedding` (vector), `tsv` |
 | `doc_types` | Type registry | `id`, `slug`, `description`, `schema` (jsonb), `version`, `status`, `parent_slug`, `aliases` (text[]), `embedding`; the document count is computed from `documents`, never stored |
 | `entities` | Issuers, recipients | `id`, `kind` (org/person), `canonical_name`, `aliases` (text[]), `identifiers` (jsonb: company ID, masked IBAN, customer number), `embedding` |
 | `type_changes` | Consolidation proposals | `id`, `kind` (merge/promote_field/stabilize/split/rename/merge_entity/merge_subject), `payload`, `rationale`, `status` (pending/applied/rejected), `auto`, `created_at` |
@@ -292,13 +292,13 @@ Two modes coexist: hybrid natural-language search over chunks, and structured qu
 
 **Hybrid search (`search`)**
 
-- Full text: Postgres `tsvector` with a language-aware configuration + `unaccent` (BM25 through ParadeDB `pg_search` as an option, if installed).
+- Full text: Postgres `tsvector` with a language-aware configuration + `unaccent` (BM25 through ParadeDB `pg_search` as an option, if installed). Each row is indexed in the language of its document (`core.language`, falling back to an unstemmed configuration); a query is read in every language present in the index, so it needs no language of its own.
 - Vector: `pgvector`, HNSW index, query embedding.
 - Fusion: Reciprocal Rank Fusion (k = 60), then grouping by document (best chunk + at most 2 snippets).
 - Combinable filters: type (aliases resolved), entity, subject, date range, status.
 - Cross-encoder reranking: out of the MVP, planned behind a flag.
 
-**Chunking**: per page, then split at about 800 tokens with 100 tokens of overlap; document title and type are prefixed to each chunk before embedding.
+**Chunking**: per page, then split at about 800 tokens with 100 tokens of overlap, bounded by the input window of the embedding model when that window is known. The title and type are prefixed to each chunk before embedding, and the chunk and its prefix are sized to fit in the window, so that no text is left out of every embedding. The default local model states its window (512 tokens, about 480 of them for the chunk) and sizes chunks with its own tokenizer. A remote provider does not: its window is what `EMBEDDING_MAX_INPUT_TOKENS` says, chunks are then sized with a conservative estimate, and when the variable is unset chunks keep 800 tokens, which a model with a smaller window truncates without an error; the server says so at startup.
 
 **Structured queries (`query`)**: a JSON DSL compiled into parameterized SQL; agents never send SQL.
 
@@ -325,7 +325,7 @@ Fourteen tools, over Streamable HTTP (`/mcp`, Bearer token auth) and stdio. All 
 | Tool | Role | Main inputs | Output |
 | --- | --- | --- | --- |
 | `describe_types` | Discover types and their schemas | `status?`, `include_examples?` | Types with description, fields, document count, aliases |
-| `search` | Hybrid natural-language search | `query`, `filters?`, `limit?` (default 10) | Documents with title, type, core, 1–3 snippets, score |
+| `search` | Hybrid natural-language search | `query`, `filters?`, `limit?` (default 10) | Documents with title, type, core, 1–3 snippets (text and highlight ranges), score |
 | `query` | Structured query (DSL) | DSL object | Rows (ID, core, requested fields) or aggregates |
 | `get_document` | Document details | `id`, `include` (`fields`, `text`, `pages`, `file_url`, `provenance`) | Document; paginated text if long |
 | `list_entities` | List or search entities | `query?`, `kind?` | Entities with aliases and document count |
@@ -362,7 +362,7 @@ A single Node binary, configured through environment variables, shipped as a mul
 
 | Variable | Default | Role |
 | --- | --- | --- |
-| `DATABASE_URL` | — | Postgres 16+ with pgvector |
+| `DATABASE_URL` | — | Postgres 16+ with pgvector 0.8+ |
 | `STORAGE_DRIVER` | `fs` | `fs` or `s3` |
 | `STORAGE_PATH` / `S3_*` | `/data/files` | File location |
 | `S3_REQUEST_TIMEOUT` / `S3_MIN_UPLOAD_RATE` | `30s` / `65536` | Deadline of one S3 request; an upload gets it plus its size at this rate (bytes per second) |
@@ -374,6 +374,8 @@ A single Node binary, configured through environment variables, shipped as a mul
 | `LLM_TIMEOUT` | `5m` | Upper bound for one text or vision model call, its retries included |
 | `EMBEDDING_TIMEOUT` | `1m` | Upper bound for one embedding request, its retries included |
 | `EMBEDDING_PROVIDER` / `EMBEDDING_MODEL` / `EMBEDDING_DIM` | `local` | Embeddings (dimension fixed at install time) |
+| `EMBEDDING_CACHE_DIR` | `/data/models` | Model files of the local embedding provider |
+| `EMBEDDING_MAX_INPUT_TOKENS` | empty | Tokens a remote embedding model reads per input; chunks are sized to fit (the local model states its own) |
 | `AUTO_APPLY` | `safe` | `none`, `safe`, `all` |
 | `CONFIDENCE_THRESHOLD` | `0.7` | Below: `needs_review` |
 | `MAX_NEW_TYPES_PER_DAY` | `5` | Beyond: closest type + `needs_review` |
@@ -386,7 +388,7 @@ A single Node binary, configured through environment variables, shipped as a mul
 
 **Watched folder.** With `WATCH_DIR` set, Liasse ingests every file of that folder and of its subfolders, those present at startup and those dropped later. It only reads the folder: it never moves, renames or deletes a file, so what was ingested stays where the user put it and is recognised by its hash at the next start. A file is read once its size and modification time have held still for two seconds. A writer that pauses longer than that in the middle of a file gets the partial file ingested as it is, and the complete file ingested as a second document when it changes again. A tool that writes under a temporary name (a leading dot, `.part`, `.tmp`, `.crdownload`) and renames at the end is safe: the watcher ignores those names. Hidden files and folders are ignored, symbolic links are not followed, and a subfolder that cannot be read is reported once and skipped. A file refused for what it is (unsupported format, empty, larger than `MAX_FILE_SIZE`) is not read again until it changes. Deleting a document does not delete its file from the folder, and the file is not ingested again. A document whose processing failed is queued again once when the folder hands its file back at a restart, and no more after that: uploading the file through the API or MCP always queues it again.
 
-**Local embeddings by default.** `EMBEDDING_PROVIDER=local` runs a small quantized multilingual model in-process (ONNX Runtime): around 384 dimensions and roughly 100 MB, with candidates to be compared on the evaluation set (for example the multilingual-e5-small family). The model is loaded on first use and unloaded after 10 minutes of inactivity to meet the idle RAM target; embeddings are computed in batches in the job queue, with a single dedicated worker.
+**Local embeddings by default.** `EMBEDDING_PROVIDER=local` runs a small quantized multilingual model on the same host (ONNX Runtime): around 384 dimensions and roughly 100 MB, with candidates to be compared on the evaluation set (for example the multilingual-e5-small family). The model files are downloaded into `EMBEDDING_CACHE_DIR` on first use, unless the directory already holds them (pre-filled image or mounted volume), after which no network access is needed. The model runs in a child process of the server, started on first use and ended after 10 minutes of inactivity: ONNX Runtime does not return its memory to the operating system when a model is released in place, so ending the process is what meets the idle RAM target. While it works, the model process peaks between 0.8 and 1.2 GB with batches of four inputs (measured: 0.83 GB on Linux arm64 with Node 22, 0.88 to 1.14 GB on macOS arm64 with Node 24). Embeddings are computed in batches in the job queue, with a single dedicated worker.
 
 **Web UI.** Enabled only when `UI_PASSWORD` is set. Session cookie `HttpOnly`, `Secure`, `SameSite=Strict`, 7-day lifetime; at most 5 login attempts per minute per IP. The UI calls the same API as MCP.
 

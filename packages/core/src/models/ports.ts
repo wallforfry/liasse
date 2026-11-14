@@ -44,4 +44,11 @@ export interface Embedder {
   readonly model: string;
   readonly isLocal: boolean;
   readonly embed: (texts: readonly string[], kind: EmbeddingKind) => Promise<readonly Embedding[]>;
+  // How many tokens of a text given to `embed` the model reads, once its own prefix and
+  // special tokens are taken off; what lies beyond is not embedded. Absent when the window
+  // is larger than anything Liasse sends.
+  readonly maxInputTokens?: number;
+  // Tokens of each text for the model's own tokenizer, in the unit of `maxInputTokens`.
+  // Absent when the embedder cannot count: callers then estimate.
+  readonly countTokens?: (texts: readonly string[]) => Promise<readonly number[]>;
 }

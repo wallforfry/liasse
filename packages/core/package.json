@@ -32,6 +32,11 @@
       "types": "./dist/domain/index.d.ts",
       "default": "./dist/domain/index.js"
     },
+    "./embeddings": {
+      "@liasse/source": "./src/embeddings/index.ts",
+      "types": "./dist/embeddings/index.d.ts",
+      "default": "./dist/embeddings/index.js"
+    },
     "./ingest": {
       "@liasse/source": "./src/ingest/index.ts",
       "types": "./dist/ingest/index.d.ts",
@@ -62,10 +67,10 @@
       "types": "./dist/registry/index.d.ts",
       "default": "./dist/registry/index.js"
     },
-    "./text": {
-      "@liasse/source": "./src/text/index.ts",
-      "types": "./dist/text/index.d.ts",
-      "default": "./dist/text/index.js"
+    "./search": {
+      "@liasse/source": "./src/search/index.ts",
+      "types": "./dist/search/index.d.ts",
+      "default": "./dist/search/index.js"
     },
     "./storage": {
       "@liasse/source": "./src/storage/index.ts",
@@ -76,6 +81,11 @@
       "@liasse/source": "./src/testing/index.ts",
       "types": "./dist/testing/index.d.ts",
       "default": "./dist/testing/index.js"
+    },
+    "./text": {
+      "@liasse/source": "./src/text/index.ts",
+      "types": "./dist/text/index.d.ts",
+      "default": "./dist/text/index.js"
     }
   },
   "publishConfig": {
@@ -93,6 +103,7 @@
     "@ai-sdk/mistral": "^4.0.87",
     "@ai-sdk/openai": "^4.0.118",
     "@ai-sdk/openai-compatible": "^3.0.92",
+    "@huggingface/transformers": "^4.3.2",
     "ai": "^7.0.173",
     "aws4fetch": "^1.0.20",
     "drizzle-orm": "^0.45.4",

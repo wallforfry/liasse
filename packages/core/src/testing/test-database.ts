@@ -6,7 +6,11 @@ import { migrate } from '../db/migrate.ts';
 export const DEFAULT_TEST_DATABASE_URL = 'postgres://liasse:liasse@127.0.0.1:54329/liasse_test';
 export const TEST_EMBEDDING_DIM = 384;
 
-const CONNECT_TIMEOUT_SECONDS = 5;
+// The server is shared with every other test file and session. Saturated, it took more than
+// five seconds to accept a connection, which failed whole test files before they ran. The
+// limit sits just under the 30 s a test or a hook is given, so an unreachable server is still
+// reported by this helper.
+const CONNECT_TIMEOUT_SECONDS = 25;
 
 export interface TestDatabaseOptions {
   readonly embeddingDim?: number;

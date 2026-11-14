@@ -15,9 +15,16 @@ export const tsvector = customType<{ data: string }>({
   dataType: () => 'tsvector',
 });
 
-// `liasse_tsvector` is the single place that decides the text search configuration.
+export const SEARCH_LANGUAGE_COLUMN = 'language';
+
+// ISO 639-1 code of the row's text, null when unknown. `liasse_tsvector` maps it to a text
+// search configuration and is the single place that decides it.
+export const searchLanguage = () => text(SEARCH_LANGUAGE_COLUMN);
+
 export const searchVector = (name: string, source: string) =>
-  tsvector(name).generatedAlwaysAs(sql.raw(`liasse_tsvector("${source}")`));
+  tsvector(name).generatedAlwaysAs(
+    sql.raw(`liasse_tsvector("${SEARCH_LANGUAGE_COLUMN}", "${source}")`),
+  );
 
 export type JsonObject = Readonly<Record<string, unknown>>;
 

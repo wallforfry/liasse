@@ -7,3 +7,9 @@ onlyBuiltDependencies:
 
 ignoredOptionalDependencies:
   - '@napi-rs/canvas'
+
+# onnxruntime-node only downloads GPU binaries in its install script (the CPU ones ship in the
+# package) and protobufjs only checks a version scheme: neither needs to run.
+ignoredBuiltDependencies:
+  - onnxruntime-node
+  - protobufjs

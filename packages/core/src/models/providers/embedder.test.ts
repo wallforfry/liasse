@@ -58,6 +58,14 @@ const failureOf = async (promise: Promise<unknown>): Promise<unknown> =>
   );
 
 describe('createProviderEmbedder', () => {
+  it('states the input window it was configured with, and none otherwise', async () => {
+    const { embedder: unbounded } = await start(echo);
+    expect(unbounded.maxInputTokens).toBeUndefined();
+    const { embedder: bounded } = await start(echo, { EMBEDDING_MAX_INPUT_TOKENS: '512' });
+    expect(bounded.maxInputTokens).toBe(512);
+    expect(bounded.countTokens).toBeUndefined();
+  });
+
   it('describes itself from the configuration', async () => {
     const { embedder } = await start(echo);
     expect(embedder).toMatchObject({ dimension: 3, model: 'embedding-model' });

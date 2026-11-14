@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import type { EmbeddingProvider, LlmProvider } from '../domain/enums.ts';
-import { MAX_EMBEDDING_DIM } from '../domain/limits.ts';
+import { MAX_EMBEDDING_DIM, MIN_EMBEDDING_INPUT_TOKENS } from '../domain/limits.ts';
 import { embeddingProviderSchema, llmProviderSchema } from '../domain/schemas.ts';
 import { type CrossFieldProblem, duration, integer, reportProblems, text } from './fields.ts';
 
@@ -78,16 +78,29 @@ export const embeddingSection = z
     EMBEDDING_PROVIDER: embeddingProviderSchema.default('local'),
     EMBEDDING_MODEL: text.optional(),
     EMBEDDING_DIM: integer(1, MAX_EMBEDDING_DIM).default(384),
+    EMBEDDING_CACHE_DIR: text.default('/data/models'),
+    EMBEDDING_MAX_INPUT_TOKENS: integer(MIN_EMBEDDING_INPUT_TOKENS, 1_000_000).optional(),
     EMBEDDING_API_KEY: text.optional(),
     EMBEDDING_BASE_URL: modelBaseUrl.optional(),
     EMBEDDING_TIMEOUT: duration.prefault('1m'),
   })
   .transform((env, ctx) => {
     if (env.EMBEDDING_PROVIDER === 'local') {
+      // The local model states its own window: a second figure could only contradict it.
+      if (env.EMBEDDING_MAX_INPUT_TOKENS !== undefined) {
+        reportProblems(ctx, [
+          {
+            key: 'EMBEDDING_MAX_INPUT_TOKENS',
+            message: 'only applies when EMBEDDING_PROVIDER is not local',
+          },
+        ]);
+        return z.NEVER;
+      }
       return Object.freeze({
         provider: env.EMBEDDING_PROVIDER,
         model: env.EMBEDDING_MODEL,
         dimension: env.EMBEDDING_DIM,
+        cacheDir: env.EMBEDDING_CACHE_DIR,
       });
     }
     const accessProblems = providerAccessProblems({
@@ -117,5 +130,6 @@ export const embeddingSection = z
       apiKey: env.EMBEDDING_API_KEY,
       baseUrl: env.EMBEDDING_BASE_URL,
       timeoutMs: env.EMBEDDING_TIMEOUT,
+      maxInputTokens: env.EMBEDDING_MAX_INPUT_TOKENS,
     });
   });
