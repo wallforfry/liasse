@@ -122,7 +122,7 @@ describe('extraction and re-extraction', () => {
           meter_id: at('PDL-000123', 'PDL-000123'),
           tariff: { ...at('blue', 'tariff blue'), page: 2 },
         },
-        extra: { usage: at(351, '350 kWh') },
+        extra: { usage: at(84.2, 'Total 84,20 EUR') },
         facts: [{ text: 'Second fact', page: 1, quote: 'Total 84,20 EUR', confidence: 0.9 }],
       }),
       'second-model',
@@ -143,7 +143,7 @@ describe('extraction and re-extraction', () => {
       status: 'indexed',
       schemaVersion: 2,
       fields: { meter_id: 'PDL-000123', tariff: 'blue' },
-      extra: { usage: 351 },
+      extra: { usage: 84.2 },
     });
     // Unchanged values keep the provenance they had; the others get the new one.
     expect(document.provenance.meter_id).toMatchObject({

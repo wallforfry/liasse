@@ -17,13 +17,15 @@ import {
   factSchema,
   subjectCandidateSchema,
 } from './extraction-schema.ts';
-import type { QuoteIndex } from './quotes.ts';
-import { isListReading, type Readings, type VerifiedValue } from './read-output.ts';
+import { factSupport, type SupportedFact } from './support.ts';
+import { type Evidence, isListReading, type Readings, type VerifiedValue } from './read-output.ts';
 
 export const MAX_SUBJECT_CANDIDATES = 10;
 
+export type ReadFact = SupportedFact<ExtractedFact>;
+
 export interface FactsReading {
-  readonly facts: readonly ExtractedFact[];
+  readonly facts: readonly ReadFact[];
   readonly rejected: number;
 }
 
@@ -32,16 +34,20 @@ export interface FactsReading {
 const holdsTogether = ({ valid_from: from, valid_to: to }: ExtractedFact): boolean =>
   from === undefined || to === undefined || from <= to;
 
-// A fact is sourced like a value: its quote must stand in the text, and the page kept
-// is the one it stands on.
-export const readFacts = (output: ExtractionOutput, quotes: QuoteIndex): FactsReading => {
+// A fact is sourced like a value: its quote must stand in the text and state what the
+// fact asserts, and the page kept is the one the quote stands on.
+export const readFacts = (
+  output: ExtractionOutput,
+  { quotes, language }: Evidence,
+): FactsReading => {
   const returned = output.facts ?? [];
   const facts = returned
     .flatMap((raw) => factSchema.safeParse(raw).data ?? [])
     .filter(holdsTogether)
     .flatMap((fact) => {
       const page = quotes.locate(fact.quote, fact.page);
-      return page === undefined ? [] : [{ ...fact, page }];
+      const supported = page === undefined ? undefined : factSupport(fact, language);
+      return supported === undefined || page === undefined ? [] : [{ ...supported, page }];
     })
     .slice(0, MAX_FACTS);
   return { facts, rejected: returned.length - facts.length };

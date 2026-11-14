@@ -29,9 +29,12 @@ const TYPE: RegisteredType = {
 const PAGES = [
   {
     page: 1,
-    text: 'Synthetic Energy SA\nInvoice SYN-1 of 03/10/2026\nTotal 84,20 EUR\n350 kWh gas',
+    text: 'Synthetic Energy SA\nInvoice SYN-1 of 03/10/2026\nTotal 84,20 EUR\n350 kWh gas\nAgent: Refused Name',
   },
-  { page: 2, text: `Card 4242 4242 4242 4242\nIBAN ${SYNTHETIC_IBAN}` },
+  {
+    page: 2,
+    text: `Card 4242 4242 4242 4242\nIBAN ${SYNTHETIC_IBAN}\nPaid to Bank ${SYNTHETIC_IBAN}`,
+  },
 ];
 
 const at = (value: unknown, quote: string, page = 1, confidence = 0.8) => ({
@@ -189,7 +192,8 @@ describe('interpret', () => {
       fields: {},
       extra: {
         tariff: at('gas', 'gas'),
-        readings: at([350, 351], '350 kWh'),
+        readings: at([350, 'gas'], '350 kWh gas'),
+        unstated: at([350, 351], '350 kWh'),
         nested: at({ deep: true }, 'gas'),
         meter_id: at('shadow of a type field', 'gas'),
         document_date: at('2026-10-03', '03/10/2026'),
@@ -197,16 +201,16 @@ describe('interpret', () => {
         ['__proto__']: at('x', 'gas'),
       },
     });
-    expect(document.extra).toEqual({ tariff: 'gas', readings: [350, 351] });
-    expect(document.provenance.readings).toMatchObject({ quote: '350 kWh' });
+    expect(document.extra).toEqual({ tariff: 'gas', readings: [350, 'gas'] });
+    expect(document.provenance.readings).toMatchObject({ quote: '350 kWh gas' });
   });
 
   it('drops an entity value the resolver refuses, and passes the name masked', async () => {
     const { document, mentions } = await read(
       {
         core: {
-          issuer: at('Refused Name', 'Synthetic Energy SA'),
-          recipient: at(`Bank ${SYNTHETIC_IBAN}`, 'IBAN', 2),
+          issuer: at('Refused Name', 'Agent: Refused Name'),
+          recipient: at(`Bank ${SYNTHETIC_IBAN}`, `Paid to Bank ${SYNTHETIC_IBAN}`, 2),
         },
         fields: { broker: at('Synthetic Energy SA', 'Synthetic Energy SA') },
         extra: {},
@@ -354,7 +358,7 @@ describe('interpret', () => {
         extra: { nested: at({ deep: true }, 'gas'), usage: at(350, '350 kWh') },
       },
       TYPE.fields,
-      quotes,
+      { quotes, language: 'en' },
     );
     expect(Object.keys(reading.core.readings)).toEqual(['reference']);
     expect(Object.keys(reading.fields.readings)).toEqual(['tags']);

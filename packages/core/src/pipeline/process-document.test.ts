@@ -24,7 +24,7 @@ const TEXT = pagesOf(
     'Invoice SYN-2026-001 dated 03/10/2026',
     'Customer: Jane Synthetic',
     'Total 84,20 EUR due 18/10/2026',
-    `IBAN ${SYNTHETIC_IBAN}`,
+    `Payee Synthetic Energy SA IBAN ${SYNTHETIC_IBAN}`,
     'Meter PDL-000123',
   ].join('\n'),
   'The contract renews on 01/03/2027.',
@@ -61,8 +61,8 @@ const OUTPUT = {
     recipient: at('Jane Synthetic', 'Customer: Jane Synthetic'),
     document_date: at('2026-10-03', 'dated 03/10/2026'),
     amount: at({ value: 84.2, currency: 'EUR' }, 'Total 84,20 EUR'),
-    reference: at(`SYN-2026-001 ${SYNTHETIC_IBAN}`, 'Invoice SYN-2026-001'),
-    language: at('en', 'Invoice SYN-2026-001'),
+    reference: at(SYNTHETIC_IBAN, `IBAN ${SYNTHETIC_IBAN}`),
+    language: at('fr', 'Invoice SYN-2026-001'),
     key_dates: [
       at(
         { kind: 'renewal', date: '2027-03-01', label: `Renewal, paid to ${SYNTHETIC_IBAN}` },
@@ -101,7 +101,7 @@ const OUTPUT = {
       entities: ['Synthetic Energy SA'],
       subjects: ['Home'],
       page: 1,
-      quote: `IBAN ${SYNTHETIC_IBAN}`,
+      quote: `Payee Synthetic Energy SA IBAN ${SYNTHETIC_IBAN}`,
       confidence: 0.8,
     },
   ],
@@ -206,7 +206,7 @@ describe('processDocument', () => {
     const stored = await harness.db.select().from(facts);
     const everything = JSON.stringify([document, dates, stored]);
     expect(everything).not.toContain('0123 4567');
-    expect(document.core.reference).toBe(`SYN-2026-001 ${SYNTHETIC_IBAN_MASKED}`);
+    expect(document.core.reference).toBe(SYNTHETIC_IBAN_MASKED);
     expect(document.fields.payment_account).toBe(SYNTHETIC_IBAN_MASKED);
     expect(document.extra).toEqual({ payment_iban: SYNTHETIC_IBAN_MASKED });
     expect(document.provenance.payment_account).toMatchObject({
@@ -217,7 +217,7 @@ describe('processDocument', () => {
     expect(dates[0]?.label).toBe(`Renewal, paid to ${SYNTHETIC_IBAN_MASKED}`);
     expect(stored[0]).toMatchObject({
       text: `Synthetic Energy SA is paid on ${SYNTHETIC_IBAN_MASKED}.`,
-      quote: `IBAN ${SYNTHETIC_IBAN_MASKED}`,
+      quote: `Payee Synthetic Energy SA IBAN ${SYNTHETIC_IBAN_MASKED}`,
     });
     const [page] = await harness.db.select().from(documentPages);
     expect(page?.text).toContain(SYNTHETIC_IBAN);
@@ -242,7 +242,8 @@ describe('processDocument', () => {
       },
     ]);
     expect(await harness.db.select().from(facts)).toMatchObject([
-      { documentId: id, validFrom: '2026-10-03', validTo: null, entityIds: [issuer?.id], page: 1 },
+      // The quote of the fact states no date: the validity the model gave is not kept.
+      { documentId: id, validFrom: null, validTo: null, entityIds: [issuer?.id], page: 1 },
     ]);
     expect((await harness.document(id)).core.key_dates).toEqual([
       { kind: 'renewal', date: '2027-03-01', label: `Renewal, paid to ${SYNTHETIC_IBAN_MASKED}` },
@@ -262,7 +263,7 @@ describe('processDocument', () => {
       id,
       live(),
     ).catch(() => undefined);
-    expect(received[0]).toEqual({ id, private: false, language: 'en' });
+    expect(received[0]).toEqual({ id, private: false, language: 'fr' });
     expect(received[1]).toMatchObject({
       subjects: [
         {
@@ -287,13 +288,13 @@ describe('processDocument', () => {
     await processDocument(defaults, id, live());
     const stored = await harness.db.select().from(chunks).where(eq(chunks.documentId, id));
     expect(stored.length).toBeGreaterThan(0);
-    expect(stored.every(({ language, embedding }) => language === 'en' && embedding !== null)).toBe(
+    expect(stored.every(({ language, embedding }) => language === 'fr' && embedding !== null)).toBe(
       true,
     );
     expect((await harness.db.select().from(documentPages)).map(({ language }) => language)).toEqual(
-      ['en', 'en'],
+      ['fr', 'fr'],
     );
-    expect((await harness.db.select().from(facts)).map(({ language }) => language)).toEqual(['en']);
+    expect((await harness.db.select().from(facts)).map(({ language }) => language)).toEqual(['fr']);
     expect(await harness.document(id)).toMatchObject({ status: 'indexed' });
   });
 
@@ -314,6 +315,49 @@ describe('processDocument', () => {
     await processDocument({ ...defaults, embedder }, id, live());
     expect(await harness.document(id)).toMatchObject({ status: 'deleted' });
     expect(await harness.db.select().from(chunks)).toEqual([]);
+  });
+
+  // Verdict P4: each value has a quote that exists in the text and does not state it.
+  it('stores none of the values the document does not state, nor what follows from them', async () => {
+    const id = await harness.ingest('hallucinated');
+    await processDocument(
+      depsFor({
+        title: 'Synthetic bill',
+        core: {
+          issuer: at('Totally Invented Corp', 'Invoice'),
+          reference: at('HALLUCINATED-999', 'due'),
+          amount: at({ value: 8420, currency: 'USD' }, 'Total 84,20 EUR'),
+          document_date: at('2026-01-01', 'SYN-2026-001'),
+          due_date: at('2018-12-25', 'due 18/10/2026'),
+        },
+        fields: { meter_id: at('PDL-999999', 'Meter') },
+        extra: { negative_amount: at(-20, 'Total 84,20 EUR') },
+        facts: [
+          {
+            text: 'The contract was terminated.',
+            valid_from: '1999-01-01',
+            page: 1,
+            quote: 'Invoice',
+            confidence: 0.9,
+          },
+        ],
+      }),
+      id,
+      live(),
+    );
+    const document = await harness.document(id);
+    expect(document).toMatchObject({
+      core: {},
+      fields: {},
+      extra: {},
+      confidence: 0,
+      status: 'needs_review',
+    });
+    expect(document.provenance[PIPELINE_PROVENANCE_KEY]).toMatchObject({
+      extraction: { rejected_values: 8 },
+    });
+    expect(await harness.db.select().from(entities)).toEqual([]);
+    expect(await harness.db.select().from(facts)).toEqual([]);
   });
 
   it('records how the text, the type and the extraction were obtained', async () => {

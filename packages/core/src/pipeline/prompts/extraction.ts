@@ -3,6 +3,7 @@ import { wrapUntrusted } from '../../prompt/untrusted.ts';
 import type { TypeFields } from '../../registry/fields.ts';
 import type { FieldDefinition } from '../../registry/primitives.ts';
 import { MAX_QUOTE_LENGTH } from '../extract/extraction-schema.ts';
+import { MIN_FACT_QUOTE_LENGTH } from '../extract/support.ts';
 import type { PageText } from '../token-budget.ts';
 import { SCHEMA_LANGUAGE_NAMES, UNTRUSTED_RULE } from './classification.ts';
 
@@ -21,7 +22,7 @@ export const extractionSystemPrompt = (language: SchemaLanguage): string =>
     '"title" names the document in a few words and "summary" says what it is in two sentences, both in the language of the document.',
     '"entities" lists each organization or person given as a value or named in a fact, once: its name as written, its kind (org or person), the identifiers printed next to it (company id, VAT number, customer number, IBAN, card number) and a few words of context.',
     `"core.key_dates" lists the dates that matter, each with a kind (${KEY_DATE_KINDS.join(', ')}) and a short label.`,
-    `"facts" holds 1 to ${String(MAX_FACTS)} short, self-contained statements of what the document establishes, each with the dates between which it holds when the document gives them, and the names of the entities and subjects it is about. No opinion, nothing the document does not say.`,
+    `"facts" holds 1 to ${String(MAX_FACTS)} short, self-contained statements of what the document establishes, each with the dates between which it holds when the document gives them, and the names of the entities and subjects it is about. The quote of a fact, at least ${String(MIN_FACT_QUOTE_LENGTH)} characters, states every name, date and number the fact gives. No opinion, nothing the document does not say.`,
     `"subjects" lists the things the recipient owns or holds that the document is about (${SUBJECT_KINDS.join(', ')}), never the organizations or people involved.`,
   ].join('\n');
 

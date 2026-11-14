@@ -229,7 +229,9 @@ describe('the classification stage', () => {
         core: {
           reference: { value: 'SYN-2026-001', page: 1, quote: 'SYN-2026-001', confidence: 1 },
         },
-        fields: { stray: { value: 'kept', page: 1, quote: 'Invoice', confidence: 1 } },
+        fields: {
+          stray: { value: 'SYN-2026-001', page: 1, quote: 'Invoice SYN-2026-001', confidence: 1 },
+        },
       }),
     });
     await processDocument(
@@ -244,7 +246,7 @@ describe('the classification stage', () => {
       status: 'needs_review',
       core: { reference: 'SYN-2026-001' },
       fields: {},
-      extra: { stray: 'kept' },
+      extra: { stray: 'SYN-2026-001' },
     });
     expect(document.provenance.reference).toMatchObject({ schema_version: null });
     expect(model.calls.at(-1)?.prompt).toContain('The document has no type');

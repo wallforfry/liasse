@@ -2,6 +2,7 @@ import type { EntityProvenance } from '../../domain/provenance.ts';
 import type { EntityMentionInput, EntityResolver, MaskSensitive } from '../deps.ts';
 import type { EntityDetail } from './extraction-schema.ts';
 import { normalizeForQuote } from './quotes.ts';
+import { compactIdentifier } from './support.ts';
 
 export type EntityResolutions = ReadonlyMap<string, EntityProvenance>;
 
@@ -19,8 +20,6 @@ export interface MentionDeps {
 
 /** Two spellings of one name in one document are one mention. */
 export const mentionKey = (name: string): string => normalizeForQuote(name);
-
-const compact = (text: string): string => text.toUpperCase().replace(/[^A-Z0-9]/g, '');
 
 export interface MentionContext {
   /** What the model said of each entity: kind, identifiers, context. */
@@ -46,7 +45,7 @@ const toMention = (
 ): Mention => {
   const given = detail?.identifiers ?? [];
   const identifiers = given.filter(({ value }) => {
-    const written = compact(value);
+    const written = compactIdentifier(value);
     return written !== '' && compactText.includes(written);
   });
   const context = detail?.context === undefined ? '' : maskSensitive(detail.context);
@@ -71,7 +70,7 @@ export const resolveMentions = async (
   { details, documentText, allowExternalEmbedding }: MentionContext,
 ): Promise<ResolvedMentions> => {
   const detailOf = new Map(details.map((detail) => [mentionKey(detail.name), detail]));
-  const compactText = compact(documentText);
+  const compactText = compactIdentifier(documentText);
   const resolutions = new Map<string, EntityProvenance>();
   let droppedIdentifiers = 0;
   for (const key of new Set(names.map(mentionKey))) {

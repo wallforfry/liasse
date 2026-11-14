@@ -13,7 +13,7 @@ import {
 import { factEntityNames, readFacts, toKnowledge } from './knowledge.ts';
 import { maskQuotes, maskValues } from './masking.ts';
 import { createQuoteIndex } from './quotes.ts';
-import { readOutput } from './read-output.ts';
+import { languageOf, readOutput } from './read-output.ts';
 
 type Values = Readonly<Record<string, unknown>>;
 
@@ -124,9 +124,9 @@ export const interpret = async (
   const mask = deps.maskSensitive;
   const typeFields = type?.fields ?? {};
   const trace = { model, schemaVersion: type?.version ?? null };
-  const quotes = createQuoteIndex(pages);
-  const reading = readOutput(output, typeFields, quotes);
-  const facts = readFacts(output, quotes);
+  const evidence = { quotes: createQuoteIndex(pages), language: languageOf(output) };
+  const reading = readOutput(output, typeFields, evidence);
+  const facts = readFacts(output, evidence);
   const { resolutions, droppedIdentifiers } = await resolveMentions(
     deps,
     [...entityNamesOf(reading, typeFields), ...factEntityNames(facts)],

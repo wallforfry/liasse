@@ -1,5 +1,4 @@
 import { describe, expect, it } from 'vitest';
-import { isConsistentWithQuote } from './consistency.ts';
 import { createQuoteIndex, normalizeForQuote } from './quotes.ts';
 
 const pages = (...texts: readonly string[]) =>
@@ -58,30 +57,5 @@ describe('locating a quote', () => {
     expect(index.locate('84', 1)).toBeUndefined();
     expect(index.locate(' 8 ', 1)).toBeUndefined();
     expect(index.locate('84,', 1)).toBe(1);
-  });
-});
-
-describe('isConsistentWithQuote', () => {
-  it.each([
-    ['2026-10-03', 'dated 03/10/2026', true],
-    ['2026-10-03', 'le 3 octobre 26', true],
-    ['2026-10-03', 'dated 03/10/2025', false],
-    ['2026-10-03', 'no digit at all', false],
-    ['2026-10-03', 'ref 20261003', true],
-    [{ start: '2026-09-01', end: '2026-09-30' }, 'September 2026', true],
-    [{ start: '2025-12-01', end: '2026-01-31' }, 'December 2025', false],
-    [{ kind: 'due', date: '2026-10-18', label: 'Payment' }, 'due 18/10/2026', true],
-    [{ kind: 'due', date: '2026-10-18', label: 'Payment' }, 'due 18/10/2027', false],
-    [{ value: 84.2, currency: 'EUR' }, 'Total 84,20 €', true],
-    [{ value: 1234.5, currency: 'EUR' }, 'Total 1 234,50 €', true],
-    [{ value: 1234.5, currency: 'USD' }, '$1,234.50', true],
-    [{ value: -84.2, currency: 'EUR' }, 'Avoir 84,20 €', true],
-    [{ value: 84.2, currency: 'EUR' }, 'Total 48,20 €', false],
-    [{ value: 84.2, currency: 'EUR' }, 'Total to pay', false],
-    [{ value: 1e21, currency: 'EUR' }, '1000000000000000000000', false],
-    ['free text', 'anything', true],
-    [42, 'forty-two', true],
-  ])('%j quoted as %j: %s', (value, quote, expected) => {
-    expect(isConsistentWithQuote(value, quote)).toBe(expected);
   });
 });
