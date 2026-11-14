@@ -1,8 +1,10 @@
 export {
+  applyByPolicy,
   type DecideResult,
   decideChange,
   type Decision,
   type DecisionOutcome,
+  type PolicyResult,
 } from './apply-change.ts';
 export type { ConsolidationContext, ConsolidationReadContext } from './context.ts';
 export { applyChange, listChanges } from './features.ts';

@@ -103,6 +103,11 @@ export const closeChange = async (
   return row;
 };
 
+/** A change found no longer safe by the auto-apply policy waits for approval. */
+export const markUnsafe = async (tx: ChangeTransaction, id: string): Promise<void> => {
+  await tx.update(typeChanges).set({ auto: false }).where(eq(typeChanges.id, id));
+};
+
 export const pendingChanges = (
   reader: ChangeReader,
   filter: SQL | undefined,

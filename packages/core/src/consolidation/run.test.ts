@@ -1,7 +1,8 @@
+import { eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import type { AutoApplyMode } from '../domain/enums.ts';
 import { seedEntity } from '../entities/support.test-helper.ts';
-import { entities } from '../db/schema/registry.ts';
+import { docTypes, entities } from '../db/schema/registry.ts';
 import {
   createFakeTextModel,
   type FakeTextModel,
@@ -12,6 +13,7 @@ import {
   changesOf,
   documentOf,
   queuedReextractions,
+  seedChange,
   seedDocument,
   seedType,
   typeOf,
@@ -159,6 +161,8 @@ describe('a run of consolidation', () => {
       ),
     );
     await seedDocument(db(), type.id, { extra: { customer_no: 'C-4' } });
+    // The most recent document is private: its value is never a sample shown to the model.
+    await seedDocument(db(), type.id, { extra: { customer_no: 'C-PRIVATE-9' }, private: true });
     const model = modelOf({
       promote: () => ({
         promotions: [
@@ -173,8 +177,11 @@ describe('a run of consolidation', () => {
       }),
     });
 
-    expect(await run(model)).toMatchObject({ applied: 1, reextractions: 4 });
+    // Five documents also make the type stable.
+    expect(await run(model)).toMatchObject({ applied: 2, reextractions: 5 });
     expect(model.calls[0]?.prompt).toContain('<<<UNTRUSTED-DATA');
+    expect(model.calls[0]?.prompt).toContain('C-4');
+    expect(model.calls[0]?.prompt).not.toContain('C-PRIVATE-9');
     expect(await typeOf(db(), type.id)).toMatchObject({
       fields: { customer_number: { type: 'text' } },
     });
@@ -184,7 +191,52 @@ describe('a run of consolidation', () => {
     for (const id of documents) {
       expect((await documentOf(db(), id)).extra).toEqual({});
     }
-    expect(await queuedReextractions(db())).toHaveLength(4);
+    expect(await queuedReextractions(db())).toHaveLength(5);
+  });
+
+  it('never applies a retyping alone with AUTO_APPLY=safe', async () => {
+    const type = await seedType(db(), { slug: 'tax_notice', fields: { year: { type: 'text' } } });
+    for (const year of [2024, 2025, 2026]) {
+      await seedDocument(db(), type.id, { extra: { tax_year: year } });
+    }
+    const model = modelOf({
+      promote: () => ({
+        promotions: [
+          {
+            key: 'tax_year',
+            name: 'year',
+            definition: { type: 'number' },
+            variants: [],
+            rationale: 'The year is a number.',
+          },
+        ],
+      }),
+    });
+    expect(await run(model)).toMatchObject({ applied: 0 });
+    expect(await changesOf(db(), 'promote_field')).toMatchObject([
+      { status: 'pending', auto: false, payload: { field: 'year', retype: true } },
+    ]);
+    expect(await typeOf(db(), type.id)).toMatchObject({ fields: { year: { type: 'text' } } });
+  });
+
+  it('reads again whether a change is safe when it is applied', async () => {
+    const { kept, absorbed } = await twins();
+    await seedChange(
+      db(),
+      'merge',
+      {
+        source_id: absorbed.id,
+        target_id: kept.id,
+        field_mapping: { meter: 'meter_id' },
+        confidence: 0.95,
+      },
+      true,
+    );
+    // Marked safe for two provisional types; the target became stable since.
+    await db().update(docTypes).set({ status: 'stable' }).where(eq(docTypes.id, kept.id));
+    expect(await run(modelOf({}))).toMatchObject({ applied: 0 });
+    expect(await typeOf(db(), absorbed.id)).toMatchObject({ status: 'provisional' });
+    expect(await changesOf(db(), 'merge')).toMatchObject([{ status: 'pending', auto: false }]);
   });
 
   it('stabilizes a provisional type with five documents and no open merge', async () => {

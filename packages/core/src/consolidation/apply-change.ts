@@ -1,5 +1,6 @@
 import type { Database } from '../db/client.ts';
 import { READ_COMMITTED } from '../db/isolation.ts';
+import type { AutoApplyMode } from '../domain/enums.ts';
 import { ID_PREFIXES, isId } from '../domain/ids.ts';
 import { mergeEntities } from '../entities/merge.ts';
 import { mergeSubjects } from '../knowledge/subject-merge.ts';
@@ -15,9 +16,12 @@ import {
   type ChangeTransaction,
   closeChange,
   lockChange,
+  markUnsafe,
   type StoredChange,
 } from './change-store.ts';
+import { isStillSafe } from './eligibility.ts';
 import { type ConsolidationChange, readChange } from './payloads.ts';
+import { appliesAutomatically } from './policy.ts';
 
 export type Decision = 'apply' | 'reject';
 
@@ -33,6 +37,9 @@ export type DecideResult =
   | { readonly outcome: 'decided'; readonly decided: DecisionOutcome }
   | { readonly outcome: 'not_found' }
   | { readonly outcome: 'already_decided'; readonly change: StoredChange };
+
+/** An application by the policy may also find the change no longer eligible. */
+export type PolicyResult = DecideResult | { readonly outcome: 'not_eligible' };
 
 const pair = ({
   source_id: sourceId,
@@ -98,6 +105,24 @@ const applyLocked = async (
   }
 };
 
+// Runs `work` on a pending change whose row is locked until the transaction ends: one
+// decision per change. The registry and entity locks are taken in this transaction too,
+// which `withRegistryLock` requires to be read committed.
+const onPendingChange = <Result extends PolicyResult>(
+  db: Database,
+  id: string,
+  work: (tx: ChangeTransaction, stored: StoredChange) => Promise<Result>,
+): Promise<Result | DecideResult> =>
+  db.transaction(
+    async (tx) => {
+      const stored = isId(ID_PREFIXES.typeChange, id) ? await lockChange(tx, id) : undefined;
+      if (stored === undefined) return { outcome: 'not_found' };
+      if (stored.status !== 'pending') return { outcome: 'already_decided', change: stored };
+      return work(tx, stored);
+    },
+    { isolationLevel: READ_COMMITTED },
+  );
+
 /**
  * Applies or rejects a pending change, once: the row of the change is locked for the
  * decision, and a change already decided is left as it is. An application the current
@@ -110,19 +135,29 @@ export const decideChange = (
   decision: Decision,
   note: string | null,
 ): Promise<DecideResult> =>
-  db.transaction(
-    async (tx) => {
-      const stored = isId(ID_PREFIXES.typeChange, id) ? await lockChange(tx, id) : undefined;
-      if (stored === undefined) return { outcome: 'not_found' };
-      if (stored.status !== 'pending') return { outcome: 'already_decided', change: stored };
-      if (decision === 'reject') {
-        return {
-          outcome: 'decided',
-          decided: { change: await closeChange(tx, id, 'rejected', note), reextractions: 0 },
-        };
-      }
-      return { outcome: 'decided', decided: await applyLocked(tx, stored, note) };
-    },
-    // The registry and entity locks are taken in this transaction: see `withRegistryLock`.
-    { isolationLevel: READ_COMMITTED },
-  );
+  onPendingChange(db, id, async (tx, stored): Promise<DecideResult> => ({
+    outcome: 'decided',
+    decided:
+      decision === 'reject'
+        ? { change: await closeChange(tx, id, 'rejected', note), reextractions: 0 }
+        : await applyLocked(tx, stored, note),
+  }));
+
+/**
+ * The application of a pending change by the auto-apply policy. Whether the change is
+ * safe is read again under the lock of its row, from the registry as it is now: a change
+ * that is no longer safe loses its `auto` flag, and `AUTO_APPLY=safe` leaves it pending.
+ */
+export const applyByPolicy = (
+  db: Database,
+  id: string,
+  mode: AutoApplyMode,
+): Promise<PolicyResult> =>
+  onPendingChange(db, id, async (tx, stored): Promise<PolicyResult> => {
+    const change = readChange(stored.kind, stored.payload);
+    const safe = stored.auto && change !== undefined && (await isStillSafe(tx, change));
+    if (stored.auto && !safe) await markUnsafe(tx, id);
+    if (!appliesAutomatically(mode, safe)) return { outcome: 'not_eligible' };
+    const note = `Applied automatically (AUTO_APPLY=${mode}).`;
+    return { outcome: 'decided', decided: await applyLocked(tx, stored, note) };
+  });

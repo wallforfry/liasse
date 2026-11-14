@@ -1,9 +1,8 @@
 import { asc, eq } from 'drizzle-orm';
 import { typeChanges } from '../db/schema/registry.ts';
 import type { ChangeKind } from '../domain/enums.ts';
-import { decideChange } from './apply-change.ts';
+import { applyByPolicy } from './apply-change.ts';
 import type { ConsolidationContext } from './context.ts';
-import { appliesAutomatically } from './policy.ts';
 import { proposeIdentityMerges } from './propose-identity-merges.ts';
 import { proposeCleanups, proposeStabilizations } from './propose-lifecycle.ts';
 import { proposeMerges } from './propose-merges.ts';
@@ -45,20 +44,19 @@ const applyAutomatic = async (
   signal?: AbortSignal,
 ): Promise<Applied> => {
   const pending = await db
-    .select({ id: typeChanges.id, kind: typeChanges.kind, auto: typeChanges.auto })
+    .select({ id: typeChanges.id, kind: typeChanges.kind })
     .from(typeChanges)
     .where(eq(typeChanges.status, 'pending'))
     .orderBy(asc(typeChanges.id));
-  const due = pending
-    .filter(({ auto }) => appliesAutomatically(autoApply, auto))
-    .toSorted((a, b) => APPLICATION_ORDER.indexOf(a.kind) - APPLICATION_ORDER.indexOf(b.kind));
-  const note = `Applied automatically (AUTO_APPLY=${autoApply}).`;
+  const due = pending.toSorted(
+    (a, b) => APPLICATION_ORDER.indexOf(a.kind) - APPLICATION_ORDER.indexOf(b.kind),
+  );
   let applied = 0;
   let refused = 0;
   let reextractions = 0;
   for (const { id } of due) {
     signal?.throwIfAborted();
-    const result = await decideChange(db, id, 'apply', note);
+    const result = await applyByPolicy(db, id, autoApply);
     if (result.outcome !== 'decided') continue;
     if (result.decided.refusal === undefined) applied += 1;
     else refused += 1;
