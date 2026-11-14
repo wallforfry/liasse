@@ -56,9 +56,16 @@ const answer = async (
   }
 };
 
+// One request at a time, in the order they arrive. ONNX Runtime runs concurrent batches
+// side by side, and the memory of the process grows with every batch in flight; the
+// server sends one batch per caller, so the queue never holds more than its callers.
 export const serveModelRequests = (handlers: ModelHandlers): void => {
+  let queue = Promise.resolve();
   process.on('message', (message) => {
-    void answer(modelRequestSchema.parse(message), handlers).then(reply);
+    const request = modelRequestSchema.parse(message);
+    queue = queue.then(async () => {
+      reply(await answer(request, handlers));
+    });
   });
   // Whatever the model is busy with, there is nobody left to hear the answer.
   process.on('disconnect', leave);

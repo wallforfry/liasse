@@ -9,6 +9,19 @@ process.stdout.write('noise on the standard output of the model process\n');
 
 const never = new Promise<never>(() => undefined);
 
+// `overlap` answers how many embed requests are running once a second request reached the
+// process: 1 when requests are served one at a time, 2 when they run side by side.
+let running = 0;
+let received = 0;
+let secondReceived: () => void = () => undefined;
+const second = new Promise<void>((resolve) => {
+  secondReceived = resolve;
+});
+process.on('message', () => {
+  received += 1;
+  if (received === 2) secondReceived();
+});
+
 // Fails the first time it is asked, as a download that could not complete would.
 let loads = 0;
 const load = loadOnceUntilLoaded(() => {
@@ -27,12 +40,20 @@ const obey = async (command: string | undefined): Promise<void> => {
   if (command === 'busy') await never;
   if (command === 'fail') throw new Error('synthetic model failure');
   if (command === 'load') await load();
+  if (command === 'overlap') await second;
 };
 
 serveModelRequests({
   embed: async (texts) => {
-    await obey(texts[0]);
-    return texts.map((text) => [text.length, process.pid]);
+    running += 1;
+    try {
+      await obey(texts[0]);
+      // Read after a turn of the event loop: a request read meanwhile has started by then.
+      await new Promise((resolve) => setImmediate(resolve));
+      return texts.map((text) => [text === 'overlap' ? running : text.length, process.pid]);
+    } finally {
+      running -= 1;
+    }
   },
   countTokens: async (texts) => {
     await obey(texts[0]);
