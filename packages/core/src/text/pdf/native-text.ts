@@ -50,8 +50,11 @@ export const readPdfTextLayer = async (
 ): Promise<readonly string[]> => {
   const pdfjs = await loadPdfjs();
   // pdfjs takes ownership of the buffer it is given, and the caller still needs its own.
+  // It also refuses a Node `Buffer`, which is what a storage driver answers, and
+  // `Buffer.prototype.slice` returns another Buffer over the same memory: only the
+  // constructor makes a copy that is a plain `Uint8Array` whatever it is given.
   const loading = pdfjs.getDocument({
-    data: bytes.slice(),
+    data: new Uint8Array(bytes),
     verbosity: SILENT,
     useSystemFonts: false,
   });

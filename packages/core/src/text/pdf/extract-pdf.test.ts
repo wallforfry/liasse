@@ -35,6 +35,14 @@ describe('extractText on a PDF with a text layer', () => {
     expect(vision.calls).toHaveLength(0);
   });
 
+  it('reads bytes given as a Node Buffer, as a storage driver answers them, and leaves them intact', async () => {
+    const bytes = Buffer.from(buildSyntheticPdf([{ lines: linesOf(150) }]));
+    const before = Buffer.from(bytes);
+    const { pages } = await extractText({ bytes, mime: PDF }, { vision: createFakeVisionModel() });
+    expect(pages).toEqual([{ page: 1, text: linesOf(150).join('\n'), method: 'native' }]);
+    expect(bytes.equals(before)).toBe(true);
+  });
+
   it('transcribes every page when the average falls just below 100 characters', async () => {
     const vision = createFakeVisionModel(() => 'transcribed');
     const bytes = buildSyntheticPdf([{ lines: linesOf(150) }, { lines: linesOf(49) }]);
