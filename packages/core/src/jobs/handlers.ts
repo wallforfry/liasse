@@ -1,6 +1,6 @@
 import type { JsonObject } from '../db/columns.ts';
 import { DuplicateJobHandlerError } from './errors.ts';
-import { type JobKind, parseJobPayload } from './kinds.ts';
+import { type JobKind, parseJobPayload, type TerminalFailureHook } from './kinds.ts';
 
 export interface JobRun {
   /** Aborted when the workers stop past their deadline or when the job lock is lost. */
@@ -19,6 +19,7 @@ export type JobHandler<Payload> = (context: JobContext<Payload>) => Promise<void
 export interface RegisteredHandler {
   readonly kind: string;
   readonly run: (payload: unknown, run: JobRun) => Promise<void>;
+  readonly onTerminalFailure?: TerminalFailureHook;
 }
 
 export const handle = <Payload extends JsonObject>(
@@ -29,6 +30,7 @@ export const handle = <Payload extends JsonObject>(
   run: async (payload, { signal, attempt }) => {
     await handler({ payload: parseJobPayload(kind, payload), signal, attempt });
   },
+  ...(kind.onTerminalFailure === undefined ? {} : { onTerminalFailure: kind.onTerminalFailure }),
 });
 
 export const createHandlerRegistry = (

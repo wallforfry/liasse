@@ -1,6 +1,8 @@
 import { and, eq, inArray, lt, lte, sql } from 'drizzle-orm';
 import type { Database } from '../db/client.ts';
 import { jobs } from '../db/schema/jobs.ts';
+import type { RegisteredHandler } from './handlers.ts';
+import type { TerminalFailureHook } from './kinds.ts';
 
 export interface ClaimedJob {
   readonly id: string;
@@ -67,8 +69,35 @@ const settle = async (
 export const completeJob = (db: Database, lease: JobLease): Promise<boolean> =>
   settle(db, lease, { status: 'succeeded', lockedAt: null });
 
-export const failJob = (db: Database, lease: JobLease, lastError: string): Promise<boolean> =>
-  settle(db, lease, { status: 'failed', lockedAt: null, lastError });
+export type TerminalFailureHooks = ReadonlyMap<string, TerminalFailureHook>;
+
+/** The hooks of the kinds this process has a handler for. */
+export const terminalFailureHooks = (
+  handlers: ReadonlyMap<string, RegisteredHandler>,
+): TerminalFailureHooks =>
+  new Map(
+    [...handlers.values()].flatMap(({ kind, onTerminalFailure }) =>
+      onTerminalFailure === undefined ? [] : [[kind, onTerminalFailure] as const],
+    ),
+  );
+
+/** Fails the job for good and, in the same transaction, runs the hook of its kind. */
+export const failJob = (
+  db: Database,
+  job: JobLease & Pick<ClaimedJob, 'kind' | 'payload'>,
+  lastError: string,
+  hook: TerminalFailureHook | undefined,
+): Promise<boolean> =>
+  db.transaction(async (tx) => {
+    const settled = await tx
+      .update(jobs)
+      .set({ status: 'failed', lockedAt: null, lastError })
+      .where(heldBy(job))
+      .returning({ id: jobs.id });
+    if (settled.length === 0) return false;
+    await hook?.(tx, { jobId: job.id, payload: job.payload, cause: 'error' });
+    return true;
+  });
 
 export const retryJob = (
   db: Database,
@@ -96,26 +125,33 @@ export const renewJobLock = (db: Database, lease: JobLease): Promise<boolean> =>
 
 /**
  * Requeues the running jobs whose lock was not renewed for `visibilityTimeoutMs`, and
- * fails those that already used every attempt. Returns how many jobs it touched.
+ * fails those that already used every attempt, running the hook of the kind of each in
+ * the same transaction. A kind without a hook here (no handler in this process) is failed
+ * all the same. Returns how many jobs it touched.
  */
-export const recoverStaleJobs = async (
+export const recoverStaleJobs = (
   db: Database,
   visibilityTimeoutMs: number,
-): Promise<number> => {
-  const recovered = await db
-    .update(jobs)
-    .set({
-      status: sql`CASE WHEN ${jobs.attempts} >= ${jobs.maxAttempts}
-        THEN 'failed'::job_status ELSE 'queued'::job_status END`,
-      lockedAt: null,
-      lastError: STALE_LOCK_ERROR,
-    })
-    .where(
-      and(
-        eq(jobs.status, 'running'),
-        lt(jobs.lockedAt, sql`now() - ${elapsed(visibilityTimeoutMs)}`),
-      ),
-    )
-    .returning({ id: jobs.id });
-  return recovered.length;
-};
+  hooks: TerminalFailureHooks = new Map(),
+): Promise<number> =>
+  db.transaction(async (tx) => {
+    const recovered = await tx
+      .update(jobs)
+      .set({
+        status: sql`CASE WHEN ${jobs.attempts} >= ${jobs.maxAttempts}
+          THEN 'failed'::job_status ELSE 'queued'::job_status END`,
+        lockedAt: null,
+        lastError: STALE_LOCK_ERROR,
+      })
+      .where(
+        and(
+          eq(jobs.status, 'running'),
+          lt(jobs.lockedAt, sql`now() - ${elapsed(visibilityTimeoutMs)}`),
+        ),
+      )
+      .returning({ id: jobs.id, kind: jobs.kind, payload: jobs.payload, status: jobs.status });
+    for (const { id, kind, payload, status } of recovered) {
+      if (status === 'failed') await hooks.get(kind)?.(tx, { jobId: id, payload, cause: 'stale' });
+    }
+    return recovered.length;
+  });

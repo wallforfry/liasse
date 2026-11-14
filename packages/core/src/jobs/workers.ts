@@ -5,7 +5,7 @@ import { startDispatcher } from './dispatcher.ts';
 import { InvalidWorkersOptionsError } from './errors.ts';
 import type { Execution, JobFailure } from './execution.ts';
 import { createHandlerRegistry, type RegisteredHandler } from './handlers.ts';
-import { recoverStaleJobs } from './store.ts';
+import { recoverStaleJobs, terminalFailureHooks } from './store.ts';
 import { createWakeSignal } from './wake-signal.ts';
 
 export interface WorkersOptions {
@@ -93,10 +93,11 @@ export const startWorkers = async (options: WorkersOptions): Promise<Workers> =>
   const visibilityTimeoutMs = options.visibilityTimeoutMs ?? DEFAULTS.visibilityTimeoutMs;
   const lockRenewalMs = lockRenewalOf(options.lockRenewalMs, visibilityTimeoutMs);
   const handlers = createHandlerRegistry(options.handlers);
+  const hooks = terminalFailureHooks(handlers);
   const wake = createWakeSignal();
 
   const recover = (): void => {
-    recoverStaleJobs(db, visibilityTimeoutMs).then((recovered) => {
+    recoverStaleJobs(db, visibilityTimeoutMs, hooks).then((recovered) => {
       if (recovered > 0) wake.notify();
     }, onError);
   };
