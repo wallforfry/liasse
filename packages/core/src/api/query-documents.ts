@@ -1,21 +1,9 @@
-import { z } from 'zod';
 import type { QueryError } from '../query/errors.ts';
 import { QueryExecutionError } from '../query/execute.ts';
 import type { QueryResult } from '../query/result.ts';
 import { runQuery } from '../query/run.ts';
 import type { ApiContext } from './context.ts';
 import { ApiError } from './errors.ts';
-
-const problemSchema = z.looseObject({ code: z.string(), message: z.string() });
-
-// The envelope of a result, for a contract: the rows and groups are described by
-// `QueryResult`, and their content depends on the query.
-export const queryResultSchema = z.looseObject({
-  rows: z.array(z.looseObject({ id: z.string() })).optional(),
-  groups: z.array(z.looseObject({})).optional(),
-  has_more: z.boolean(),
-  warnings: z.array(problemSchema),
-});
 
 const TIMEOUT_CODE = 'timeout' satisfies QueryError['code'];
 

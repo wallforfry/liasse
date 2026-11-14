@@ -1,39 +1,10 @@
-import { z } from 'zod';
-import { entityIdentifierTypeSchema, entityKindSchema } from '../domain/schemas.ts';
-import { listEntities as listStoredEntities, listEntitiesOptionsSchema } from '../entities/list.ts';
+import {
+  type EntityListView,
+  type ListEntitiesRequest,
+  listEntitiesRequestSchema,
+} from '../contract/registry.ts';
+import { listEntities as listStoredEntities } from '../entities/list.ts';
 import type { ApiContext } from './context.ts';
-
-const { includePrivate, ...sameNameOptions } = listEntitiesOptionsSchema.shape;
-
-// The options of `listEntities` of the entities module, under snake_case names.
-export const listEntitiesRequestSchema = z.strictObject({
-  ...sameNameOptions,
-  include_private: includePrivate.describe(
-    'Whether the document counts include private documents.',
-  ),
-});
-export type ListEntitiesRequest = z.input<typeof listEntitiesRequestSchema>;
-
-export const entityListSchema = z.object({
-  entities: z.array(
-    z.object({
-      id: z.string(),
-      kind: entityKindSchema,
-      canonical_name: z.string(),
-      aliases: z.array(z.string()),
-      identifiers: z.array(
-        z.object({
-          type: entityIdentifierTypeSchema,
-          value: z.string().describe('Masked for an IBAN or a card number.'),
-          format: z.string().optional(),
-        }),
-      ),
-      document_count: z.int(),
-    }),
-  ),
-  total: z.int(),
-});
-export type EntityListView = z.output<typeof entityListSchema>;
 
 /** Entities with their document count. Names come from documents: untrusted content. */
 export const listEntities = async (

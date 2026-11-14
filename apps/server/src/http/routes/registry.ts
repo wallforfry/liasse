@@ -1,21 +1,24 @@
 import {
   applyChange,
-  changeDecisionSchema,
   describeTypes,
+  listChanges,
+  listEntities,
+  listSubjects,
+  upcoming,
+} from '@liasse/core/api';
+import {
+  changeDecisionSchema,
   describeTypesOptionsSchema,
   entityListSchema,
-  listChanges,
+  featureResultSchema,
   listChangesOptionsSchema,
-  listEntities,
   listEntitiesRequestSchema,
-  listSubjects,
   listSubjectsOptionsSchema,
   listSubjectsOutputSchema,
   typeListSchema,
-  upcoming,
   upcomingOptionsSchema,
   upcomingOutputSchema,
-} from '@liasse/core/api';
+} from '@liasse/core/contract';
 import { Hono } from 'hono';
 import { z } from 'zod';
 import { failures, jsonResponse, operation, valid } from '../describe.ts';
@@ -58,10 +61,6 @@ const upcomingQuery = z
   .pipe(upcomingOptionsSchema);
 
 const changesQuery = z.strictObject({ kind: text }).pipe(listChangesOptionsSchema);
-
-// Consolidation is not part of this build: until it is, the contract of its routes only
-// says an object comes back.
-const pending = z.looseObject({});
 
 export const registryRoutes = ({ api, authenticated }: RouteDeps): Hono<AppEnv> =>
   new Hono<AppEnv>()
@@ -120,7 +119,10 @@ export const registryRoutes = ({ api, authenticated }: RouteDeps): Hono<AppEnv> 
       operation({
         summary: 'List consolidation proposals',
         tag: 'Registry',
-        responses: { 200: jsonResponse('The changes.', pending), ...failures(400, 501) },
+        responses: {
+          200: jsonResponse('The changes.', featureResultSchema),
+          ...failures(400, 501),
+        },
       }),
       authenticated,
       valid('query', changesQuery),
@@ -132,7 +134,7 @@ export const registryRoutes = ({ api, authenticated }: RouteDeps): Hono<AppEnv> 
         summary: 'Apply or reject a consolidation proposal',
         tag: 'Registry',
         responses: {
-          200: jsonResponse('The outcome.', pending),
+          200: jsonResponse('The outcome.', featureResultSchema),
           ...failures(400, 404, 413, 415, 501),
         },
       }),

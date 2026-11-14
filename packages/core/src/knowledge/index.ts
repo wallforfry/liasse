@@ -25,14 +25,7 @@ export {
 export { createKnowledgeHandlers, detectLinksJob } from './jobs.ts';
 export { type KeyDateRow, planKeyDates } from './key-dates.ts';
 export { findLinkCandidates, type LinkDocument } from './link-candidates.ts';
-export {
-  type ListedSubject,
-  listSubjects,
-  type ListSubjectsInput,
-  listSubjectsInputSchema,
-  listSubjectsOutputSchema,
-  type SubjectList,
-} from './list-subjects.ts';
+export { listSubjects, type ListSubjectsInput, listSubjectsInputSchema } from './list-subjects.ts';
 export { LINK_ACTORS, type LinkActor, type ProposedLink } from './link-prompt.ts';
 export { validateLinks, type ValidLink } from './link-rules.ts';
 export { type Period, shiftMonths, subtractPeriod } from './notice-deadline.ts';
@@ -46,13 +39,6 @@ export {
   prepareKnowledge,
   prepareWithoutModels,
 } from './prepare-knowledge.ts';
-export {
-  type DocumentRef,
-  documentRefSchema,
-  type SubjectRef,
-  subjectRefSchema,
-  untrustedText,
-} from './read-shared.ts';
 export {
   type Recall,
   recall,
@@ -89,11 +75,4 @@ export {
   type TimelineItem,
   timelineOutputSchema,
 } from './timeline.ts';
-export {
-  type Upcoming,
-  upcoming,
-  type UpcomingDate,
-  type UpcomingInput,
-  upcomingInputSchema,
-  upcomingOutputSchema,
-} from './upcoming.ts';
+export { upcoming, type UpcomingInput, upcomingInputSchema } from './upcoming.ts';

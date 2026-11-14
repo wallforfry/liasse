@@ -44,6 +44,7 @@ Inside `packages/core/src`, one directory per concern. A new concern gets its ow
 | Directory     | Content                                                                                             |
 | ------------- | --------------------------------------------------------------------------------------------------- |
 | `api/`        | The use cases REST and MCP share, their schemas, `ApiError`, signed file URLs; knows no transport   |
+| `contract/`   | Zod schemas of the requests and answers of the API, shared by the server and the SDK; Zod only      |
 | `config/`     | The Zod schema that turns `process.env` into the typed, frozen configuration                        |
 | `db/`         | Drizzle schema, `createDb`, the migration runner; SQL migrations are in `migrations/`               |
 | `domain/`     | Enumerations, ids, shared Zod schemas, limits                                                       |
