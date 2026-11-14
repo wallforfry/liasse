@@ -34,6 +34,6 @@ export const prepareFullTextRanking = async (
         `${MIN_PG_SEARCH_VERSION.join('.')} or later. Full text is ranked by ts_rank_cd.`,
     };
   }
-  await ensureBm25Index(db);
+  await ensureBm25Index(db, version);
   return { ranker: rankByBm25, notice: `Full text is ranked by BM25 (pg_search ${version}).` };
 };

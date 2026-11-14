@@ -233,6 +233,29 @@ describe('BM25 ranking through ParadeDB pg_search', () => {
       expect(rebuilt.oid).not.toBe(built.oid);
       expect(rebuilt.comment).toBe(built.comment);
     });
+
+    it('builds the index again when a liasse text search configuration changes', async () => {
+      const built = await indexState(database);
+      // No chunk of the corpus is in Yiddish, so the other tests do not see the change.
+      await database.db.execute(sql`
+        ALTER TEXT SEARCH CONFIGURATION liasse_yi ALTER MAPPING FOR word WITH pg_catalog.simple
+      `);
+      await prepareFullTextRanking(database.db);
+      const rebuilt = await indexState(database);
+      expect(rebuilt.oid).not.toBe(built.oid);
+      expect(rebuilt.comment).not.toBe(built.comment);
+    });
+
+    it('builds the index again when pg_search is upgraded, and only then', async () => {
+      const built = await indexState(database);
+      const upgraded = () => Promise.resolve('99.0.0');
+      await prepareFullTextRanking(database.db, upgraded);
+      const rebuilt = await indexState(database);
+      expect(rebuilt.oid).not.toBe(built.oid);
+      expect(rebuilt.comment).not.toBe(built.comment);
+      await prepareFullTextRanking(database.db, upgraded);
+      expect(await indexState(database)).toEqual(rebuilt);
+    });
   });
 });
 
