@@ -9,14 +9,13 @@ import {
 } from '@liasse/core/hindsight';
 import { createDeleteFileHandler, requeueFileDeletions } from '@liasse/core/ingest';
 import type { RegisteredHandler } from '@liasse/core/jobs';
-import { createPersistKnowledge, listSubjects, upcoming } from '@liasse/core/knowledge';
+import { createKnowledgeHandlers, listSubjects, upcoming } from '@liasse/core/knowledge';
 import type { Embedder, TextModel, VisionModel } from '@liasse/core/models';
 import {
   correctDocument,
   createPipelineHandlers,
   failAbandonedDocuments,
   type PipelineDeps,
-  reindexDocumentJob,
 } from '@liasse/core/pipeline';
 import type { Storage } from '@liasse/core/storage';
 
@@ -70,7 +69,6 @@ const pipelineDepsOf = (
       maxFileSize,
       maxVisionPages,
     },
-    persistKnowledge: createPersistKnowledge({ identifierKey }),
     ...(hindsight.enabled
       ? {
           afterIndexed: (id: string) => hindsight.enqueueSync(db, id),
@@ -92,8 +90,9 @@ const featuresOf = (deps: PipelineDeps, hindsight: HindsightIntegration): ApiFea
 
 /**
  * The one module that binds the features to the runtime. A feature that merges adds
- * its lines here and nowhere else: consolidation (`listChanges` and `applyChange` in
- * `features`) is the one left, and the notice below goes with it.
+ * its lines here and nowhere else. The pipeline, link detection, the knowledge reads and
+ * Hindsight are bound; consolidation (`listChanges` and `applyChange` in `features`) is
+ * the one left, and the notice below goes with it.
  */
 export const bindFeatures: Bind = (parts) => {
   const { config, db, storage } = parts;
@@ -107,11 +106,10 @@ export const bindFeatures: Bind = (parts) => {
     handlers: [
       createDeleteFileHandler({ db, storage }),
       ...createPipelineHandlers(pipeline),
+      ...createKnowledgeHandlers({ db, textModel: parts.textModel }),
       ...hindsight.handlers,
     ],
-    // A re-indexing is embedding alone, and the local embedder is one model process:
-    // a second one at a time would only wait inside it, holding a worker.
-    perKindConcurrency: { [reindexDocumentJob.name]: 1, ...hindsight.perKindConcurrency },
+    perKindConcurrency: hindsight.perKindConcurrency,
     features: featuresOf(pipeline, hindsight),
     startupTasks: [
       { name: 'queueing the file removals still owed', run: () => requeueFileDeletions({ db }) },

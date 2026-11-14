@@ -20,7 +20,7 @@ import { describe, expect, it } from 'vitest';
 import { eq } from 'drizzle-orm';
 import { z } from 'zod';
 import { startModelStub } from './model-stub.test-helper.ts';
-import { LETTER_LINES } from './synthetic-letter.fixture.ts';
+import { LETTER } from './synthetic-documents.fixture.ts';
 
 const STEP_TIMEOUT_MS = 15_000;
 const TOKEN = 'synthetic-token-0001';
@@ -208,7 +208,7 @@ describe('server process', () => {
       try {
         await withServer(env, async ({ url, database, terminate }) => {
           const form = new FormData();
-          const pdf = buildSyntheticPdf([{ lines: ['processed in a process', ...LETTER_LINES] }]);
+          const pdf = buildSyntheticPdf([{ lines: [...LETTER.lines] }]);
           form.append('file', new File([pdf], 'letter.pdf'));
           const response = await call(`${url}/documents`, { method: 'POST', body: form });
           expect(response.status).toBe(201);
@@ -222,8 +222,9 @@ describe('server process', () => {
                 .where(eq(documents.id, id))
             )[0]?.status;
           await waitUntil(async () => (await statusOf()) === 'indexed');
-          expect(models.paths).toContain('/v1/chat/completions');
-          expect(models.paths).toContain('/v1/embeddings');
+          const paths = models.requests.map(({ path }) => path);
+          expect(paths).toContain('/v1/chat/completions');
+          expect(paths).toContain('/v1/embeddings');
           expect(await terminate()).toBe(0);
         });
       } finally {
