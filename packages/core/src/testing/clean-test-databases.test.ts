@@ -52,6 +52,20 @@ describe('listTestServerDatabases and dropTestDatabases', () => {
     }
   });
 
+  // A repeatable read snapshot taken before the drop still shows the database row once its
+  // directory is gone: the state a listing meets when another suite drops a database mid-scan.
+  it('leaves out a database dropped between the catalog scan and the file stat', async () => {
+    const name = await create();
+    const listed = await withAdmin((admin) =>
+      admin.begin('isolation level repeatable read', async (snapshot) => {
+        await snapshot`SELECT FROM pg_database`;
+        await withAdmin((other) => other.unsafe(`DROP DATABASE ${name}`));
+        return listTestServerDatabases(snapshot);
+      }),
+    );
+    expect(listed.map((database) => database.name)).not.toContain(name);
+  });
+
   it('drops an idle database and keeps one a session holds', async () => {
     const idle = await create();
     const held = await create();
