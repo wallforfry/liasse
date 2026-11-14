@@ -2,12 +2,25 @@ import { z } from 'zod';
 import type { EmbeddingProvider, LlmProvider } from '../domain/enums.ts';
 import { MAX_EMBEDDING_DIM } from '../domain/limits.ts';
 import { embeddingProviderSchema, llmProviderSchema } from '../domain/schemas.ts';
-import { type CrossFieldProblem, integer, reportProblems, text } from './fields.ts';
+import { type CrossFieldProblem, duration, integer, reportProblems, text } from './fields.ts';
 
 type ModelProvider = LlmProvider | EmbeddingProvider;
 
 const KEYLESS_PROVIDERS: readonly ModelProvider[] = ['local', 'ollama', 'openai-compatible'];
 const BASE_URL_PROVIDERS: readonly ModelProvider[] = ['openai-compatible'];
+
+// A provider package sends the key in a header and appends its paths to the base URL, so
+// credentials or a query string in the URL cannot work; they would only end up in logs.
+const modelBaseUrl = z.string().refine((value) => {
+  if (!URL.canParse(value)) return false;
+  const { protocol, username, password, search } = new URL(value);
+  return (
+    (protocol === 'http:' || protocol === 'https:') &&
+    username === '' &&
+    password === '' &&
+    search === ''
+  );
+}, 'expected an http or https URL without credentials or query string');
 
 interface ProviderAccess {
   readonly prefix: 'LLM' | 'EMBEDDING';
@@ -34,9 +47,10 @@ export const llmSection = z
   .object({
     LLM_PROVIDER: llmProviderSchema.default('anthropic'),
     LLM_API_KEY: text.optional(),
-    LLM_BASE_URL: z.url().optional(),
+    LLM_BASE_URL: modelBaseUrl.optional(),
     VISION_MODEL: text,
     TEXT_MODEL: text,
+    LLM_TIMEOUT: duration.prefault('5m'),
   })
   .transform((env, ctx) => {
     const problems = providerAccessProblems({
@@ -55,6 +69,7 @@ export const llmSection = z
       baseUrl: env.LLM_BASE_URL,
       visionModel: env.VISION_MODEL,
       textModel: env.TEXT_MODEL,
+      timeoutMs: env.LLM_TIMEOUT,
     });
   });
 
@@ -64,7 +79,8 @@ export const embeddingSection = z
     EMBEDDING_MODEL: text.optional(),
     EMBEDDING_DIM: integer(1, MAX_EMBEDDING_DIM).default(384),
     EMBEDDING_API_KEY: text.optional(),
-    EMBEDDING_BASE_URL: z.url().optional(),
+    EMBEDDING_BASE_URL: modelBaseUrl.optional(),
+    EMBEDDING_TIMEOUT: duration.prefault('1m'),
   })
   .transform((env, ctx) => {
     if (env.EMBEDDING_PROVIDER === 'local') {
@@ -100,5 +116,6 @@ export const embeddingSection = z
       dimension: env.EMBEDDING_DIM,
       apiKey: env.EMBEDDING_API_KEY,
       baseUrl: env.EMBEDDING_BASE_URL,
+      timeoutMs: env.EMBEDDING_TIMEOUT,
     });
   });

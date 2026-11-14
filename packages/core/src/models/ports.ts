@@ -21,6 +21,8 @@ export interface TextModel {
 export interface TranscribePageRequest {
   readonly image: Uint8Array;
   readonly mime: string;
+  // The instruction comes from the caller, so an adapter carries no wording of its own.
+  readonly prompt: string;
   readonly signal?: AbortSignal;
 }
 

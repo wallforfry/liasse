@@ -369,6 +369,8 @@ A single Node binary, configured through environment variables, shipped as a mul
 | `LLM_PROVIDER` | `anthropic` | `anthropic`, `openai`, `mistral`, `gemini`, `ollama`, `openai-compatible` |
 | `VISION_MODEL` | — | Model for extraction from images |
 | `TEXT_MODEL` | — | Model for classification, re-extraction, consolidation |
+| `LLM_TIMEOUT` | `5m` | Upper bound for one text or vision model call, its retries included |
+| `EMBEDDING_TIMEOUT` | `1m` | Upper bound for one embedding request, its retries included |
 | `EMBEDDING_PROVIDER` / `EMBEDDING_MODEL` / `EMBEDDING_DIM` | `local` | Embeddings (dimension fixed at install time) |
 | `AUTO_APPLY` | `safe` | `none`, `safe`, `all` |
 | `CONFIDENCE_THRESHOLD` | `0.7` | Below: `needs_review` |
@@ -411,6 +413,7 @@ Documents are personal and sensitive (taxes, health, banking): privacy by defaul
 
 - LLM provider of your choice, including 100% local (Ollama); warning at startup when a cloud provider is configured.
 - Per-document `private` flag: excluded from Hindsight, from embeddings sent to an external provider, and from `search` results unless explicitly requested.
+- An embedding endpoint is external unless it is the in-process model, or an Ollama or OpenAI-compatible server whose base URL host is a loopback or private IP address, or a name that resolved at startup to such addresses only; a cloud provider is always external, and a DNS change after startup is not re-checked.
 - Sensitive identifiers (IBAN, tax number, social security number) masked in `core`, `fields` and provenance; the full value is only readable in the document's full text.
 - No telemetry.
 

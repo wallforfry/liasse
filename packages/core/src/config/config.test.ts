@@ -24,6 +24,7 @@ describe('loadConfig', () => {
         baseUrl: undefined,
         visionModel: 'vision-model',
         textModel: 'text-model',
+        timeoutMs: 300_000,
       },
       embedding: { provider: 'local', model: undefined, dimension: 384 },
       pipeline: {
@@ -73,6 +74,8 @@ describe('loadConfig', () => {
       WATCH_DIR: '/inbox',
       UI_PASSWORD: 'synthetic-ui-password',
       UI_SESSION_TTL: '12h',
+      LLM_TIMEOUT: '90s',
+      EMBEDDING_TIMEOUT: '20s',
       HINDSIGHT_URL: 'http://127.0.0.1:8888',
     });
     expect(config.server).toEqual({ host: '0.0.0.0', port: 9090 });
@@ -82,7 +85,9 @@ describe('loadConfig', () => {
       dimension: 768,
       apiKey: undefined,
       baseUrl: undefined,
+      timeoutMs: 20_000,
     });
+    expect(config.llm.timeoutMs).toBe(90_000);
     expect(config.pipeline.confidenceThreshold).toBe(0.55);
     expect(config.pipeline.workers).toBe(4);
     expect(config.pipeline.watchDir).toBe('/inbox');
@@ -100,6 +105,22 @@ describe('loadConfig', () => {
   it('defaults the UI session lifetime to seven days', () => {
     const config = loadConfig({ ...SYNTHETIC_ENV, UI_PASSWORD: 'synthetic-ui-password' });
     expect(config.auth.ui?.sessionTtlMs).toBe(604_800_000);
+  });
+
+  it('defaults the embedding request timeout to one minute', () => {
+    const config = loadConfig({
+      ...SYNTHETIC_ENV,
+      EMBEDDING_PROVIDER: 'ollama',
+      EMBEDDING_MODEL: 'embedding-model',
+    });
+    expect(config.embedding).toMatchObject({ timeoutMs: 60_000 });
+  });
+
+  it('rejects a model timeout that is not a duration', () => {
+    expect(problemsOf({ ...SYNTHETIC_ENV, LLM_TIMEOUT: '0s', EMBEDDING_TIMEOUT: 'fast' })).toEqual([
+      'LLM_TIMEOUT: expected a duration such as 30m, 12h or 7d',
+      'EMBEDDING_TIMEOUT: expected a duration such as 30m, 12h or 7d',
+    ]);
   });
 
   it('returns a frozen configuration', () => {
@@ -144,6 +165,26 @@ describe('loadConfig', () => {
   it('requires a base URL for an openai-compatible LLM', () => {
     expect(problemsOf({ ...SYNTHETIC_ENV, LLM_PROVIDER: 'openai-compatible' })).toEqual([
       'LLM_BASE_URL: required when LLM_PROVIDER=openai-compatible',
+    ]);
+  });
+
+  it.each([
+    ['credentials', 'https://operator:secret-9f3a@llm.example.com/v1'],
+    ['a user name', 'https://secret-9f3a@llm.example.com/v1'],
+    ['a password', 'https://:secret-9f3a@llm.example.com/v1'],
+    ['a query string', 'https://llm.example.com/v1?api-key=secret-9f3a'],
+    ['another scheme', 'ftp://llm.example.com/secret-9f3a'],
+  ])('rejects a model base URL with %s, without echoing it', (_case, url) => {
+    const problems = problemsOf({
+      ...SYNTHETIC_ENV,
+      LLM_BASE_URL: url,
+      EMBEDDING_PROVIDER: 'ollama',
+      EMBEDDING_MODEL: 'embedding-model',
+      EMBEDDING_BASE_URL: url,
+    });
+    expect(problems).toEqual([
+      'LLM_BASE_URL: expected an http or https URL without credentials or query string',
+      'EMBEDDING_BASE_URL: expected an http or https URL without credentials or query string',
     ]);
   });
 
