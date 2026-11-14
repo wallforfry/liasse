@@ -1,7 +1,7 @@
 import { sql } from 'drizzle-orm';
 import { PgTransaction } from 'drizzle-orm/pg-core';
-import { z } from 'zod';
 import type { Database } from '../db/client.ts';
+import { assertReadCommitted, READ_COMMITTED } from '../db/isolation.ts';
 import type { EntityTransaction } from './entity-store.ts';
 
 // A database, or a transaction the caller has opened and will commit itself.
@@ -11,22 +11,6 @@ const isTransaction = (executor: EntityExecutor): executor is EntityTransaction 
   executor instanceof PgTransaction;
 
 const LOCK = sql`SELECT pg_advisory_xact_lock(hashtext('liasse.entities'))`;
-
-const REQUIRED_ISOLATION = 'read committed';
-const isolationSchema = z.tuple([z.object({ transaction_isolation: z.string() })]);
-
-// A snapshot taken before the lock was granted would hide what the previous holder
-// committed: under any stricter level the lock would protect nothing.
-const assertReadCommitted = async (tx: EntityTransaction): Promise<void> => {
-  const [{ transaction_isolation: level }] = isolationSchema.parse(
-    await tx.execute(sql`SHOW transaction_isolation`),
-  );
-  if (level !== REQUIRED_ISOLATION) {
-    throw new Error(
-      `Entities are written in a ${REQUIRED_ISOLATION} transaction; this one is ${level}.`,
-    );
-  }
-};
 
 // Every write to `entities`, and every write of an entity id elsewhere, runs under this
 // one lock. Resolution reads before it writes (no identifier, name or alias matches, so
@@ -43,7 +27,7 @@ export const withEntityLock = async <Outcome>(
   work: (tx: EntityTransaction) => Promise<Outcome>,
 ): Promise<Outcome> => {
   if (isTransaction(executor)) {
-    await assertReadCommitted(executor);
+    await assertReadCommitted(executor, 'Entities');
     await executor.execute(LOCK);
     return executor.transaction(work);
   }
@@ -52,6 +36,6 @@ export const withEntityLock = async <Outcome>(
       await tx.execute(LOCK);
       return work(tx);
     },
-    { isolationLevel: REQUIRED_ISOLATION },
+    { isolationLevel: READ_COMMITTED },
   );
 };

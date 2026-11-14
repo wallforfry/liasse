@@ -97,4 +97,29 @@ describe('type store', () => {
       order.filter((_, index) => index % 2 === 1).every((entry) => entry.endsWith('ends')),
     ).toBe(true);
   });
+
+  it('writes in the transaction of the caller, which commits or rolls it back', async () => {
+    const rolledBack = new Error('the caller rolls back');
+    await expect(
+      database.db.transaction(async (tx) => {
+        await withRegistryLock(tx, (locked) => insertType(locked, newType('caller_rolls', {})));
+        throw rolledBack;
+      }),
+    ).rejects.toBe(rolledBack);
+    expect(await database.db.$count(docTypes, eq(docTypes.slug, 'caller_rolls'))).toBe(0);
+
+    await database.db.transaction(async (tx) => {
+      await withRegistryLock(tx, (locked) => insertType(locked, newType('caller_commits', {})));
+    });
+    expect(await database.db.$count(docTypes, eq(docTypes.slug, 'caller_commits'))).toBe(1);
+  });
+
+  it('refuses a transaction of the caller stricter than read committed', async () => {
+    await expect(
+      database.db.transaction(
+        (tx) => withRegistryLock(tx, (locked) => insertType(locked, newType('strict_tx', {}))),
+        { isolationLevel: 'repeatable read' },
+      ),
+    ).rejects.toThrow(/read committed transaction; this one is repeatable read/);
+  });
 });
