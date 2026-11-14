@@ -14,14 +14,11 @@ export {
 } from './identifiers.ts';
 export {
   DEFAULT_ENTITY_LIST_LIMIT,
-  type EntityList,
-  getEntity,
-  type ListedEntity,
-  listEntities,
   type ListEntitiesOptions,
   listEntitiesOptionsSchema,
   MAX_ENTITY_LIST_LIMIT,
-} from './list.ts';
+} from './list-options.ts';
+export { type EntityList, getEntity, type ListedEntity, listEntities } from './list.ts';
 export { type EntityMention, entityMentionSchema, InvalidEntityMentionError } from './mention.ts';
 export {
   findMergeCandidates,

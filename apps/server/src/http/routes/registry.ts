@@ -1,19 +1,22 @@
 import {
   applyChange,
-  changeDecisionSchema,
   describeTypes,
+  listChanges,
+  listEntities,
+  listSubjects,
+  upcoming,
+} from '@liasse/core/api';
+import {
+  changeDecisionSchema,
   describeTypesOptionsSchema,
   entityListSchema,
-  listChanges,
+  featureResultSchema,
   listChangesOptionsSchema,
-  listEntities,
   listEntitiesRequestSchema,
-  listSubjects,
   listSubjectsOptionsSchema,
   typeListSchema,
-  upcoming,
   upcomingOptionsSchema,
-} from '@liasse/core/api';
+} from '@liasse/core/contract';
 import { Hono } from 'hono';
 import { z } from 'zod';
 import { failures, jsonResponse, operation, valid } from '../describe.ts';
@@ -57,10 +60,6 @@ const upcomingQuery = z
 
 const changesQuery = z.strictObject({ kind: text }).pipe(listChangesOptionsSchema);
 
-// The modules behind these routes define their answers; until they are bound here, the
-// contract only says an object comes back.
-const pending = z.looseObject({});
-
 export const registryRoutes = ({ api, authenticated }: RouteDeps): Hono<AppEnv> =>
   new Hono<AppEnv>()
     .get(
@@ -90,7 +89,10 @@ export const registryRoutes = ({ api, authenticated }: RouteDeps): Hono<AppEnv> 
       operation({
         summary: 'List or search subjects',
         tag: 'Knowledge',
-        responses: { 200: jsonResponse('The subjects.', pending), ...failures(400, 501) },
+        responses: {
+          200: jsonResponse('The subjects.', featureResultSchema),
+          ...failures(400, 501),
+        },
       }),
       authenticated,
       valid('query', subjectsQuery),
@@ -101,7 +103,10 @@ export const registryRoutes = ({ api, authenticated }: RouteDeps): Hono<AppEnv> 
       operation({
         summary: 'Key dates in a window',
         tag: 'Knowledge',
-        responses: { 200: jsonResponse('The dates, sorted.', pending), ...failures(400, 501) },
+        responses: {
+          200: jsonResponse('The dates, sorted.', featureResultSchema),
+          ...failures(400, 501),
+        },
       }),
       authenticated,
       valid('query', upcomingQuery),
@@ -112,7 +117,10 @@ export const registryRoutes = ({ api, authenticated }: RouteDeps): Hono<AppEnv> 
       operation({
         summary: 'List consolidation proposals',
         tag: 'Registry',
-        responses: { 200: jsonResponse('The changes.', pending), ...failures(400, 501) },
+        responses: {
+          200: jsonResponse('The changes.', featureResultSchema),
+          ...failures(400, 501),
+        },
       }),
       authenticated,
       valid('query', changesQuery),
@@ -124,7 +132,7 @@ export const registryRoutes = ({ api, authenticated }: RouteDeps): Hono<AppEnv> 
         summary: 'Apply or reject a consolidation proposal',
         tag: 'Registry',
         responses: {
-          200: jsonResponse('The outcome.', pending),
+          200: jsonResponse('The outcome.', featureResultSchema),
           ...failures(400, 404, 413, 415, 501),
         },
       }),

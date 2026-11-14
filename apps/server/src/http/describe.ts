@@ -1,8 +1,9 @@
+import { errorBodySchema } from '@liasse/core/contract';
 import { describeRoute, type DescribeRouteOptions, resolver, validator } from 'hono-openapi';
 import type { ValidationTargets } from 'hono';
 import type { z } from 'zod';
 import type { AppEnv } from './env.ts';
-import { errorSchema, HttpFailure, invalidRequest } from './errors.ts';
+import { HttpFailure, invalidRequest } from './errors.ts';
 
 export const BEARER_SCHEME = 'bearerAuth';
 export const SIGNED_URL_SCHEME = 'signedUrl';
@@ -29,7 +30,7 @@ export const failures = (...statuses: readonly number[]): Responses =>
   Object.fromEntries(
     statuses.map((status) => [
       String(status),
-      jsonResponse(FAILURES[status] ?? 'Failure.', errorSchema),
+      jsonResponse(FAILURES[status] ?? 'Failure.', errorBodySchema),
     ]),
   );
 
