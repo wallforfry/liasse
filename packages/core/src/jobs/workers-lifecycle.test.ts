@@ -6,6 +6,7 @@ import { createGate, sleep, waitUntil } from '../testing/async.ts';
 import { JobLockLostError, WorkersStoppingError } from './errors.ts';
 import { handle } from './handlers.ts';
 import { jobById, labelJob } from './kinds.test-helper.ts';
+import { recoverStaleJobs } from './store.ts';
 import { aborted, createWorkersHarness, type WorkersHarness } from './workers.test-helper.ts';
 import { startWorkers } from './workers.ts';
 
@@ -173,6 +174,65 @@ describe('workers: locks, wake-up and stop', () => {
     });
     expect(await harness.statusOf(id)).toBe('running');
     finish.open();
+    await waitUntil(async () => (await harness.statusOf(id)) === 'succeeded');
+  });
+
+  it('stops renewing the lock of an abandoned job, so that it is taken back', async () => {
+    const entered = createGate();
+    const finish = createGate();
+    const workers = await harness.start({
+      visibilityTimeoutMs: 300,
+      handlers: [
+        handle(labelJob, async () => {
+          entered.open();
+          await finish.opened;
+        }),
+      ],
+    });
+    const id = await harness.queue('abandoned');
+    await entered.opened;
+    expect(await workers.stop({ timeoutMs: 0, abortGraceMs: 20 })).toMatchObject({
+      abandoned: [id],
+    });
+    await waitUntil(async () => (await recoverStaleJobs(harness.database.db, 300)) === 1, 15_000);
+    expect(await jobById(harness.database.db, id)).toMatchObject({
+      status: 'queued',
+      attempts: 1,
+      lockedAt: null,
+    });
+    finish.open();
+  }, 30_000);
+
+  it('tracks both executions of a job it lost and claimed again', async () => {
+    const gates = [createGate(), createGate()];
+    const attempts: number[] = [];
+    const errors: unknown[] = [];
+    const workers = await harness.start({
+      onError: (error) => errors.push(error),
+      handlers: [
+        handle(labelJob, async ({ attempt }) => {
+          attempts.push(attempt);
+          await gates[attempt - 1]?.opened;
+        }),
+      ],
+    });
+    const id = await harness.queue('claimed twice');
+    await waitUntil(() => attempts.length === 1);
+    // What the stale-lock recovery does to a job whose worker went silent.
+    await harness.database.db
+      .update(jobs)
+      .set({ status: 'queued', lockedAt: null })
+      .where(eq(jobs.id, id));
+    await waitUntil(() => attempts.length === 2);
+    gates[0]?.open();
+    await waitUntil(() => errors.some((error) => error instanceof JobLockLostError));
+
+    // The first execution is over; the second one is still running and must be seen.
+    expect(await workers.stop({ timeoutMs: 0, abortGraceMs: 20 })).toEqual({
+      aborted: [id],
+      abandoned: [id],
+    });
+    gates[1]?.open();
     await waitUntil(async () => (await harness.statusOf(id)) === 'succeeded');
   });
 

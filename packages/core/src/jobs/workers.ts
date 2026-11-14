@@ -120,9 +120,13 @@ export const startWorkers = async (options: WorkersOptions): Promise<Workers> =>
       interrupt();
     });
     await settledWithin(late, abortGraceMs);
+    const deaf = dispatcher.inFlight();
+    deaf.forEach(({ abandon }) => {
+      abandon();
+    });
     return {
       aborted: late.map(({ job }) => job.id),
-      abandoned: dispatcher.inFlight().map(({ job }) => job.id),
+      abandoned: deaf.map(({ job }) => job.id),
     };
   };
 

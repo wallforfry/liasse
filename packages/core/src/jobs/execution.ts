@@ -33,6 +33,12 @@ export interface Execution {
   readonly done: Promise<void>;
   /** Aborts the handler because the workers are stopping. */
   readonly interrupt: () => void;
+  /**
+   * Stops renewing the lock of a handler that ignored its abort. The lock then expires
+   * and the job is taken back, instead of staying `running` for as long as the process
+   * lives; the timer no longer keeps that process alive either.
+   */
+  readonly abandon: () => void;
 }
 
 const settleFailure = (
@@ -69,14 +75,8 @@ const run = async (
   deps: ExecutionDeps,
   job: ClaimedJob,
   controller: AbortController,
+  renewal: NodeJS.Timeout,
 ): Promise<void> => {
-  // A handler that outlives the visibility timeout keeps its job as long as its
-  // process answers: only a silent worker loses it.
-  const renewal = setInterval(() => {
-    renewJobLock(deps.db, job).then((held) => {
-      if (!held) controller.abort(new JobLockLostError());
-    }, deps.onError);
-  }, deps.lockRenewalMs);
   try {
     const written = await runHandler(deps, job, controller.signal);
     if (!written) deps.onError(new JobLockLostError());
@@ -91,11 +91,21 @@ const run = async (
 
 export const executeJob = (deps: ExecutionDeps, job: ClaimedJob): Execution => {
   const controller = new AbortController();
+  // A handler that outlives the visibility timeout keeps its job as long as its
+  // process answers: only a silent worker loses it.
+  const renewal = setInterval(() => {
+    renewJobLock(deps.db, job).then((held) => {
+      if (!held) controller.abort(new JobLockLostError());
+    }, deps.onError);
+  }, deps.lockRenewalMs);
   return {
     job,
-    done: run(deps, job, controller),
+    done: run(deps, job, controller, renewal),
     interrupt: () => {
       controller.abort(new WorkersStoppingError());
+    },
+    abandon: () => {
+      clearInterval(renewal);
     },
   };
 };

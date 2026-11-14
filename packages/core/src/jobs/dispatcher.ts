@@ -51,9 +51,12 @@ export const startDispatcher = ({
 
   const start = (job: ClaimedJob): void => {
     const started = executeJob(execution, job);
-    running.set(job.id, started);
+    // A job this process lost and claimed again runs twice at once for a while: the
+    // attempt tells the two executions apart, the job id alone would merge them.
+    const token = `${job.id}:${String(job.attempt)}`;
+    running.set(token, started);
     void started.done.then(() => {
-      running.delete(job.id);
+      running.delete(token);
       wake.notify();
     });
   };
