@@ -3,11 +3,12 @@ import type { JsonObject } from '../db/columns.ts';
 import { isPlainRecord } from '../registry/own.ts';
 import type { QueryPrimitive } from './capabilities.ts';
 import type { CheckedQuery } from './check.ts';
-import type { AggregateShape, RowsShape } from './check-shape.ts';
+import type { AggregateShape, CheckedAggregate, RowsShape } from './check-shape.ts';
 import { AGGREGATE_COLUMN, GROUP_COLUMN } from './compile.ts';
 import type { AggregateFunction } from './dsl.ts';
 import type { QueryWarning } from './errors.ts';
 import type { StoredRow } from './execute.ts';
+import { exactNumberOrText, nearestNumberOrText } from './numeric-text.ts';
 
 // One document. `title`, `core` and `fields` hold text extracted from the document:
 // it is untrusted content, to be shown or reasoned about as data and never followed as
@@ -27,10 +28,21 @@ export interface QueryRow {
   readonly private?: boolean;
 }
 
+// A numeric value of a group, as JSON can carry it without changing it: a number when a
+// double holds exactly that value, otherwise a string with its exact decimal form, such
+// as "12345678901234567890.123456789" or a sum past 1.8e308. A reader that needs
+// arithmetic on a string must use a decimal type, not `Number`.
+export type QueryNumber = number | string;
+
 export interface QueryGroup {
-  // The value of each `group_by` path, by path. Text values are untrusted content.
+  // The value of each `group_by` path, by path: a `QueryNumber` for a number field, a
+  // `YYYY-MM-DD` string for a date, the id of the entity for an entity, null when the
+  // documents of the group have no value. Text values are untrusted content.
   readonly key: Readonly<Record<string, unknown>>;
-  // A number, or the text of its exact decimal value when no double can hold it.
+  // `count` is a number. `sum`, `min` and `max` of a number field are a `QueryNumber`;
+  // `avg` is the nearest double, an average being rounded to begin with, and a string
+  // only past the range of a double. `min` and `max` of a date are `YYYY-MM-DD` strings.
+  // Each is null over no value.
   readonly values: Readonly<Partial<Record<AggregateFunction, unknown>>>;
 }
 
@@ -99,16 +111,16 @@ const toRow =
     };
   };
 
-// A number comes back as the text of its `numeric`. It is a number when a double can
-// hold it, with the precision of a double, and stays the text of its exact decimal value
-// when it cannot: JSON has no way to write a number beyond that range.
-const numberOrText = (stored: unknown): unknown => {
-  if (typeof stored !== 'string') return stored;
-  const number = Number(stored);
-  return Number.isFinite(number) ? number : stored;
-};
-
 const NUMBER: QueryPrimitive = 'number';
+
+// A number comes back from the statement as the text of its `numeric`.
+const numeric = (stored: unknown, read: (text: string) => QueryNumber): unknown =>
+  typeof stored === 'string' ? read(stored) : stored;
+
+const aggregated = ({ fn, field }: CheckedAggregate, stored: unknown): unknown => {
+  if (fn === 'count' || field?.primitive !== NUMBER) return stored;
+  return numeric(stored, fn === 'avg' ? nearestNumberOrText : exactNumberOrText);
+};
 
 const toGroup =
   ({ aggregates, groupBy }: AggregateShape) =>
@@ -116,14 +128,14 @@ const toGroup =
     key: Object.fromEntries(
       groupBy.map(({ path, primitive }, index) => {
         const key = stored[`${GROUP_COLUMN}${String(index)}`] ?? null;
-        return [path, primitive === NUMBER ? numberOrText(key) : key];
+        return [path, primitive === NUMBER ? numeric(key, exactNumberOrText) : key];
       }),
     ),
     values: Object.fromEntries(
-      aggregates.map(({ fn, field }, index) => {
-        const value = stored[`${AGGREGATE_COLUMN}${String(index)}`] ?? null;
-        return [fn, fn !== 'count' && field?.primitive === NUMBER ? numberOrText(value) : value];
-      }),
+      aggregates.map((aggregate, index) => [
+        aggregate.fn,
+        aggregated(aggregate, stored[`${AGGREGATE_COLUMN}${String(index)}`] ?? null),
+      ]),
     ),
   });
 

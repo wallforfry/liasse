@@ -25,5 +25,12 @@ export type {
   UnknownField,
 } from './errors.ts';
 export { QueryExecutionError } from './execute.ts';
-export type { AggregateResult, QueryGroup, QueryResult, QueryRow, RowsResult } from './result.ts';
+export type {
+  AggregateResult,
+  QueryGroup,
+  QueryNumber,
+  QueryResult,
+  QueryRow,
+  RowsResult,
+} from './result.ts';
 export { type QueryContext, runQuery } from './run.ts';

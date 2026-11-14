@@ -8,6 +8,9 @@ import { runQuery } from './run.ts';
 
 const LARGEST_DOUBLES = '1e308';
 const BEYOND_A_DOUBLE = '1e400';
+const MORE_DIGITS_THAN_A_DOUBLE = '12345678901234567890.123456789';
+
+const RANGE = [['title', 'in', ['small', 'large', 'as large', 'beyond']]];
 
 const digits = (first: string, zeros: number): string => `${first}${'0'.repeat(zeros)}`;
 
@@ -50,6 +53,10 @@ describe('numbers at and beyond the range of a double', () => {
     await add('large', LARGEST_DOUBLES);
     await add('as large', LARGEST_DOUBLES);
     await add('beyond', BEYOND_A_DOUBLE);
+    await add('precise', MORE_DIGITS_THAN_A_DOUBLE);
+    await add('one', '1');
+    await add('two', '2');
+    await add('two again', '2');
   });
 
   afterAll(async () => {
@@ -64,10 +71,12 @@ describe('numbers at and beyond the range of a double', () => {
   });
 
   it('gives a minimum, a maximum and a group key beyond a double as a text', async () => {
-    expect(await groupsOf({ aggregate: { min: 'fields.reading', max: 'fields.reading' } })).toEqual(
-      [{ key: {}, values: { min: 2.5, max: digits('1', 400) } }],
-    );
-    expect(await groupsOf({ aggregate: { count: '*' }, group_by: ['fields.reading'] })).toEqual([
+    expect(
+      await groupsOf({ aggregate: { min: 'fields.reading', max: 'fields.reading' }, where: RANGE }),
+    ).toEqual([{ key: {}, values: { min: 2.5, max: digits('1', 400) } }]);
+    expect(
+      await groupsOf({ aggregate: { count: '*' }, group_by: ['fields.reading'], where: RANGE }),
+    ).toEqual([
       { key: { 'fields.reading': 2.5 }, values: { count: 1 } },
       { key: { 'fields.reading': 1e308 }, values: { count: 2 } },
       { key: { 'fields.reading': digits('1', 400) }, values: { count: 1 } },
@@ -75,8 +84,46 @@ describe('numbers at and beyond the range of a double', () => {
   });
 
   it('gives an average beyond a double as a text', async () => {
-    const [group] = await groupsOf({ aggregate: { avg: 'fields.reading' } });
+    const [group] = await groupsOf({ aggregate: { avg: 'fields.reading' }, where: RANGE });
     expect(group?.values.avg).toMatch(/^25\d{398}\.\d+$/);
+  });
+
+  it('gives a value with more digits than a double holds as its exact decimal text', async () => {
+    const precise = [['title', '=', 'precise']];
+    expect(
+      await groupsOf({
+        aggregate: { sum: 'fields.reading', min: 'fields.reading', max: 'fields.reading' },
+        group_by: ['fields.reading'],
+        where: precise,
+      }),
+    ).toEqual([
+      {
+        key: { 'fields.reading': MORE_DIGITS_THAN_A_DOUBLE },
+        values: {
+          sum: MORE_DIGITS_THAN_A_DOUBLE,
+          min: MORE_DIGITS_THAN_A_DOUBLE,
+          max: MORE_DIGITS_THAN_A_DOUBLE,
+        },
+      },
+    ]);
+    const [sum] = await groupsOf({
+      aggregate: { sum: 'fields.reading' },
+      where: [['title', 'in', ['precise', 'one']]],
+    });
+    expect(sum?.values.sum).toBe('12345678901234567891.123456789');
+  });
+
+  it('gives an average as the nearest double: it is rounded to begin with', async () => {
+    const [thirds] = await groupsOf({
+      aggregate: { avg: 'fields.reading', sum: 'fields.reading' },
+      where: [['title', 'in', ['one', 'two', 'two again']]],
+    });
+    expect(thirds?.values).toEqual({ avg: 5 / 3, sum: 5 });
+    const [precise] = await groupsOf({
+      aggregate: { avg: 'fields.reading' },
+      where: [['title', '=', 'precise']],
+    });
+    expect(precise?.values.avg).toBe(Number(MORE_DIGITS_THAN_A_DOUBLE));
   });
 
   it('keeps a number that fits a double a number', async () => {
