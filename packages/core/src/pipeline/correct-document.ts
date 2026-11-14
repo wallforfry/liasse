@@ -5,6 +5,7 @@ import { writeIfLive } from '../ingest/live-write.ts';
 import { enqueue } from '../jobs/enqueue.ts';
 import { resolveType } from '../registry/read-types.ts';
 import { findTypeById, type RegisteredType } from '../registry/type-store.ts';
+import { entitiesOf, maskOf } from './bindings.ts';
 import { applyCorrection, type Correction } from './correction/apply.ts';
 import {
   type CorrectionError,
@@ -73,7 +74,7 @@ const apply = (
   read: PipelineDocument,
   correction: Correction,
 ): Promise<Applied> =>
-  deps.entities.withLock(deps.db, async (locked) => {
+  entitiesOf(deps).withLock(deps.db, async (locked) => {
     const outcome = await writeIfLive(locked, read.id, async (tx): Promise<Applied> => {
       const stored = await loadDocument(tx, read.id);
       if (stored === undefined) return undefined;
@@ -83,7 +84,7 @@ const apply = (
       // The ids this correction brings in: those the document already holds are kept
       // true by the merges themselves.
       const resolved = [...correction.resolutions.values()].map((entity) => entity.entity_id);
-      if ((await deps.entities.missingIds(tx, resolved)).length > 0) return 'stale';
+      if ((await entitiesOf(deps).missingIds(tx, resolved)).length > 0) return 'stale';
       await tx
         .update(documents)
         .set(applyCorrection(stored, correction))
@@ -135,7 +136,8 @@ export const correctDocument = async (
       return refused(...(core.ok ? [] : core.errors), ...(fields.ok ? [] : fields.errors));
     }
     const names = entityNames(core.value, fields.value);
-    const resolutions = await resolveMentions(deps, names, {
+    const bound = { entities: entitiesOf(deps), maskSensitive: maskOf(deps) };
+    const { resolutions } = await resolveMentions(bound, names, {
       details: [],
       documentText: '',
       allowExternalEmbedding: !(input.data.private ?? document.private),
@@ -155,7 +157,7 @@ export const correctDocument = async (
       fields: fields.value,
       private: input.data.private,
       resolutions,
-      maskSensitive: deps.maskSensitive,
+      maskSensitive: maskOf(deps),
     });
     if (applied === undefined) return refused(NOT_FOUND(id));
     if (applied !== 'stale') return { ok: true, value: applied };

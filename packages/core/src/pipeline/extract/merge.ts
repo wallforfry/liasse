@@ -104,6 +104,7 @@ export const mergeWithStored = (
           schema_version: type?.version ?? null,
           truncated,
           rejected_values: fresh.rejected,
+          dropped_identifiers: fresh.droppedIdentifiers,
         },
       },
     },

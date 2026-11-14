@@ -252,7 +252,7 @@ describe('extraction and re-extraction', () => {
     let checks = 0;
     const merging = {
       ...harness.entities,
-      missingIds: async (...[tx, ids]: Parameters<PipelineDeps['entities']['missingIds']>) => {
+      missingIds: async (...[tx, ids]: Parameters<typeof harness.entities.missingIds>) => {
         checks += 1;
         if (checks === 1) await tx.delete(entities);
         return harness.entities.missingIds(tx, ids);

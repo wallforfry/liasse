@@ -22,6 +22,7 @@ export type {
   PersistKnowledge,
   PipelineDeps,
   PipelineSettings,
+  ResolvedMention,
 } from './deps.ts';
 export type { PipelineDocument } from './document.ts';
 export {
@@ -36,7 +37,6 @@ export { createPipelineHandlers, failAbandonedDocuments } from './handlers.ts';
 export { reextractDocumentJob, reindexDocumentJob } from './jobs.ts';
 export { storeKnowledge } from './knowledge-store.ts';
 export { processDocument, reextractDocument, reindexDocument } from './process-document.ts';
-export { createSensitiveMasker, type SensitiveSpan } from './sensitive-masker.ts';
 export {
   DEFAULT_TEXT_PROCESS_LIMITS,
   extractTextInChild,

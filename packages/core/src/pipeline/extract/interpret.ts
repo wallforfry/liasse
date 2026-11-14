@@ -1,9 +1,9 @@
 import { CORE_FIELDS } from '../../registry/core-fields.ts';
 import type { RegisteredType } from '../../registry/type-store.ts';
-import type { Knowledge, MaskSensitive, PipelineDeps } from '../deps.ts';
+import type { Knowledge, MaskSensitive } from '../deps.ts';
 import type { PageText } from '../token-budget.ts';
 import { type AssembledSection, assembleSection, entityNamesOf } from './assemble.ts';
-import { resolveMentions } from './entities.ts';
+import { type MentionDeps, resolveMentions } from './entities.ts';
 import {
   entityDetailSchema,
   type ExtractionOutput,
@@ -30,6 +30,8 @@ export interface ExtractedDocument {
   readonly rejectedCore: number;
   /** Every value and fact the model returned that was dropped. */
   readonly rejected: number;
+  /** Identifiers the model gave for an entity that were not used. */
+  readonly droppedIdentifiers: number;
   readonly title: string | null;
   readonly summary: string | null;
   readonly knowledge: Knowledge;
@@ -115,7 +117,7 @@ const tidyText = (
  * masked. The output triggers nothing else.
  */
 export const interpret = async (
-  deps: Pick<PipelineDeps, 'entities' | 'maskSensitive'>,
+  deps: MentionDeps,
   { output, model }: ModelAnswer,
   { type, pages, private: isPrivate }: InterpretContext,
 ): Promise<ExtractedDocument> => {
@@ -125,7 +127,7 @@ export const interpret = async (
   const quotes = createQuoteIndex(pages);
   const reading = readOutput(output, typeFields, quotes);
   const facts = readFacts(output, quotes);
-  const resolutions = await resolveMentions(
+  const { resolutions, droppedIdentifiers } = await resolveMentions(
     deps,
     [...entityNamesOf(reading, typeFields), ...factEntityNames(facts)],
     {
@@ -147,6 +149,7 @@ export const interpret = async (
     coreConfidences: core.confidences,
     rejectedCore: core.rejected,
     rejected: core.rejected + fields.rejected + extra.rejected + facts.rejected,
+    droppedIdentifiers,
     title: tidyText(mask, output.title, MAX_TITLE_LENGTH),
     summary: tidyText(mask, output.summary, MAX_SUMMARY_LENGTH),
     knowledge: maskKnowledge(

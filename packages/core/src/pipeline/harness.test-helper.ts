@@ -1,10 +1,10 @@
-import { eq, inArray, sql } from 'drizzle-orm';
+import { eq } from 'drizzle-orm';
 import type { Database } from '../db/client.ts';
 import { chunks, documentPages, documents } from '../db/schema/documents.ts';
 import { jobs } from '../db/schema/jobs.ts';
 import { documentDates, documentLinks, facts } from '../db/schema/knowledge.ts';
 import { docTypes, entities } from '../db/schema/registry.ts';
-import type { Transaction } from '../ingest/existing-document.ts';
+import { deriveIdentifierKey } from '../entities/sensitive.ts';
 import { createIngestHarness, type IngestHarness } from '../ingest/harness.test-helper.ts';
 import { ingestFile } from '../ingest/ingest-file.ts';
 import { createFakeEmbedder } from '../testing/fake-embedder.ts';
@@ -16,79 +16,37 @@ import {
 import { createFakeVisionModel } from '../testing/fake-vision-model.ts';
 import { syntheticPdf } from '../testing/synthetic-files.ts';
 import type { ExtractedText } from '../text/types.ts';
+import { entitiesOf } from './bindings.ts';
 import type { EntityMentionInput, EntityResolver, PipelineDeps } from './deps.ts';
-import { createSensitiveMasker } from './sensitive-masker.ts';
 
-// Structurally valid numbers of accounts that do not exist.
+// A structurally valid number of an account that does not exist.
 export const SYNTHETIC_IBAN = 'DE37 9999 9999 0123 4567 89';
 export const SYNTHETIC_IBAN_MASKED = '****6789';
 
-const IBAN = /(?<![A-Za-z0-9])[A-Z]{2}\d{2}(?: ?[A-Z0-9]){11,30}(?![A-Za-z0-9])/g;
+export const TEST_IDENTIFIER_KEY = deriveIdentifierKey('synthetic-identifier-secret-0123456789');
 
-const isIban = (candidate: string): boolean => {
-  const compact = candidate.replace(/ /g, '');
-  const digits = `${compact.slice(4)}${compact.slice(0, 4)}`.replace(/[A-Z]/g, (letter) =>
-    String(Number.parseInt(letter, 36)),
-  );
-  return BigInt(digits) % 97n === 1n;
-};
-
-// A stand-in for the detector and the masker of entity resolution: IBANs only.
-export const maskSyntheticIbans = createSensitiveMasker(
-  (text) =>
-    [...text.matchAll(IBAN)]
-      .filter(([match]) => isIban(match))
-      .map(({ 0: value, index }) => ({ start: index, end: index + value.length, value })),
-  ({ value }) => `****${value.replace(/ /g, '').slice(-4)}`,
-);
-
-export interface FakeEntities extends EntityResolver {
+export interface RecordingEntities extends EntityResolver {
   readonly mentions: readonly EntityMentionInput[];
   readonly options: readonly { readonly allowExternalEmbedding: boolean }[];
   readonly clear: () => void;
 }
 
-// Entities by exact name, in the real table and under a real advisory lock, so the
-// ordering contract (lock, then `missingIds`, then write) is exercised for real.
-export const createFakeEntities = (db: Database): FakeEntities => {
+// The real entity resolution, which also notes what it was asked.
+const recording = (real: EntityResolver): RecordingEntities => {
   const mentions: EntityMentionInput[] = [];
   const options: { readonly allowExternalEmbedding: boolean }[] = [];
-  const lock = sql`SELECT pg_advisory_xact_lock(hashtext('liasse.entities'))`;
   return {
+    ...real,
     mentions,
+    options,
     clear: () => {
       mentions.length = 0;
       options.length = 0;
     },
-    options,
-    resolve: async (mention, option) => {
+    resolve: (mention, option) => {
       mentions.push(mention);
       options.push(option);
-      if (mention.name.startsWith('Unresolvable')) return undefined;
-      const [known] = await db
-        .select({ id: entities.id })
-        .from(entities)
-        .where(eq(entities.canonicalName, mention.name));
-      if (known !== undefined) return { entity_id: known.id, match: 'name', confidence: 0.99 };
-      const [created] = await db
-        .insert(entities)
-        .values({ kind: mention.kind ?? 'org', canonicalName: mention.name })
-        .returning({ id: entities.id });
-      if (created === undefined) throw new Error('The entity was not created');
-      return { entity_id: created.id, match: 'created', confidence: 1 };
-    },
-    withLock: (executor, work) =>
-      executor.transaction(async (tx) => {
-        await tx.execute(lock);
-        return work(tx);
-      }),
-    missingIds: async (tx: Transaction, ids) => {
-      if (ids.length === 0) return [];
-      const found = await tx
-        .select({ id: entities.id })
-        .from(entities)
-        .where(inArray(entities.id, [...ids]));
-      return ids.filter((id) => !found.some((entity) => entity.id === id));
+      return real.resolve(mention, option);
     },
   };
 };
@@ -138,7 +96,7 @@ export const pagesOf = (...texts: readonly string[]): ExtractedText => ({
 export interface PipelineHarness {
   readonly ingestHarness: IngestHarness;
   readonly db: Database;
-  readonly entities: FakeEntities;
+  readonly entities: RecordingEntities;
   readonly indexed: readonly string[];
   /** Dependencies with fakes for everything but the database and the storage. */
   readonly deps: (overrides?: Partial<PipelineDeps>) => PipelineDeps;
@@ -154,7 +112,21 @@ export const DEFAULT_TEXT = pagesOf('Synthetic Energy SA\nInvoice SYN-2026-001\n
 export const createPipelineHarness = async (): Promise<PipelineHarness> => {
   const ingestHarness = await createIngestHarness();
   const { db } = ingestHarness.database;
-  const fakeEntities = createFakeEntities(db);
+  const base: PipelineDeps = {
+    db,
+    storage: ingestHarness.storage,
+    textModel: scriptedModel({}),
+    visionModel: createFakeVisionModel(),
+    embedder: createFakeEmbedder(),
+    identifierKey: TEST_IDENTIFIER_KEY,
+    settings: {
+      confidenceThreshold: 0.7,
+      maxNewTypesPerDay: 5,
+      schemaLanguage: 'en',
+      maxFileSize: ingestHarness.deps.maxFileSize,
+    },
+  };
+  const fakeEntities = recording(entitiesOf(base));
   const indexed: string[] = [];
   return {
     ingestHarness,
@@ -162,19 +134,8 @@ export const createPipelineHarness = async (): Promise<PipelineHarness> => {
     entities: fakeEntities,
     indexed,
     deps: (overrides = {}) => ({
-      db,
-      storage: ingestHarness.storage,
-      textModel: scriptedModel({}),
-      visionModel: createFakeVisionModel(),
-      embedder: createFakeEmbedder(),
-      settings: {
-        confidenceThreshold: 0.7,
-        maxNewTypesPerDay: 5,
-        schemaLanguage: 'en',
-        maxFileSize: ingestHarness.deps.maxFileSize,
-      },
+      ...base,
       entities: fakeEntities,
-      maskSensitive: maskSyntheticIbans,
       indexDocument: (documentId) => {
         indexed.push(documentId);
         return Promise.resolve();

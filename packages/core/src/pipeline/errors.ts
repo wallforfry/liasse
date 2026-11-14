@@ -1,3 +1,4 @@
+import { EntityResolutionContendedError } from '../entities/resolve.ts';
 import { PermanentJobError } from '../jobs/errors.ts';
 import { ModelOutputError, ModelProviderError } from '../models/errors.ts';
 import { StorageObjectNotFoundError } from '../storage/errors.ts';
@@ -46,7 +47,11 @@ export const documentErrorCode = (error: unknown): string => {
   if (error instanceof ModelProviderError) return 'model_provider_failed';
   if (error instanceof ModelOutputError) return 'model_output_invalid';
   if (error instanceof StorageObjectNotFoundError) return 'file_missing';
-  if (error instanceof PipelineConflictError || error instanceof IndexingConflictError) {
+  if (
+    error instanceof PipelineConflictError ||
+    error instanceof IndexingConflictError ||
+    error instanceof EntityResolutionContendedError
+  ) {
     return 'processing_conflict';
   }
   return 'internal_error' satisfies PipelineErrorCode;

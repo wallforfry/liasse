@@ -10,8 +10,6 @@ import {
   isPermanentFailure,
   PipelineConflictError,
 } from './errors.ts';
-import { maskSyntheticIbans, SYNTHETIC_IBAN } from './harness.test-helper.ts';
-import { createSensitiveMasker } from './sensitive-masker.ts';
 import { TextProcessError } from './text-process/extract-in-child.ts';
 import { openingOf, withinBudget } from './token-budget.ts';
 
@@ -68,27 +66,6 @@ describe('the error of a document', () => {
   ])('%s has the code %s, permanent: %s', (error, code, permanent) => {
     expect(documentErrorCode(error)).toBe(code);
     expect(isPermanentFailure(error)).toBe(permanent);
-  });
-});
-
-describe('createSensitiveMasker', () => {
-  it('replaces every span, whatever the lengths of the replacements', () => {
-    const mask = createSensitiveMasker(
-      (text) =>
-        [...text.matchAll(/\d+/g)].map(({ 0: value, index }) => ({
-          start: index,
-          end: index + value.length,
-          value,
-        })),
-      ({ value }) => `<${String(value.length)}>`,
-    );
-    expect(mask('a 1 bb 22222 c 33')).toBe('a <1> bb <5> c <2>');
-    expect(mask('nothing')).toBe('nothing');
-  });
-
-  it('masks a synthetic IBAN and leaves a number that is not one', () => {
-    expect(maskSyntheticIbans(`pay ${SYNTHETIC_IBAN} now`)).toBe('pay ****6789 now');
-    expect(maskSyntheticIbans('pay DE37 9999 9999 0123 4567 88 now')).toContain('4567 88');
   });
 });
 

@@ -2,7 +2,8 @@ import { eq } from 'drizzle-orm';
 import { documents } from '../db/schema/documents.ts';
 import type { DocumentStatus } from '../domain/enums.ts';
 import { readPipelineProvenance } from '../domain/provenance.ts';
-import { DocumentNotFoundError, indexDocument } from '../search/indexing.ts';
+import { DocumentNotFoundError } from '../search/indexing.ts';
+import { indexerOf } from './bindings.ts';
 import { runClassificationStage } from './classification-stage.ts';
 import { settledStatus } from './confidence.ts';
 import type { PipelineDeps } from './deps.ts';
@@ -38,7 +39,7 @@ const settle = (
 // The indexer refuses a tombstone: a document deleted meanwhile has nothing to index,
 // and the stage that follows finds it gone.
 const index = async (deps: PipelineDeps, documentId: string): Promise<void> => {
-  const run = deps.indexDocument ?? ((id: string) => indexDocument(deps, id));
+  const run = indexerOf(deps);
   await run(documentId).catch((error: unknown) => {
     if (!(error instanceof DocumentNotFoundError)) throw error;
   });

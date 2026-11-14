@@ -8,6 +8,7 @@ import type { Transaction } from '../../ingest/existing-document.ts';
 import { writeIfLive } from '../../ingest/live-write.ts';
 import { isPlainRecord } from '../../registry/own.ts';
 import type { RegisteredType } from '../../registry/type-store.ts';
+import { entitiesOf } from '../bindings.ts';
 import type { PipelineDeps } from '../deps.ts';
 import { loadDocument, type PipelineDocument } from '../document.ts';
 import { storeKnowledge } from '../knowledge-store.ts';
@@ -78,7 +79,7 @@ const write = async (
       ...fresh.knowledge.facts.flatMap((fact) => fact.entityIds),
     ]),
   ];
-  if ((await deps.entities.missingIds(tx, entityIds)).length > 0) return 'stale';
+  if ((await entitiesOf(deps).missingIds(tx, entityIds)).length > 0) return 'stale';
   const merged = mergeWithStored(stored, fresh, {
     type,
     truncated,
@@ -109,7 +110,7 @@ const write = async (
  * it was resolved is never written. Values a person corrected are kept as they are.
  */
 export const storeExtraction = (deps: PipelineDeps, input: StoreInput): Promise<StoreOutcome> =>
-  deps.entities.withLock(deps.db, async (locked) => {
+  entitiesOf(deps).withLock(deps.db, async (locked) => {
     const outcome = await writeIfLive(locked, input.documentId, (tx) => write(deps, tx, input));
     return outcome.written ? outcome.result : 'skipped';
   });

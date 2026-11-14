@@ -2,7 +2,8 @@ import { describe, expect, it } from 'vitest';
 import type { EntityProvenance } from '../../domain/provenance.ts';
 import type { RegisteredType } from '../../registry/type-store.ts';
 import type { EntityMentionInput, EntityResolver } from '../deps.ts';
-import { maskSyntheticIbans, SYNTHETIC_IBAN } from '../harness.test-helper.ts';
+import { redactSensitiveIdentifiers } from '../../entities/detect-sensitive.ts';
+import { SYNTHETIC_IBAN } from '../harness.test-helper.ts';
 import { extractionOutputSchema, REJECTED } from './extraction-schema.ts';
 import { interpret } from './interpret.ts';
 import { createQuoteIndex } from './quotes.ts';
@@ -50,7 +51,8 @@ const resolver = (refuse: readonly string[] = []) => {
         match: 'created',
         confidence: 1,
       };
-      return Promise.resolve(refuse.includes(mention.name) ? undefined : resolution);
+      const resolved = { provenance: resolution, droppedIdentifiers: 2 };
+      return Promise.resolve(refuse.includes(mention.name) ? undefined : resolved);
     },
   };
   return { mentions, entities };
@@ -60,17 +62,13 @@ const read = async (
   raw: unknown,
   type: RegisteredType = TYPE,
   refuse: string[] = [],
-  mask: (text: string) => string = maskSyntheticIbans,
+  mask: (text: string) => string = redactSensitiveIdentifiers,
 ) => {
   const { mentions, entities } = resolver(refuse);
   const output = extractionOutputSchema(type.fields).parse(raw);
   const document = await interpret(
     {
-      entities: {
-        ...entities,
-        withLock: () => Promise.reject(new Error('unused')),
-        missingIds: () => Promise.resolve([]),
-      },
+      entities,
       maskSensitive: mask,
     },
     { output, model: 'synthetic-model' },
@@ -220,6 +218,8 @@ describe('interpret', () => {
       ['Refused Name'],
     );
     expect(document.core).toEqual({ recipient: 'Bank ****6789' });
+    // What the resolver did not keep of the two mentions it resolved.
+    expect(document.droppedIdentifiers).toBe(4);
     expect(document.rejectedCore).toBe(1);
     expect(document.provenance.broker).toEqual({
       entity_id: 'ent_Synthetic Energy SA',

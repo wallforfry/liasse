@@ -8,17 +8,23 @@ import type {
 } from '../domain/enums.ts';
 import type { LanguageCode } from '../domain/languages.ts';
 import type { EntityProvenance } from '../domain/provenance.ts';
+import type { IdentifierKey } from '../entities/sensitive.ts';
+import type { SimilarityThresholds } from '../entities/similarity.ts';
 import type { Transaction } from '../ingest/existing-document.ts';
 import type { Embedder, TextModel, VisionModel } from '../models/ports.ts';
 import type { Storage } from '../storage/port.ts';
 import type { ExtractedText, ExtractTextDeps, ExtractTextInput } from '../text/types.ts';
 import type { TextProcessLimits } from './text-process/limits.ts';
 
-// The pipeline depends on entity resolution and on sensitive-identifier masking through
-// the narrow shapes below, so it compiles before that feature is merged. Each is the
-// signature of the function that is bound to it in one place, once it is:
-// `resolveEntity`, `withEntityLock` and `missingEntityIds` of `@liasse/core/entities`,
-// `findSensitiveIdentifiers` and `maskSensitiveIdentifier` of the same.
+// Entity resolution, masking and indexing are bound to the real functions in
+// `bindings.ts`. The shapes below are what the pipeline uses of them, and what a caller
+// may substitute.
+
+export interface ResolvedMention {
+  readonly provenance: EntityProvenance;
+  /** Identifiers of the mention the resolver did not keep. */
+  readonly droppedIdentifiers: number;
+}
 
 export interface EntityMentionInput {
   readonly name: string;
@@ -35,7 +41,7 @@ export interface EntityResolver {
   readonly resolve: (
     mention: EntityMentionInput,
     options: { readonly allowExternalEmbedding: boolean },
-  ) => Promise<EntityProvenance | undefined>;
+  ) => Promise<ResolvedMention | undefined>;
   /**
    * Every write of an entity id runs under this lock, after `missingIds` answered that
    * each id still exists: an id that a merge removed meanwhile must be resolved again.
@@ -123,6 +129,11 @@ export interface PipelineSettings {
   readonly maxExtractionTokens?: number;
   /** Memory and CPU the process that reads a file may use; `DEFAULT_TEXT_PROCESS_LIMITS` by default. */
   readonly textProcessLimits?: Partial<TextProcessLimits>;
+  /**
+   * Thresholds of the similarity rule of entity resolution; those of the specification
+   * by default. They were never calibrated on a real embedder.
+   */
+  readonly entitySimilarity?: SimilarityThresholds;
 }
 
 export interface PipelineDeps {
@@ -132,8 +143,12 @@ export interface PipelineDeps {
   readonly visionModel: VisionModel;
   readonly embedder: Embedder;
   readonly settings: PipelineSettings;
-  readonly entities: EntityResolver;
-  readonly maskSensitive: MaskSensitive;
+  /** `deriveIdentifierKey(config.auth.fileUrlSecret)`: the key of the identifier hashes. */
+  readonly identifierKey: IdentifierKey;
+  /** Entity resolution of `@liasse/core/entities`, with the models above, by default. */
+  readonly entities?: EntityResolver;
+  /** `redactSensitiveIdentifiers` of `@liasse/core/entities` by default. */
+  readonly maskSensitive?: MaskSensitive;
   /** `indexDocument` of `@liasse/core/search`, with the embedder above, by default. */
   readonly indexDocument?: IndexDocument;
   /** `storeKnowledge` by default. */

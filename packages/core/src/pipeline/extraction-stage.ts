@@ -1,5 +1,6 @@
 import { resolveType } from '../registry/read-types.ts';
 import { findTypeById, type RegisteredType } from '../registry/type-store.ts';
+import { entitiesOf, maskOf } from './bindings.ts';
 import type { PipelineDeps } from './deps.ts';
 import { loadDocument } from './document.ts';
 import { DocumentProcessingError, PipelineConflictError } from './errors.ts';
@@ -73,7 +74,8 @@ export const extractDocument = async (
     if (asked?.schemaKey !== schemaKey) {
       asked = { schemaKey, answer: await askModel(deps, type, budgeted, signal) };
     }
-    const fresh = await interpret(deps, asked.answer, {
+    const bound = { entities: entitiesOf(deps), maskSensitive: maskOf(deps) };
+    const fresh = await interpret(bound, asked.answer, {
       type,
       pages: budgeted.pages,
       private: document.private,

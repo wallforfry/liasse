@@ -1,5 +1,11 @@
 import { z } from 'zod';
 import { ENTITY_IDENTIFIER_TYPES } from '../../domain/enums.ts';
+import {
+  MAX_ENTITY_CONTEXT_LENGTH,
+  MAX_ENTITY_NAME_LENGTH,
+  MAX_IDENTIFIER_VALUE_LENGTH,
+  MAX_IDENTIFIERS_PER_MENTION,
+} from '../../domain/limits.ts';
 import { entityKindSchema, subjectKindSchema } from '../../domain/schemas.ts';
 import { isoDateSchema } from '../../domain/values.ts';
 import { CORE_FIELD_NAMES } from '../../registry/core-fields.ts';
@@ -13,13 +19,6 @@ export const MAX_TITLE_LENGTH = 200;
 export const MAX_SUMMARY_LENGTH = 600;
 export const MAX_FACT_LENGTH = 500;
 export const MAX_LABEL_LENGTH = 200;
-
-// The entity resolver validates a mention against its own limits; these only keep an
-// oversized model output from reaching it.
-const MAX_MENTION_NAME_LENGTH = 200;
-const MAX_MENTION_CONTEXT_LENGTH = 500;
-const MAX_MENTION_IDENTIFIERS = 20;
-const MAX_MENTION_IDENTIFIER_LENGTH = 64;
 
 /** What an element the model got wrong parses to, instead of failing the whole output. */
 export const REJECTED: unique symbol = Symbol('rejected');
@@ -44,18 +43,18 @@ export const evidenced: ValueWrapper = (value) => lenient(z.object({ value, ...e
 export const mentionIdentifierTypes = ENTITY_IDENTIFIER_TYPES.filter((type) => type !== 'other');
 
 export const entityDetailSchema = z.object({
-  name: z.string().trim().min(1).max(MAX_MENTION_NAME_LENGTH),
+  name: z.string().trim().min(1).max(MAX_ENTITY_NAME_LENGTH),
   kind: entityKindSchema.optional(),
   identifiers: z
     .array(
       z.object({
         type: z.enum(mentionIdentifierTypes),
-        value: z.string().min(1).max(MAX_MENTION_IDENTIFIER_LENGTH),
+        value: z.string().min(1).max(MAX_IDENTIFIER_VALUE_LENGTH),
       }),
     )
-    .max(MAX_MENTION_IDENTIFIERS)
+    .max(MAX_IDENTIFIERS_PER_MENTION)
     .optional(),
-  context: z.string().trim().max(MAX_MENTION_CONTEXT_LENGTH).optional(),
+  context: z.string().trim().max(MAX_ENTITY_CONTEXT_LENGTH).optional(),
 });
 export type EntityDetail = z.output<typeof entityDetailSchema>;
 
@@ -63,7 +62,7 @@ export const factSchema = z.object({
   text: z.string().trim().min(1).max(MAX_FACT_LENGTH),
   valid_from: isoDateSchema.optional(),
   valid_to: isoDateSchema.optional(),
-  entities: z.array(z.string().trim().min(1).max(MAX_MENTION_NAME_LENGTH)).optional(),
+  entities: z.array(z.string().trim().min(1).max(MAX_ENTITY_NAME_LENGTH)).optional(),
   subjects: z.array(z.string().trim().min(1).max(MAX_LABEL_LENGTH)).optional(),
   ...evidence,
 });
@@ -72,7 +71,7 @@ export type ExtractedFact = z.output<typeof factSchema>;
 export const subjectCandidateSchema = z.object({
   kind: subjectKindSchema,
   name: z.string().trim().min(1).max(MAX_LABEL_LENGTH),
-  identifier: z.string().trim().min(1).max(MAX_MENTION_IDENTIFIER_LENGTH).optional(),
+  identifier: z.string().trim().min(1).max(MAX_IDENTIFIER_VALUE_LENGTH).optional(),
 });
 export type SubjectCandidate = z.output<typeof subjectCandidateSchema>;
 

@@ -180,11 +180,7 @@ describe('correctDocument', () => {
     ['a wrong value of a type field', { fields: { tags: 'not a list' } }, 'invalid_value'],
     ['clearing a field that does not exist', { fields: { colour: null } }, 'unknown_field'],
     ['key dates', { core: { key_dates: [] } }, 'unsupported_field'],
-    [
-      'an entity the resolver refuses',
-      { core: { issuer: 'Unresolvable Ltd' } },
-      'unresolved_entity',
-    ],
+    ['an entity the resolver refuses', { core: { issuer: 'x'.repeat(201) } }, 'unresolved_entity'],
     ['a key the operation does not have', { title: 'New title' }, 'invalid_input'],
   ])('refuses %s and writes nothing', async (_case, patch, code) => {
     const type = await bill();

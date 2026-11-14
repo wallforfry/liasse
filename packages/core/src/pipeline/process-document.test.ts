@@ -283,7 +283,7 @@ describe('processDocument', () => {
 
   it('indexes with the real indexer by default, in the language of the document', async () => {
     const id = await harness.ingest('really indexed');
-    const { indexDocument: _fake, ...defaults } = depsFor();
+    const { indexDocument: _fake, entities: _recording, ...defaults } = depsFor();
     await processDocument(defaults, id, live());
     const stored = await harness.db.select().from(chunks).where(eq(chunks.documentId, id));
     expect(stored.length).toBeGreaterThan(0);
@@ -306,7 +306,8 @@ describe('processDocument', () => {
     const embedder = {
       ...defaults.embedder,
       embed: async (texts: readonly string[], kind: 'query' | 'passage') => {
-        if (kind === 'passage') await deleteDocument({ db: harness.db }, id);
+        const extracted = (await harness.document(id)).confidence !== null;
+        if (kind === 'passage' && extracted) await deleteDocument({ db: harness.db }, id);
         return defaults.embedder.embed(texts, kind);
       },
     };
@@ -327,6 +328,8 @@ describe('processDocument', () => {
         schema_version: 1,
         truncated: false,
         rejected_values: 2,
+        // The company id the model gave for the issuer, which the text does not hold.
+        dropped_identifiers: 1,
       },
     });
   });
