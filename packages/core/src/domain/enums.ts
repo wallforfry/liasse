@@ -97,3 +97,13 @@ export type SchemaLanguage = (typeof SCHEMA_LANGUAGES)[number];
 
 export const AUTO_APPLY_MODES = ['none', 'safe', 'all'] as const;
 export type AutoApplyMode = (typeof AUTO_APPLY_MODES)[number];
+
+export const SUPPORTED_MIMES = [
+  'application/pdf',
+  'image/jpeg',
+  'image/png',
+  'image/heic',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  'message/rfc822',
+] as const;
+export type SupportedMime = (typeof SUPPORTED_MIMES)[number];

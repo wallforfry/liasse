@@ -15,6 +15,7 @@ import {
   SCHEMA_LANGUAGES,
   STORAGE_DRIVERS,
   SUBJECT_KINDS,
+  SUPPORTED_MIMES,
   TYPE_STATUSES,
 } from './enums.ts';
 
@@ -34,3 +35,4 @@ export const llmProviderSchema = z.enum(LLM_PROVIDERS);
 export const embeddingProviderSchema = z.enum(EMBEDDING_PROVIDERS);
 export const autoApplyModeSchema = z.enum(AUTO_APPLY_MODES);
 export const schemaLanguageSchema = z.enum(SCHEMA_LANGUAGES);
+export const supportedMimeSchema = z.enum(SUPPORTED_MIMES);

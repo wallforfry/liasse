@@ -4,3 +4,6 @@ packages:
 
 onlyBuiltDependencies:
   - esbuild
+
+ignoredOptionalDependencies:
+  - '@napi-rs/canvas'
