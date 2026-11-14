@@ -1,35 +1,17 @@
-import { serve } from '@hono/node-server';
 import { loadConfig } from '@liasse/core/config';
-import { createDb, migrate } from '@liasse/core/db';
 import { StartupError } from '@liasse/core/domain';
-import { describeEmbeddingWindow } from '@liasse/core/embeddings';
-import { describeModelPrivacy } from '@liasse/core/models';
-import { createApp } from './app.ts';
+import { createRuntime } from './runtime/create-runtime.ts';
 import { installShutdown } from './shutdown.ts';
 
-const start = async (): Promise<void> => {
-  const config = loadConfig();
-  const { warning } = await describeModelPrivacy(config);
-  if (warning !== undefined) process.stderr.write(`${warning}\n`);
-  const windowNotice = describeEmbeddingWindow(config.embedding);
-  if (windowNotice !== undefined) process.stderr.write(`${windowNotice}\n`);
-  await migrate(config.database.url, { embeddingDim: config.embedding.dimension });
-  const database = createDb(config.database.url);
-  const server = serve(
-    {
-      fetch: createApp({ database }).fetch,
-      hostname: config.server.host,
-      port: config.server.port,
-    },
-    ({ address, port }) => {
-      process.stdout.write(`Liasse is listening on http://${address}:${String(port)}\n`);
-    },
-  );
-  installShutdown({ signals: process, server, database });
-};
-
 try {
-  await start();
+  const runtime = await createRuntime(loadConfig());
+  installShutdown({
+    signals: process,
+    stop: runtime.stop,
+    exit: (code) => {
+      process.exit(code);
+    },
+  });
 } catch (error) {
   if (!(error instanceof StartupError)) throw error;
   process.stderr.write(`${error.message}\n`);
