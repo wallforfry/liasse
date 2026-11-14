@@ -26,6 +26,9 @@ Node 22 or later and pnpm (version pinned in `package.json`). Run everything fro
 | `pnpm test:models`                 | Tests that download and run the real local embedding model       |
 | `pnpm db:up:paradedb`              | Start Postgres with ParadeDB `pg_search` (`:54331`), for BM25    |
 | `pnpm test:paradedb`               | BM25 tests, on the ParadeDB server of `pnpm db:up:paradedb`      |
+| `pnpm eval:run --label <name>`     | Evaluation run with the configured models (calls them; not CI)   |
+| `pnpm eval:compare <reports...>`   | Evaluation reports side by side, as Markdown                     |
+| `pnpm eval:calibrate`              | Entity similarity thresholds measured with the configured model  |
 | `pnpm build`                       | Compile every package with `tsc`                                 |
 | `pnpm --filter @liasse/server dev` | Run the server from source (copy `.env.example` to `.env` first) |
 | `pnpm changeset`                   | Describe a user-facing change for the changelog                  |
@@ -38,7 +41,7 @@ Before pushing, `pnpm lint`, `pnpm typecheck`, `pnpm test` and `pnpm build` must
 - `packages/core` (`@liasse/core`): everything else on the server side. No barrel: import a subpath such as `@liasse/core/config` or `@liasse/core/db`, each declared in `exports` of its `package.json`.
 - `packages/mcp` (`@liasse/mcp`): the MCP server.
 - `packages/sdk` (`@liasse/sdk`): the TypeScript client.
-- `eval` (`@liasse/eval`, private): the public evaluation set. A synthetic corpus of 50 documents with its ground truth, 20 reference questions, the generator that writes them and the scoring functions; see [`eval/README.md`](eval/README.md). Nothing of the application depends on it.
+- `eval` (`@liasse/eval`, private): the public evaluation set. A synthetic corpus of 50 documents with its ground truth, 20 reference questions, the generator that writes them, the scoring functions and the regression harness, which runs the server of `@liasse/server/runtime` on a throwaway database; see [`eval/README.md`](eval/README.md). Nothing of the application depends on it.
 - `docs/spec.md`: the design.
 
 Inside `packages/core/src`, one directory per concern. A new concern gets its own directory and its own subpath export.
