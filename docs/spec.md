@@ -389,7 +389,7 @@ Fourteen tools, over Streamable HTTP (`/mcp`, Bearer token auth) and stdio. All 
 - A tool answers compact JSON in one text content. A failure is a tool error (`isError`) whose text is `{"error": {"code", "message", …}}` with the codes of the REST API; a feature this build does not provide answers `not_implemented` where REST answers 501. An unexpected failure answers `internal_error`, and only its class is logged.
 - Arguments are checked against strict schemas derived from those of the REST API; the SDK refuses those that do not match with an "invalid arguments" tool error. `query` is the exception: the DSL reads its arguments itself, so its errors name the field, type or operator to correct, as `POST /query` does.
 - A resource that does not exist answers the JSON-RPC error -32002, with the body a tool would answer as its data.
-- `timeline`, `recall` and `get_subject` reach the knowledge layer through the same feature binding as `upcoming` and `GET /subjects`; until it is bound they answer `not_implemented`.
+- `upcoming`, `timeline`, `recall` and `get_subject` reach the knowledge layer through the features the server binds, as `GET /upcoming` and `GET /subjects` do; their answers are those of the knowledge layer. `list_pending_changes` and `apply_change` answer `not_implemented` until consolidation is bound.
 
 ## API, configuration and deployment
 

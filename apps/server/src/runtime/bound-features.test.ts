@@ -12,6 +12,13 @@ const datesSchema = z.object({
   dates: z.array(z.object({ date: z.string(), kind: z.string(), document: z.object({}) })),
 });
 
+const toolResponse = z.object({
+  result: z.object({
+    isError: z.boolean().optional(),
+    content: z.tuple([z.object({ type: z.literal('text'), text: z.string() })]),
+  }),
+});
+
 describe('the features the runtime binds', () => {
   const harness = useRuntimeHarness();
   const { start, call, upload, documentOf, jobsOf } = harness;
@@ -22,6 +29,31 @@ describe('the features the runtime binds', () => {
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify(correction),
     });
+
+  // One stateless JSON-RPC call of a tool; its answer is the JSON of its one text content.
+  const callTool = async (
+    runtime: Runtime,
+    name: string,
+    args: Readonly<Record<string, unknown>>,
+  ): Promise<unknown> => {
+    const response = await call(runtime, '/mcp', {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        accept: 'application/json, text/event-stream',
+      },
+      body: JSON.stringify({
+        jsonrpc: '2.0',
+        id: 1,
+        method: 'tools/call',
+        params: { name, arguments: args },
+      }),
+    });
+    const { result } = toolResponse.parse(await response.json());
+    expect(result.isError).toBeUndefined();
+    const body: unknown = JSON.parse(result.content[0].text);
+    return body;
+  };
 
   const linksDetected = async (id: string): Promise<boolean> =>
     (await jobsOf('detect_links', id)).some(({ status }) => status === 'succeeded');
@@ -50,6 +82,22 @@ describe('the features the runtime binds', () => {
     expect(await documentOf(id)).toEqual({ status: 'indexed', private: true });
     expect(await datesOf(runtime, '')).toEqual([]);
     expect((await call(runtime, '/changes')).status).toBe(501);
+  });
+
+  it('answers the knowledge tools of MCP from what the pipeline stored', async () => {
+    const runtime = await start();
+    const id = await upload(runtime, LETTER.lines, 'letter.pdf');
+    await waitUntil(async () => (await documentOf(id))?.status === 'indexed');
+
+    const subject = z
+      .object({ found: z.literal(true), subject: z.object({ id: z.string() }) })
+      .parse(await callTool(runtime, 'get_subject', { query: 'Home insurance contract' }));
+    expect(await callTool(runtime, 'timeline', { subject: subject.subject.id })).toMatchObject({
+      items: [{ kind: 'document', document: { id } }],
+    });
+    expect(await callTool(runtime, 'recall', { query: 'next review' })).toMatchObject({
+      facts: [{ text: 'The next review is due on 15/03/2027.', documentId: id }],
+    });
   });
 
   it('detects links once a document is indexed: a superseded contract has no date to come', async () => {
