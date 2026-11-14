@@ -1,5 +1,4 @@
 import { type ChildProcess, fork } from 'node:child_process';
-import { z } from 'zod';
 import { TextExtractionError } from '../../text/errors.ts';
 import { resolveTextLimits } from '../../text/limits.ts';
 import type { ExtractedText, ExtractTextDeps, ExtractTextInput } from '../../text/types.ts';
@@ -45,12 +44,15 @@ const spawnChild = (entry: URL, limits: TextProcessLimits): ChildProcess =>
     stdio: ['ignore', 'ignore', 'inherit', 'ipc', 'pipe'],
   });
 
-const verdictSchema = z.enum(WATCHDOG_VERDICTS);
+// The watchdog samples on while the signal it sent is on its way: the verdict can be
+// written more than once, and the first one is the reason.
+const firstVerdict = (written: string) =>
+  WATCHDOG_VERDICTS.find((verdict) => written.startsWith(verdict));
 
 // Why a child nobody ended is gone. V8 aborts the process when its heap reaches
 // `--max-old-space-size`: that is the memory limit too, enforced without the watchdog.
 const deathCause = (verdict: string, signalName: NodeJS.Signals | null): TextProcessError => {
-  const reason = verdictSchema.safeParse(verdict).data;
+  const reason = firstVerdict(verdict);
   if (reason === 'memory' || signalName === 'SIGABRT') {
     return new TextProcessError('text_memory_limit');
   }
@@ -86,9 +88,11 @@ export const extractWithProcess = async (
   const abort = (): void => {
     decide(failed(signal?.reason));
   };
+  // A message that cannot be sent means the child is gone or going. Why is only known
+  // once it has closed: its watchdog may have ended it, and has said so.
   const tell = (message: ParentMessage): void => {
     child.send(message, (error) => {
-      if (error !== null) decide(crashed());
+      if (error !== null) child.kill('SIGKILL');
     });
   };
   // A failed vision call fails the extraction, and its caller decides on a retry from

@@ -209,6 +209,12 @@ describe('a failure of the extraction', () => {
     const error = await failureOf(run(NATIVE, {}, entry));
     expect(error).toMatchObject({ code: 'text_process_crashed', retryable: true });
   });
+
+  it('takes the reason of a child from its first verdict, however it then ends', async () => {
+    const entry = new URL('./repeating-child.test-helper.ts', import.meta.url);
+    const error = await failureOf(run(NATIVE, {}, entry));
+    expect(error).toMatchObject({ code: 'text_cpu_limit', retryable: false });
+  });
 });
 
 describe('the limits of the extraction process', () => {
