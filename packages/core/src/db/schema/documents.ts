@@ -50,6 +50,12 @@ export const documents = pgTable(
     confidence: real('confidence'),
     manualFields: textArray('manual_fields'),
     subjectIds: textArray('subject_ids'),
+    // How many times the watched folder queued this document again after a failure
+    // without a person asking: bounded, so a restart loop cannot spend on it forever.
+    watchRequeues: integer('watch_requeues').notNull().default(0),
+    // Set on a tombstone once its stored file is removed. Null on a tombstone means
+    // the removal is still owed, whatever became of its job.
+    fileDeletedAt: instant('file_deleted_at'),
     ingestedAt: instant('ingested_at').notNull().defaultNow(),
     updatedAt: updatedAt(),
   },
