@@ -35,6 +35,7 @@ Before pushing, `pnpm lint`, `pnpm typecheck`, `pnpm test` and `pnpm build` must
 - `packages/core` (`@liasse/core`): everything else on the server side. No barrel: import a subpath such as `@liasse/core/config` or `@liasse/core/db`, each declared in `exports` of its `package.json`.
 - `packages/mcp` (`@liasse/mcp`): the MCP server.
 - `packages/sdk` (`@liasse/sdk`): the TypeScript client.
+- `eval` (`@liasse/eval`, private): the public evaluation set. A synthetic corpus of 50 documents with its ground truth, 20 reference questions, the generator that writes them and the scoring functions; see [`eval/README.md`](eval/README.md). Nothing of the application depends on it.
 - `docs/spec.md`: the design.
 
 Inside `packages/core/src`, one directory per concern. A new concern gets its own directory and its own subpath export.

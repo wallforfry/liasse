@@ -51,6 +51,24 @@ importers:
         specifier: ^4.13.18
         version: 4.13.18
 
+  eval:
+    devDependencies:
+      '@liasse/core':
+        specifier: workspace:*
+        version: link:../packages/core
+      '@types/heic-decode':
+        specifier: ^2.0.1
+        version: 2.0.1
+      heic-decode:
+        specifier: ^2.1.0
+        version: 2.1.0
+      jpeg-js:
+        specifier: ^0.4.4
+        version: 0.4.4
+      zod:
+        specifier: ^4.6.7
+        version: 4.6.7
+
   packages/core:
     dependencies:
       '@ai-sdk/anthropic':

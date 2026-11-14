@@ -13,10 +13,15 @@ export {
   type FakeVisionModel,
 } from './fake-vision-model.ts';
 export { type DocumentRow, insertSyntheticDocument, type NewDocumentRow } from './fixtures.ts';
-export { buildSyntheticDocx, syntheticDocumentXml } from './synthetic-docx.ts';
+export {
+  buildSyntheticDocx,
+  type SyntheticDocxOptions,
+  syntheticDocumentXml,
+} from './synthetic-docx.ts';
 export { SYNTHETIC_ENV } from './synthetic-env.ts';
 export {
   buildSyntheticPdf,
+  type SyntheticPdfJpeg,
   type SyntheticPdfOptions,
   type SyntheticPdfPage,
 } from './synthetic-pdf.ts';

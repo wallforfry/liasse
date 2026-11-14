@@ -8,3 +8,5 @@ packages/core/migrations/
 CHANGELOG.md
 # The specification is formatted by hand.
 docs/spec.md
+# Written by the corpus generator, byte for byte.
+eval/corpus/

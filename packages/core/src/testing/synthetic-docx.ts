@@ -27,11 +27,22 @@ export const syntheticDocumentXml = (bodyXml: string): string =>
     '</w:document>',
   ].join('');
 
+export interface SyntheticDocxOptions {
+  // Stores the parts without compressing them. The bytes of a deflated part depend on the
+  // zlib of the runtime; stored parts are the same everywhere, which a committed file needs.
+  readonly stored?: boolean;
+}
+
 // A minimal package that Word opens: content types, the root relationship and the main
 // document, whose body is the WordprocessingML given.
-export const buildSyntheticDocx = (bodyXml: string): Uint8Array =>
-  buildSyntheticZip([
-    { name: '[Content_Types].xml', data: utf8(CONTENT_TYPES) },
-    { name: '_rels/.rels', data: utf8(RELATIONSHIPS) },
-    { name: 'word/document.xml', data: utf8(syntheticDocumentXml(bodyXml)) },
-  ]);
+export const buildSyntheticDocx = (
+  bodyXml: string,
+  { stored = false }: SyntheticDocxOptions = {},
+): Uint8Array =>
+  buildSyntheticZip(
+    [
+      { name: '[Content_Types].xml', data: utf8(CONTENT_TYPES) },
+      { name: '_rels/.rels', data: utf8(RELATIONSHIPS) },
+      { name: 'word/document.xml', data: utf8(syntheticDocumentXml(bodyXml)) },
+    ].map((entry) => ({ ...entry, stored })),
+  );
