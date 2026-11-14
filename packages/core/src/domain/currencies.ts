@@ -1,0 +1,57 @@
+// ISO 4217, written out so that a value stored today validates the same way after any
+// runtime upgrade. It holds the codes in circulation (list one) and the withdrawn ones
+// (list three): an archive keeps documents in francs, marks and lire. `XXX` (no currency)
+// and `XTS` (testing) are left out, since neither is an amount of anything.
+// prettier-ignore
+export const CURRENCY_CODES = [
+  // In circulation.
+  'AED', 'AFN', 'ALL', 'AMD', 'AOA', 'ARS', 'AUD', 'AWG', 'AZN',
+  'BAM', 'BBD', 'BDT', 'BHD', 'BIF', 'BMD', 'BND', 'BOB', 'BOV', 'BRL', 'BSD', 'BTN', 'BWP', 'BYN', 'BZD',
+  'CAD', 'CDF', 'CHE', 'CHF', 'CHW', 'CLF', 'CLP', 'CNY', 'COP', 'COU', 'CRC', 'CUP', 'CVE', 'CZK',
+  'DJF', 'DKK', 'DOP', 'DZD',
+  'EGP', 'ERN', 'ETB', 'EUR',
+  'FJD', 'FKP',
+  'GBP', 'GEL', 'GHS', 'GIP', 'GMD', 'GNF', 'GTQ', 'GYD',
+  'HKD', 'HNL', 'HTG', 'HUF',
+  'IDR', 'ILS', 'INR', 'IQD', 'IRR', 'ISK',
+  'JMD', 'JOD', 'JPY',
+  'KES', 'KGS', 'KHR', 'KMF', 'KPW', 'KRW', 'KWD', 'KYD', 'KZT',
+  'LAK', 'LBP', 'LKR', 'LRD', 'LSL', 'LYD',
+  'MAD', 'MDL', 'MGA', 'MKD', 'MMK', 'MNT', 'MOP', 'MRU', 'MUR', 'MVR', 'MWK', 'MXN', 'MXV', 'MYR', 'MZN',
+  'NAD', 'NGN', 'NIO', 'NOK', 'NPR', 'NZD',
+  'OMR',
+  'PAB', 'PEN', 'PGK', 'PHP', 'PKR', 'PLN', 'PYG',
+  'QAR',
+  'RON', 'RSD', 'RUB', 'RWF',
+  'SAR', 'SBD', 'SCR', 'SDG', 'SEK', 'SGD', 'SHP', 'SLE', 'SOS', 'SRD', 'SSP', 'STN', 'SVC', 'SYP', 'SZL',
+  'THB', 'TJS', 'TMT', 'TND', 'TOP', 'TRY', 'TTD', 'TWD', 'TZS',
+  'UAH', 'UGX', 'USD', 'USN', 'UYI', 'UYU', 'UYW', 'UZS',
+  'VED', 'VES', 'VND', 'VUV',
+  'WST',
+  'XAF', 'XAG', 'XAU', 'XBA', 'XBB', 'XBC', 'XBD', 'XCD', 'XCG', 'XDR', 'XOF', 'XPD', 'XPF', 'XPT', 'XSU', 'XUA',
+  'YER',
+  'ZAR', 'ZMW', 'ZWG',
+  // Withdrawn.
+  'ADP', 'AFA', 'ALK', 'ANG', 'AOK', 'AON', 'AOR', 'ARA', 'ARP', 'ARY', 'ATS', 'AYM', 'AZM',
+  'BAD', 'BEC', 'BEF', 'BEL', 'BGJ', 'BGK', 'BGL', 'BGN', 'BOP', 'BRB', 'BRC', 'BRE', 'BRN', 'BRR', 'BUK', 'BYB', 'BYR',
+  'CHC', 'CNX', 'CSD', 'CSJ', 'CSK', 'CUC', 'CYP',
+  'DDM', 'DEM',
+  'ECS', 'ECV', 'EEK', 'ESA', 'ESB', 'ESP',
+  'FIM', 'FRF',
+  'GEK', 'GHC', 'GHP', 'GNE', 'GNS', 'GQE', 'GRD', 'GWE', 'GWP',
+  'HRD', 'HRK',
+  'IEP', 'ILP', 'ILR', 'ISJ', 'ITL',
+  'LAJ', 'LSM', 'LTL', 'LTT', 'LUC', 'LUF', 'LUL', 'LVL', 'LVR',
+  'MGF', 'MLF', 'MRO', 'MTL', 'MTP', 'MVQ', 'MXP', 'MZE', 'MZM',
+  'NIC', 'NLG',
+  'PEH', 'PEI', 'PES', 'PLZ', 'PTE',
+  'RHD', 'ROK', 'ROL', 'RUR',
+  'SDD', 'SDP', 'SIT', 'SKK', 'SLL', 'SRG', 'STD', 'SUR',
+  'TJR', 'TMM', 'TPE', 'TRL',
+  'UAK', 'UGS', 'UGW', 'USS', 'UYN', 'UYP',
+  'VEB', 'VEF', 'VNC',
+  'XEU', 'XFO', 'XFU', 'XRE',
+  'YDD', 'YUD', 'YUM', 'YUN',
+  'ZAL', 'ZMK', 'ZRN', 'ZRZ', 'ZWC', 'ZWD', 'ZWL', 'ZWN', 'ZWR',
+] as const;
+export type CurrencyCode = (typeof CURRENCY_CODES)[number];

@@ -38,16 +38,17 @@ Before pushing, `pnpm lint`, `pnpm typecheck`, `pnpm test` and `pnpm build` must
 
 Inside `packages/core/src`, one directory per concern. A new concern gets its own directory and its own subpath export.
 
-| Directory  | Content                                                                               |
-| ---------- | ------------------------------------------------------------------------------------- |
-| `config/`  | The Zod schema that turns `process.env` into the typed, frozen configuration          |
-| `db/`      | Drizzle schema, `createDb`, the migration runner; SQL migrations are in `migrations/` |
-| `domain/`  | Enumerations, ids, shared Zod schemas, limits                                         |
-| `models/`  | Ports for the text model, the vision model and the embedder; `providers/` adapts them |
-| `prompt/`  | Prompt helpers, starting with the untrusted-content wrapper                           |
-| `testing/` | Test database helper and deterministic model fakes                                    |
+| Directory   | Content                                                                               |
+| ----------- | ------------------------------------------------------------------------------------- |
+| `config/`   | The Zod schema that turns `process.env` into the typed, frozen configuration          |
+| `db/`       | Drizzle schema, `createDb`, the migration runner; SQL migrations are in `migrations/` |
+| `domain/`   | Enumerations, ids, shared Zod schemas, limits                                         |
+| `models/`   | Ports for the text model, the vision model and the embedder; `providers/` adapts them |
+| `prompt/`   | Prompt helpers, starting with the untrusted-content wrapper                           |
+| `registry/` | Field primitives, naming rules and the operations on the evolving type registry       |
+| `testing/`  | Test database helper and deterministic model fakes                                    |
 
-Names reserved for the features to come, created only by the change that implements them: `storage/`, `jobs/`, `ingest/`, `text/`, `embeddings/`, `search/`, `registry/`, `pipeline/`, `entities/`, `query/`, `knowledge/`, `consolidation/`, `hindsight/`.
+Names reserved for the features to come, created only by the change that implements them: `storage/`, `jobs/`, `ingest/`, `text/`, `embeddings/`, `search/`, `pipeline/`, `entities/`, `query/`, `knowledge/`, `consolidation/`, `hindsight/`.
 
 Tests sit next to the code they cover, as `*.test.ts`.
 

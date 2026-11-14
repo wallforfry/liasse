@@ -64,6 +64,8 @@ const noteColumnCount = (database: TestDatabase) =>
     `,
   );
 
+const SHIPPED = readJournal(MIGRATIONS_FOLDER).entries.length;
+
 // Later than any real migration, so these entries sort after the shipped ones.
 const BASE = Date.now() + 60_000;
 const ADD_NOTE = 'ALTER TABLE jobs ADD COLUMN note text;';
@@ -102,10 +104,10 @@ describe('migrate against the recorded history', () => {
     await migrate(database.url, { embeddingDim: 384, migrationsFolder });
 
     expect(await tableExists(database, 'merged_late')).toBe(1);
-    expect(await recordedMigrationCount(database)).toBe(3);
+    expect(await recordedMigrationCount(database)).toBe(SHIPPED + 1);
 
     await migrate(database.url, { embeddingDim: 384, migrationsFolder });
-    expect(await recordedMigrationCount(database)).toBe(3);
+    expect(await recordedMigrationCount(database)).toBe(SHIPPED + 1);
   });
 
   const ADD_COLUMN = { tag: '0002_add_note', when: BASE + 1, sql: ADD_NOTE };
@@ -128,10 +130,10 @@ describe('migrate against the recorded history', () => {
     await migrate(database.url, { embeddingDim: 384, migrationsFolder });
 
     expect(await noteColumnCount(database)).toBe(1);
-    expect(await recordedMigrationCount(database)).toBe(5);
+    expect(await recordedMigrationCount(database)).toBe(SHIPPED + 3);
 
     await migrate(database.url, { embeddingDim: 384, migrationsFolder });
-    expect(await recordedMigrationCount(database)).toBe(5);
+    expect(await recordedMigrationCount(database)).toBe(SHIPPED + 3);
   });
 
   it('applies repeated content on an empty database, once per journal entry', async () => {
@@ -143,10 +145,10 @@ describe('migrate against the recorded history', () => {
 
     await migrate(database.url, { embeddingDim: 384, migrationsFolder });
     expect(await noteColumnCount(database)).toBe(1);
-    expect(await recordedMigrationCount(database)).toBe(5);
+    expect(await recordedMigrationCount(database)).toBe(SHIPPED + 3);
 
     await migrate(database.url, { embeddingDim: 384, migrationsFolder });
-    expect(await recordedMigrationCount(database)).toBe(5);
+    expect(await recordedMigrationCount(database)).toBe(SHIPPED + 3);
   });
 
   it('refuses to run when an applied migration was given another date', async () => {
@@ -165,7 +167,7 @@ describe('migrate against the recorded history', () => {
     await expect(failure).rejects.toThrow(
       /0001_initial_schema was given another date in the journal after it was applied/,
     );
-    expect(await recordedMigrationCount(database)).toBe(2);
+    expect(await recordedMigrationCount(database)).toBe(SHIPPED);
   });
 
   it('refuses to run when an applied migration was edited', async () => {
@@ -179,14 +181,14 @@ describe('migrate against the recorded history', () => {
     const failure = migrate(database.url, { embeddingDim: 384, migrationsFolder });
     await expect(failure).rejects.toBeInstanceOf(StartupError);
     await expect(failure).rejects.toThrow(/0001_initial_schema was modified after it was applied/);
-    expect(await recordedMigrationCount(database)).toBe(2);
+    expect(await recordedMigrationCount(database)).toBe(SHIPPED);
   });
 
   it('refuses to run when the database records a migration the folder does not have', async () => {
     const database = await testDatabase({ migrate: true });
     const migrationsFolder = copyOfMigrations();
     const journal = readJournal(migrationsFolder);
-    writeJournal(migrationsFolder, { ...journal, entries: journal.entries.slice(0, 1) });
+    writeJournal(migrationsFolder, { ...journal, entries: journal.entries.slice(0, -1) });
 
     const failure = migrate(database.url, { embeddingDim: 384, migrationsFolder });
     await expect(failure).rejects.toBeInstanceOf(StartupError);
@@ -205,7 +207,7 @@ describe('migrate against the recorded history', () => {
     expect(outcomes.map((outcome) => outcome.status)).toEqual(
       Array.from({ length: 8 }, () => 'fulfilled'),
     );
-    expect(await recordedMigrationCount(database)).toBe(2);
+    expect(await recordedMigrationCount(database)).toBe(SHIPPED);
     expect(await publicTableCount(database)).toBe(11);
   });
 
