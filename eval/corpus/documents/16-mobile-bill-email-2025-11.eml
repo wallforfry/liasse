@@ -1,0 +1,61 @@
+From: Telorca <facture@telorca.example>
+To: Jane Doe <jane.doe@example.org>
+Subject: Votre facture Telorca de novembre 2025 est disponible
+Date: Mon, 03 Nov 2025 09:12:00 +0100
+Message-ID: <mobile-bill-email-2025-11@telorca.example>
+MIME-Version: 1.0
+Content-Type: multipart/mixed; boundary="liasse-eval-mobile-bill-email-2025-11"
+
+--liasse-eval-mobile-bill-email-2025-11
+Content-Type: text/plain; charset=utf-8
+Content-Transfer-Encoding: 8bit
+
+Bonjour Jane Doe,
+
+Votre facture mobile n° TM-F-2025-11-73293 du 3 novembre 2025 est disponible.
+Vous la trouverez en pièce jointe de ce message.
+
+Montant : 19,99 €
+Prélèvement prévu le 13 novembre 2025
+Ligne : 06 39 98 01 23
+
+Vous n'avez rien à faire : le montant sera prélevé automatiquement.
+
+L'équipe Telorca
+Ce message est envoyé automatiquement, merci de ne pas y répondre.
+--liasse-eval-mobile-bill-email-2025-11
+Content-Type: application/pdf; name="facture-TM-F-2025-11-73293.pdf"
+Content-Disposition: attachment; filename="facture-TM-F-2025-11-73293.pdf"
+Content-Transfer-Encoding: base64
+
+JVBERi0xLjQKMSAwIG9iago8PCAvVHlwZSAvQ2F0YWxvZyAvUGFnZXMgMiAwIFIgPj4KZW5kb2Jq
+CjIgMCBvYmoKPDwgL1R5cGUgL1BhZ2VzIC9LaWRzIFs0IDAgUl0gL0NvdW50IDEgPj4KZW5kb2Jq
+CjMgMCBvYmoKPDwgL1R5cGUgL0ZvbnQgL1N1YnR5cGUgL1R5cGUxIC9CYXNlRm9udCAvSGVsdmV0
+aWNhIC9FbmNvZGluZyAvV2luQW5zaUVuY29kaW5nID4+CmVuZG9iago0IDAgb2JqCjw8IC9UeXBl
+IC9QYWdlIC9QYXJlbnQgMiAwIFIgL01lZGlhQm94IFswIDAgNTk1IDg0Ml0gL0NvbnRlbnRzIDUg
+MCBSIC9SZXNvdXJjZXMgPDwgL0ZvbnQgPDwgL0YxIDMgMCBSID4+IC9YT2JqZWN0IDw8IC9JbTAg
+NiAwIFIgPj4gPj4gPj4KZW5kb2JqCjUgMCBvYmoKPDwgIC9MZW5ndGggODcyID4+CnN0cmVhbQpC
+VAovRjEgMTIgVGYKMTQgVEwKNTAgNzgyIFRkCihURUxPUkNBIFNBUykgVGogVCoKKDI3IGF2ZW51
+ZSBkZXMgQ+JibGllcnMsIDk5NDEwIFNhaW50ZS1Pcm1lKSBUaiBUKgooU0lSRU4gMjkxNTQxNzc5
+IC0gU2VydmljZSBjbGllbnRzIDogMDEgOTkgMDAgNjMgMTApIFRqIFQqCigpIFRqIFQqCihGQUNU
+VVJFIE1PQklMRSBOsCBUTS1GLTIwMjUtMTEtNzMyOTMpIFRqIFQqCihEYXRlIGRlIGZhY3R1cmUg
+OiAzIG5vdmVtYnJlIDIwMjUpIFRqIFQqCigpIFRqIFQqCihUaXR1bGFpcmUgOiBNbWUgSmFuZSBE
+b2UpIFRqIFQqCihS6WbpcmVuY2UgY2xpZW50IDogVDM2MTA4MzMwIC0gQ29udHJhdCBusCBUTS01
+NTYyMTIxMykgVGogVCoKKExpZ25lIDogMDYgMzkgOTggMDEgMjMgLSBGb3JmYWl0IEhvcml6b24g
+NjAgR28pIFRqIFQqCigpIFRqIFQqCihQ6XJpb2RlIGZhY3R1cullIDogZHUgMWVyIG9jdG9icmUg
+MjAyNSBhdSAzMSBvY3RvYnJlIDIwMjUpIFRqIFQqCigpIFRqIFQqCihGb3JmYWl0IEhvcml6b24g
+NjAgR28gOiAxOSw5OSCAKSBUaiBUKgooQ29tbXVuaWNhdGlvbnMgaG9ycyBmb3JmYWl0IDogMCww
+MCCAKSBUaiBUKgooVG90YWwgVFRDIOAgcGF5ZXIgOiAxOSw5OSCAKSBUaiBUKgooKSBUaiBUKgoo
+UHLpbOh2ZW1lbnQgbGUgMTMgbm92ZW1icmUgMjAyNSBzdXIgbGUgY29tcHRlIHNlIHRlcm1pbmFu
+dCBwYXIgOTMyMi4pIFRqIFQqCihMZSBk6XRhaWwgZGUgdm9zIGNvbW11bmljYXRpb25zIGVzdCBk
+aXNwb25pYmxlIGRhbnMgdm90cmUgZXNwYWNlIGNsaWVudC4pIFRqIFQqCigpIFRqIFQqCihUZWxv
+cmNhIFNBUyAtIHNlcnZpY2UuY2xpZW50c0B0ZWxvcmNhLmV4YW1wbGUgLSB3d3cudGVsb3JjYS5l
+eGFtcGxlKSBUaiBUKgpFVAplbmRzdHJlYW0KZW5kb2JqCjYgMCBvYmoKPDwgL1R5cGUgL1hPYmpl
+Y3QgL1N1YnR5cGUgL0ltYWdlIC9XaWR0aCA4IC9IZWlnaHQgOCAvQ29sb3JTcGFjZSAvRGV2aWNl
+R3JheSAvQml0c1BlckNvbXBvbmVudCA4IC9MZW5ndGggNjQgPj4Kc3RyZWFtCgAECAwQFBgcICQo
+LDA0ODxAREhMUFRYXGBkaGxwdHh8gISIjJCUmJygpKissLS4vMDEyMzQ1Njc4OTo7PD0+PwKZW5k
+c3RyZWFtCmVuZG9iagp4cmVmCjAgNwowMDAwMDAwMDAwIDY1NTM1IGYgCjAwMDAwMDAwMDkgMDAw
+MDAgbiAKMDAwMDAwMDA1OCAwMDAwMCBuIAowMDAwMDAwMTE1IDAwMDAwIG4gCjAwMDAwMDAyMTIg
+MDAwMDAgbiAKMDAwMDAwMDM2NCAwMDAwMCBuIAowMDAwMDAxMjg4IDAwMDAwIG4gCnRyYWlsZXIK
+PDwgL1NpemUgNyAvUm9vdCAxIDAgUiA+PgpzdGFydHhyZWYKMTQ5NgolJUVPRgo=
+--liasse-eval-mobile-bill-email-2025-11--
