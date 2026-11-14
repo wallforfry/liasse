@@ -29,6 +29,7 @@ describe('loadConfig', () => {
       embedding: { provider: 'local', model: undefined, dimension: 384 },
       pipeline: {
         watchDir: undefined,
+        maxFileSize: 52_428_800,
         autoApply: 'safe',
         confidenceThreshold: 0.7,
         maxNewTypesPerDay: 5,
@@ -133,25 +134,44 @@ describe('loadConfig', () => {
     expect(Object.isFrozen(config.auth.apiTokens)).toBe(true);
   });
 
-  it('accepts the s3 driver with a bucket', () => {
-    const config = loadConfig({ ...SYNTHETIC_ENV, STORAGE_DRIVER: 's3', S3_BUCKET: 'liasse' });
+  it('accepts the s3 driver with a bucket and a key pair', () => {
+    const config = loadConfig({
+      ...SYNTHETIC_ENV,
+      STORAGE_DRIVER: 's3',
+      S3_BUCKET: 'liasse',
+      S3_ACCESS_KEY_ID: 'synthetic-id',
+      S3_SECRET_ACCESS_KEY: 'synthetic-secret',
+    });
     expect(config.storage).toEqual({
       driver: 's3',
       bucket: 'liasse',
       region: undefined,
       endpoint: undefined,
-      accessKeyId: undefined,
-      secretAccessKey: undefined,
+      accessKeyId: 'synthetic-id',
+      secretAccessKey: 'synthetic-secret',
     });
   });
 
-  it('requires a bucket and paired credentials for the s3 driver', () => {
-    expect(
-      problemsOf({ ...SYNTHETIC_ENV, STORAGE_DRIVER: 's3', S3_ACCESS_KEY_ID: 'synthetic-id' }),
-    ).toEqual([
+  it('requires a bucket and a key pair for the s3 driver', () => {
+    expect(problemsOf({ ...SYNTHETIC_ENV, STORAGE_DRIVER: 's3' })).toEqual([
       'S3_BUCKET: required when STORAGE_DRIVER=s3',
-      'S3_SECRET_ACCESS_KEY: S3_ACCESS_KEY_ID and S3_SECRET_ACCESS_KEY must be set together',
+      'S3_ACCESS_KEY_ID: required when STORAGE_DRIVER=s3',
+      'S3_SECRET_ACCESS_KEY: required when STORAGE_DRIVER=s3',
     ]);
+    expect(
+      problemsOf({
+        ...SYNTHETIC_ENV,
+        STORAGE_DRIVER: 's3',
+        S3_BUCKET: 'liasse',
+        S3_ACCESS_KEY_ID: 'synthetic-id',
+      }),
+    ).toEqual(['S3_SECRET_ACCESS_KEY: required when STORAGE_DRIVER=s3']);
+  });
+
+  it('caps an ingested file at 50 MB unless MAX_FILE_SIZE says otherwise', () => {
+    expect(loadConfig(SYNTHETIC_ENV).pipeline.maxFileSize).toBe(52_428_800);
+    expect(loadConfig({ ...SYNTHETIC_ENV, MAX_FILE_SIZE: '1024' }).pipeline.maxFileSize).toBe(1024);
+    expect(problemsOf({ ...SYNTHETIC_ENV, MAX_FILE_SIZE: '0' })).toHaveLength(1);
   });
 
   it('requires a model, a key and a base URL for remote embedding providers', () => {

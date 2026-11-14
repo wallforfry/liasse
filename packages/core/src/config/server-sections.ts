@@ -27,28 +27,26 @@ const storageFields = z.object({
   S3_SECRET_ACCESS_KEY: text.optional(),
 });
 
-const s3CredentialProblems = (env: z.output<typeof storageFields>): readonly CrossFieldProblem[] =>
-  (env.S3_ACCESS_KEY_ID === undefined) === (env.S3_SECRET_ACCESS_KEY === undefined)
-    ? []
-    : [
-        {
-          key: env.S3_ACCESS_KEY_ID === undefined ? 'S3_ACCESS_KEY_ID' : 'S3_SECRET_ACCESS_KEY',
-          message: 'S3_ACCESS_KEY_ID and S3_SECRET_ACCESS_KEY must be set together',
-        },
-      ];
+const S3_REQUIRED_KEYS = ['S3_BUCKET', 'S3_ACCESS_KEY_ID', 'S3_SECRET_ACCESS_KEY'] as const;
+
+// The s3 driver signs its requests itself and reads no ambient credential (instance
+// role, shared profile), hence the explicit key pair.
+const missingS3Settings = (env: z.output<typeof storageFields>): readonly CrossFieldProblem[] =>
+  S3_REQUIRED_KEYS.filter((key) => env[key] === undefined).map((key) => ({
+    key,
+    message: 'required when STORAGE_DRIVER=s3',
+  }));
 
 export const storageSection = storageFields.transform((env, ctx) => {
   if (env.STORAGE_DRIVER === 'fs') {
     return Object.freeze({ driver: env.STORAGE_DRIVER, path: env.STORAGE_PATH });
   }
-  const credentialProblems = s3CredentialProblems(env);
-  if (env.S3_BUCKET === undefined || credentialProblems.length > 0) {
-    reportProblems(ctx, [
-      ...(env.S3_BUCKET === undefined
-        ? [{ key: 'S3_BUCKET', message: 'required when STORAGE_DRIVER=s3' }]
-        : []),
-      ...credentialProblems,
-    ]);
+  if (
+    env.S3_BUCKET === undefined ||
+    env.S3_ACCESS_KEY_ID === undefined ||
+    env.S3_SECRET_ACCESS_KEY === undefined
+  ) {
+    reportProblems(ctx, missingS3Settings(env));
     return z.NEVER;
   }
   return Object.freeze({

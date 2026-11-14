@@ -3,9 +3,15 @@ import { DEFAULT_MAX_VISION_PAGES } from '../domain/limits.ts';
 import { autoApplyModeSchema, schemaLanguageSchema } from '../domain/schemas.ts';
 import { decimal, integer, text } from './fields.ts';
 
+const MEBIBYTE = 1024 * 1024;
+const DEFAULT_MAX_FILE_SIZE = 50 * MEBIBYTE;
+// An ingested file is hashed and sniffed in memory, and a Node Buffer stops at 2 GiB.
+const MAX_FILE_SIZE_LIMIT = 2048 * MEBIBYTE - 1;
+
 export const pipelineSection = z
   .object({
     WATCH_DIR: text.optional(),
+    MAX_FILE_SIZE: integer(1, MAX_FILE_SIZE_LIMIT).default(DEFAULT_MAX_FILE_SIZE),
     AUTO_APPLY: autoApplyModeSchema.default('safe'),
     CONFIDENCE_THRESHOLD: decimal(0, 1).default(0.7),
     MAX_NEW_TYPES_PER_DAY: integer(0, 1000).default(5),
@@ -16,6 +22,7 @@ export const pipelineSection = z
   .transform((env) =>
     Object.freeze({
       watchDir: env.WATCH_DIR,
+      maxFileSize: env.MAX_FILE_SIZE,
       autoApply: env.AUTO_APPLY,
       confidenceThreshold: env.CONFIDENCE_THRESHOLD,
       maxNewTypesPerDay: env.MAX_NEW_TYPES_PER_DAY,
