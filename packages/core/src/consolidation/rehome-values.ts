@@ -20,10 +20,17 @@ export interface Rehoming {
 }
 
 interface Entry {
+  /** The name the value has before the change: its provenance and mark are under it. */
   readonly name: string;
   readonly value: unknown;
-  readonly destination: string;
+  readonly manual: boolean;
+  /** The field it becomes, when the new schema has that field and the value fits it. */
+  readonly field: string | undefined;
 }
+
+type Placement =
+  | { readonly entry: Entry; readonly section: 'fields' | 'extra'; readonly key: string }
+  | { readonly entry: Entry; readonly section: 'dropped' };
 
 const fits = (fields: TypeFields, name: string, value: unknown): boolean => {
   const definition = ownValue(fields, name);
@@ -33,51 +40,91 @@ const fits = (fields: TypeFields, name: string, value: unknown): boolean => {
   );
 };
 
-const renameIn = (record: Values, from: string, to: string): Values => {
-  const value = ownValue(record, from);
-  if (value === undefined || from === to) return record;
-  return {
-    ...Object.fromEntries(Object.entries(record).filter(([name]) => name !== from)),
-    [to]: value,
-  };
-};
+// Manual values first. Within each standing, a value that fits no field comes before one
+// that does, so it keeps its own name and no renamed value lands on it; then a value that
+// is already a field comes before one of `extra`.
+const rank = ({ manual, field }: Entry, fromFields: boolean): number =>
+  (manual ? 0 : 4) + (field === undefined ? 0 : 2) + (fromFields ? 0 : 1);
+
+const place = (entries: readonly Entry[], reserved: ReadonlySet<string>): readonly Placement[] =>
+  entries.reduce<{ readonly taken: ReadonlySet<string>; readonly placed: readonly Placement[] }>(
+    ({ taken, placed }, entry) => {
+      const free = (key: string) => !taken.has(key);
+      const placement: Placement =
+        entry.field !== undefined && free(entry.field)
+          ? { entry, section: 'fields', key: entry.field }
+          : free(entry.name)
+            ? { entry, section: 'extra', key: entry.name }
+            : { entry, section: 'dropped' };
+      return {
+        taken: placement.section === 'dropped' ? taken : new Set([...taken, placement.key]),
+        placed: [...placed, placement],
+      };
+    },
+    { taken: reserved, placed: [] },
+  ).placed;
+
+const sectionOf = (placements: readonly Placement[], section: 'fields' | 'extra'): Values =>
+  Object.fromEntries(
+    placements.flatMap((placement) =>
+      placement.section === section ? [[placement.key, placement.entry.value] as const] : [],
+    ),
+  );
 
 /**
- * Moves the values of a document to the schema a change gives its type. A value becomes
- * the field it is renamed to (or keeps its name) when the schema has that field and the
- * value fits its definition; any other value goes to `extra` under the name it had, so
- * nothing is lost. Provenance and the manual mark follow the value: a value a person
- * corrected stays protected under its new name, and no extraction writes it again.
+ * Moves the values of a document to the schema a change gives its type, in one pass from
+ * the name each value had: a value becomes the field it is renamed to (or keeps its name)
+ * when the schema has that field and the value fits it, and goes to `extra` under its own
+ * name otherwise. Its provenance entry and its manual mark go with it, under the key it
+ * ends at; no key is both a field and a key of `extra`.
  *
- * Two values for one field: a value that is already a field wins over one from `extra`,
- * and the first one met otherwise; the other stays in `extra`.
+ * On a collision a value a person corrected wins, and a mark of a field a person cleared
+ * keeps its name free. An extracted value that loses its own name to a manual one is
+ * dropped: the correction stands for it, and the re-extraction can give it back.
  */
 export const rehomeValues = (document: DocumentValues, { fields, renames }: Rehoming) => {
-  const entries: readonly Entry[] = [
-    ...Object.entries(document.fields),
-    ...Object.entries(document.extra),
-  ].map(([name, value]) => ({ name, value, destination: renames.get(name) ?? name }));
-  const placed = entries.reduce<readonly Entry[]>(
-    (taken, entry) =>
-      fits(fields, entry.destination, entry.value) &&
-      !taken.some(({ destination }) => destination === entry.destination)
-        ? [...taken, entry]
-        : taken,
-    [],
+  const isManual = (name: string) => document.manualFields.includes(name);
+  const entryOf = ([name, value]: readonly [string, unknown]): Entry => {
+    const destination = renames.get(name) ?? name;
+    return {
+      name,
+      value,
+      manual: isManual(name),
+      field: fits(fields, destination, value) ? destination : undefined,
+    };
+  };
+  const ranked = [
+    ...Object.entries(document.fields).map((pair) => ({ entry: entryOf(pair), fromFields: true })),
+    ...Object.entries(document.extra).map((pair) => ({ entry: entryOf(pair), fromFields: false })),
+  ]
+    .toSorted((a, b) => rank(a.entry, a.fromFields) - rank(b.entry, b.fromFields))
+    .map(({ entry }) => entry);
+  const valueNames = new Set(ranked.map(({ name }) => name));
+  const cleared = new Set(document.manualFields.filter((name) => !valueNames.has(name)));
+  const placements = place(ranked, cleared);
+  const keyOf = new Map(
+    placements.flatMap((placement) =>
+      placement.section === 'dropped' ? [] : [[placement.entry.name, placement.key] as const],
+    ),
   );
-  const isPlaced = (entry: Entry) => placed.includes(entry);
-  const moved = placed.filter(({ name, destination }) => name !== destination);
   return {
-    fields: Object.fromEntries(placed.map(({ destination, value }) => [destination, value])),
-    extra: Object.fromEntries(
-      entries.filter((entry) => !isPlaced(entry)).map(({ name, value }) => [name, value]),
-    ),
-    provenance: moved.reduce(
-      (provenance, { name, destination }) => renameIn(provenance, name, destination),
-      document.provenance,
-    ),
-    manualFields: document.manualFields.map(
-      (name) => moved.find((entry) => entry.name === name)?.destination ?? name,
-    ),
+    fields: sectionOf(placements, 'fields'),
+    extra: sectionOf(placements, 'extra'),
+    provenance: {
+      ...Object.fromEntries(
+        Object.entries(document.provenance).filter(([name]) => !valueNames.has(name)),
+      ),
+      ...Object.fromEntries(
+        [...keyOf].flatMap(([name, key]) => {
+          const entry = ownValue(document.provenance, name);
+          return entry === undefined ? [] : [[key, entry] as const];
+        }),
+      ),
+    },
+    manualFields: document.manualFields.flatMap((name) => {
+      if (!valueNames.has(name)) return [name];
+      const key = keyOf.get(name);
+      return key === undefined ? [] : [key];
+    }),
   };
 };

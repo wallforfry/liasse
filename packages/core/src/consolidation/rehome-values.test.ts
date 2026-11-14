@@ -70,4 +70,105 @@ describe('rehomeValues', () => {
       extra: { customer_no: 'C-2' },
     });
   });
+
+  const QUOTE_A = { ...EXTRACTED, quote: 'quote of a' };
+  const QUOTE_B = { ...EXTRACTED, quote: 'quote of b' };
+  const TEXT = { type: 'text' } as const;
+
+  it('follows a chain of renames with each provenance and mark under its own value', () => {
+    const moved = rehomeValues(
+      {
+        fields: { a: 'one', b: 'two' },
+        extra: {},
+        provenance: { a: QUOTE_A, b: MANUAL_PROVENANCE },
+        manualFields: ['b'],
+      },
+      {
+        fields: { b: TEXT, c: TEXT },
+        renames: new Map([
+          ['a', 'b'],
+          ['b', 'c'],
+        ]),
+      },
+    );
+    expect(moved).toEqual({
+      fields: { b: 'one', c: 'two' },
+      extra: {},
+      provenance: { b: QUOTE_A, c: MANUAL_PROVENANCE },
+      manualFields: ['c'],
+    });
+  });
+
+  it('swaps two values with their provenance', () => {
+    const moved = rehomeValues(
+      {
+        fields: { a: 'one', b: 'two' },
+        extra: {},
+        provenance: { a: QUOTE_A, b: QUOTE_B },
+        manualFields: ['a'],
+      },
+      {
+        fields: { a: TEXT, b: TEXT },
+        renames: new Map([
+          ['a', 'b'],
+          ['b', 'a'],
+        ]),
+      },
+    );
+    expect(moved).toEqual({
+      fields: { b: 'one', a: 'two' },
+      extra: {},
+      provenance: { b: QUOTE_A, a: QUOTE_B },
+      manualFields: ['b'],
+    });
+  });
+
+  it('never lands a renamed value on the name of a manual value kept in extra', () => {
+    const moved = rehomeValues(
+      {
+        fields: { a: 'extracted' },
+        extra: { b: 42 },
+        provenance: { a: QUOTE_A, b: MANUAL_PROVENANCE },
+        manualFields: ['b'],
+      },
+      { fields: { b: TEXT }, renames: new Map([['a', 'b']]) },
+    );
+    expect(moved).toEqual({
+      fields: {},
+      extra: { a: 'extracted', b: 42 },
+      provenance: { a: QUOTE_A, b: MANUAL_PROVENANCE },
+      manualFields: ['b'],
+    });
+  });
+
+  it('gives the field to a manual variant over an extracted value', () => {
+    const moved = rehomeValues(
+      {
+        fields: {},
+        extra: { customer_number: 'C-1', customer_no: 'C-MANUAL' },
+        provenance: { customer_number: QUOTE_A, customer_no: MANUAL_PROVENANCE },
+        manualFields: ['customer_no'],
+      },
+      { fields: { customer_number: TEXT }, renames: new Map([['customer_no', 'customer_number']]) },
+    );
+    expect(moved).toEqual({
+      fields: { customer_number: 'C-MANUAL' },
+      extra: {},
+      provenance: { customer_number: MANUAL_PROVENANCE },
+      manualFields: ['customer_number'],
+    });
+  });
+
+  it('keeps the name of a field a person cleared free of any renamed value', () => {
+    const moved = rehomeValues(
+      { fields: { a: 'one' }, extra: {}, provenance: { a: QUOTE_A }, manualFields: ['b'] },
+      { fields: { b: TEXT }, renames: new Map([['a', 'b']]) },
+    );
+    expect(moved).toEqual({
+      fields: {},
+      extra: { a: 'one' },
+      provenance: { a: QUOTE_A },
+      manualFields: ['b'],
+    });
+  });
 });
