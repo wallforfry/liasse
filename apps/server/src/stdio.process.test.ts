@@ -122,7 +122,22 @@ const withStdioServer = async (
   const stdout: string[] = [];
   const stderr: string[] = [];
   const errors: Error[] = [];
-  child.stdout.on('data', (chunk: Buffer) => stdout.push(chunk.toString('utf8')));
+  // Rejected as soon as a whole line of stdout is not the protocol: a stray line can break
+  // the client before it answers, and the test must then name the line, not time out.
+  const corruption: { reject?: (error: Error) => void } = {};
+  const corrupted = new Promise<never>((_, reject) => {
+    corruption.reject = reject;
+  });
+  corrupted.catch(() => undefined);
+  const guarded = <Result>(work: Promise<Result>): Promise<Result> =>
+    Promise.race([work, corrupted]);
+  child.stdout.on('data', (chunk: Buffer) => {
+    stdout.push(chunk.toString('utf8'));
+    const written = stdout.join('');
+    const [foreign] = foreignLines(written.slice(0, written.lastIndexOf('\n') + 1));
+    if (foreign !== undefined)
+      corruption.reject?.(new Error(`stdout carries more than the protocol: ${foreign}`));
+  });
   child.stderr.setEncoding('utf8').on('data', (chunk: string) => stderr.push(chunk));
   const closed = once(child, 'close');
   try {
@@ -131,13 +146,13 @@ const withStdioServer = async (
       return stderr.join('').includes(SERVING);
     });
     const client = new Client({ name: 'liasse-test', version: '0.0.0' });
-    await client.connect(childTransport(child, errors));
+    await guarded(client.connect(childTransport(child, errors)));
     await use({
       client,
       database,
       callTool: async (name, args = {}) => {
         const result = CallToolResultSchema.parse(
-          await client.callTool({ name, arguments: { ...args } }),
+          await guarded(client.callTool({ name, arguments: { ...args } })),
         );
         const [{ text }] = textAnswer.parse(result).content;
         const body: unknown = JSON.parse(text);
@@ -146,7 +161,7 @@ const withStdioServer = async (
       end: async () => {
         const exited = once(child, 'close', { signal: AbortSignal.timeout(STEP_TIMEOUT_MS) });
         await client.close();
-        const [code] = z.tuple([z.number().nullable(), z.unknown()]).parse(await exited);
+        const [code] = z.tuple([z.number().nullable(), z.unknown()]).parse(await guarded(exited));
         return code;
       },
       stdout: () => stdout.join(''),
