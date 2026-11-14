@@ -126,3 +126,5 @@ export const MAX_RECALL_RELATED = 10;
 export const MAX_SUBJECT_DOCUMENTS = 50;
 export const MAX_SUBJECT_NEXT_DATES = 5;
 export const MAX_SUBJECT_SUGGESTIONS = 5;
+export const DEFAULT_SUBJECT_LIST_LIMIT = 100;
+export const MAX_SUBJECT_LIST_LIMIT = 500;
