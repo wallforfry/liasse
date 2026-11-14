@@ -1,6 +1,7 @@
 import type { Database } from '../db/client.ts';
 import { isVersionAtLeast } from '../db/extension-version.ts';
-import { ensureBm25Index, rankByBm25 } from './bm25.ts';
+import { rankByBm25 } from './bm25.ts';
+import { ensureBm25Index } from './bm25-index.ts';
 import {
   installedPgSearchVersion,
   MIN_PG_SEARCH_VERSION,

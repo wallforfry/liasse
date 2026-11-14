@@ -1,7 +1,7 @@
 import { sql } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createTestDatabase, type TestDatabase } from '../testing/test-database.ts';
-import { BM25_INDEX } from './bm25.ts';
+import { BM25_INDEX } from './bm25-index.ts';
 import { prepareFullTextRanking } from './full-text-ranking.ts';
 import { installedPgSearchVersion } from './pg-search.ts';
 import { rankByFullText } from './rankers.ts';
@@ -21,6 +21,13 @@ describe('prepareFullTextRanking without pg_search', () => {
 
   const indexExists = async (): Promise<boolean> =>
     (await database.db.execute(sql`SELECT to_regclass(${BM25_INDEX}) AS index`))[0]?.index !== null;
+
+  it('connects without any pg_search setting, which a pooler may refuse', async () => {
+    const [row] = await database.db.execute(
+      sql`SELECT current_setting('paradedb.planner_warnings', true) AS setting`,
+    );
+    expect(row?.setting).toBeNull();
+  });
 
   it('reads no pg_search version', async () => {
     expect(await installedPgSearchVersion(database.db)).toBeUndefined();

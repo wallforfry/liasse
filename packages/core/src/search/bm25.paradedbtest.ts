@@ -1,9 +1,14 @@
 import { eq, sql } from 'drizzle-orm';
+import { drizzle } from 'drizzle-orm/postgres-js';
+import postgres from 'postgres';
+import { z } from 'zod';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { documents } from '../db/schema/documents.ts';
+import * as schema from '../db/schema/index.ts';
 import { createFakeEmbedder } from '../testing/fake-embedder.ts';
 import { createTestDatabase, type TestDatabase } from '../testing/test-database.ts';
-import { BM25_INDEX, rankByBm25 } from './bm25.ts';
+import { rankByBm25 } from './bm25.ts';
+import { BM25_INDEX } from './bm25-index.ts';
 import { CORPUS, type CorpusDocument, seedCorpus, type SeededCorpus } from './corpus.fixture.ts';
 import { documentFilter } from './filters.ts';
 import { prepareFullTextRanking } from './full-text-ranking.ts';
@@ -20,6 +25,18 @@ const extra = (key: string, text: string): CorpusDocument => ({
   language: null,
   pages: [text],
 });
+
+const indexStateRows = z.tuple([z.object({ oid: z.string(), comment: z.string().nullable() })]);
+
+const indexState = async (database: TestDatabase) =>
+  indexStateRows.parse([
+    ...(await database.db.execute(sql`
+      SELECT to_regclass(${BM25_INDEX})::oid::text AS oid,
+        obj_description(to_regclass(${BM25_INDEX}), 'pg_class') AS comment
+    `)),
+  ])[0];
+
+const SIGNATURE = /^[0-9a-f]{32}$/;
 
 const indexAccessMethod = async (database: TestDatabase): Promise<unknown> =>
   (
@@ -64,13 +81,6 @@ describe('BM25 ranking through ParadeDB pg_search', () => {
     expect(await installedPgSearchVersion(database.db)).toMatch(/^\d+\.\d+\.\d+$/);
   });
 
-  it('connects with the planner warnings of pg_search off', async () => {
-    const [row] = await database.db.execute(
-      sql`SELECT lower(current_setting('paradedb.planner_warnings')) AS setting`,
-    );
-    expect(row?.setting).toBe('off');
-  });
-
   it('chooses BM25 and creates its index, once', async () => {
     expect(await indexAccessMethod(database)).toBeUndefined();
     const version = await installedPgSearchVersion(database.db);
@@ -80,6 +90,7 @@ describe('BM25 ranking through ParadeDB pg_search', () => {
       notice: `Full text is ranked by BM25 (pg_search ${String(version)}).`,
     });
     expect(await indexAccessMethod(database)).toBe('paradedb');
+    expect((await indexState(database)).comment).toMatch(SIGNATURE);
     expect((await prepareFullTextRanking(database.db)).ranker).toBe(rankByBm25);
   });
 
@@ -160,12 +171,67 @@ describe('BM25 ranking through ParadeDB pg_search', () => {
       expect(await keysBy(rankByBm25, 'basalt')).toEqual([]);
     });
 
+    it('ranks without a planner warning and leaves no pg_search setting behind', async () => {
+      const warnings: string[] = [];
+      const client = postgres(database.url, {
+        max: 1,
+        onnotice: (notice) => {
+          if (notice.severity === 'WARNING') warnings.push(notice.message ?? '');
+        },
+      });
+      try {
+        const observed = drizzle(client, { schema });
+        expect(await rankByBm25(observed, await request('facture septembre'))).toHaveLength(1);
+        expect(warnings).toEqual([]);
+        const [row] = await observed.execute(
+          sql`SELECT lower(current_setting('paradedb.planner_warnings')) AS setting`,
+        );
+        expect(row?.setting).toBe('warning');
+        // The same connection does report what pg_search warns about outside BM25 ranking.
+        await observed.execute(sql`SELECT DISTINCT language FROM chunks`);
+        expect(warnings).toHaveLength(1);
+      } finally {
+        await client.end();
+      }
+    });
+
     it('serves hybrid search', async () => {
       const hits = await search(
         { db: database.db, embedder: createFakeEmbedder(), fullText: rankByBm25 },
         { query: 'facture septembre' },
       );
       expect(hits[0]?.title).toBe(CORPUS.find((document) => document.key === 'energy-09')?.title);
+    });
+
+    it('builds the index again when what its lexemes come from changes, and only then', async () => {
+      const built = await indexState(database);
+      await prepareFullTextRanking(database.db);
+      expect(await indexState(database)).toEqual(built);
+      // The same lexemes from another body, positions being unique: only the definition differs.
+      await database.db.execute(sql`
+        CREATE OR REPLACE FUNCTION liasse_bm25_document(language text, content text) RETURNS text
+          LANGUAGE sql IMMUTABLE PARALLEL SAFE
+          RETURN (
+            SELECT string_agg(entries.lexeme, ' ' ORDER BY occurrences.position, entries.lexeme)
+            FROM unnest(public.liasse_tsvector(language, content)) AS entries,
+              unnest(entries.positions) AS occurrences(position)
+          )
+      `);
+      await prepareFullTextRanking(database.db);
+      const rebuilt = await indexState(database);
+      expect(rebuilt.oid).not.toBe(built.oid);
+      expect(rebuilt.comment).toMatch(SIGNATURE);
+      expect(rebuilt.comment).not.toBe(built.comment);
+      expect(await keysBy(rankByBm25, 'facture septembre')).toEqual(['energy-09']);
+    });
+
+    it('builds again an index that carries no signature', async () => {
+      const built = await indexState(database);
+      await database.db.execute(sql.raw(`COMMENT ON INDEX ${BM25_INDEX} IS NULL`));
+      await prepareFullTextRanking(database.db);
+      const rebuilt = await indexState(database);
+      expect(rebuilt.oid).not.toBe(built.oid);
+      expect(rebuilt.comment).toBe(built.comment);
     });
   });
 });
