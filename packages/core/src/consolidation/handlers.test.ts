@@ -1,5 +1,6 @@
 import { eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { createDb } from '../db/client.ts';
 import { jobs } from '../db/schema/jobs.ts';
 import { createFakeTextModel } from '../testing/fake-text-model.ts';
 import { createTestDatabase, type TestDatabase } from '../testing/test-database.ts';
@@ -52,6 +53,29 @@ describe('the consolidate handler', () => {
       expect(await typeOf(db(), type.id)).toMatchObject({ status: 'provisional' });
     });
     await run('batch');
+    expect(await typeOf(db(), type.id)).toMatchObject({ status: 'stable' });
+  });
+
+  it('lets go of the run lock after a run, so a run of another process runs next', async () => {
+    const type = await seedType(db(), { slug: 'rent_receipt' });
+    for (let index = 0; index < 5; index += 1) await seedDocument(db(), type.id);
+    await withConsolidationRunLock(db(), () => Promise.resolve());
+
+    const other = createDb(database.url);
+    try {
+      const [registered] = createConsolidationHandlers({
+        db: other.db,
+        textModel: createFakeTextModel([]),
+        autoApply: 'safe',
+        schemaLanguage: 'en',
+      });
+      await registered?.run(
+        { trigger: 'batch' },
+        { signal: new AbortController().signal, attempt: 1 },
+      );
+    } finally {
+      await other.close();
+    }
     expect(await typeOf(db(), type.id)).toMatchObject({ status: 'stable' });
   });
 });
