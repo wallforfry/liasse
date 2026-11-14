@@ -30,11 +30,12 @@ const QUERY_DESCRIPTION =
   'exists, so the query can be corrected. Returns rows (id, core, the fields selected) or ' +
   'the groups of an aggregate; aggregate values and numeric group keys are a JSON number ' +
   'or an exact decimal string. Private documents are left out unless `include_private` ' +
-  'is true; even then, a name compared with an entity reveals whether an entity bears ' +
-  'that name when only private documents refer to it, though no document, count or ' +
-  `amount of theirs is returned. A name is compared with the canonical name and the first ${String(MAX_QUERY_ENTITY_NAMES - 1)} ` +
-  `aliases of each entity, each cut to its first ${String(MAX_QUERY_ENTITY_NAME_LENGTH)} ` +
-  `characters. Rows, snippets and the data fields of errors carry document text. ${UNTRUSTED}`;
+  'is true. Even when they are left out, a name compared with an entity reveals whether ' +
+  'an entity bears that name when only private documents refer to it, though no ' +
+  'document, count or amount of theirs is returned. A name is compared with the ' +
+  `canonical name and the first ${String(MAX_QUERY_ENTITY_NAMES - 1)} aliases of each ` +
+  `entity, each cut to its first ${String(MAX_QUERY_ENTITY_NAME_LENGTH)} characters. ` +
+  `Rows, snippets and the data fields of errors carry document text. ${UNTRUSTED}`;
 
 export const registerSearchTools = (server: McpServer, { api, report }: McpDeps): void => {
   server.registerTool(

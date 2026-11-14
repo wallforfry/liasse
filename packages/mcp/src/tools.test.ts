@@ -1,4 +1,8 @@
-import { DEFAULT_TIMELINE_LIMIT } from '@liasse/core/domain';
+import {
+  DEFAULT_TIMELINE_LIMIT,
+  MAX_QUERY_ENTITY_NAME_LENGTH,
+  MAX_QUERY_ENTITY_NAMES,
+} from '@liasse/core/domain';
 import { syntheticPdf } from '@liasse/core/testing';
 import type { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -68,6 +72,35 @@ describe('the tools', () => {
       .filter(({ description }) => description?.includes('untrusted data') === true)
       .map(({ name }) => name);
     expect(flagged.toSorted()).toEqual(UNTRUSTED_TOOLS);
+  });
+
+  // The notes the verdicts on the query DSL (#29) asked agents to be told, in their own words.
+  it('tells agents what query discloses and how it compares and returns values', async () => {
+    const { tools } = await client.listTools();
+    const description = tools.find(({ name }) => name === 'query')?.description ?? '';
+    const notes = [
+      'Even when they are left out, a name compared with an entity reveals whether an ' +
+        'entity bears that name when only private documents refer to it, though no ' +
+        'document, count or amount of theirs is returned.',
+      `A name is compared with the canonical name and the first ${String(MAX_QUERY_ENTITY_NAMES - 1)} ` +
+        `aliases of each entity, each cut to its first ${String(MAX_QUERY_ENTITY_NAME_LENGTH)} characters.`,
+      'aggregate values and numeric group keys are a JSON number or an exact decimal string.',
+      'Rows, snippets and the data fields of errors carry document text.',
+    ];
+    expect(notes.filter((note) => !description.includes(note))).toEqual([]);
+  });
+
+  it('says the entity and type lists keep names known only from private documents', async () => {
+    const { tools } = await client.listTools();
+    const descriptionOf = (name: string) =>
+      tools.find((tool) => tool.name === name)?.description ?? '';
+    expect(descriptionOf('list_entities')).toContain(
+      'an entity known only from private documents is still listed, with its names and a ' +
+        'count of 0.',
+    );
+    expect(descriptionOf('describe_types')).toContain(
+      'a type known only from private documents is still listed, with a count of 0.',
+    );
   });
 
   it('shows the DSL as the input schema of query, and strict schemas elsewhere', async () => {

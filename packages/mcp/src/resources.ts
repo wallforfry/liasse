@@ -36,7 +36,8 @@ export const registerResources = (server: McpServer, { api, report }: McpDeps): 
     {
       description:
         'The type registry, as `describe_types` returns it; the counts leave private ' +
-        `documents out. ${UNTRUSTED}`,
+        'documents out, and a type known only from them is listed with a count of 0. ' +
+        UNTRUSTED,
       mimeType: JSON_TYPE,
     },
     async (uri) => read(uri, 'types://', report, () => describeTypes(api)),

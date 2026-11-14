@@ -21,14 +21,16 @@ const applyChangeInputSchema = z.strictObject({ id: idSchema, ...changeDecisionS
 const DESCRIBE_TYPES_DESCRIPTION =
   'The document types Liasse has learnt, with their description, aliases, fields and ' +
   'document count. Call it before `query`, to know which types and fields exist. The ' +
-  'counts leave private documents out unless `include_private` is true. Descriptions and ' +
-  `example titles come from documents. ${UNTRUSTED}`;
+  'counts leave private documents out unless `include_private` is true; a type known only ' +
+  'from private documents is still listed, with a count of 0. Descriptions and example ' +
+  `titles come from documents. ${UNTRUSTED}`;
 
 const LIST_ENTITIES_DESCRIPTION =
   'Lists the people, organisations and other entities named in the documents, or those ' +
   'whose name matches `query`, with their aliases, identifiers (an IBAN or a card number ' +
   'is masked) and document count. The counts leave private documents out unless ' +
-  `\`include_private\` is true. ${UNTRUSTED}`;
+  '`include_private` is true; an entity known only from private documents is still ' +
+  `listed, with its names and a count of 0. ${UNTRUSTED}`;
 
 const LIST_CHANGES_DESCRIPTION =
   'The changes of the type registry that consolidation proposes and that wait for ' +
