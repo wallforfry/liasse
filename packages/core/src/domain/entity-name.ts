@@ -39,6 +39,14 @@ const MIN_SIGNIFICANT_LENGTH = 3;
 export const normalizeEntityName = (name: string): readonly string[] =>
   withoutLegalForm(tokenize(name));
 
+// What two names must share to name the same entity. A name written without any ASCII
+// letter or digit has no token: it is compared as written, so that two such names are
+// not equal to each other for having nothing left.
+export const entityNameKey = (name: string): string => {
+  const tokens = normalizeEntityName(name);
+  return tokens.length > 0 ? tokens.join(' ') : name.normalize('NFKC').trim().toLowerCase();
+};
+
 // The words that say something: no function word, nothing under three characters.
 export const significantWords = (words: readonly string[]): readonly string[] =>
   words.filter((word) => word.length >= MIN_SIGNIFICANT_LENGTH && !FUNCTION_WORDS.has(word));

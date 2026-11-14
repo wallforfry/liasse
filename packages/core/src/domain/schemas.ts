@@ -7,7 +7,9 @@ import {
   DOCUMENT_STATES,
   DOCUMENT_STATUSES,
   EMBEDDING_PROVIDERS,
+  ENTITY_IDENTIFIER_TYPES,
   ENTITY_KINDS,
+  ENTITY_MATCH_RULES,
   JOB_STATUSES,
   KEY_DATE_KINDS,
   LINK_KINDS,
@@ -27,6 +29,8 @@ export const changeKindSchema = z.enum(CHANGE_KINDS);
 export const changeStatusSchema = z.enum(CHANGE_STATUSES);
 export const jobStatusSchema = z.enum(JOB_STATUSES);
 export const entityKindSchema = z.enum(ENTITY_KINDS);
+export const entityMatchRuleSchema = z.enum(ENTITY_MATCH_RULES);
+export const entityIdentifierTypeSchema = z.enum(ENTITY_IDENTIFIER_TYPES);
 export const keyDateKindSchema = z.enum(KEY_DATE_KINDS);
 export const linkKindSchema = z.enum(LINK_KINDS);
 export const subjectKindSchema = z.enum(SUBJECT_KINDS);

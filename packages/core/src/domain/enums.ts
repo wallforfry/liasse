@@ -44,6 +44,27 @@ export type JobStatus = (typeof JOB_STATUSES)[number];
 export const ENTITY_KINDS = ['org', 'person'] as const;
 export type EntityKind = (typeof ENTITY_KINDS)[number];
 
+// The rule of entity resolution that attached a mention, in the order they are tried.
+export const ENTITY_MATCH_RULES = [
+  'identifier',
+  'name',
+  'alias',
+  'similarity',
+  'arbitration',
+  'created',
+] as const;
+export type EntityMatchRule = (typeof ENTITY_MATCH_RULES)[number];
+
+export const ENTITY_IDENTIFIER_TYPES = [
+  'company_id',
+  'vat_number',
+  'customer_number',
+  'iban',
+  'card_number',
+  'other',
+] as const;
+export type EntityIdentifierType = (typeof ENTITY_IDENTIFIER_TYPES)[number];
+
 export const KEY_DATE_KINDS = [
   'due',
   'expiry',
