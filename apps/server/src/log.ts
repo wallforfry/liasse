@@ -1,3 +1,5 @@
+import { sqlStateOf } from '@liasse/core/db';
+
 export type LogFields = Readonly<Record<string, string | number | boolean | undefined>>;
 
 export interface Logger {
@@ -31,14 +33,4 @@ export const describeError = (error: unknown): LogFields => {
   if (!(error instanceof Error)) return { error: typeof error };
   const sqlState = sqlStateOf(error);
   return { error: error.name, ...(sqlState === undefined ? {} : { sqlstate: sqlState }) };
-};
-
-const SQLSTATE = /^[0-9A-Z]{5}$/;
-
-/** The SQLSTATE of a database failure, looked for down the causes: Drizzle wraps the driver error. */
-export const sqlStateOf = (error: unknown): string | undefined => {
-  if (!(error instanceof Error)) return undefined;
-  return 'code' in error && typeof error.code === 'string' && SQLSTATE.test(error.code)
-    ? error.code
-    : sqlStateOf(error.cause);
 };

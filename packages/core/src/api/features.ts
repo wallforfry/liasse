@@ -5,6 +5,8 @@ import type { DeletedDocument } from '../ingest/delete-document.ts';
 import type { Transaction } from '../ingest/existing-document.ts';
 import { type ApiContext } from './context.ts';
 import { ApiError, documentNotFound, notImplemented } from './errors.ts';
+import type { DocumentPart } from './get-document.ts';
+import type { KnowledgeFeatures } from './knowledge.ts';
 
 const jsonObjectSchema = z.record(z.string(), z.unknown());
 const isoDate = z.iso.date();
@@ -60,7 +62,7 @@ export type CorrectionOutcome =
  * the function bound to it by the composition root; one left undefined answers
  * `not_implemented`. A feature returns `undefined` for an id it does not know.
  */
-export interface ApiFeatures {
+export interface ApiFeatures extends KnowledgeFeatures {
   /** `correctDocument` of the pipeline, given `{ id, ...correction }`. */
   readonly correctDocument?: (input: JsonObject) => Promise<CorrectionOutcome>;
   readonly listSubjects?: (options: ListSubjectsOptions) => Promise<JsonObject>;
@@ -75,6 +77,9 @@ export interface ApiFeatures {
 }
 
 const NOT_FOUND_CODE = 'document_not_found';
+
+/** The parts of a document a correction answers with, by REST and MCP alike. */
+export const CORRECTED_PARTS: readonly DocumentPart[] = ['fields', 'provenance'];
 
 /** Corrects a document. The caller reads it again to answer with its new state. */
 export const correctDocument = async (

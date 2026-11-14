@@ -1,5 +1,6 @@
 import {
   correctDocument,
+  CORRECTED_PARTS,
   documentCorrectionSchema,
   documentListSchema,
   documentSchema,
@@ -38,9 +39,6 @@ const documentQuery = z
     page_limit: integerParam.optional(),
   })
   .pipe(getDocumentOptionsSchema);
-
-// What a correction answers with: the document and the parts a correction changes.
-const CORRECTED_PARTS = ['fields', 'provenance'] as const;
 
 export const documentRoutes = ({ api, authenticated }: RouteDeps): Hono<AppEnv> =>
   new Hono<AppEnv>()

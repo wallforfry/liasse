@@ -8,11 +8,19 @@ export {
 } from './describe-types.ts';
 export { openDocumentFile, type OpenedFile, removeDocument } from './document-file.ts';
 export { type DocumentSummary, documentSummarySchema } from './document-view.ts';
-export { API_ERROR_KINDS, ApiError, type ApiErrorKind } from './errors.ts';
+export {
+  API_ERROR_KINDS,
+  ApiError,
+  type ApiErrorKind,
+  invalidRequest,
+  notImplemented,
+  toApiError,
+} from './errors.ts';
 export {
   type ApiFeatures,
   applyChange,
   CHANGE_DECISIONS,
+  CORRECTED_PARTS,
   type ChangeDecision,
   changeDecisionSchema,
   correctDocument,
@@ -36,6 +44,19 @@ export {
   type FileUrlOptions,
   type FileUrls,
 } from './file-url.ts';
+export { idSchema } from './id.ts';
+export {
+  getSubject,
+  type GetSubjectOptions,
+  getSubjectOptionsSchema,
+  type KnowledgeFeatures,
+  recall,
+  type RecallOptions,
+  recallOptionsSchema,
+  timeline,
+  type TimelineOptions,
+  timelineOptionsSchema,
+} from './knowledge.ts';
 export {
   DEFAULT_PAGE_COUNT,
   DEFAULT_TEXT_LENGTH,
