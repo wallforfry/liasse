@@ -21,7 +21,6 @@ export const docTypes = pgTable('doc_types', {
   status: typeStatus('status').notNull().default('provisional'),
   parentSlug: text('parent_slug'),
   aliases: textArray('aliases'),
-  docCount: integer('doc_count').notNull().default(0),
   embedding: embeddingVector('embedding'),
   createdAt: createdAt(),
   updatedAt: updatedAt(),

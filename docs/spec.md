@@ -89,7 +89,7 @@ Eleven Postgres tables: documents, text pages, chunks, types, entities, change l
 | `documents` | One ingested document | `id`, `sha256` (unique), `storage_key`, `mime`, `original_name`, `source` (watch/api/mcp), `status`, `type_id`, `schema_version`, `core` (jsonb), `fields` (jsonb), `extra` (jsonb), `provenance` (jsonb), `title`, `summary`, `private`, `ingested_at` |
 | `document_pages` | Full text per page | `document_id`, `page`, `text`, `tsv` (tsvector) |
 | `chunks` | Search units | `id`, `document_id`, `page_from`, `page_to`, `text`, `embedding` (vector), `tsv` |
-| `doc_types` | Type registry | `id`, `slug`, `description`, `schema` (jsonb), `version`, `status`, `parent_slug`, `aliases` (text[]), `doc_count`, `embedding` |
+| `doc_types` | Type registry | `id`, `slug`, `description`, `schema` (jsonb), `version`, `status`, `parent_slug`, `aliases` (text[]), `embedding`; the document count is computed from `documents`, never stored |
 | `entities` | Issuers, recipients | `id`, `kind` (org/person), `canonical_name`, `aliases` (text[]), `identifiers` (jsonb: company ID, masked IBAN, customer number), `embedding` |
 | `type_changes` | Consolidation proposals | `id`, `kind` (merge/promote_field/stabilize/split/rename/merge_entity/merge_subject), `payload`, `rationale`, `status` (pending/applied/rejected), `auto`, `created_at` |
 | `jobs` | Processing queue | `id`, `kind`, `payload`, `status`, `attempts`, `run_after`, `locked_at` |

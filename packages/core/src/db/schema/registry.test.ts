@@ -41,7 +41,6 @@ describe('doc_types, entities, type_changes and jobs', () => {
       status: 'provisional',
       parentSlug: 'bill',
       aliases: ['electricity_bill'],
-      docCount: 0,
       embedding: EMBEDDING,
     });
     expect(selected?.id).toMatch(/^typ_/);
