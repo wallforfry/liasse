@@ -1,3 +1,4 @@
+import type postgres from 'postgres';
 import { z } from 'zod';
 import { TEMPLATE_DATABASE_PREFIX, dropIdleTemplate } from './test-template.ts';
 import { type AdminSql, TEST_DATABASE_PREFIX } from './test-server.ts';
@@ -22,21 +23,27 @@ const databaseRows = z.array(
 );
 
 // Postgres records no creation time; PG_VERSION is written once, when the database is
-// created. Reading it takes a superuser, which the test servers' user is.
+// created. Reading it takes a superuser, which the test servers' user is. A database another
+// suite drops during the scan keeps its catalog row in the statement's snapshot but has lost
+// its directory: `missing_ok` turns the stat into null and the row is left out.
 export const listTestServerDatabases = async (
-  sql: AdminSql,
+  sql: postgres.ISql,
 ): Promise<readonly TestServerDatabase[]> =>
   databaseRows
     .parse(
       await sql`
-        SELECT d.datname AS name,
-          (SELECT count(*) FROM pg_stat_activity a WHERE a.datid = d.oid) AS connections,
-          extract(epoch FROM now() - (pg_stat_file('base/' || d.oid || '/PG_VERSION')).modification)
-            AS age_seconds
-        FROM pg_database d
-        WHERE starts_with(d.datname, ${TEST_DATABASE_PREFIX})
-          OR starts_with(d.datname, ${TEMPLATE_DATABASE_PREFIX})
-        ORDER BY d.datname
+        SELECT name, connections, age_seconds
+        FROM (
+          SELECT d.datname AS name,
+            (SELECT count(*) FROM pg_stat_activity a WHERE a.datid = d.oid) AS connections,
+            extract(epoch FROM now()
+              - (pg_stat_file('base/' || d.oid || '/PG_VERSION', true)).modification) AS age_seconds
+          FROM pg_database d
+          WHERE starts_with(d.datname, ${TEST_DATABASE_PREFIX})
+            OR starts_with(d.datname, ${TEMPLATE_DATABASE_PREFIX})
+        ) listed
+        WHERE age_seconds IS NOT NULL
+        ORDER BY name
       `,
     )
     .map(({ name, connections, age_seconds }) => ({

@@ -63,9 +63,9 @@ const readFacts = async (
       date: FACT_DATE,
       id: facts.id,
       text: facts.text,
-      validFrom: facts.validFrom,
-      validTo: facts.validTo,
-      documentId: facts.documentId,
+      valid_from: facts.validFrom,
+      valid_to: facts.validTo,
+      document_id: facts.documentId,
     })
     .from(facts)
     .innerJoin(documents, eq(documents.id, facts.documentId))

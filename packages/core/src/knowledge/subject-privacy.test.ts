@@ -124,7 +124,7 @@ describe('subjects and private documents', () => {
     expect(await getSubject({ db: database.db }, { query: 'Country house' })).toMatchObject({
       found: true,
       subject: { id: cottage },
-      documentCount: 1,
+      document_count: 1,
     });
   });
 
