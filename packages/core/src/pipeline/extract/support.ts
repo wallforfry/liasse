@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { CURRENCY_CODES } from '../../domain/currencies.ts';
+import { normalizeEntityName, significantWords } from '../../domain/entity-name.ts';
 import { isoDateSchema } from '../../domain/values.ts';
 import { dateParts, datesIn, type StatedDates } from './quote-dates.ts';
 import { numbersIn, statesNumber } from './quote-numbers.ts';
@@ -139,12 +140,29 @@ interface FactLike {
   readonly valid_to?: string | undefined;
 }
 
+// Inflections of one word share their beginning: "cancelled", "cancels", "cancellation".
+const STEM_LENGTH = 5;
+
+const wordsOf = (text: string): readonly string[] =>
+  significantWords(normalizeEntityName(text)).map((word) => word.slice(0, STEM_LENGTH));
+
+// A fact names no entity, date or number more often than not: what it says must then be
+// in its quote. At least half of its words, and one at least: a single word in common
+// ("customer") is found in any quote of the page it was taken from.
+const sharesWords = (text: string, quote: string): boolean => {
+  const said = [...new Set(wordsOf(text))];
+  const quoted = new Set(wordsOf(quote));
+  const found = said.filter((word) => quoted.has(word)).length;
+  return found > 0 && found * 2 >= said.length;
+};
+
 const statesFact = (fact: FactLike, stated: StatedDates, language: string | undefined) => {
   const written = datesIn(fact.text, language);
   const months = new Set([...stated.months, ...[...stated.days].map((day) => day.slice(0, 7))]);
   const numbers = [...numbersIn(fact.quote), ...dateParts(stated)];
   return (
     normalizeForQuote(fact.quote).length >= MIN_FACT_QUOTE_LENGTH &&
+    sharesWords(fact.text, fact.quote) &&
     (fact.entities ?? []).every((entity) => holds(fact.quote, entity)) &&
     [...written.days].every((day) => stated.days.has(day)) &&
     [...written.months].every((month) => months.has(month)) &&

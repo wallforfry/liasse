@@ -176,6 +176,24 @@ describe('factSupport', () => {
     expect(factSupport(fact('The contract was terminated.', 'Invoice'), 'en')).toBeUndefined();
   });
 
+  // Re-verdict R6: no entity, date or number to check, a quote long enough, one word in
+  // common ("customer"), and nothing of what the fact says.
+  it('drops a fact whose words its quote does not hold', () => {
+    expect(
+      factSupport(fact('The customer cancelled the contract.', 'Customer: Jane Synthetic'), 'en'),
+    ).toBeUndefined();
+    expect(
+      factSupport(fact('Nothing in common here.', 'Customer: Jane Synthetic'), 'en'),
+    ).toBeUndefined();
+    // No word of its own at all: nothing it says can be found in the quote.
+    expect(factSupport(fact('It is so.', 'Customer: Jane Synthetic'), 'en')).toBeUndefined();
+  });
+
+  it('keeps a fact that says what its quote says, inflected words included', () => {
+    const quote = 'The customer has cancelled the contracts as of today';
+    expect(factSupport(fact('The customer cancels the contract.', quote), 'en')).toBeDefined();
+  });
+
   it('drops a fact about an entity its quote does not name', () => {
     const quote = 'The contract is terminated as of today';
     expect(

@@ -17,6 +17,7 @@ describe('the extraction prompt', () => {
     expect(QUOTE_RULE).toContain('at most 300 characters');
     expect(system).toContain('1 to 5 short');
     expect(system).toContain('at least 12 characters, states every name, date and number');
+    expect(system).toContain('the fact uses the words of its quote');
   });
 
   it('asks for the keys of `extra` in the schema language', () => {

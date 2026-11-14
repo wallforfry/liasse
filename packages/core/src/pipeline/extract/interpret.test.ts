@@ -350,15 +350,17 @@ describe('interpret', () => {
       facts: [
         fact('unsourced', { quote: 'not in the text' }),
         fact('backwards', { valid_from: '2026-02-01', valid_to: '2026-01-01' }),
-        ...['one', 'two', 'three', 'four', 'five', 'six'].map((text) => fact(text)),
+        ...['one', 'two', 'three', 'four', 'five', 'six'].map((label) =>
+          fact(`Invoice SYN-1 ${label}`),
+        ),
       ],
     });
     expect(document.knowledge.facts.map(({ text }) => text)).toEqual([
-      'one',
-      'two',
-      'three',
-      'four',
-      'five',
+      'Invoice SYN-1 one',
+      'Invoice SYN-1 two',
+      'Invoice SYN-1 three',
+      'Invoice SYN-1 four',
+      'Invoice SYN-1 five',
     ]);
     expect(document.rejected).toBe(3);
   });

@@ -36,7 +36,14 @@ const FIRST = {
   },
   fields: { meter_id: at('PDL-000123', 'Meter PDL-000123') },
   extra: { usage: at(350, '350 kWh') },
-  facts: [{ text: 'First fact', page: 1, quote: 'Invoice SYN-2026-001', confidence: 0.9 }],
+  facts: [
+    {
+      text: 'Invoice SYN-2026-001 was issued.',
+      page: 1,
+      quote: 'Invoice SYN-2026-001',
+      confidence: 0.9,
+    },
+  ],
 };
 
 describe('extraction and re-extraction', () => {
@@ -123,7 +130,9 @@ describe('extraction and re-extraction', () => {
           tariff: { ...at('blue', 'tariff blue'), page: 2 },
         },
         extra: { usage: at(84.2, 'Total 84,20 EUR') },
-        facts: [{ text: 'Second fact', page: 1, quote: 'Total 84,20 EUR', confidence: 0.9 }],
+        facts: [
+          { text: 'The total is 84,20 EUR.', page: 1, quote: 'Total 84,20 EUR', confidence: 0.9 },
+        ],
       }),
       'second-model',
     );
@@ -162,7 +171,7 @@ describe('extraction and re-extraction', () => {
     });
     expect(document.provenance.usage).toMatchObject({ model: 'second-model' });
     expect((await harness.db.select().from(facts)).map(({ text }) => text)).toEqual([
-      'Second fact',
+      'The total is 84,20 EUR.',
     ]);
     expect(harness.indexed).toEqual([id, id]);
   });
