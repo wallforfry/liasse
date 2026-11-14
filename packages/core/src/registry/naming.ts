@@ -1,4 +1,4 @@
-import { significantEntityTokens, significantWords } from '../domain/entity-name.ts';
+import { normalizeEntityName, significantWords } from '../domain/entity-name.ts';
 import type { EntityKind, SchemaLanguage } from '../domain/enums.ts';
 import { MAX_FIELD_NAME_LENGTH, MAX_SLUG_LENGTH } from '../domain/limits.ts';
 import { CORE_FIELD_NAMES } from './core-fields.ts';
@@ -20,35 +20,37 @@ export interface NamingViolation {
 
 const SNAKE_CASE = /^[a-z][a-z0-9]*(_[a-z0-9]+)*$/;
 
-// The date words a slug may not carry, per schema language: the twelve months and their
-// usual short forms, in ASCII. English is always checked, whatever the configuration.
-// `satisfies` makes a schema language without its row a compile error.
+// The date words a slug may not carry, per schema language: the full names of the months,
+// in ASCII. English is always checked, whatever the configuration. `satisfies` makes a
+// schema language without its row a compile error.
+// What is left out on purpose, because a refusal sends a document to review while a slug
+// that slipped through is only a poor name:
+// - short forms (`mar`, `dec`, `set`, `oct`): they are ordinary words too (`data_set`,
+//   `seguro_mar`). One standing next to a year would be a date, but a slug holds no digit,
+//   so there is no year to stand next to;
+// - English `may`, which is spelled like the verb;
+// - numbers spelled out (`bill_twenty_twenty_six`).
 // prettier-ignore
 export const MONTH_WORDS = {
   en: [
-    'january', 'february', 'march', 'april', 'may', 'june',
+    'january', 'february', 'march', 'april', 'june',
     'july', 'august', 'september', 'october', 'november', 'december',
-    'jan', 'feb', 'mar', 'apr', 'jun', 'jul', 'aug', 'sep', 'sept', 'oct', 'nov', 'dec',
   ],
   fr: [
     'janvier', 'fevrier', 'mars', 'avril', 'mai', 'juin',
     'juillet', 'aout', 'septembre', 'octobre', 'novembre', 'decembre',
-    'janv', 'fevr', 'avr', 'juil', 'sept', 'oct', 'nov', 'dec',
   ],
   de: [
     'januar', 'februar', 'marz', 'maerz', 'april', 'mai', 'juni',
     'juli', 'august', 'september', 'oktober', 'november', 'dezember',
-    'jan', 'feb', 'mrz', 'apr', 'jun', 'jul', 'aug', 'sep', 'sept', 'okt', 'nov', 'dez',
   ],
   es: [
     'enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio',
     'julio', 'agosto', 'septiembre', 'setiembre', 'octubre', 'noviembre', 'diciembre',
-    'ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'sept', 'oct', 'nov', 'dic',
   ],
   it: [
     'gennaio', 'febbraio', 'marzo', 'aprile', 'maggio', 'giugno',
     'luglio', 'agosto', 'settembre', 'ottobre', 'novembre', 'dicembre',
-    'gen', 'feb', 'mar', 'apr', 'mag', 'giu', 'lug', 'ago', 'set', 'ott', 'nov', 'dic',
   ],
 } as const satisfies Readonly<Record<SchemaLanguage, readonly string[]>>;
 
@@ -117,17 +119,31 @@ export interface SlugContext {
 // later, so the rule errs towards accepting:
 // - a person: any significant word of the name, as a whole word;
 // - an organisation named with one significant word: that word, as a whole word;
+// - an organisation whose whole name, legal form aside, is one word of two letters (BP,
+//   LG, HP): that word, as a whole word. Two letters are too short to count anywhere
+//   else, in the name of a person or among the words of a longer name;
 // - an organisation named with several: the full name, as a run of the significant words
 //   of the slug, so that "The Bank of the North" is found in `bank_north_statement` too.
 //   One of its words alone is too often generic (Energy, Credit, Services) to refuse.
 // A single word is let through once a type slug uses it: it then belongs to the
 // vocabulary of the registry, and an entity called Contract or Bill does not take it back.
+const SHORT_ORGANISATION_NAME_LENGTH = 2;
+
+const significantNameWords = ({ kind, name }: KnownEntityName): readonly string[] => {
+  const words = normalizeEntityName(name);
+  const [only] = words;
+  return kind === 'org' && words.length === 1 && only?.length === SHORT_ORGANISATION_NAME_LENGTH
+    ? words
+    : significantWords(words);
+};
+
 const offendingParts = (
-  { kind, name }: KnownEntityName,
+  entity: KnownEntityName,
   slug: string,
   isFreeWord: (word: string) => boolean,
 ): readonly string[] => {
-  const significant = significantEntityTokens(name);
+  const significant = significantNameWords(entity);
+  const { kind } = entity;
   const words = slug.split('_');
   if (kind === 'person' || significant.length === 1) {
     return significant.filter((word) => words.includes(word) && !isFreeWord(word));
