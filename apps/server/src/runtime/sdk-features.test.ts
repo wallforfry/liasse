@@ -1,5 +1,7 @@
+import { documents, typeChanges } from '@liasse/core/db';
 import { buildSyntheticPdf, waitUntil } from '@liasse/core/testing';
 import { createLiasseClient, LiasseApiError, type LiasseClient } from '@liasse/sdk';
+import { eq } from 'drizzle-orm';
 import { describe, expect, it } from 'vitest';
 import { LETTER } from '../synthetic-documents.fixture.ts';
 import type { Runtime } from './create-runtime.ts';
@@ -10,7 +12,7 @@ const YEAR_2027 = { from: '2027-01-01', to: '2027-12-31' } as const;
 
 // The SDK against a runtime whose pipeline and knowledge layer are bound, with fake models.
 describe('the TypeScript SDK on the bound features', () => {
-  const { start } = useRuntimeHarness();
+  const { start, database } = useRuntimeHarness();
 
   const clientOf = (runtime: Runtime): LiasseClient =>
     createLiasseClient({ baseUrl: `http://127.0.0.1:${String(runtime.port)}`, token: TOKEN });
@@ -42,5 +44,40 @@ describe('the TypeScript SDK on the bound features', () => {
       .catch((error: unknown) => error);
     expect(refused).toBeInstanceOf(LiasseApiError);
     expect(refused).toMatchObject({ status: 404, code: 'document_not_found' });
+  });
+
+  it('lists the pending consolidation changes and decides one', async () => {
+    const client = clientOf(await start());
+    const file = new File([buildSyntheticPdf([{ lines: [...LETTER.lines] }])], 'letter.pdf');
+    const { id } = await client.uploadDocument({ file });
+    await waitUntil(async () => (await client.getDocument(id)).status === 'indexed');
+    const [document] = await database()
+      .db.select({ typeId: documents.typeId })
+      .from(documents)
+      .where(eq(documents.id, id));
+    const [change] = await database()
+      .db.insert(typeChanges)
+      .values({
+        kind: 'stabilize',
+        payload: { type_id: document?.typeId ?? '' },
+        rationale: 'Synthetic rationale.',
+      })
+      .returning({ id: typeChanges.id });
+    const changeId = change?.id ?? '';
+
+    const { changes } = await client.listChanges({ kind: 'stabilize' });
+    expect(changes.map(({ id: listed, status }) => [listed, status])).toEqual([
+      [changeId, 'pending'],
+    ]);
+    const decided = await client.decideChange(changeId, { decision: 'reject', note: 'Too early.' });
+    expect(decided).toMatchObject({
+      change: { id: changeId, status: 'rejected', note: 'Too early.' },
+      documents_to_reextract: 0,
+    });
+    const again: unknown = await client
+      .decideChange(changeId, { decision: 'apply' })
+      .catch((error: unknown) => error);
+    expect(again).toMatchObject({ status: 400, code: 'change_already_decided' });
+    expect((await client.listChanges()).changes).toEqual([]);
   });
 });

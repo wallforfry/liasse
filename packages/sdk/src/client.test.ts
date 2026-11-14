@@ -22,6 +22,17 @@ const json = (body: unknown, status = 200): Response => Response.json(body, { st
 
 const EMPTY_LIST = { documents: [], total: 0, has_more: false };
 const NO_DATES = { dates: [], truncated: false };
+const REJECTED_CHANGE = {
+  id: 'chg_01',
+  kind: 'merge',
+  payload: { source_id: 'typ_a', target_id: 'typ_b', field_mapping: {}, confidence: 0.6 },
+  rationale: 'Both are bills.',
+  status: 'rejected',
+  auto: false,
+  created_at: '2026-11-14T03:00:00.000Z',
+  decided_at: '2026-11-14T09:00:00.000Z',
+  note: 'Not the same type.',
+};
 
 describe('createLiasseClient', () => {
   it('sends the token and resolves routes under the path prefix of the base URL', async () => {
@@ -52,6 +63,8 @@ describe('createLiasseClient', () => {
       '/subjects': { subjects: [], truncated: false },
       '/entities': { entities: [], total: 0 },
       '/types': { types: [] },
+      '/changes': { changes: [], truncated: false },
+      '/changes/chg_01': { change: REJECTED_CHANGE, documents_to_reextract: 0 },
     };
     const server = answering((url) => json(answers[new URL(url).pathname] ?? {}));
     const client = createLiasseClient({
@@ -62,8 +75,10 @@ describe('createLiasseClient', () => {
     await client.listSubjects({ query: 'home', kind: 'contract' });
     await client.listEntities({ query: 'zirc', kind: 'org', limit: 5, include_private: true });
     await client.listTypes({ status: 'stable', include_examples: true, include_private: false });
-    await client.listChanges({ kind: 'merge' });
-    await client.decideChange('chg_01', { decision: 'reject', note: 'Not the same type.' });
+    expect(await client.listChanges({ kind: 'merge' })).toEqual({ changes: [], truncated: false });
+    expect(
+      await client.decideChange('chg_01', { decision: 'reject', note: 'Not the same type.' }),
+    ).toEqual({ change: REJECTED_CHANGE, documents_to_reextract: 0 });
     expect(server.sent.map(({ url }) => url)).toEqual([
       'http://x.test/subjects?query=home&kind=contract',
       'http://x.test/entities?query=zirc&kind=org&limit=5&include_private=true',
@@ -157,6 +172,19 @@ describe('createLiasseClient', () => {
       LiasseResponseError,
     );
     await expect(client.listSubjects()).rejects.toBeInstanceOf(LiasseResponseError);
+  });
+
+  it('holds the answers of consolidation changes to their schemas', async () => {
+    const server = answering(() => json({ changes: [{ id: 'chg_01' }] }));
+    const client = createLiasseClient({
+      baseUrl: 'http://x.test',
+      token: 't',
+      fetch: server.fetch,
+    });
+    await expect(client.listChanges()).rejects.toBeInstanceOf(LiasseResponseError);
+    await expect(client.decideChange('chg_01', { decision: 'apply' })).rejects.toBeInstanceOf(
+      LiasseResponseError,
+    );
   });
 
   it('rejects a body that is not JSON as a LiasseResponseError', async () => {

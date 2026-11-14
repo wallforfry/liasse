@@ -53,6 +53,7 @@ export const CHANGE_KINDS = [
   'rename',
   'merge_entity',
   'merge_subject',
+  'remove_field',
 ] as const;
 export type ChangeKind = (typeof CHANGE_KINDS)[number];
 

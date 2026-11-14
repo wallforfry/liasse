@@ -3,6 +3,7 @@ import { ID_PREFIXES, newId } from '../../domain/ids.ts';
 import {
   createdAt,
   embeddingVector,
+  instant,
   type JsonObject,
   jsonObject,
   textArray,
@@ -49,4 +50,8 @@ export const typeChanges = pgTable('type_changes', {
   status: changeStatus('status').notNull().default('pending'),
   auto: boolean('auto').notNull().default(false),
   createdAt: createdAt(),
+  // Set with the status, when the change is applied or rejected: by a person through
+  // `apply_change`, or by consolidation itself.
+  decidedAt: instant('decided_at'),
+  note: text('note'),
 });

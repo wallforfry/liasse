@@ -1,7 +1,7 @@
 import { and, eq, ne } from 'drizzle-orm';
 import { docTypes } from '../db/schema/registry.ts';
 import type { TypeStatus } from '../domain/enums.ts';
-import type { RegistryReadContext } from './context.ts';
+import type { RegistryWriteContext } from './context.ts';
 import {
   failure,
   invalidAlias,
@@ -34,7 +34,7 @@ const editableType = async (
 export const setStatus = (
   typeId: string,
   status: TypeStatus,
-  { db }: RegistryReadContext,
+  { db }: RegistryWriteContext,
 ): Promise<Result<RegisteredType, RegistryError>> =>
   withRegistryLock(db, async (tx) => {
     if (status === 'merged') {
@@ -50,7 +50,7 @@ export const setStatus = (
 export const addAlias = (
   typeId: string,
   alias: string,
-  { db }: RegistryReadContext,
+  { db }: RegistryWriteContext,
 ): Promise<Result<RegisteredType, RegistryError>> =>
   withRegistryLock(db, async (tx) => {
     const violations = aliasViolations(alias);
@@ -89,11 +89,12 @@ const targetParent = async (
 };
 
 // A registry write and nothing more: it records no `type_changes` row, queues no
-// re-extraction and leaves the documents of the source where they are.
+// re-extraction and leaves the documents of the source where they are. Applying a merge
+// change of consolidation moves them in the transaction it gives here.
 export const markMerged = (
   sourceId: string,
   targetId: string,
-  { db }: RegistryReadContext,
+  { db }: RegistryWriteContext,
 ): Promise<Result<RegisteredType, RegistryError>> =>
   withRegistryLock(db, async (tx) => {
     if (sourceId === targetId) {
