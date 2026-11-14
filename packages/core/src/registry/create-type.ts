@@ -1,4 +1,4 @@
-import { count, gte } from 'drizzle-orm';
+import { and, count, gte, lt } from 'drizzle-orm';
 import { docTypes, entities } from '../db/schema/registry.ts';
 import { normalizeEntityName } from '../domain/entity-name.ts';
 import { MAX_TYPE_DESCRIPTION_LENGTH } from '../domain/limits.ts';
@@ -87,14 +87,24 @@ const resolveParent = async (
       );
 };
 
+const DAY_IN_MILLISECONDS = 86_400_000;
+
 const startOfUtcDay = (instant: Date): Date =>
   new Date(Date.UTC(instant.getUTCFullYear(), instant.getUTCMonth(), instant.getUTCDate()));
 
-const typesCreatedSince = async (reader: RegistryReader, since: Date): Promise<number> => {
+// The day is closed at both ends: a row dated after it, by a clock step or another host,
+// belongs to its own day and takes nothing from this one.
+const typesCreatedOnUtcDayOf = async (reader: RegistryReader, instant: Date): Promise<number> => {
+  const start = startOfUtcDay(instant);
   const [row] = await reader
     .select({ total: count() })
     .from(docTypes)
-    .where(gte(docTypes.createdAt, since));
+    .where(
+      and(
+        gte(docTypes.createdAt, start),
+        lt(docTypes.createdAt, new Date(start.getTime() + DAY_IN_MILLISECONDS)),
+      ),
+    );
   return row?.total ?? 0;
 };
 
@@ -102,14 +112,14 @@ const typesCreatedSince = async (reader: RegistryReader, since: Date): Promise<n
 const checkCreatable = async (
   reader: RegistryReader,
   draft: TypeDraft,
-  now: Date,
+  instant: Date,
   limit: number,
 ): Promise<Result<string | null, RegistryError>> => {
   const holder = await findNameHolder(reader, draft.slug);
   if (holder !== undefined) return err(nameTaken(draft.slug, holder));
   const parent = await resolveParent(reader, draft.parentSlug);
   if (!parent.ok) return parent;
-  const createdToday = await typesCreatedSince(reader, startOfUtcDay(now));
+  const createdToday = await typesCreatedOnUtcDayOf(reader, instant);
   return createdToday >= limit ? err(quotaExceeded(limit, createdToday)) : parent;
 };
 
@@ -119,14 +129,16 @@ export const createType = async (
 ): Promise<Result<RegisteredType, RegistryError>> => {
   const draft = await checkDraft(input, db);
   if (!draft.ok) return draft;
-  const createdAt = now();
   // The embedder may be a remote call: it runs outside the lock, and only for a request
   // that would pass at this point. The same checks run again under the lock.
-  const early = await checkCreatable(db, draft.value, createdAt, maxNewTypesPerDay);
+  const early = await checkCreatable(db, draft.value, now(), maxNewTypesPerDay);
   if (!early.ok) return early;
   const [embedding] = await embedder.embed([draft.value.description], 'passage');
   if (embedding === undefined) throw new Error('The embedder returned no embedding');
   return withRegistryLock(db, async (tx) => {
+    // Read under the lock, after the embedder: the type is counted on the day it is
+    // written, and that day is the one whose quota was just checked.
+    const createdAt = now();
     const parentSlug = await checkCreatable(tx, draft.value, createdAt, maxNewTypesPerDay);
     if (!parentSlug.ok) return parentSlug;
     return ok(

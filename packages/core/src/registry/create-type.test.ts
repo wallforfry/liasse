@@ -259,6 +259,71 @@ describe('createType', () => {
       });
     });
 
+    it('stamps the type when it is written, after a slow embedder', async () => {
+      let clock = new Date('2040-06-01T23:59:59.900Z');
+      const fake = createFakeEmbedder();
+      const slow: Embedder = {
+        ...fake,
+        embed: (texts, kind) => {
+          clock = new Date('2040-06-02T00:00:01.000Z');
+          return fake.embed(texts, kind);
+        },
+      };
+      const quota = { maxNewTypesPerDay: 1, now: () => clock, embedder: slow };
+      expect((await createType(draft('slow_embedder'), context(quota))).ok).toBe(true);
+      const [row] = await database.db
+        .select({ createdAt: docTypes.createdAt })
+        .from(docTypes)
+        .where(eq(docTypes.slug, 'slow_embedder'));
+      expect(row?.createdAt).toEqual(new Date('2040-06-02T00:00:01.000Z'));
+      clock = new Date('2040-06-01T12:00:00.000Z');
+      const sameClock = { maxNewTypesPerDay: 1, now: () => clock };
+      expect((await createType(draft('previous_day'), context(sameClock))).ok).toBe(true);
+      expect(
+        await errorOf(draft('next_day_taken'), {
+          ...sameClock,
+          now: () => new Date('2040-06-02T08:00:00.000Z'),
+        }),
+      ).toMatchObject({ code: 'quota_exceeded', createdToday: 1 });
+    });
+
+    it('refuses a type whose day filled up while the embedder was running', async () => {
+      let clock = new Date('2041-06-01T23:59:59.900Z');
+      const fake = createFakeEmbedder();
+      const slow: Embedder = {
+        ...fake,
+        embed: async (texts, kind) => {
+          clock = new Date('2041-06-02T00:00:01.000Z');
+          await createType(
+            draft('other_process'),
+            context({ maxNewTypesPerDay: 1, now: () => clock }),
+          );
+          return fake.embed(texts, kind);
+        },
+      };
+      const quota = { maxNewTypesPerDay: 1, now: () => clock, embedder: slow };
+      expect(await errorOf(draft('late_arrival'), quota)).toMatchObject({
+        code: 'quota_exceeded',
+        createdToday: 1,
+      });
+    });
+
+    it('does not count a type dated after the current UTC day', async () => {
+      const day = (date: string) => ({ maxNewTypesPerDay: 1, now: () => new Date(date) });
+      expect(
+        (await createType(draft('dated_later'), context(day('2042-03-06T00:00:00.000Z')))).ok,
+      ).toBe(true);
+      expect(
+        (await createType(draft('dated_today'), context(day('2042-03-05T23:59:59.999Z')))).ok,
+      ).toBe(true);
+      expect(
+        await errorOf(draft('dated_today_again'), day('2042-03-05T00:00:00.000Z')),
+      ).toMatchObject({
+        code: 'quota_exceeded',
+        createdToday: 1,
+      });
+    });
+
     it('creates nothing when the quota is zero', async () => {
       const quota = { maxNewTypesPerDay: 0, now: () => new Date('2032-01-01T08:00:00.000Z') };
       expect(await errorOf(draft('never_created'), quota)).toMatchObject({
