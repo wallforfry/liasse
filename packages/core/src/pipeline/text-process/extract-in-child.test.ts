@@ -1,6 +1,7 @@
 import { afterEach, beforeAll, describe, expect, it } from 'vitest';
 import { ModelProviderError } from '../../models/errors.ts';
-import { createGate } from '../../testing/async.ts';
+import { z } from 'zod';
+import { createGate, sleep } from '../../testing/async.ts';
 import { createFakeVisionModel } from '../../testing/fake-vision-model.ts';
 import { buildSyntheticDocx } from '../../testing/synthetic-docx.ts';
 import { buildSyntheticPdf } from '../../testing/synthetic-pdf.ts';
@@ -8,6 +9,7 @@ import { TextExtractionError } from '../../text/errors.ts';
 import { extractText } from '../../text/extract-text.ts';
 import type { ExtractTextInput } from '../../text/types.ts';
 import {
+  CHILD_ENVIRONMENT,
   type ExtractInChildDeps,
   EXTRACTION_CHILD_ENTRY,
   extractWithProcess,
@@ -208,6 +210,46 @@ describe('a failure of the extraction', () => {
     const entry = new URL('./babbling-child.test-helper.ts', import.meta.url);
     const error = await failureOf(run(NATIVE, {}, entry));
     expect(error).toMatchObject({ code: 'text_process_crashed', retryable: true });
+  });
+
+  // Verdict R4: the child parses hostile files; the credentials stay in the server.
+  it('gives the child no variable of the server but what Node and poppler need', async () => {
+    process.env.LIASSE_TEST_CANARY_API_KEY = 'synthetic-canary-secret';
+    try {
+      const entry = new URL('./env-child.test-helper.ts', import.meta.url);
+      const error = await failureOf(run(NATIVE, {}, entry));
+      expect(error).toBeInstanceOf(TextExtractionError);
+      const seen = z
+        .object({ keys: z.array(z.string()), canary: z.string().nullable() })
+        .parse(JSON.parse(error instanceof Error ? error.message : '{}'));
+      expect(seen.canary).toBeNull();
+      expect(seen.keys).toContain('PATH');
+      // macOS adds this one to the environment of every process it starts.
+      const injected = (key: string) => key === '__CF_USER_TEXT_ENCODING';
+      expect(seen.keys.filter((key) => !CHILD_ENVIRONMENT.includes(key) && !injected(key))).toEqual(
+        [],
+      );
+    } finally {
+      delete process.env.LIASSE_TEST_CANARY_API_KEY;
+    }
+  });
+
+  // Verdict R5: no processor time is spent, so only the clock can end it.
+  it('ends a child that stops answering, with a coded error another attempt may not meet', async () => {
+    const entry = new URL('./silent-child.test-helper.ts', import.meta.url);
+    const error = await failureOf(run(NATIVE, { processLimits: { maxIdleMs: 200 } }, entry));
+    expect(error).toBeInstanceOf(TextProcessError);
+    expect(error).toMatchObject({ code: 'text_process_timeout', retryable: true });
+  });
+
+  it('does not count the time a vision call takes as silence', async () => {
+    const entry = new URL('./waiting-child.test-helper.ts', import.meta.url);
+    const vision = createFakeVisionModel(async () => {
+      await sleep(1500);
+      return 'Transcribed after a long wait';
+    });
+    const text = await run(NATIVE, { vision, processLimits: { maxIdleMs: 1000 } }, entry);
+    expect(text.pages[0]?.text).toBe('Transcribed after a long wait');
   });
 
   it('takes the reason of a child from its first verdict, however it then ends', async () => {

@@ -3,6 +3,7 @@ import { TextExtractionError } from '../../text/errors.ts';
 import { resolveTextLimits } from '../../text/limits.ts';
 import type { ExtractedText, ExtractTextDeps, ExtractTextInput } from '../../text/types.ts';
 import { DEFAULT_TEXT_PROCESS_LIMITS, TextProcessError, type TextProcessLimits } from './limits.ts';
+import { createIdleDeadline } from './idle-deadline.ts';
 import { type ChildMessage, childMessageSchema, type ParentMessage } from './protocol.ts';
 import { VERDICT_FD, WATCHDOG_VERDICTS } from './verdict.ts';
 
@@ -32,6 +33,32 @@ type Outcome =
 const failed = (error: unknown): Outcome => ({ ok: false, error });
 const crashed = (): Outcome => failed(new TextProcessError('text_process_crashed'));
 
+// What the child keeps of the environment of the server: where to find poppler, the
+// locale and the time zone it formats with, where to write temporary files, and the home
+// directory fontconfig keeps its cache under. The child parses hostile files; the
+// credentials of the server, and `NODE_OPTIONS`, stay out of its reach.
+export const CHILD_ENVIRONMENT: readonly string[] = [
+  'PATH',
+  'HOME',
+  'TMPDIR',
+  'TMP',
+  'TEMP',
+  'LANG',
+  'LANGUAGE',
+  'LC_ALL',
+  'LC_CTYPE',
+  'TZ',
+  'SystemRoot',
+];
+
+const childEnvironment = (): NodeJS.ProcessEnv =>
+  Object.fromEntries(
+    CHILD_ENVIRONMENT.flatMap((key) => {
+      const value = process.env[key];
+      return value === undefined ? [] : [[key, value] as const];
+    }),
+  );
+
 // The child's stdout is discarded: pdfjs prints its warnings there, and the server's own
 // stdout may carry a protocol (MCP over stdio). The fifth entry is the watchdog's verdict.
 const spawnChild = (entry: URL, limits: TextProcessLimits): ChildProcess =>
@@ -40,6 +67,7 @@ const spawnChild = (entry: URL, limits: TextProcessLimits): ChildProcess =>
       ...(RUNS_FROM_SOURCE ? SOURCE_FLAGS : []),
       `--max-old-space-size=${String(limits.maxOldSpaceMb)}`,
     ],
+    env: childEnvironment(),
     serialization: 'advanced',
     stdio: ['ignore', 'ignore', 'inherit', 'ipc', 'pipe'],
   });
@@ -75,7 +103,8 @@ export const extractWithProcess = async (
   { vision, signal, limits, pdfRenderer, processLimits }: ExtractInChildDeps,
 ): Promise<ExtractedText> => {
   signal?.throwIfAborted();
-  const child = spawnChild(entry, { ...DEFAULT_TEXT_PROCESS_LIMITS, ...processLimits });
+  const resolvedLimits = { ...DEFAULT_TEXT_PROCESS_LIMITS, ...processLimits };
+  const child = spawnChild(entry, resolvedLimits);
   onSpawn?.(child.pid);
   let outcome: Outcome | undefined;
   let verdict = '';
@@ -85,6 +114,9 @@ export const extractWithProcess = async (
     outcome = decided;
     child.kill('SIGKILL');
   };
+  const deadline = createIdleDeadline(resolvedLimits.maxIdleMs, () => {
+    decide(failed(new TextProcessError('text_process_timeout')));
+  });
   const abort = (): void => {
     decide(failed(signal?.reason));
   };
@@ -101,6 +133,7 @@ export const extractWithProcess = async (
     id,
     ...page
   }: Extract<ChildMessage, { type: 'vision' }>): Promise<void> => {
+    deadline.waiting();
     try {
       const { image, mime: imageMime, prompt } = page;
       const { markdown, model } = await vision.transcribePage({
@@ -112,6 +145,8 @@ export const extractWithProcess = async (
       tell({ type: 'vision_result', id, markdown, model });
     } catch (error) {
       decide(failed(error));
+    } finally {
+      deadline.answered();
     }
   };
   const receive = (message: ChildMessage): void => {
@@ -144,6 +179,7 @@ export const extractWithProcess = async (
     verdict += chunk.toString('latin1');
   });
   child.on('message', (received) => {
+    deadline.heard();
     const message = childMessageSchema.safeParse(received);
     if (message.success) receive(message.data);
     else decide(crashed());
@@ -156,6 +192,7 @@ export const extractWithProcess = async (
       resolve(outcome ?? crashed());
     });
   });
+  deadline.stop();
   signal?.removeEventListener('abort', abort);
   if (!final.ok) throw final.error;
   return final.text;
