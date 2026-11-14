@@ -243,7 +243,11 @@ Entities are managed locally and deterministically: it is the most queried field
 
 Entity merges go through `type_changes` (kind `merge_entity`) with the same policy: automatic if a strong identifier is shared, approval otherwise.
 
-**Privacy**: IBANs and card numbers are never stored in clear in `identifiers`; only the last 4 characters and a hash are used for matching.
+An IBAN or a card number carried by an entity is a strong identifier too, matched through its hash. A customer number is scoped to the entity that issued it: it attaches only when it has at least 6 characters once normalized and no other entity of the same kind carries it (otherwise the name rules decide), and sharing one never makes a merge automatic. An identifier of a free format is kept but never attaches or merges anything. A document never makes two entities share a strong identifier: a mention whose identifiers designate more than one entity is resolved by the name and similarity rules, and an entity never takes an identifier another entity carries; what the mention suggests is kept as a merge proposal that needs an approval. A fragment is not an identifier: a company ID under 5 characters, a VAT number under 4, or either without a digit, is ignored. Names are normalized without accents on Latin letters only: in other scripts a mark is part of the word. A name or similarity match yields when the entity and the mention carry different company IDs or VAT numbers: a new entity is created, since a duplicate can be merged and a wrong fusion cannot be undone. The text model arbitrates outside the entity lock, and its answer is used only if the candidates are still the same once the lock is taken. A mention of a `private` document skips the similarity rule when the embedding provider is external.
+
+An entity-typed value in `core` or `fields` is the name as the document writes it. The entity it designates is in its provenance entry (`provenance.<field>.entity_id`; one entry per item for a list field, `provenance.<field>[i].entity_id`), and that entry is what a merge rewrites, with `facts.entity_ids`.
+
+**Privacy**: IBANs and card numbers are never stored in clear in `identifiers`; only the last 4 characters and a hash are used for matching. The hash is an HMAC-SHA-256 under a key derived from `FILE_URL_SECRET`: without the key it cannot be reversed by enumerating account numbers, and after a change of that secret the stored hashes no longer match until the entity meets its identifier again.
 
 ## Knowledge layer
 

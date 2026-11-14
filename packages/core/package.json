@@ -37,6 +37,11 @@
       "types": "./dist/embeddings/index.d.ts",
       "default": "./dist/embeddings/index.js"
     },
+    "./entities": {
+      "@liasse/source": "./src/entities/index.ts",
+      "types": "./dist/entities/index.d.ts",
+      "default": "./dist/entities/index.js"
+    },
     "./ingest": {
       "@liasse/source": "./src/ingest/index.ts",
       "types": "./dist/ingest/index.d.ts",
