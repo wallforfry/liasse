@@ -7,8 +7,14 @@ export {
   IngestError,
   UnsupportedFormatError,
 } from './errors.ts';
-export type { IngestResult } from './existing-document.ts';
+export type { IngestResult, Transaction } from './existing-document.ts';
+export {
+  type FileDeletionSweepDeps,
+  type FileDeletionSweepOptions,
+  requeueFileDeletions,
+} from './file-deletion-sweep.ts';
 export { type IngestDeps, ingestFile, type IngestInput } from './ingest-file.ts';
+export { type LiveWrite, writeIfLive } from './live-write.ts';
 export { detectMimeType } from './mime.ts';
 export { processDocumentJob } from './process-document-job.ts';
 export type { FileContent } from './read-content.ts';
