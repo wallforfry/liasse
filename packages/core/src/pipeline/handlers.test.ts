@@ -188,9 +188,26 @@ describe('the job handlers of the pipeline', () => {
     } finally {
       await workers.stop();
     }
-    expect(await harness.db.select({ status: jobs.status }).from(jobs)).toEqual([
-      { status: 'succeeded' },
+    // Link detection is queued with the settled document; its handler is not this module's.
+    const queued = await harness.db.select({ kind: jobs.kind, status: jobs.status }).from(jobs);
+    expect(queued.toSorted((left, right) => left.kind.localeCompare(right.kind))).toEqual([
+      { kind: 'detect_links', status: 'queued' },
+      { kind: 'process_document', status: 'succeeded' },
     ]);
+  });
+
+  it('queues link detection again after a re-extraction, and not after a re-indexing', async () => {
+    const id = await harness.ingest('extracted again');
+    await run(harness.deps(), id);
+    const detections = async () =>
+      (await harness.db.select({ kind: jobs.kind }).from(jobs)).filter(
+        ({ kind }) => kind === 'detect_links',
+      ).length;
+    expect(await detections()).toBe(1);
+    for (const kind of [reindexDocumentJob.name, reextractDocumentJob.name]) {
+      await handlerOf(harness.deps(), kind).run({ documentId: id }, { signal: live(), attempt: 1 });
+    }
+    expect(await detections()).toBe(2);
   });
 });
 

@@ -2,6 +2,8 @@ import { eq } from 'drizzle-orm';
 import { documents } from '../db/schema/documents.ts';
 import type { DocumentStatus } from '../domain/enums.ts';
 import { readPipelineProvenance } from '../domain/provenance.ts';
+import { enqueue } from '../jobs/enqueue.ts';
+import { detectLinksJob } from '../knowledge/jobs.ts';
 import { DocumentNotFoundError } from '../search/indexing.ts';
 import { indexerOf } from './bindings.ts';
 import { runClassificationStage } from './classification-stage.ts';
@@ -36,6 +38,9 @@ const settle = (
         error: null,
       })
       .where(eq(documents.id, documentId));
+    // Link detection reads the title, summary and knowledge just settled: it is queued
+    // with them, once per extraction that reaches this point.
+    await enqueue(tx, { kind: detectLinksJob, payload: { documentId } });
   });
 
 // The indexer refuses a tombstone: a document deleted meanwhile has nothing to index,

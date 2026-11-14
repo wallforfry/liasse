@@ -1,29 +1,20 @@
 import { once } from 'node:events';
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { mkdir, writeFile } from 'node:fs/promises';
 import { createServer as createHttpServer } from 'node:http';
 import { createServer } from 'node:net';
-import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { type Config, loadConfig } from '@liasse/core/config';
+import { loadConfig } from '@liasse/core/config';
 import { documents, jobs } from '@liasse/core/db';
 import { StartupError } from '@liasse/core/domain';
 import { defineJobKind, enqueue, handle } from '@liasse/core/jobs';
-import {
-  createGate,
-  createTestDatabase,
-  SYNTHETIC_ENV,
-  syntheticPdf,
-  type TestDatabase,
-  waitUntil,
-} from '@liasse/core/testing';
+import { createGate, SYNTHETIC_ENV, syntheticPdf, waitUntil } from '@liasse/core/testing';
 import { eq } from 'drizzle-orm';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import { z } from 'zod';
 import { createLogger } from '../log.ts';
-import { type Bind, bindFeatures } from './bindings.ts';
-import { createRuntime, type Runtime, type RuntimeOptions } from './create-runtime.ts';
-
-const TOKEN = 'synthetic-token-0001';
+import type { Bind } from './bindings.ts';
+import { createRuntime } from './create-runtime.ts';
+import { bindWithFakes, useRuntimeHarness } from './runtime.test-helper.ts';
 
 const slowJob = defineJobKind({
   name: 'synthetic_slow',
@@ -36,55 +27,8 @@ const fastJob = defineJobKind({
 });
 
 describe('createRuntime', () => {
-  let database: TestDatabase;
-  let root: string;
-  let lines: string[];
-  const started: Runtime[] = [];
-
-  beforeEach(async () => {
-    database = await createTestDatabase({ migrate: false });
-    root = await mkdtemp(join(tmpdir(), 'liasse-runtime-'));
-    lines = [];
-  });
-
-  afterEach(async () => {
-    await Promise.all(started.splice(0).map((runtime) => runtime.stop()));
-    await rm(root, { recursive: true, force: true });
-    await database.dispose();
-  });
-
-  // Port 0 lets the system pick a free one; the configuration itself refuses it.
-  const configOf = (env: Readonly<Record<string, string>> = {}): Config => {
-    const config = loadConfig({
-      ...SYNTHETIC_ENV,
-      DATABASE_URL: database.url,
-      STORAGE_PATH: join(root, 'files'),
-      EMBEDDING_CACHE_DIR: join(root, 'models'),
-      ...env,
-    });
-    return env.PORT === undefined ? { ...config, server: { ...config.server, port: 0 } } : config;
-  };
-
-  const start = async (
-    env: Readonly<Record<string, string>> = {},
-    options: RuntimeOptions = {},
-  ): Promise<Runtime> => {
-    const runtime = await createRuntime(configOf(env), {
-      logger: createLogger((line) => lines.push(line)),
-      ...options,
-    });
-    started.push(runtime);
-    return runtime;
-  };
-
-  const call = (runtime: Runtime, path: string, init: RequestInit = {}) =>
-    fetch(`http://127.0.0.1:${String(runtime.port)}${path}`, {
-      ...init,
-      headers: {
-        ...Object.fromEntries(new Headers(init.headers)),
-        Authorization: `Bearer ${TOKEN}`,
-      },
-    });
+  const harness = useRuntimeHarness();
+  const { start, call } = harness;
 
   const failureOf = async (work: Promise<unknown>): Promise<unknown> =>
     work.then(
@@ -99,15 +43,17 @@ describe('createRuntime', () => {
     // Read back from the socket: a listener on every interface would report 0.0.0.0 or ::.
     expect(runtime.address).toBe('127.0.0.1');
     expect((await call(runtime, '/types')).status).toBe(200);
-    expect(lines).toEqual(
+    expect(harness.lines()).toEqual(
       expect.arrayContaining([
         'Optional parts: watched folder off, Hindsight off, web UI off.',
         `Liasse is listening on http://127.0.0.1:${String(runtime.port)}`,
       ]),
     );
-    expect(lines.some((line) => line.startsWith('Notice: document processing is not part'))).toBe(
-      true,
+    expect(harness.lines()).toContain(
+      'Notice: consolidation is not part of this build. Listing and applying consolidation ' +
+        'changes answer 501.',
     );
+    expect(harness.lines().some((line) => line.includes('document processing'))).toBe(false);
   });
 
   it('queues again at startup the file removals a past run gave up on', async () => {
@@ -118,28 +64,32 @@ describe('createRuntime', () => {
     const { id } = z.object({ id: z.string() }).parse(await uploaded.json());
     await first.stop();
     // A tombstone whose removal is owed and whose job is gone, as after a long outage.
-    await database.db.update(documents).set({ status: 'deleted', fileDeletedAt: null });
-    await database.db.delete(jobs);
+    await harness.database().db.update(documents).set({ status: 'deleted', fileDeletedAt: null });
+    await harness.database().db.delete(jobs);
 
     await start();
-    const removals = () => database.db.select({ kind: jobs.kind, status: jobs.status }).from(jobs);
+    const removals = () =>
+      harness.database().db.select({ kind: jobs.kind, status: jobs.status }).from(jobs);
     await waitUntil(async () => (await removals()).some(({ status }) => status === 'succeeded'));
     expect(await removals()).toEqual([{ kind: 'delete_file', status: 'succeeded' }]);
-    const [tombstone] = await database.db
-      .select({ id: documents.id, fileDeletedAt: documents.fileDeletedAt })
+    const [tombstone] = await harness
+      .database()
+      .db.select({ id: documents.id, fileDeletedAt: documents.fileDeletedAt })
       .from(documents);
     expect(tombstone?.id).toBe(id);
     expect(tombstone?.fileDeletedAt).toBeInstanceOf(Date);
   });
 
   it('ingests the files of the watched folder when WATCH_DIR is set', async () => {
-    const inbox = join(root, 'inbox');
+    const inbox = join(harness.root(), 'inbox');
     await mkdir(inbox);
     await writeFile(join(inbox, 'dropped.pdf'), syntheticPdf('dropped'));
     await start({ WATCH_DIR: inbox });
-    expect(lines).toContain('Optional parts: watched folder on, Hindsight off, web UI off.');
-    await waitUntil(async () => (await database.db.$count(documents)) === 1);
-    const [row] = await database.db.select().from(documents);
+    expect(harness.lines()).toContain(
+      'Optional parts: watched folder on, Hindsight off, web UI off.',
+    );
+    await waitUntil(async () => (await harness.database().db.$count(documents)) === 1);
+    const [row] = await harness.database().db.select().from(documents);
     expect(row).toMatchObject({ source: 'watch', originalName: 'dropped.pdf' });
   });
 
@@ -159,20 +109,23 @@ describe('createRuntime', () => {
     if (address === null || typeof address === 'string') throw new Error('no port');
     try {
       const runtime = await start({ HINDSIGHT_URL: `http://127.0.0.1:${String(address.port)}` });
-      expect(lines.some((line) => line.includes('are sent to Hindsight at 127.0.0.1'))).toBe(true);
+      expect(
+        harness.lines().some((line) => line.includes('are sent to Hindsight at 127.0.0.1')),
+      ).toBe(true);
       const form = new FormData();
       form.append('file', new File([syntheticPdf('sent to the bank')], 'sent.pdf'));
       const uploaded = await call(runtime, '/documents', { method: 'POST', body: form });
       const { id } = z.object({ id: z.string() }).parse(await uploaded.json());
       // As if its facts had been retained: the bank may hold them.
-      await database.db.update(documents).set({ hindsightHeldSince: new Date() });
+      await harness.database().db.update(documents).set({ hindsightHeldSince: new Date() });
 
       expect((await call(runtime, `/documents/${id}`, { method: 'DELETE' })).status).toBe(204);
       await waitUntil(() => calls.length === 1);
       expect(calls).toEqual([`DELETE /v1/default/banks/documents/documents/${id}`]);
       await waitUntil(async () => {
-        const [row] = await database.db
-          .select({ heldSince: documents.hindsightHeldSince })
+        const [row] = await harness
+          .database()
+          .db.select({ heldSince: documents.hindsightHeldSince })
           .from(documents);
         return row?.heldSince === null;
       });
@@ -188,9 +141,9 @@ describe('createRuntime', () => {
     form.append('file', new File([syntheticPdf('kept local')], 'local.pdf'));
     const uploaded = await call(runtime, '/documents', { method: 'POST', body: form });
     const { id } = z.object({ id: z.string() }).parse(await uploaded.json());
-    await database.db.update(documents).set({ hindsightHeldSince: new Date() });
+    await harness.database().db.update(documents).set({ hindsightHeldSince: new Date() });
     expect((await call(runtime, `/documents/${id}`, { method: 'DELETE' })).status).toBe(204);
-    const kinds = await database.db.select({ kind: jobs.kind }).from(jobs);
+    const kinds = await harness.database().db.select({ kind: jobs.kind }).from(jobs);
     expect(kinds.map(({ kind }) => kind)).not.toContain('hindsight_sync');
   });
 
@@ -199,7 +152,7 @@ describe('createRuntime', () => {
     const running: string[] = [];
     let peak = 0;
     const bind: Bind = (parts) => {
-      const defaults = bindFeatures(parts);
+      const defaults = bindWithFakes(parts);
       return {
         ...defaults,
         handlers: [
@@ -218,25 +171,33 @@ describe('createRuntime', () => {
       };
     };
     const runtime = await start({ WORKERS: '4' }, { bind });
-    expect(lines).toContain('Notice: synthetic binding.');
+    expect(harness.lines()).toContain('Notice: synthetic binding.');
     expect(await (await call(runtime, '/subjects')).json()).toEqual({ subjects: [] });
     expect((await call(runtime, '/upcoming?from=2026-01-01&to=2026-02-01')).status).toBe(501);
 
     for (const label of ['a', 'b', 'c']) {
-      await enqueue(database.db, { kind: slowJob, payload: { label } });
+      await enqueue(harness.database().db, { kind: slowJob, payload: { label } });
     }
     await waitUntil(() => running.length === 1);
     // A job queued after the slow ones finishes while they wait: the dispatcher has had
     // free slots and passed over them, which only their cap explains.
-    const fast = await enqueue(database.db, { kind: fastJob, payload: { label: 'fast' } });
+    const fast = await enqueue(harness.database().db, {
+      kind: fastJob,
+      payload: { label: 'fast' },
+    });
     const statusOf = async (id: string) =>
-      (await database.db.select({ status: jobs.status }).from(jobs).where(eq(jobs.id, id)))[0]
-        ?.status;
+      (
+        await harness
+          .database()
+          .db.select({ status: jobs.status })
+          .from(jobs)
+          .where(eq(jobs.id, id))
+      )[0]?.status;
     await waitUntil(async () => (await statusOf(fast)) === 'succeeded');
     expect(running).toHaveLength(1);
     gate.open();
     await waitUntil(async () => {
-      const rows = await database.db.select({ status: jobs.status }).from(jobs);
+      const rows = await harness.database().db.select({ status: jobs.status }).from(jobs);
       return rows.every(({ status }) => status === 'succeeded');
     });
     expect(peak).toBe(1);
@@ -246,7 +207,7 @@ describe('createRuntime', () => {
     const gate = createGate();
     let aborted = false;
     const bind: Bind = (parts) => ({
-      ...bindFeatures(parts),
+      ...bindWithFakes(parts),
       handlers: [
         handle(
           slowJob,
@@ -262,11 +223,11 @@ describe('createRuntime', () => {
       ],
     });
     const runtime = await start({}, { bind, shutdownGraceMs: 50 });
-    await enqueue(database.db, { kind: slowJob, payload: { label: 'never ends' } });
+    await enqueue(harness.database().db, { kind: slowJob, payload: { label: 'never ends' } });
     await gate.opened;
     expect(await runtime.stop()).toBe(true);
     expect(aborted).toBe(true);
-    expect(lines).toContain('{"event":"jobs_interrupted","aborted":1,"abandoned":0}');
+    expect(harness.lines()).toContain('{"event":"jobs_interrupted","aborted":1,"abandoned":0}');
   });
 
   it('stops once, and refuses connections afterwards', async () => {
@@ -277,10 +238,12 @@ describe('createRuntime', () => {
   });
 
   it('explains a storage it cannot write to, and leaves nothing running', async () => {
-    await writeFile(join(root, 'not-a-directory'), 'x');
-    const error = await failureOf(start({ STORAGE_PATH: join(root, 'not-a-directory', 'files') }));
+    await writeFile(join(harness.root(), 'not-a-directory'), 'x');
+    const error = await failureOf(
+      start({ STORAGE_PATH: join(harness.root(), 'not-a-directory', 'files') }),
+    );
     expect(error).toBeInstanceOf(StartupError);
-    expect(lines.some((line) => line.startsWith('Liasse is listening'))).toBe(false);
+    expect(harness.lines().some((line) => line.startsWith('Liasse is listening'))).toBe(false);
   });
 
   it('explains a port that is taken, and closes what it had opened', async () => {
