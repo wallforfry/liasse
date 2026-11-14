@@ -179,6 +179,41 @@ describe('search', () => {
         searchInputSchema.safeParse({ query: 'obsidian', filters: { status: 'deleted' } }).success,
       ).toBe(false);
     });
+
+    // A ranker is a replaceable engine with an index of its own, which can be stale. The
+    // snippets already leave out the chunks of a tombstone, so the candidate here pairs a
+    // tombstone with a chunk that still has a snippet: only the read of the documents is
+    // left to stop it. A private document indexed with a remote embedder has no embedding,
+    // so the vector ranker returns neither chunk and the injected ranker alone names the
+    // document of the candidate.
+    it('does not return a tombstone that a ranker still names', async () => {
+      const live = await corpus.add(
+        extra('stale-live', ['zircon lantern'], { private: true }),
+        remoteEmbedder,
+      );
+      const tombstone = await corpus.add(
+        extra('stale-gone', ['zircon ember'], { private: true }),
+        remoteEmbedder,
+      );
+      await database.db
+        .update(documents)
+        .set({ status: 'deleted' })
+        .where(eq(documents.id, tombstone));
+      const [chunk] = await database.db
+        .select({ id: chunks.id })
+        .from(chunks)
+        .where(eq(chunks.documentId, live));
+      const idsWhenRankerNames = async (documentId: string): Promise<readonly string[]> => {
+        const fullText = () => Promise.resolve([{ chunkId: chunk?.id ?? '', documentId }]);
+        const hits = await search(
+          { ...deps, fullText },
+          { query: 'zircon', limit: 50, includePrivate: true },
+        );
+        return hits.map((hit) => hit.id);
+      };
+      expect(await idsWhenRankerNames(live)).toContain(live);
+      expect(await idsWhenRankerNames(tombstone)).not.toContain(tombstone);
+    });
   });
 
   describe('private documents', () => {
