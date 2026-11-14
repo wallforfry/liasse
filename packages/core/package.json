@@ -52,6 +52,11 @@
       "types": "./dist/prompt/index.d.ts",
       "default": "./dist/prompt/index.js"
     },
+    "./query": {
+      "@liasse/source": "./src/query/index.ts",
+      "types": "./dist/query/index.d.ts",
+      "default": "./dist/query/index.js"
+    },
     "./registry": {
       "@liasse/source": "./src/registry/index.ts",
       "types": "./dist/registry/index.d.ts",
