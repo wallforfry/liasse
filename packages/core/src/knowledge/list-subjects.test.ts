@@ -1,4 +1,6 @@
+import { eq } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { documents } from '../db/schema/documents.ts';
 import { createTestDatabase, type TestDatabase } from '../testing/test-database.ts';
 import { listSubjects, listSubjectsOutputSchema } from './list-subjects.ts';
 import { buildScenario, type Scenario } from './scenario.test-helper.ts';
@@ -59,6 +61,22 @@ describe('listSubjects, on a synthetic household', () => {
     ]);
     expect(await summary({ query: 'AB-123-CD' })).toEqual([[car, 2]]);
     expect(await summary({ query: 'Private loan account' })).toEqual([]);
+  });
+
+  // A document made public keeps the private subject it created until it is extracted
+  // again: a public document then concerns a subject that is still private.
+  it('never shows a private subject without being asked, even when a public document concerns it', async () => {
+    const { privateLetter } = scenario.documents;
+    const { privateAccount } = scenario.subjects;
+    const flag = (value: boolean) =>
+      database.db.update(documents).set({ private: value }).where(eq(documents.id, privateLetter));
+    await flag(false);
+    try {
+      expect((await summary()).map(([id]) => id)).not.toContain(privateAccount);
+      expect(await summary({ includePrivate: true })).toContainEqual([privateAccount, 1]);
+    } finally {
+      await flag(true);
+    }
   });
 
   it('says when the limit cut the list', async () => {
