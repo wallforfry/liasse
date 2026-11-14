@@ -14,8 +14,10 @@ export const REQUEST_ID_HEADER = 'X-Request-Id';
 export const requestId: MiddlewareHandler<AppEnv> = async (context, next) => {
   const id = randomUUID();
   context.set('requestId', id);
-  context.header(REQUEST_ID_HEADER, id);
   await next();
+  // Set on the final response: a route that builds its own (the file stream) would
+  // otherwise drop a header set before it ran.
+  context.res.headers.set(REQUEST_ID_HEADER, id);
 };
 
 // For an API that answers JSON to programs: nothing may be framed, sniffed, cached or

@@ -25,7 +25,8 @@ export interface RuntimeOptions {
 }
 
 export interface Runtime {
-  /** The port the server listens on. */
+  /** The address and port the server listens on, as the system bound them. */
+  readonly address: string;
   readonly port: number;
   /** Resolves to false when something could not be stopped cleanly. Runs once. */
   readonly stop: () => Promise<boolean>;
@@ -132,6 +133,7 @@ export const createRuntime = async (
 
     let stopped: Promise<boolean> | undefined;
     return {
+      address: listener.address,
       port: listener.port,
       stop: () => {
         stopped ??= runShutdown(stopping, logger);

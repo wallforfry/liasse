@@ -1,3 +1,4 @@
+import { ApiError } from '@liasse/core/api';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { z } from 'zod';
 import { MAX_JSON_BODY_BYTES, MAX_JSON_DEPTH, SECURITY_HEADERS } from './guards.ts';
@@ -115,6 +116,33 @@ describe('hardening', () => {
       expect(lines[0]).toContain('"error":"Error"');
       expect(lines.join('\n')).not.toContain('secret_column');
       expect(lines.join('\n')).not.toContain('/data/files');
+    });
+  });
+
+  describe('a typed failure', () => {
+    it('keeps its code and the request id whatever its details hold', async () => {
+      const app = harness.appWith({
+        features: {
+          listSubjects: () =>
+            Promise.reject(
+              new ApiError('invalid', 'synthetic_refusal', 'Refused.', {
+                code: 'forged',
+                request_id: 'forged',
+                hint: 'kept',
+              }),
+            ),
+        },
+      });
+      const response = await app.request('/subjects', authorized());
+      expect(response.status).toBe(400);
+      expect(await response.json()).toEqual({
+        error: {
+          code: 'synthetic_refusal',
+          message: 'Refused.',
+          request_id: response.headers.get('X-Request-Id'),
+          hint: 'kept',
+        },
+      });
     });
   });
 

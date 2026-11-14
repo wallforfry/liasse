@@ -11,6 +11,8 @@ export interface ListenOptions {
 }
 
 export interface Listener {
+  /** The address and port the system bound, read back from the socket. */
+  readonly address: string;
   readonly port: number;
   /**
    * Stops accepting connections and lets the requests in progress finish. Those still
@@ -24,10 +26,10 @@ const errorCode = (error: unknown): string =>
     ? error.code
     : 'unknown error';
 
-const portOf = (server: Server): number => {
+const boundOf = (server: Server): AddressInfo => {
   const address: AddressInfo | string | null = server.address();
   if (address === null || typeof address === 'string') throw new Error('The server has no port');
-  return address.port;
+  return address;
 };
 
 const close = async (server: Server, graceMs: number): Promise<void> => {
@@ -56,5 +58,6 @@ export const listen = async ({ fetch, host, port }: ListenOptions): Promise<List
         'set HOST and PORT to an address this machine has and a port that is free.',
     );
   }
-  return { port: portOf(server), close: (graceMs) => close(server, graceMs) };
+  const { address, port: boundPort } = boundOf(server);
+  return { address, port: boundPort, close: (graceMs) => close(server, graceMs) };
 };

@@ -15,6 +15,7 @@ import {
   type TestDatabase,
   waitUntil,
 } from '@liasse/core/testing';
+import { eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { z } from 'zod';
 import { createLogger } from '../log.ts';
@@ -25,6 +26,11 @@ const TOKEN = 'synthetic-token-0001';
 
 const slowJob = defineJobKind({
   name: 'synthetic_slow',
+  schema: z.object({ label: z.string() }),
+});
+
+const fastJob = defineJobKind({
+  name: 'synthetic_fast',
   schema: z.object({ label: z.string() }),
 });
 
@@ -89,6 +95,8 @@ describe('createRuntime', () => {
 
   it('migrates, listens on the loopback address and says what it does on the logger', async () => {
     const runtime = await start();
+    // Read back from the socket: a listener on every interface would report 0.0.0.0 or ::.
+    expect(runtime.address).toBe('127.0.0.1');
     expect((await call(runtime, '/types')).status).toBe(200);
     expect(lines).toEqual(
       expect.arrayContaining([
@@ -150,6 +158,7 @@ describe('createRuntime', () => {
             await gate.opened;
             running.splice(running.indexOf(payload.label), 1);
           }),
+          handle(fastJob, () => Promise.resolve()),
         ],
         perKindConcurrency: { [slowJob.name]: 1 },
         features: { listSubjects: () => Promise.resolve({ subjects: [] }) },
@@ -165,6 +174,14 @@ describe('createRuntime', () => {
       await enqueue(database.db, { kind: slowJob, payload: { label } });
     }
     await waitUntil(() => running.length === 1);
+    // A job queued after the slow ones finishes while they wait: the dispatcher has had
+    // free slots and passed over them, which only their cap explains.
+    const fast = await enqueue(database.db, { kind: fastJob, payload: { label: 'fast' } });
+    const statusOf = async (id: string) =>
+      (await database.db.select({ status: jobs.status }).from(jobs).where(eq(jobs.id, id)))[0]
+        ?.status;
+    await waitUntil(async () => (await statusOf(fast)) === 'succeeded');
+    expect(running).toHaveLength(1);
     gate.open();
     await waitUntil(async () => {
       const rows = await database.db.select({ status: jobs.status }).from(jobs);

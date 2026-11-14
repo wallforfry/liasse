@@ -55,6 +55,7 @@ describe('GET /documents/:id/file', () => {
         'cache-control': 'private, no-store',
         'x-frame-options': 'DENY',
       });
+      expect(response.headers.get('X-Request-Id')).toMatch(/^[0-9a-f-]{36}$/);
     });
 
     it('offers as a download what a browser could run', async () => {
