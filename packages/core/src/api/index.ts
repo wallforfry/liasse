@@ -67,7 +67,7 @@ export {
   type ListEntitiesRequest,
   listEntitiesRequestSchema,
 } from './list-entities.ts';
-export { queryDocuments } from './query-documents.ts';
+export { queryDocuments, queryResultSchema } from './query-documents.ts';
 export {
   searchDocuments,
   type SearchRequest,
