@@ -13,6 +13,7 @@ export interface TextLimits {
   readonly maxHeicEdgePx: number;
   readonly maxDocxXmlBytes: number;
   readonly maxDocxXmlNodes: number;
+  readonly maxDocxTextChars: number;
 }
 
 export const DEFAULT_TEXT_LIMITS: TextLimits = Object.freeze({
@@ -28,10 +29,14 @@ export const DEFAULT_TEXT_LIMITS: TextLimits = Object.freeze({
   maxHeicPixels: 50_000_000,
   // Close to an A4 page at the 200 dpi used for scanned PDFs.
   maxHeicEdgePx: 2400,
-  maxDocxXmlBytes: 20 * MEBIBYTE,
-  // An element costs a few hundred bytes once parsed, so this keeps the tree of one
-  // document near 150 MB at worst. Several hundred pages of Word output stay below it.
-  maxDocxXmlNodes: 500_000,
+  // The main part of a real document rarely exceeds a few megabytes; parsing costs
+  // several times its size in memory.
+  maxDocxXmlBytes: 8 * MEBIBYTE,
+  // About the text of a 600-page book.
+  maxDocxTextChars: 2_000_000,
+  // An element costs a few hundred bytes once parsed and rendered: a document close to
+  // this limit was measured at about 165 MB above an idle process.
+  maxDocxXmlNodes: 250_000,
 });
 
 export const resolveTextLimits = (overrides: Partial<TextLimits> = {}): TextLimits => ({

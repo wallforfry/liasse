@@ -241,8 +241,38 @@ describe('extractText on a DOCX with too many elements', () => {
     });
   });
 
-  it('holds at most 500 000 nodes by default', () => {
-    expect(DEFAULT_TEXT_LIMITS.maxDocxXmlNodes).toBe(500_000);
+  it('holds at most 250 000 nodes by default', () => {
+    expect(DEFAULT_TEXT_LIMITS.maxDocxXmlNodes).toBe(250_000);
+  });
+});
+
+describe('extractText on a DOCX with too much text', () => {
+  // Entities count as written: the cap is checked before they are decoded.
+  const bytes = buildSyntheticDocx(paragraph('12345') + paragraph('&amp;<![CDATA[6789]]>'));
+  const characters = 5 + 5 + 4;
+  const extractWithin = (maxDocxTextChars: number) =>
+    extractText(
+      { bytes, mime: DOCX },
+      { vision: createFakeVisionModel(), limits: { maxDocxTextChars } },
+    );
+
+  it('accepts a document with exactly as many characters of text as the limit', async () => {
+    expect((await extractWithin(characters)).pages[0]?.text).toBe('12345\n\n&6789');
+  });
+
+  it('refuses a document with one character of text more than the limit', async () => {
+    const failure = extractWithin(characters - 1);
+    await expect(failure).rejects.toMatchObject({
+      name: 'TextExtractionError',
+      code: 'docx_too_large',
+      retryable: false,
+    });
+    await expect(failure).rejects.toThrow(/characters of text/);
+  });
+
+  it('reads 8 MiB of XML and 2 000 000 characters of text by default', () => {
+    expect(DEFAULT_TEXT_LIMITS.maxDocxXmlBytes).toBe(8 * 1024 * 1024);
+    expect(DEFAULT_TEXT_LIMITS.maxDocxTextChars).toBe(2_000_000);
   });
 });
 

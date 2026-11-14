@@ -19,7 +19,10 @@ export const extractDocx = async (
   if (xml === undefined) {
     throw new TextExtractionError('docx_corrupt', `The archive holds no ${MAIN_DOCUMENT}`);
   }
-  const document = parseXml(new TextDecoder().decode(xml), limits.maxDocxXmlNodes);
+  const document = parseXml(new TextDecoder().decode(xml), {
+    maxNodes: limits.maxDocxXmlNodes,
+    maxTextChars: limits.maxDocxTextChars,
+  });
   const markdown = renderDocxMarkdown(document);
   if (markdown === undefined) {
     throw new TextExtractionError('docx_corrupt', `${MAIN_DOCUMENT} has no document body`);

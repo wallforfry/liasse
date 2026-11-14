@@ -89,23 +89,45 @@ const openElement = (body: string): OpenElement => {
   };
 };
 
+export interface XmlLimits {
+  readonly maxNodes: number;
+  // Counted as written, before entities are decoded: decoding and rendering a text copy
+  // it several times, so the cap has to hold before the first copy.
+  readonly maxTextChars: number;
+}
+
+const tooLarge = (limit: number, unit: string): TextExtractionError =>
+  new TextExtractionError(
+    'docx_too_large',
+    `The document XML holds more than the limit of ${String(limit)} ${unit}`,
+  );
+
+const createBudget = ({ maxNodes, maxTextChars }: XmlLimits) => {
+  let nodes = 0;
+  let textChars = 0;
+  return {
+    countNode: (): void => {
+      nodes += 1;
+      if (nodes > maxNodes) throw tooLarge(maxNodes, 'nodes');
+    },
+    countText: (length: number): void => {
+      textChars += length;
+      if (textChars > maxTextChars) throw tooLarge(maxTextChars, 'characters of text');
+    },
+  };
+};
+
 // A small, non-validating parser for the XML that Word writes: elements, attributes,
 // text, CDATA and the five predefined entities. Declarations, comments and processing
-// instructions are skipped; DTD entities are never expanded. The tree holds at most
-// `maxNodes` elements and text nodes: the size of the XML bounds its bytes, not the
-// memory of the objects built from it.
-export const parseXml = (xml: string, maxNodes: number): XmlElement => {
+// instructions are skipped; DTD entities are never expanded. The size of the XML bounds
+// its bytes, not the memory of what is built from it, so the tree holds at most
+// `maxNodes` elements and text nodes and `maxTextChars` characters of text.
+export const parseXml = (xml: string, limits: XmlLimits): XmlElement => {
   const root: OpenElement = { name: '#document', attributes: NO_ATTRIBUTES, children: [] };
   const stack: OpenElement[] = [root];
-  let nodes = 0;
+  const budget = createBudget(limits);
   const append = (parent: OpenElement, node: XmlNode): void => {
-    nodes += 1;
-    if (nodes > maxNodes) {
-      throw new TextExtractionError(
-        'docx_too_large',
-        `The document XML holds more than the limit of ${String(maxNodes)} nodes`,
-      );
-    }
+    budget.countNode();
     parent.children.push(node);
   };
   let position = 0;
@@ -113,11 +135,15 @@ export const parseXml = (xml: string, maxNodes: number): XmlElement => {
     const current = stack.at(-1) ?? root;
     const start = xml.indexOf('<', position);
     const text = xml.slice(position, start === -1 ? xml.length : start);
-    if (text !== '') append(current, decodeEntities(text));
+    if (text !== '') {
+      budget.countText(text.length);
+      append(current, decodeEntities(text));
+    }
     if (start === -1) break;
     const { opening, body, end } = readMarkup(xml, start);
     position = end;
     if (opening === '<![CDATA[') {
+      budget.countText(body.length);
       append(current, body);
     } else if (opening === '<' && body.startsWith('/')) {
       if (stack.length === 1 || current.name !== body.slice(1).trim()) {
