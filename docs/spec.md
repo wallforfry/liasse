@@ -368,7 +368,9 @@ A single Node binary, configured through environment variables, shipped as a mul
 - **Signed file URLs.** `file_url` is `PUBLIC_URL/documents/:id/file?expires=…&signature=…`: an HMAC-SHA-256 of the document ID and the expiry, under a key derived from `FILE_URL_SECRET`. It opens that one file, for 15 minutes, any number of times, and nothing else. It stops working when the document is deleted and works again if the same bytes revive the document before it expires. It is issued only to an authenticated caller, private documents included.
 - **Files are served as data.** `Content-Disposition` is `attachment` except for PDF, JPEG and PNG, always with `X-Content-Type-Options: nosniff` and `Content-Security-Policy: sandbox`.
 - **Errors** are `{"error": {"code", "message", "request_id", …}}` with stable codes. A route whose feature is not part of the build answers 501 `not_implemented`.
+- **Private documents in counts.** The document counts of `GET /types` and `GET /entities` leave private documents out unless `include_private=true`, as search and queries do.
 - **No CORS.** The API allows no other origin; the web UI is served from the same one.
+- **Shutdown.** SIGTERM or SIGINT stops accepting requests, lets requests and jobs in progress finish within a grace period, then exits with code 0 (1 if a part could not be stopped). Any second signal exits at once with code 1.
 
 **Main variables**
 
