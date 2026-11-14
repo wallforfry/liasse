@@ -3,7 +3,11 @@ import { EmbeddingDimensionError, ModelProviderError } from '../errors.ts';
 import type { Embedder } from '../ports.ts';
 import { createProviderEmbedder, MAX_TEXTS_PER_REQUEST } from './embedder.ts';
 import type { HostResolver } from './locality.ts';
-import { type StubHandler, type StubServer, startStubServer } from './stub-server.ts';
+import {
+  type StubHandler,
+  type StubServer,
+  startStubServer,
+} from '../../testing/provider-stub-server.ts';
 import {
   embeddingConfig,
   embeddingInputOf,
@@ -11,7 +15,7 @@ import {
   failure,
   indexedEmbeddings,
   SYNTHETIC_API_KEY,
-} from './wire-fixtures.ts';
+} from '../../testing/provider-wire.ts';
 
 // The DNS of the test: a Compose service on a private address, a public name.
 const resolveHost: HostResolver = (hostname) =>

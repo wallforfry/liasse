@@ -1,4 +1,4 @@
-import { SYNTHETIC_API_KEY } from './wire-fixtures.ts';
+import { SYNTHETIC_API_KEY } from '../../testing/provider-wire.ts';
 
 // Minimal successful responses in the native wire format of each cloud provider, enough for
 // the provider package to accept them. The local server stands in for the provider's API.

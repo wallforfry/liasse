@@ -3,10 +3,19 @@ import { z } from 'zod';
 import { LLM_PROVIDERS } from '../../domain/enums.ts';
 import { createProviderEmbedder } from './embedder.ts';
 import { PROVIDERS } from './registry.ts';
-import { type StubResponse, type StubServer, startStubServer } from './stub-server.ts';
+import {
+  type StubResponse,
+  type StubServer,
+  startStubServer,
+} from '../../testing/provider-stub-server.ts';
 import { createTextModel } from './text-model.ts';
-import { NATIVE_GENERATION } from './native-fixtures.ts';
-import { embeddingConfig, embeddings, llmConfig, SYNTHETIC_API_KEY } from './wire-fixtures.ts';
+import { NATIVE_GENERATION } from './native.fixture.ts';
+import {
+  embeddingConfig,
+  embeddings,
+  llmConfig,
+  SYNTHETIC_API_KEY,
+} from '../../testing/provider-wire.ts';
 
 const OUTPUT = { decision: 'existing' };
 

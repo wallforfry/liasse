@@ -2,7 +2,11 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { z } from 'zod';
 import { ModelOutputError, ModelProviderError, OutputSchemaError } from '../errors.ts';
 import type { TextModel } from '../ports.ts';
-import { type StubHandler, type StubServer, startStubServer } from './stub-server.ts';
+import {
+  type StubHandler,
+  type StubServer,
+  startStubServer,
+} from '../../testing/provider-stub-server.ts';
 import { createTextModel } from './text-model.ts';
 import {
   chatCompletion,
@@ -10,7 +14,7 @@ import {
   llmConfig,
   RESOLVED_MODEL,
   SYNTHETIC_API_KEY,
-} from './wire-fixtures.ts';
+} from '../../testing/provider-wire.ts';
 
 const classification = z.strictObject({
   decision: z.enum(['existing', 'new']),

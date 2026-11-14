@@ -30,6 +30,7 @@ export interface DeleteDocumentDeps {
 // first recognises the same bytes later, the second is what `delete_file` removes.
 // `hindsight_held_since` stays as well: it says nothing of the content, and it is the
 // only trace that Hindsight may still hold facts of the document and owes a forget.
+// `hindsight_retain_until` stays with it: a retain in flight may still land.
 const BLANK_CONTENT = {
   status: 'deleted',
   state: 'current',

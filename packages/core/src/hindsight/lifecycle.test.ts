@@ -7,6 +7,7 @@ import { findSensitiveIdentifiers } from '../entities/detect-sensitive.ts';
 import { jobs } from '../db/schema/jobs.ts';
 import { facts } from '../db/schema/knowledge.ts';
 import { deleteDocument } from '../ingest/delete-document.ts';
+import { DeferJobError } from '../jobs/errors.ts';
 import { createIngestHarness, type IngestHarness } from '../ingest/harness.test-helper.ts';
 import { ingestFile } from '../ingest/ingest-file.ts';
 import { createGate, waitUntil } from '../testing/async.ts';
@@ -15,6 +16,7 @@ import type { HindsightClientOptions } from './client.ts';
 import { flagsSyntheticIdentifiers, SYNTHETIC_IDENTIFIER } from './detector.test-helper.ts';
 import { createHindsightIntegration } from './integration.ts';
 import { type HindsightStub, startHindsightStub, type StubOverride } from './stub.test-helper.ts';
+import { outlastRetains } from './sync-state.test-helper.ts';
 
 const NEVER_ABORTED = new AbortController().signal;
 
@@ -186,8 +188,14 @@ describe('the Hindsight sync over the life of a document', () => {
     await harness.database.db.delete(jobs);
 
     await flagPrivate(id);
-    await runQueued();
+    // The forget is sent; the job waits for the bound of the retain that timed out.
+    await expect(runQueued()).rejects.toBeInstanceOf(DeferJobError);
     expect(remote(id)).toBeUndefined();
+    expect((await row(id)).hindsightHeldSince).not.toBeNull();
+
+    await outlastRetains(harness.database.db, id);
+    await runQueued();
+    expect((await row(id)).hindsightHeldSince).toBeNull();
   });
 
   it('leaves out a fact with a valid IBAN once the detector of entities/ is bound', async () => {

@@ -1,9 +1,9 @@
 import { z } from 'zod';
-import { loadConfig } from '../../config/load.ts';
-import { SYNTHETIC_ENV } from '../../testing/synthetic-env.ts';
-import type { RemoteEmbeddingConfig } from './embedder.ts';
-import type { LlmConfig } from './language-call.ts';
-import type { StubRequest, StubResponse } from './stub-server.ts';
+import { loadConfig } from '../config/load.ts';
+import { SYNTHETIC_ENV } from './synthetic-env.ts';
+import type { RemoteEmbeddingConfig } from '../models/providers/embedder.ts';
+import type { LlmConfig } from '../models/providers/language-call.ts';
+import type { StubRequest, StubResponse } from './provider-stub-server.ts';
 
 // Responses in the wire format of the OpenAI Chat Completions and Embeddings APIs, which
 // Ollama and every `openai-compatible` server speak.

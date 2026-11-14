@@ -1,5 +1,5 @@
 {
-  "id": "49af0d9d-5668-4478-8b3a-dbeb8eb38d82",
+  "id": "9c6dc28b-73fd-4eb8-b349-f609119bea16",
   "prevId": "b342364f-e7bd-4db0-9381-b81d4229e858",
   "version": "7",
   "dialect": "postgresql",
@@ -56,8 +56,8 @@
           "primaryKey": false,
           "notNull": false,
           "generated": {
-            "type": "stored",
-            "as": "liasse_tsvector(\"language\", \"text\")"
+            "as": "liasse_tsvector(\"language\", \"text\")",
+            "type": "stored"
           }
         }
       },
@@ -73,9 +73,9 @@
             }
           ],
           "isUnique": false,
-          "with": {},
+          "concurrently": false,
           "method": "btree",
-          "concurrently": false
+          "with": {}
         },
         "chunks_language_idx": {
           "name": "chunks_language_idx",
@@ -88,9 +88,9 @@
             }
           ],
           "isUnique": false,
-          "with": {},
+          "concurrently": false,
           "method": "btree",
-          "concurrently": false
+          "with": {}
         },
         "chunks_tsv_idx": {
           "name": "chunks_tsv_idx",
@@ -103,9 +103,9 @@
             }
           ],
           "isUnique": false,
-          "with": {},
+          "concurrently": false,
           "method": "gin",
-          "concurrently": false
+          "with": {}
         },
         "chunks_embedding_idx": {
           "name": "chunks_embedding_idx",
@@ -119,24 +119,24 @@
             }
           ],
           "isUnique": false,
-          "with": {},
+          "concurrently": false,
           "method": "hnsw",
-          "concurrently": false
+          "with": {}
         }
       },
       "foreignKeys": {
         "chunks_document_id_documents_id_fk": {
           "name": "chunks_document_id_documents_id_fk",
           "tableFrom": "chunks",
+          "tableTo": "documents",
           "columnsFrom": [
             "document_id"
           ],
-          "tableTo": "documents",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
@@ -184,8 +184,8 @@
           "primaryKey": false,
           "notNull": false,
           "generated": {
-            "type": "stored",
-            "as": "liasse_tsvector(\"language\", \"text\")"
+            "as": "liasse_tsvector(\"language\", \"text\")",
+            "type": "stored"
           }
         }
       },
@@ -201,24 +201,24 @@
             }
           ],
           "isUnique": false,
-          "with": {},
+          "concurrently": false,
           "method": "gin",
-          "concurrently": false
+          "with": {}
         }
       },
       "foreignKeys": {
         "document_pages_document_id_documents_id_fk": {
           "name": "document_pages_document_id_documents_id_fk",
           "tableFrom": "document_pages",
+          "tableTo": "documents",
           "columnsFrom": [
             "document_id"
           ],
-          "tableTo": "documents",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {
@@ -413,6 +413,12 @@
           "primaryKey": false,
           "notNull": false
         },
+        "hindsight_retain_until": {
+          "name": "hindsight_retain_until",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
         "ingested_at": {
           "name": "ingested_at",
           "type": "timestamp with time zone",
@@ -440,9 +446,9 @@
             }
           ],
           "isUnique": false,
-          "with": {},
+          "concurrently": false,
           "method": "btree",
-          "concurrently": false
+          "with": {}
         },
         "documents_type_id_idx": {
           "name": "documents_type_id_idx",
@@ -455,9 +461,9 @@
             }
           ],
           "isUnique": false,
-          "with": {},
+          "concurrently": false,
           "method": "btree",
-          "concurrently": false
+          "with": {}
         },
         "documents_subject_ids_idx": {
           "name": "documents_subject_ids_idx",
@@ -470,34 +476,34 @@
             }
           ],
           "isUnique": false,
-          "with": {},
+          "concurrently": false,
           "method": "gin",
-          "concurrently": false
+          "with": {}
         }
       },
       "foreignKeys": {
         "documents_type_id_doc_types_id_fk": {
           "name": "documents_type_id_doc_types_id_fk",
           "tableFrom": "documents",
+          "tableTo": "doc_types",
           "columnsFrom": [
             "type_id"
           ],
-          "tableTo": "doc_types",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "no action"
+          "onDelete": "no action",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {
         "documents_sha256_unique": {
           "name": "documents_sha256_unique",
+          "nullsNotDistinct": false,
           "columns": [
             "sha256"
-          ],
-          "nullsNotDistinct": false
+          ]
         }
       },
       "policies": {},
@@ -593,10 +599,10 @@
             }
           ],
           "isUnique": false,
-          "with": {},
-          "method": "btree",
           "where": "\"jobs\".\"status\" = 'queued'",
-          "concurrently": false
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
         }
       },
       "foreignKeys": {},
@@ -691,9 +697,9 @@
             }
           ],
           "isUnique": false,
-          "with": {},
+          "concurrently": false,
           "method": "btree",
-          "concurrently": false
+          "with": {}
         },
         "document_dates_document_id_idx": {
           "name": "document_dates_document_id_idx",
@@ -706,24 +712,24 @@
             }
           ],
           "isUnique": false,
-          "with": {},
+          "concurrently": false,
           "method": "btree",
-          "concurrently": false
+          "with": {}
         }
       },
       "foreignKeys": {
         "document_dates_document_id_documents_id_fk": {
           "name": "document_dates_document_id_documents_id_fk",
           "tableFrom": "document_dates",
+          "tableTo": "documents",
           "columnsFrom": [
             "document_id"
           ],
-          "tableTo": "documents",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
@@ -832,9 +838,9 @@
             }
           ],
           "isUnique": true,
-          "with": {},
+          "concurrently": false,
           "method": "btree",
-          "concurrently": false
+          "with": {}
         },
         "document_links_to_document_id_idx": {
           "name": "document_links_to_document_id_idx",
@@ -847,37 +853,37 @@
             }
           ],
           "isUnique": false,
-          "with": {},
+          "concurrently": false,
           "method": "btree",
-          "concurrently": false
+          "with": {}
         }
       },
       "foreignKeys": {
         "document_links_from_document_id_documents_id_fk": {
           "name": "document_links_from_document_id_documents_id_fk",
           "tableFrom": "document_links",
+          "tableTo": "documents",
           "columnsFrom": [
             "from_document_id"
           ],
-          "tableTo": "documents",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         },
         "document_links_to_document_id_documents_id_fk": {
           "name": "document_links_to_document_id_documents_id_fk",
           "tableFrom": "document_links",
+          "tableTo": "documents",
           "columnsFrom": [
             "to_document_id"
           ],
-          "tableTo": "documents",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
@@ -991,8 +997,8 @@
           "primaryKey": false,
           "notNull": false,
           "generated": {
-            "type": "stored",
-            "as": "liasse_tsvector(\"language\", \"text\")"
+            "as": "liasse_tsvector(\"language\", \"text\")",
+            "type": "stored"
           }
         },
         "created_at": {
@@ -1015,9 +1021,9 @@
             }
           ],
           "isUnique": false,
-          "with": {},
+          "concurrently": false,
           "method": "btree",
-          "concurrently": false
+          "with": {}
         },
         "facts_entity_ids_idx": {
           "name": "facts_entity_ids_idx",
@@ -1030,9 +1036,9 @@
             }
           ],
           "isUnique": false,
-          "with": {},
+          "concurrently": false,
           "method": "gin",
-          "concurrently": false
+          "with": {}
         },
         "facts_subject_ids_idx": {
           "name": "facts_subject_ids_idx",
@@ -1045,9 +1051,9 @@
             }
           ],
           "isUnique": false,
-          "with": {},
+          "concurrently": false,
           "method": "gin",
-          "concurrently": false
+          "with": {}
         },
         "facts_tsv_idx": {
           "name": "facts_tsv_idx",
@@ -1060,9 +1066,9 @@
             }
           ],
           "isUnique": false,
-          "with": {},
+          "concurrently": false,
           "method": "gin",
-          "concurrently": false
+          "with": {}
         },
         "facts_embedding_idx": {
           "name": "facts_embedding_idx",
@@ -1076,24 +1082,24 @@
             }
           ],
           "isUnique": false,
-          "with": {},
+          "concurrently": false,
           "method": "hnsw",
-          "concurrently": false
+          "with": {}
         }
       },
       "foreignKeys": {
         "facts_document_id_documents_id_fk": {
           "name": "facts_document_id_documents_id_fk",
           "tableFrom": "facts",
+          "tableTo": "documents",
           "columnsFrom": [
             "document_id"
           ],
-          "tableTo": "documents",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
@@ -1272,10 +1278,10 @@
       "uniqueConstraints": {
         "doc_types_slug_unique": {
           "name": "doc_types_slug_unique",
+          "nullsNotDistinct": false,
           "columns": [
             "slug"
-          ],
-          "nullsNotDistinct": false
+          ]
         }
       },
       "policies": {},
@@ -1528,10 +1534,10 @@
     }
   },
   "schemas": {},
-  "views": {},
   "sequences": {},
   "roles": {},
   "policies": {},
+  "views": {},
   "_meta": {
     "columns": {},
     "schemas": {},

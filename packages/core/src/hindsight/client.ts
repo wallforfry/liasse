@@ -7,6 +7,7 @@ import {
   invalidResponse,
   readJson,
   type RequestPolicy,
+  requestWindowMs,
   send,
   statusError,
 } from './request.ts';
@@ -32,6 +33,11 @@ export interface HindsightClient {
    * held no such document, which is the state a forget asks for.
    */
   readonly forget: (documentId: string, signal?: AbortSignal) => Promise<boolean>;
+  /**
+   * The longest a request may stay in flight, its retries included. Past it, the client
+   * has given up; what Hindsight still does with a request it received is its own.
+   */
+  readonly requestWindowMs: number;
 }
 
 // A synchronous retain returns once Hindsight has extracted and stored the memories,
@@ -104,5 +110,6 @@ export const createHindsightClient = (
   return {
     retain: (item, signal) => send(policy, retainRequest(item), signal),
     forget: (documentId, signal) => send(policy, forgetRequest(documentId), signal),
+    requestWindowMs: requestWindowMs(policy),
   };
 };

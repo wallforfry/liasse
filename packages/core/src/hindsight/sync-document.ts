@@ -1,7 +1,11 @@
 import type { Database } from '../db/client.ts';
 import type { HindsightClient } from './client.ts';
 import { type SyncSession, withDocumentSyncLock } from './document-lock.ts';
-import { HindsightSyncBusyError, HindsightSyncLockLostError } from './errors.ts';
+import {
+  HindsightRetainInFlightError,
+  HindsightSyncBusyError,
+  HindsightSyncLockLostError,
+} from './errors.ts';
 import {
   buildRetainItem,
   retainHash,
@@ -13,6 +17,7 @@ import {
   readSyncState,
   recordForgotten,
   recordOutcomeUnknown,
+  recordRetainAnswered,
   recordRetained,
   recordRetainStarted,
   type SyncState,
@@ -82,11 +87,15 @@ const sendRequest = async (run: SyncRun, request: () => Promise<unknown>): Promi
 };
 
 // The record is cleared after the answer and never before: a forget that fails leaves
-// it set, which is what makes the forget owed and lets the sweep queue it again.
+// it set, which is what makes the forget owed and lets the sweep queue it again. A
+// retain that may still land keeps it set as well, and the forget is owed once more.
 const forget = async (run: SyncRun, state: SyncState): Promise<HindsightSyncAction> => {
   if (!state.mayHold) return 'skipped';
   await sendRequest(run, () => run.deps.client.forget(run.documentId, run.signal));
-  await recordForgotten(run.session, run.documentId);
+  const retainingMs = await recordForgotten(run.session, run.documentId);
+  if (retainingMs !== undefined && retainingMs > 0) {
+    throw new HindsightRetainInFlightError(retainingMs);
+  }
   return 'forgotten';
 };
 
@@ -99,6 +108,10 @@ const confirmRetained = async (run: SyncRun, sentHash: string): Promise<void> =>
   await recordRetained(run.session, run.documentId, sentHash);
 };
 
+// The bound is written before the request leaves: this covers the time between the two
+// and the slack of the timers that end the request.
+const RETAIN_START_MARGIN_MS = 10_000;
+
 const retain = async (
   run: SyncRun,
   state: SyncState,
@@ -109,8 +122,13 @@ const retain = async (
   // Committed before the request: whatever becomes of it, a timeout after Hindsight
   // stored the facts included, the row says the bank may hold them. A document deleted
   // or flagged private since it was read is left to the sync queued by that change.
-  if (!(await recordRetainStarted(run.session, run.documentId))) return 'skipped';
-  await sendRequest(run, () => run.deps.client.retain(item, run.signal));
+  const { client } = run.deps;
+  const windowMs = client.requestWindowMs + RETAIN_START_MARGIN_MS;
+  if (!(await recordRetainStarted(run.session, run.documentId, windowMs))) {
+    return 'skipped';
+  }
+  await sendRequest(run, () => client.retain(item, run.signal));
+  await recordRetainAnswered(run.session, run.documentId, state.retainUntil);
   await confirmRetained(run, hash);
   return 'retained';
 };
@@ -134,7 +152,8 @@ const syncLocked = async (run: SyncRun): Promise<HindsightSyncResult> => {
  * Syncs of one document exclude each other; the one that finds another in progress
  * throws a `HindsightSyncBusyError`. One that loses its lock with its connection
  * records that the bank may hold anything and throws a `HindsightSyncLockLostError`.
- * The queue tries both again.
+ * A forget that a retain may still overtake keeps its record and throws a
+ * `HindsightRetainInFlightError`. The queue tries all three again.
  */
 export const syncDocumentToHindsight = async (
   deps: HindsightSyncDeps,
