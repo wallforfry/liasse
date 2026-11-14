@@ -64,7 +64,7 @@ jobs:
           node-version-file: .nvmrc
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      - name: Install poppler-utils (pdftoppm renders scanned PDFs in the tests)
+      - name: Install poppler-utils (pdfinfo and pdftoppm handle scanned PDFs in the tests)
         run: sudo apt-get update && sudo apt-get install --yes --no-install-recommends poppler-utils
       - run: pnpm lint
       - run: pnpm typecheck

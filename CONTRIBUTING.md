@@ -25,7 +25,7 @@ pnpm exec commitlint --from main
 
 ## Development
 
-You need Node 22 or later, pnpm, Docker and `pdftoppm` (`poppler-utils` on Debian and Ubuntu, `poppler` with Homebrew), which renders scanned PDFs.
+You need Node 22 or later, pnpm, Docker and poppler (`poppler-utils` on Debian and Ubuntu, `poppler` with Homebrew), whose `pdfinfo` and `pdftoppm` measure and render scanned PDFs.
 
 ```sh
 pnpm install
