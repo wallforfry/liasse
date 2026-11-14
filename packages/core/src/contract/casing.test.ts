@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import { z } from 'zod';
+import {
+  mergePayloadSchema,
+  promoteFieldPayloadSchema,
+  removeFieldPayloadSchema,
+  stabilizePayloadSchema,
+} from '../consolidation/payloads.ts';
+import { mergeEntityPayloadSchema } from '../entities/proposal-store.ts';
 import * as contract from './index.ts';
 
 // The inputs the knowledge layer parses in-process. They never travel: the transports take
@@ -11,6 +18,15 @@ const SNAKE_CASE = /^[a-z][a-z0-9]*(?:_[a-z0-9]+)*$/;
 const schemas = Object.entries(contract).flatMap(([name, value]) =>
   value instanceof z.ZodType ? [{ name, schema: value }] : [],
 );
+
+// The `payload` of a change is an open record in the contract; these schemas write it.
+const CHANGE_PAYLOADS = {
+  mergePayloadSchema,
+  promoteFieldPayloadSchema,
+  stabilizePayloadSchema,
+  removeFieldPayloadSchema,
+  mergeEntityPayloadSchema,
+};
 
 const isRecord = (value: unknown): value is Readonly<Record<string, unknown>> =>
   typeof value === 'object' && value !== null;
@@ -42,6 +58,14 @@ describe('the wire casing of the contract', () => {
         (path) => `${name}${path}`,
       ),
     );
+    expect(notSnakeCase(offending)).toEqual([]);
+  });
+
+  it('spells every key of a change payload in snake_case', () => {
+    const offending = Object.entries(CHANGE_PAYLOADS).flatMap(([name, schema]) =>
+      keysOf(schema, 'output').map((path) => `${name}${path}`),
+    );
+    expect(offending.length).toBeGreaterThan(5);
     expect(notSnakeCase(offending)).toEqual([]);
   });
 
