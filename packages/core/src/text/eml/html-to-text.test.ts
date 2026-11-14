@@ -89,6 +89,14 @@ describe('htmlToText', () => {
     );
   });
 
+  it('treats a quote inside an unquoted attribute value as an ordinary character', () => {
+    expect(convert('<a href=https://ok.example/?q="x>link</a> after')).toBe(
+      'link (https://ok.example/?q="x) after',
+    );
+    expect(convert("<p data-x=a='b>kept</p>")).toBe('kept');
+    expect(convert('<p class=plain title="a>b">kept</p>')).toBe('kept');
+  });
+
   it('opens a quote only where an attribute value starts', () => {
     expect(convert("<p don't>kept</p> it's")).toBe("kept\nit's");
     expect(convert('<p class=plain>kept "as is"')).toBe('kept "as is"');
