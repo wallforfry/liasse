@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { z } from 'zod';
-import { ModelOutputError, ModelProviderError } from '../errors.ts';
+import { ModelOutputError, ModelProviderError, OutputSchemaError } from '../errors.ts';
 import type { TextModel } from '../ports.ts';
 import { type StubHandler, type StubServer, startStubServer } from './stub-server.ts';
 import { createTextModel } from './text-model.ts';
@@ -129,6 +129,19 @@ describe('createTextModel', () => {
     expect(error).toBeInstanceOf(ModelOutputError);
     expect(error).toHaveProperty('message', expect.stringMatching(reason));
     expect(server.requests).toHaveLength(1);
+  });
+
+  it('fails with OutputSchemaError, before any request, for a schema without a JSON Schema form', async () => {
+    const { server, model } = await start(() => chatCompletion(VALID_OUTPUT));
+    const error = await failureOf(
+      model.generateObject({ ...request, schema: z.object({ when: z.date() }) }),
+    );
+    expect(error).toBeInstanceOf(OutputSchemaError);
+    expect(error).toHaveProperty(
+      'message',
+      expect.stringMatching(/^The output schema cannot be converted to JSON Schema: .*Date/),
+    );
+    expect(server.requests).toHaveLength(0);
   });
 
   it.each([429, 503])('retries after HTTP %d, then succeeds', async (status) => {
