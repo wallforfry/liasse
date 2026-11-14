@@ -56,10 +56,15 @@ export const withRegistryLock = <Outcome>(
   db: Database,
   work: (tx: RegistryTransaction) => Promise<Outcome>,
 ): Promise<Outcome> =>
-  db.transaction(async (tx) => {
-    await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext('liasse.registry'))`);
-    return work(tx);
-  });
+  db.transaction(
+    async (tx) => {
+      await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext('liasse.registry'))`);
+      return work(tx);
+    },
+    // A snapshot taken before the lock was granted would hide what the previous holder
+    // committed, so the level is set here whatever the default of the database.
+    { isolationLevel: 'read committed' },
+  );
 
 const firstType = (rows: readonly TypeRow[]): RegisteredType | undefined => {
   const [row] = rows;

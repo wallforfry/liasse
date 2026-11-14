@@ -1,5 +1,6 @@
-import { eq } from 'drizzle-orm';
+import { eq, sql } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { createDb } from '../db/client.ts';
 import { docTypes } from '../db/schema/registry.ts';
 import { createTestDatabase, type TestDatabase } from '../testing/test-database.ts';
 import { InvalidTypeSchemaError } from './stored-schema.ts';
@@ -52,6 +53,30 @@ describe('type store', () => {
       ),
     ).rejects.toThrow(InvalidTypeSchemaError);
     expect(await findTypeById(database.db, type.id)).toEqual(type);
+  });
+
+  it('reads committed state under the lock, whatever the default isolation level', async () => {
+    const strict = await createTestDatabase({ embeddingDim: EMBEDDING.length });
+    await strict.db.execute(sql`
+      DO $block$ BEGIN
+        EXECUTE format(
+          'ALTER DATABASE %I SET default_transaction_isolation TO ''repeatable read''',
+          current_database()
+        );
+      END $block$
+    `);
+    const fresh = createDb(strict.url);
+    try {
+      const [outside] = await fresh.db.execute(sql`SHOW transaction_isolation`);
+      const [inside] = await withRegistryLock(fresh.db, (tx) =>
+        tx.execute(sql`SHOW transaction_isolation`),
+      );
+      expect(outside).toEqual({ transaction_isolation: 'repeatable read' });
+      expect(inside).toEqual({ transaction_isolation: 'read committed' });
+    } finally {
+      await fresh.close();
+      await strict.dispose();
+    }
   });
 
   it('serializes the work done under the registry lock', async () => {
