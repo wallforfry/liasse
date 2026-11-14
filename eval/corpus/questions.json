@@ -336,7 +336,7 @@
           "required": [
             "brisevent"
           ],
-          "exhaustive": true
+          "exhaustive": false
         },
         "verdict": null
       },

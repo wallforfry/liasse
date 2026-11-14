@@ -214,8 +214,6 @@ const fine: ScenarioDocument = {
       keyDate('due', FINE_DUE, frDate(FINE_DUE)),
       keyDate('event', OFFENCE_DATE, frDate(OFFENCE_DATE), 'optional'),
     ],
-    // An offence notice is a paper a person may well want kept private.
-    private: 'optional',
     subjects: [about(SUBJECTS.car)],
     facts: [
       fact('A parking fine of 35 EUR was issued for the car, payable by 2025-06-28.', {
@@ -271,8 +269,6 @@ const contestLetter: ScenarioDocument = {
     }),
     fields: [{ ...plateField, expectation: optional(CAR.plate, CAR.plate) }],
     links: [link('replies_to', fine.id)],
-    // A dispute with an authority is a letter a person may well want kept private.
-    private: 'optional',
     subjects: [about(SUBJECTS.car)],
     facts: [
       fact(

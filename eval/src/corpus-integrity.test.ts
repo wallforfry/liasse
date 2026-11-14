@@ -302,6 +302,28 @@ describe('the reference questions', () => {
     expect(questions.reference_date).toBe(corpus.reference_date);
   });
 
+  // Private documents do not surface unless asked for, so a question that does not ask
+  // for them can only call for documents that must never be flagged private: a system
+  // that flags a document private, where the truth allows it, and respects the flag
+  // must still be able to answer.
+  it('only call for documents that cannot be private, unless they ask for private ones', () => {
+    const privacyOf = new Map(corpus.documents.map(({ id, private: flag }) => [id, flag]));
+    const canBePrivate = (id: string): boolean => privacyOf.get(id) !== 'forbidden';
+    const asksForPrivate = ({ tools }: QuestionSet['questions'][number]): boolean =>
+      tools.some(
+        ({ arguments: input }) => 'include_private' in input && input.include_private === true,
+      );
+    const conflicts = questions.questions
+      .filter((question) => !asksForPrivate(question))
+      .flatMap(({ id, expected: { documents } }) => [
+        ...documents.required.filter(canBePrivate).map((document) => `${id}: ${document}`),
+        ...documents.any_of
+          .filter((group) => group.every(canBePrivate))
+          .map((group) => `${id}: any of ${group.join(', ')}`),
+      ]);
+    expect(conflicts).toEqual([]);
+  });
+
   it('only point at documents and entities of the corpus', () => {
     const documents = new Set(corpus.documents.map(({ id }) => id));
     const entities = new Set(corpus.entities.map(({ key }) => key));

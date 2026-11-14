@@ -187,7 +187,9 @@ export const QUESTIONS: readonly QuestionInput[] = [
       },
     ],
     expected: expected({
-      entities: { required: [PARTIES.brisevent.key], exhaustive: true },
+      // The answer may well name the supplier Brisevent replaced: only the documents are
+      // an exact set.
+      entities: { required: [PARTIES.brisevent.key], exhaustive: false },
       documents: documents({
         required: [
           'energy-contract-brisevent',

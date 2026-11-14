@@ -283,7 +283,7 @@ describe('scoreDocument', () => {
     expect([
       scoreWith('tax-notice-2025', () => ({ private: false })).private?.outcome,
       scoreWith('energy-bill-2025-01', () => ({ private: true })).private?.outcome,
-      scoreWith('payslip-2025-11', () => ({ private: true })).private?.outcome,
+      scoreWith('bank-statement-2025-10', () => ({ private: true })).private?.outcome,
     ]).toEqual(['missing', 'invented', 'correct']);
   });
 
@@ -404,7 +404,53 @@ describe('scoreDocument on a value stored under another name', () => {
   });
 });
 
+const nested = (depth: number): unknown =>
+  Array.from({ length: depth }).reduce<unknown>((inner) => ({ inner }), 'FR49');
+
 describe('scoring what is not a system output', () => {
+  it.each(['provenance', 'fields', 'extra'] as const)(
+    'answers that a %s nested 10 000 deep is invalid, without throwing',
+    (part) => {
+      const truth = index.document('bank-statement-2025-10');
+      const perfect = oracleDocument(truth, index);
+      const deep = part === 'provenance' ? nested(10_000) : { iban: nested(10_000) };
+      const result = scoreDocument(truth, { ...perfect, [part]: deep }, index);
+      expect(result).toMatchObject({ kind: 'invalid', id: truth.id });
+      expect(result.kind === 'invalid' ? result.issues : []).toEqual([
+        expect.stringMatching(/^input: nested deeper than \d+ levels$/),
+      ]);
+    },
+  );
+
+  it('scores an output with a very wide value', () => {
+    const truth = index.document('bank-statement-2025-10');
+    const perfect = oracleDocument(truth, index);
+    const wide = { lines: Array.from({ length: 300_000 }, (_, line) => String(line)) };
+    expect(scoreDocument(truth, { ...perfect, extra: wide }, index)).toMatchObject({
+      kind: 'scored',
+    });
+  });
+
+  it('scores an output nested within the limit', () => {
+    const truth = index.document('bank-statement-2025-10');
+    const perfect = oracleDocument(truth, index);
+    expect(scoreDocument(truth, { ...perfect, provenance: nested(40) }, index)).toMatchObject({
+      kind: 'scored',
+    });
+  });
+
+  it('answers that an answer nested 10 000 deep is invalid, without throwing', () => {
+    const [first] = questions;
+    if (first === undefined) throw new Error('No question');
+    const score = scoreAnswer(
+      first,
+      { ...oracleAnswer(first, index), entities: nested(10_000) },
+      index,
+    );
+    expect(score.pass).toBe(false);
+    expect(score.reasons).toEqual([expect.stringMatching(/^invalid answer: input: nested deeper/)]);
+  });
+
   it.each([
     ['nothing', null],
     ['a string', 'energy_bill'],
@@ -554,5 +600,33 @@ describe('scoreAnswer', () => {
       }).reasons,
     ).toEqual(['names Northmere Travel Cover, which the question does not call for']);
     expect(scoreWithAnswer('q02', { entities: ['Brisevent', 'Voltaneige'] }).pass).toBe(true);
+  });
+
+  it('lets an answer about the documents of Brisevent also name the supplier it replaced', () => {
+    expect(scoreWithAnswer('q06', { entities: ['Brisevent', 'Voltaneige'] }).pass).toBe(true);
+  });
+
+  it('fails an exact question whose answer files a value under a key it does not have', () => {
+    expect(
+      scoreWithAnswer('q16', {
+        amounts: [
+          ...oracleAnswer(asked('q16'), index).amounts,
+          { key: 'indicative-euros', value: { value: 739.38, currency: 'EUR' } },
+        ],
+      }).reasons,
+    ).toEqual(['indicative-euros: an amount the question does not ask for']);
+    expect(
+      scoreWithAnswer('q20', {
+        counts: [...oracleAnswer(asked('q20'), index).counts, { key: 'all', value: 7 }],
+      }).pass,
+    ).toBe(false);
+  });
+
+  it('leaves a value under another key alone when the question is not an exact one', () => {
+    expect(
+      scoreWithAnswer('q01', {
+        amounts: [...oracleAnswer(asked('q01'), index).amounts, eur('with-copy', 686.05)],
+      }).pass,
+    ).toBe(true);
   });
 });

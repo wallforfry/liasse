@@ -6,7 +6,7 @@ import {
 } from '../schema/index.ts';
 import { nameMatches, sameMoney } from './compare.ts';
 import type { CorpusIndex } from './corpus-index.ts';
-import { issuesOf } from './invalid.ts';
+import { depthIssues, issuesOf } from './invalid.ts';
 
 export interface AnswerScore {
   readonly id: string;
@@ -107,28 +107,55 @@ const entityReasons = (
   ];
 };
 
+// A question that lists its documents or its entities as an exact set asks for an exact
+// answer: an amount, a date or a count filed under a key it does not have is then a
+// claim the answer adds and must be held to. Elsewhere such a value is about another
+// thing the question did not ask, and is left alone: the slots already bind each value
+// the question asks for to its meaning.
+const isExact = ({ documents, entities }: AnswerExpectation): boolean =>
+  documents.exhaustive || entities.exhaustive;
+
+const unaskedValueReasons = (expected: AnswerExpectation, answer: Answer): readonly string[] => {
+  const unasked = (
+    kind: string,
+    slots: readonly { readonly key: string }[],
+    given: readonly { readonly key: string }[],
+  ): readonly string[] =>
+    [...new Set(given.map(({ key }) => key))]
+      .filter((key) => !slots.some((slot) => slot.key === key))
+      .map((key) => `${key}: ${kind} the question does not ask for`);
+  return [
+    ...unasked('an amount', expected.amounts, answer.amounts),
+    ...unasked('a date', expected.dates, answer.dates),
+    ...unasked('a count', expected.counts, answer.counts),
+  ];
+};
+
 // An answer passes when it meets every expectation of the question. Each expected value
 // is read under the key of its slot, so a right number cannot stand for another thing.
 // What the answer adds is judged where the question asks for an exact set: documents and
-// entities marked `exhaustive`, and any second value under the key of a slot. Values
-// under keys the question does not have are left alone. An input that is not an answer
+// entities marked `exhaustive`, any second value under the key of a slot, and, for such
+// a question, any value under a key it does not have. An input that is not an answer
 // fails with the reason, without throwing.
 export const scoreAnswer = (
   question: Question,
   answer: unknown,
   index: CorpusIndex,
 ): AnswerScore => {
-  const parsed = answerSchema.safeParse(answer);
+  const tooDeep = depthIssues(answer);
+  const parsed = answerSchema.safeParse(tooDeep.length > 0 ? undefined : answer);
   if (!parsed.success) {
+    const issues = tooDeep.length > 0 ? tooDeep : issuesOf(parsed.error);
     return {
       id: question.id,
       pass: false,
-      reasons: issuesOf(parsed.error).map((issue) => `invalid answer: ${issue}`),
+      reasons: issues.map((issue) => `invalid answer: ${issue}`),
     };
   }
   const reasons = [
     ...documentReasons(question.expected.documents, parsed.data.documents),
     ...valueReasons(question.expected, parsed.data),
+    ...(isExact(question.expected) ? unaskedValueReasons(question.expected, parsed.data) : []),
     ...entityReasons(question.expected.entities, parsed.data.entities, index),
   ];
   return { id: question.id, pass: reasons.length === 0, reasons };

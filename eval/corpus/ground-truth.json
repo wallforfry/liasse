@@ -5764,7 +5764,7 @@
         }
       ],
       "masking": [],
-      "private": "optional",
+      "private": "forbidden",
       "pages": [
         {
           "page": 1,
@@ -5878,7 +5878,7 @@
         }
       ],
       "masking": [],
-      "private": "optional",
+      "private": "forbidden",
       "pages": [
         {
           "page": 1,
@@ -6151,7 +6151,7 @@
         }
       ],
       "masking": [],
-      "private": "optional",
+      "private": "forbidden",
       "pages": [
         {
           "page": 1,
@@ -6362,7 +6362,7 @@
           "visible_tail": "4726"
         }
       ],
-      "private": "optional",
+      "private": "forbidden",
       "pages": [
         {
           "page": 1,
@@ -6573,7 +6573,7 @@
           "visible_tail": "4726"
         }
       ],
-      "private": "optional",
+      "private": "forbidden",
       "pages": [
         {
           "page": 1,
@@ -6784,7 +6784,7 @@
           "visible_tail": "4726"
         }
       ],
-      "private": "optional",
+      "private": "forbidden",
       "pages": [
         {
           "page": 1,
@@ -6970,7 +6970,7 @@
         }
       ],
       "masking": [],
-      "private": "optional",
+      "private": "forbidden",
       "pages": [
         {
           "page": 1,

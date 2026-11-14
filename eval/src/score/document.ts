@@ -10,7 +10,7 @@ import {
   typeVerdict,
   type TypeVerdict,
 } from './knowledge.ts';
-import { issuesOf } from './invalid.ts';
+import { depthIssues, issuesOf } from './invalid.ts';
 import { type MaskingResult, scoreMasking } from './masking.ts';
 import { type Judgement, judgePresence } from './outcome.ts';
 import { scoreTranscriptions, type TranscriptionScore } from './transcription.ts';
@@ -102,6 +102,8 @@ export const scoreDocument = (
   output: unknown,
   index: CorpusIndex,
 ): DocumentResult => {
+  const tooDeep = depthIssues(output);
+  if (tooDeep.length > 0) return { kind: 'invalid', id: truth.id, issues: tooDeep };
   const parsed = systemDocumentSchema.safeParse(output);
   if (!parsed.success) return { kind: 'invalid', id: truth.id, issues: issuesOf(parsed.error) };
   if (parsed.data.id !== truth.id) {

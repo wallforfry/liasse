@@ -44,6 +44,21 @@ describe('the tolerance rules', () => {
     expect(textCarries('Anselme Rouvière', 'Dr Quivrenne')).toBe(false);
   });
 
+  it.each([
+    'non favorable',
+    'NON-FAVORABLE',
+    'pas favorable',
+    'not favorable',
+    'no favorable outcome',
+    'sans favorable',
+  ])('does not find favorable in "%s", where a negation stands before it', (actual) => {
+    expect(textCarries('favorable', actual)).toBe(false);
+  });
+
+  it('finds a word whose negation is elsewhere in the text', () => {
+    expect(textCarries('favorable', 'Résultat favorable, pas de contre-visite')).toBe(true);
+  });
+
   it('accepts a masked identifier that keeps its tail and not the clear value', () => {
     expect(isMasked('FR** **** 9322', '9322', 'FR76 9999 9000 0193 22')).toBe(true);
     expect(isMasked('FR7699999000019322', '9322', 'FR76 9999 9000 0193 22')).toBe(false);

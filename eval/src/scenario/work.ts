@@ -93,8 +93,6 @@ const employmentContract: ScenarioDocument = {
       noKeyDate('renewal', 'due'),
     ],
     subjects: [about(SUBJECTS.employment)],
-    // A contract of employment states a salary: flagging it private is a fair call.
-    private: 'optional',
     facts: [
       fact('Jane Doe has worked for Ostrelia Conseil on a permanent contract since 2023-09-01.', {
         entities: [PARTIES.employer.key],
@@ -236,7 +234,6 @@ const payslip = (slip: Payslip): ScenarioDocument => {
           visible_tail: SOCIAL_SECURITY_TAIL,
         },
       ],
-      private: 'optional',
     }),
   };
 };
@@ -312,7 +309,6 @@ const paySummary: ScenarioDocument = {
         amounts: [money(YEAR_NET_PAID), money(YEAR_NET_TAXABLE)],
       }),
     ],
-    private: 'optional',
   }),
 };
 

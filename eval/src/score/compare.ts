@@ -13,7 +13,8 @@ import type { TruthPrimitive } from '../schema/index.ts';
 //   the same IBAN is printed in groups of four or in one run;
 // - amounts and numbers compare within half a cent, and an amount needs its currency;
 // - names compare as entity resolution does: without case, accents or legal form;
-// - free text must carry the expected words, whole and in order, whatever surrounds them.
+// - free text must carry the expected words, whole and in order, not right after a
+//   negation, whatever surrounds them.
 export const AMOUNT_TOLERANCE = 0.005;
 
 // Lowercase, without accents, with single spaces.
@@ -38,13 +39,30 @@ export const nameMatches = (actual: string, accepted: readonly string[]): boolea
 
 const wordsOf = (text: string): readonly string[] => foldText(text).match(/[a-z0-9]+/g) ?? [];
 
-// The expected words, in order and whole: "favorable" is not in "defavorable".
+// Words that turn the word after them into its opposite, in the languages of the corpus.
+// A negating prefix ("défavorable", "unfavourable") makes another word, which whole-word
+// matching already tells apart.
+// prettier-ignore
+const NEGATIONS: ReadonlySet<string> = new Set([
+  'non', 'pas', 'sans', 'ni', 'aucun', 'aucune',
+  'not', 'no', 'never', 'without',
+  'nicht', 'kein', 'keine', 'ohne',
+  'sin', 'nunca',
+]);
+
+// The expected words, in order and whole, and not right after a negation: "favorable" is
+// neither in "défavorable" nor in "non favorable". A negation the expected words carry
+// themselves is matched like any other word.
 export const textCarries = (expected: string, actual: string): boolean => {
   const wanted = wordsOf(expected);
   const given = wordsOf(actual);
   return (
     wanted.length > 0 &&
-    given.some((_, start) => wanted.every((word, offset) => given[start + offset] === word))
+    given.some(
+      (_, start) =>
+        wanted.every((word, offset) => given[start + offset] === word) &&
+        !NEGATIONS.has(given[start - 1] ?? ''),
+    )
   );
 };
 

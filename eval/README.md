@@ -93,7 +93,7 @@ Languages: 46 documents in French, 3 in English, 1 in German, 1 in Spanish. Twel
 
 The twelve raster pages are drawn in one dot-matrix face, in two weights (headings are bold), with skew, uneven light and grain. One holds a ruled table of figures (the scanned payslip), one sets two blocks side by side (the parking fine), one carries a rubber stamp across the text (the amendment) and one lies a few degrees off (the roadworthiness report). The digits 0 and 8 and the letter G are drawn apart, since an OCR engine confused them.
 
-That is a floor, not a fair sample of real paper: there is no logo, no photograph, no handwriting, no second typeface, no fold, no stain, and every page has one clean column of print. A vision model reads them more easily than it reads a real scan, so **vision scores on this corpus are an upper bound** on what the same model does on real documents.
+That is a floor, not a fair sample of real paper: there is no logo, no photograph, no handwriting, no second typeface, no fold and no stain. The layout stays simple: one ruled table and one page in two columns, every other page a single column of print. A vision model reads them more easily than it reads a real scan, so **vision scores on this corpus are an upper bound** on what the same model does on real documents.
 
 Hard cases, each tagged in `hard_cases`:
 
@@ -141,14 +141,14 @@ A record holds:
 
 Tolerance rules (`src/score/compare.ts`):
 
-| Value                              | Rule                                                                                            |
-| ---------------------------------- | ----------------------------------------------------------------------------------------------- |
-| Dates, periods, booleans, language | Exact                                                                                           |
-| Identifiers, references            | Exact once spaces, punctuation and case are set aside                                           |
-| Amounts, numbers                   | Within 0.005; an amount needs its currency                                                      |
-| Entity names                       | As entity resolution compares them: no case, no accents, no legal form; any alias of the entity |
-| Free text                          | The expected words are in the value, whole and in order (`favorable` is not in `défavorable`)   |
-| Masked identifier                  | Ends with the visible characters and does not hold the clear value                              |
+| Value                              | Rule                                                                                                                                                 |
+| ---------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Dates, periods, booleans, language | Exact                                                                                                                                                |
+| Identifiers, references            | Exact once spaces, punctuation and case are set aside                                                                                                |
+| Amounts, numbers                   | Within 0.005; an amount needs its currency                                                                                                           |
+| Entity names                       | As entity resolution compares them: no case, no accents, no legal form; any alias of the entity                                                      |
+| Free text                          | The expected words are in the value, whole, in order and not right after a negation (`favorable` is neither in `défavorable` nor in `non favorable`) |
+| Masked identifier                  | Ends with the visible characters and does not hold the clear value                                                                                   |
 
 Each expected value gets one outcome: `correct`, `missing` (required, not found), `wrong` (another value), `invented` (found where forbidden) or `absent` (not found, not required). Precision is `correct / (correct + wrong + invented)` and recall is `correct / (correct + missing + wrong when required)`.
 
@@ -162,13 +162,13 @@ Each expected value gets one outcome: `correct`, `missing` (required, not found)
 - **Transcription**: for pages without a text layer, precision, recall and F1 over words, without case, accents or punctuation.
 - **Duplicates**: a byte-identical copy is only scored on being recognised.
 
-`scoreDocument` parses what it is given: an output that is not a system output of that document is answered `{ kind: 'invalid', issues }` rather than scored or thrown on. `aggregateReport` sums the documents of a run into per-field and per-section precision and recall, and counts invalid outputs apart.
+`scoreDocument` parses what it is given: an output that is not a system output of that document, or that nests deeper than 64 levels, is answered `{ kind: 'invalid', issues }` rather than scored or thrown on. `aggregateReport` sums the documents of a run into per-field and per-section precision and recall, and counts invalid outputs apart.
 
-`scoreAnswer` judges an answer to a question and returns pass or fail with the reasons; an input that is not an answer fails with the reason. Each value a question expects is a slot with a key (`total`, `voltaneige`, `lease-end`), and the answer files each value under the key of its slot, so a right number cannot stand for another thing. A slot passes when the answer gives it one or more values and all of them are right: a right total beside a wrong one fails. Documents and entities may be marked `exhaustive`, in which case anything beyond the expected set fails too; values under keys the question does not have are left alone.
+`scoreAnswer` judges an answer to a question and returns pass or fail with the reasons; an input that is not an answer fails with the reason. Each value a question expects is a slot with a key (`total`, `voltaneige`, `lease-end`), and the answer files each value under the key of its slot, so a right number cannot stand for another thing. A slot passes when the answer gives it one or more values and all of them are right: a right total beside a wrong one fails. Documents and entities may be marked `exhaustive`, in which case anything beyond the expected set fails too. Such a question asks for an exact answer, so an amount, a date or a count under a key it does not have fails it as well. Elsewhere a value under another key is about something the question did not ask, and is left alone: an answer to "how much for electricity in 2025?" may also give the total with the duplicated bill, under a key of its own.
 
 ## Reference questions
 
-`corpus/questions.json` holds twenty questions in French and English. Each has the calls an agent would plausibly make (the `query` arguments are valid against the DSL of `@liasse/core/query`), the expected answer as data and a rationale. They cover numeric aggregation, deadlines relative to the reference date, links between documents, subjects, entities, fuzzy search, a question whose answer is that nothing was found, and private documents, which must not surface unless asked for.
+`corpus/questions.json` holds twenty questions in French and English. Each has the calls an agent would plausibly make (the `query` arguments are valid against the DSL of `@liasse/core/query`), the expected answer as data and a rationale. They cover numeric aggregation, deadlines relative to the reference date, links between documents, subjects, entities, fuzzy search, a question whose answer is that nothing was found, and private documents, which must not surface unless asked for. A question that does not ask for private documents only calls for documents whose truth forbids the private flag, and a test holds every question to that rule: a system that flags a document private where the truth allows it, and then respects the flag, can still answer every question.
 
 The tool calls document the intended route: an agent is free to answer another way, and only the answer is scored.
 
