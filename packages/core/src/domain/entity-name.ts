@@ -5,14 +5,16 @@ const LEGAL_FORMS: ReadonlySet<string> = new Set([
   'gmbh', 'ag', 'kg', 'ug', 'bv', 'nv', 'spa', 'srl', 'sl', 'ab', 'as', 'oy',
 ]);
 
-// Dotted abbreviations such as "S.A." or "Inc." must end up as one token.
+// Dotted abbreviations such as "S.A." or "Inc." must end up as one token. Letters and
+// digits of every script are kept: a name must not lose the word that tells it apart
+// because that word is not written in Latin letters.
 const tokenize = (name: string): readonly string[] =>
   name
     .normalize('NFKD')
     .replace(/\p{M}/gu, '')
     .replace(/\./g, '')
     .toLowerCase()
-    .split(/[^a-z0-9]+/)
+    .split(/[^\p{L}\p{N}]+/u)
     .filter((token) => token !== '');
 
 const withoutLegalForm = (tokens: readonly string[]): readonly string[] => {
@@ -34,14 +36,14 @@ const FUNCTION_WORDS: ReadonlySet<string> = new Set([
 
 const MIN_SIGNIFICANT_LENGTH = 3;
 
-// Lowercase ASCII tokens of an entity name, without accents and without the legal form
-// around it. A name made only of legal-form words keeps them, so it never becomes empty.
+// Lowercase tokens of an entity name, without accents and without the legal form around
+// it. A name made only of legal-form words keeps them, so it never becomes empty.
 export const normalizeEntityName = (name: string): readonly string[] =>
   withoutLegalForm(tokenize(name));
 
-// What two names must share to name the same entity. A name written without any ASCII
-// letter or digit has no token: it is compared as written, so that two such names are
-// not equal to each other for having nothing left.
+// What two names must share to name the same entity. A name written without any letter
+// or digit has no token: it is compared as written, so that two such names are not equal
+// to each other for having nothing left.
 export const entityNameKey = (name: string): string => {
   const tokens = normalizeEntityName(name);
   return tokens.length > 0 ? tokens.join(' ') : name.normalize('NFKC').trim().toLowerCase();

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { normalizeEntityName, significantEntityTokens } from './entity-name.ts';
+import { entityNameKey, normalizeEntityName, significantEntityTokens } from './entity-name.ts';
 
 describe('normalizeEntityName', () => {
   it('lowercases, removes accents and splits on anything that is not a letter or a digit', () => {
@@ -28,8 +28,45 @@ describe('normalizeEntityName', () => {
     expect(normalizeEntityName('SA')).toEqual(['sa']);
   });
 
-  it('gives no token for a name without any ASCII letter or digit', () => {
+  it('keeps the letters and digits of every script', () => {
+    expect(normalizeEntityName('Ромашка LLC')).toEqual(['ромашка']);
+    expect(normalizeEntityName('中国银行 2024')).toEqual(['中国银行', '2024']);
+    expect(normalizeEntityName('Ελληνική Τράπεζα SA')).toEqual(['ελληνικη', 'τραπεζα']);
+  });
+
+  it('gives no token for a name without any letter or digit', () => {
     expect(normalizeEntityName('***')).toEqual([]);
+  });
+});
+
+describe('entityNameKey', () => {
+  it('is the same for two spellings of one name', () => {
+    expect(entityNameKey('Électricité de Synthèse S.A.')).toBe('electricite de synthese');
+    expect(entityNameKey('ELECTRICITE DE SYNTHESE')).toBe(
+      entityNameKey('Électricité de Synthèse SA'),
+    );
+  });
+
+  it.each([
+    ['Ромашка LLC', 'Лютик LLC'],
+    ['Газпром AG', 'Роснефть AG'],
+    ['中国银行 2024', '工商银行 2024'],
+    ['Ελληνική Τράπεζα SA', 'SA'],
+  ])('keeps %s and %s apart', (left, right) => {
+    expect(entityNameKey(left)).not.toBe(entityNameKey(right));
+  });
+
+  it('is the same for two spellings of a name in another script', () => {
+    expect(entityNameKey('РОМАШКА llc')).toBe(entityNameKey('Ромашка LLC'));
+  });
+
+  it('keeps apart two names that have no letter or digit', () => {
+    expect(entityNameKey('***')).not.toBe(entityNameKey('---'));
+  });
+
+  it('keeps apart two names in a script without ASCII letters', () => {
+    expect(entityNameKey(' Синтез ')).toBe('синтез');
+    expect(entityNameKey('Синтез')).not.toBe(entityNameKey('Энергия'));
   });
 });
 
