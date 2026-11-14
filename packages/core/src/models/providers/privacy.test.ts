@@ -44,10 +44,10 @@ describe('describeModelPrivacy', () => {
     });
   });
 
-  it('names both destinations on one line, without credentials', async () => {
+  it('names both destinations on one line', async () => {
     const { external, warning } = await privacyOf({
       LLM_PROVIDER: 'openai-compatible',
-      LLM_BASE_URL: `https://operator:${SYNTHETIC_API_KEY}@llm.example.com/v1?token=${SYNTHETIC_API_KEY}`,
+      LLM_BASE_URL: 'https://llm.example.com/v1',
       LLM_API_KEY: SYNTHETIC_API_KEY,
       EMBEDDING_PROVIDER: 'ollama',
       EMBEDDING_MODEL: 'embedding-model',

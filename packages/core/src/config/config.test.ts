@@ -168,6 +168,25 @@ describe('loadConfig', () => {
     ]);
   });
 
+  it.each([
+    ['credentials', 'https://operator:secret-9f3a@llm.example.com/v1'],
+    ['a user name', 'https://secret-9f3a@llm.example.com/v1'],
+    ['a query string', 'https://llm.example.com/v1?api-key=secret-9f3a'],
+    ['another scheme', 'ftp://llm.example.com/secret-9f3a'],
+  ])('rejects a model base URL with %s, without echoing it', (_case, url) => {
+    const problems = problemsOf({
+      ...SYNTHETIC_ENV,
+      LLM_BASE_URL: url,
+      EMBEDDING_PROVIDER: 'ollama',
+      EMBEDDING_MODEL: 'embedding-model',
+      EMBEDDING_BASE_URL: url,
+    });
+    expect(problems).toEqual([
+      'LLM_BASE_URL: expected an http or https URL without credentials or query string',
+      'EMBEDDING_BASE_URL: expected an http or https URL without credentials or query string',
+    ]);
+  });
+
   it('lists every problem of every section in one error', () => {
     const problems = problemsOf({
       PORT: '99999',

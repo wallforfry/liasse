@@ -9,6 +9,19 @@ type ModelProvider = LlmProvider | EmbeddingProvider;
 const KEYLESS_PROVIDERS: readonly ModelProvider[] = ['local', 'ollama', 'openai-compatible'];
 const BASE_URL_PROVIDERS: readonly ModelProvider[] = ['openai-compatible'];
 
+// A provider package sends the key in a header and appends its paths to the base URL, so
+// credentials or a query string in the URL cannot work; they would only end up in logs.
+const modelBaseUrl = z.string().refine((value) => {
+  if (!URL.canParse(value)) return false;
+  const { protocol, username, password, search } = new URL(value);
+  return (
+    (protocol === 'http:' || protocol === 'https:') &&
+    username === '' &&
+    password === '' &&
+    search === ''
+  );
+}, 'expected an http or https URL without credentials or query string');
+
 interface ProviderAccess {
   readonly prefix: 'LLM' | 'EMBEDDING';
   readonly provider: ModelProvider;
@@ -34,7 +47,7 @@ export const llmSection = z
   .object({
     LLM_PROVIDER: llmProviderSchema.default('anthropic'),
     LLM_API_KEY: text.optional(),
-    LLM_BASE_URL: z.url().optional(),
+    LLM_BASE_URL: modelBaseUrl.optional(),
     VISION_MODEL: text,
     TEXT_MODEL: text,
     LLM_TIMEOUT: duration.prefault('5m'),
@@ -66,7 +79,7 @@ export const embeddingSection = z
     EMBEDDING_MODEL: text.optional(),
     EMBEDDING_DIM: integer(1, MAX_EMBEDDING_DIM).default(384),
     EMBEDDING_API_KEY: text.optional(),
-    EMBEDDING_BASE_URL: z.url().optional(),
+    EMBEDDING_BASE_URL: modelBaseUrl.optional(),
     EMBEDDING_TIMEOUT: duration.prefault('1m'),
   })
   .transform((env, ctx) => {
