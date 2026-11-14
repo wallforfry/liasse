@@ -47,12 +47,13 @@ Inside `packages/core/src`, one directory per concern. A new concern gets its ow
 | `jobs/`     | The job queue on the `jobs` table: kinds, `enqueue`, workers                          |
 | `models/`   | Ports for the text model, the vision model and the embedder; `providers/` adapts them |
 | `prompt/`   | Prompt helpers, starting with the untrusted-content wrapper                           |
+| `query/`    | The structured query DSL: its schema, field typing and compilation to bound SQL       |
 | `registry/` | Field primitives, naming rules and the operations on the evolving type registry       |
 | `storage/`  | The file storage port and its `fs` and `s3` drivers                                   |
 | `testing/`  | Test database and bucket helpers, model fakes and synthetic document builders         |
 | `text/`     | `extractText`: native text of PDF, DOCX and email, vision transcription otherwise     |
 
-Names reserved for the features to come, created only by the change that implements them: `embeddings/`, `search/`, `pipeline/`, `entities/`, `query/`, `knowledge/`, `consolidation/`, `hindsight/`.
+Names reserved for the features to come, created only by the change that implements them: `embeddings/`, `search/`, `pipeline/`, `entities/`, `knowledge/`, `consolidation/`, `hindsight/`.
 
 Tests sit next to the code they cover, as `*.test.ts`. A helper that only the tests of one directory use is a `*.test-helper.ts` beside them; neither is compiled into `dist`.
 
