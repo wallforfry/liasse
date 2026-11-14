@@ -49,6 +49,10 @@ describe('applying a change to the type registry', () => {
         manualFields: ['meter'],
       });
       const onItsWay = await seedDocument(db(), source.id, { status: 'classified' });
+      const tombstone = await seedDocument(db(), source.id, {
+        status: 'deleted',
+        fields: { meter: 'GONE' },
+      });
       await seedDocument(db(), target.id);
       const change = await seedChange(db(), 'merge', {
         source_id: source.id,
@@ -71,6 +75,11 @@ describe('applying a change to the type registry', () => {
         manualFields: ['meter_id'],
       });
       expect(await documentOf(db(), onItsWay)).toMatchObject({ typeId: target.id });
+      // A tombstone is not a document: no change moves it.
+      expect(await documentOf(db(), tombstone)).toMatchObject({
+        typeId: source.id,
+        fields: { meter: 'GONE' },
+      });
       expect(await queuedReextractions(db())).toEqual([manual]);
       // The count is computed from the documents: it follows them to the target.
       const listed = await listTypes({}, { db: db() });
