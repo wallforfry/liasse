@@ -30,7 +30,7 @@ export interface Front {
 }
 
 /**
- * The HTTP server (REST, MCP on `/mcp`), or MCP on the standard streams. Over stdio
+ * The HTTP server (REST, MCP on `/mcp`, the web UI on `/ui`), or MCP on the standard streams. Over stdio
  * nothing listens: the signed file URLs a tool returns open on the HTTP server of
  * `PUBLIC_URL`, when one runs.
  */
@@ -47,7 +47,21 @@ export const startFront = async ({
     logger.notice('Liasse is serving MCP on stdio');
     return { stop: { name: 'mcp', run: session.close }, ended: session.ended };
   }
-  const app = createApp({ api, apiTokens: config.auth.apiTokens, ping, logger });
+  const { ui } = config.auth;
+  const app = createApp({
+    api,
+    apiTokens: config.auth.apiTokens,
+    ping,
+    logger,
+    ui:
+      ui === undefined
+        ? undefined
+        : {
+            password: ui.password,
+            sessionTtlMs: ui.sessionTtlMs,
+            secureCookies: config.server.publicUrl.startsWith('https:'),
+          },
+  });
   const listener = await listen({
     fetch: app.fetch,
     host: config.server.host,

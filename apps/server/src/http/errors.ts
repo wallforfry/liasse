@@ -67,9 +67,10 @@ const OF_HTTP_STATUS: Readonly<Partial<Record<number, Failure>>> = {
   504: failure(504, 'request_timeout', 'The request took too long and was abandoned.'),
 };
 
-const INTERNAL = failure(500, 'internal_error', 'The server failed to answer this request.');
+export const INTERNAL = failure(500, 'internal_error', 'The server failed to answer this request.');
 
-const failureOf = (error: unknown): Failure | undefined => {
+/** The failure a known error answers with; the web UI shows the same ones as pages. */
+export const failureOf = (error: unknown): Failure | undefined => {
   if (error instanceof HttpFailure) return error.failure;
   if (error instanceof HTTPException) return OF_HTTP_STATUS[error.status];
   const known = toApiError(error);

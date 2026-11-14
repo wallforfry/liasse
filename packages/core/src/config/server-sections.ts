@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { storageDriverSchema } from '../domain/schemas.ts';
 import { type CrossFieldProblem, duration, integer, list, reportProblems, text } from './fields.ts';
+import { uiPassword } from './ui-password.ts';
 
 // What clients are told to call: the origin signed file URLs start with. It is never read
 // from a request, whose Host header belongs to the caller.
@@ -121,7 +122,7 @@ export const authSection = z
         .min(1, 'expected at least one token')
         .readonly(),
     ),
-    UI_PASSWORD: z.string().min(1).optional(),
+    UI_PASSWORD: uiPassword.optional(),
     UI_SESSION_TTL: duration.prefault('7d'),
     FILE_URL_SECRET: z
       .string()
