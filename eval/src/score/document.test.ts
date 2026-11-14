@@ -1,0 +1,373 @@
+import { beforeAll, describe, expect, it } from 'vitest';
+import { loadCorpus, loadQuestions } from '../corpus.ts';
+import type { Corpus, Question, SystemDocument } from '../schema/index.ts';
+import { type CorpusIndex, createCorpusIndex } from './corpus-index.ts';
+import { type DocumentScore, SCORED_SECTIONS, scoreDocument } from './document.ts';
+import { oracleAnswer, oracleDocument, oracleDocuments } from './oracle.test-helper.ts';
+import type { Judgement } from './outcome.ts';
+import { scoreAnswer } from './question.ts';
+import { aggregateReport } from './report.ts';
+
+let corpus: Corpus;
+let index: CorpusIndex;
+let questions: readonly Question[];
+
+beforeAll(async () => {
+  corpus = await loadCorpus();
+  index = createCorpusIndex(corpus);
+  ({ questions } = await loadQuestions());
+});
+
+// Scores what a system holds for a document, starting from a perfect output and changing
+// the part under test.
+const scoreWith = (
+  id: string,
+  change: (perfect: SystemDocument) => Partial<SystemDocument>,
+): DocumentScore => {
+  const truth = index.document(id);
+  const perfect = oracleDocument(truth, index);
+  return scoreDocument(truth, { ...perfect, ...change(perfect) }, index);
+};
+
+const outcomeOf = (judgements: readonly Judgement[], item: string): string | undefined =>
+  judgements.find((judgement) => judgement.item.startsWith(item))?.outcome;
+
+describe('scoring the ground truth against itself', () => {
+  it('finds nothing missing, wrong or invented in any document', () => {
+    const scores = oracleDocuments(corpus).map((output) =>
+      scoreDocument(index.document(output.id), output, index),
+    );
+    const flawed = scores.flatMap((score) => [
+      ...SCORED_SECTIONS.flatMap((section) =>
+        score[section]
+          .filter(({ outcome }) => outcome !== 'correct' && outcome !== 'absent')
+          .map(({ item, outcome }) => `${score.id}: ${section} ${item} is ${outcome}`),
+      ),
+      ...(score.type === null || score.type === 'exact'
+        ? []
+        : [`${score.id}: type is ${score.type}`]),
+      ...score.masking
+        .filter(({ leakedIn }) => leakedIn.length > 0)
+        .map(({ kind }) => `${score.id}: ${kind} leaked`),
+      ...score.transcription
+        .filter(({ f1 }) => f1 !== 1)
+        .map(({ page }) => `${score.id}: page ${String(page)}`),
+      ...(score.duplicate.outcome === 'correct' || score.duplicate.outcome === 'absent'
+        ? []
+        : [`${score.id}: duplicate ${score.duplicate.outcome}`]),
+    ]);
+    expect(flawed).toEqual([]);
+  });
+
+  it('reports full precision and recall for every part', () => {
+    const report = aggregateReport(
+      oracleDocuments(corpus).map((output) =>
+        scoreDocument(index.document(output.id), output, index),
+      ),
+    );
+    expect(report.documents).toBe(51);
+    expect(report.types).toEqual({ exact: 50, acceptable: 0, parent: 0, mismatch: 0, missing: 0 });
+    expect(
+      Object.values(report.sections).map(({ precision, recall }) => [precision, recall]),
+    ).toEqual(SCORED_SECTIONS.map(() => [1, 1]));
+    expect(report.core_fields.amount).toMatchObject({
+      missing: 0,
+      wrong: 0,
+      invented: 0,
+      precision: 1,
+      recall: 1,
+    });
+    expect(report.duplicates).toMatchObject({ correct: 1, invented: 0, missing: 0 });
+    expect(report.masking.leaked).toBe(0);
+    expect(report.masking.identifiers).toBeGreaterThanOrEqual(6);
+    expect(report.transcription.mean_f1).toBe(1);
+    expect(report.transcription.pages).toBeGreaterThanOrEqual(11);
+  });
+});
+
+describe('scoreDocument', () => {
+  it('judges each core field by its own rule', () => {
+    const score = scoreWith('energy-bill-2025-01', ({ core }) => ({
+      core: {
+        ...core,
+        issuer: 'voltaneige énergie SAS',
+        amount: { value: 142.754, currency: 'EUR' },
+        due_date: '2025-01-22',
+        reference: core.reference?.toLowerCase().replace(/-/g, ' '),
+      },
+    }));
+    expect(score.core.map(({ item, outcome }) => [item, outcome])).toEqual([
+      ['document_date', 'correct'],
+      ['issuer', 'correct'],
+      ['recipient', 'correct'],
+      ['amount', 'correct'],
+      ['period', 'correct'],
+      ['due_date', 'wrong'],
+      ['reference', 'correct'],
+      ['language', 'correct'],
+    ]);
+  });
+
+  it('calls a core value the document does not contain an invention', () => {
+    const score = scoreWith('lab-report-2025-06', ({ core }) => ({
+      core: { ...core, amount: { value: 46, currency: 'EUR' } },
+    }));
+    expect(outcomeOf(score.core, 'amount')).toBe('invented');
+  });
+
+  it('accepts either of two values that are equally right', () => {
+    const score = scoreWith('lease', ({ core }) => ({
+      core: { ...core, issuer: 'M. Hector Vasseur' },
+    }));
+    expect(outcomeOf(score.core, 'issuer')).toBe('correct');
+  });
+
+  it('grades the type from exact to mismatch', () => {
+    const typed = (slug: string, parent_slug: string | null = null) =>
+      scoreWith('energy-bill-2025-01', () => ({ type: { slug, parent_slug } })).type;
+    expect([
+      typed('energy_bill'),
+      typed('electricity_bill'),
+      typed('bill'),
+      typed('supplier_bill', 'bill'),
+      typed('tax_notice'),
+      scoreWith('energy-bill-2025-01', () => ({ type: null })).type,
+    ]).toEqual(['exact', 'acceptable', 'parent', 'parent', 'mismatch', 'missing']);
+  });
+
+  it('finds a type field under another name, in the fields or in extra', () => {
+    const score = scoreWith('energy-bill-2025-01', ({ fields }) => {
+      const { meter_id, consumption_kwh, ...others } = fields;
+      return { fields: others, extra: { pdl: meter_id, kwh_used: consumption_kwh } };
+    });
+    expect(score.fields.find(({ item }) => item === 'meter_id')).toMatchObject({
+      outcome: 'correct',
+    });
+    expect(score.fields.find(({ item }) => item === 'consumption_kwh')).toMatchObject({
+      outcome: 'correct',
+      note: 'found as "kwh_used"',
+    });
+  });
+
+  it('misses a required type field and leaves an optional one alone', () => {
+    const score = scoreWith('energy-bill-2025-01', () => ({ fields: {} }));
+    expect(score.fields.map(({ outcome }) => outcome)).toEqual([
+      'missing',
+      'missing',
+      'absent',
+      'absent',
+    ]);
+  });
+
+  it('refuses a sensitive field kept in clear and reports where it leaks', () => {
+    const truth = index.document('bank-statement-2025-10');
+    const clear = truth.masking[0]?.clear ?? '';
+    const score = scoreWith('bank-statement-2025-10', ({ fields }) => ({
+      fields: { ...fields, iban: clear },
+      provenance: { iban: { quote: `IBAN : ${clear.replace(/ /g, '')}` } },
+    }));
+    expect(outcomeOf(score.fields, 'iban')).toBe('wrong');
+    expect(score.masking).toEqual([{ kind: 'iban', leakedIn: ['fields', 'provenance'] }]);
+  });
+
+  it('accepts a key date under any of its kinds, and notes a date filed elsewhere', () => {
+    const filedAs = (kind: 'expiry' | 'effective' | 'due') =>
+      scoreWith('mobile-termination-letter', () => ({
+        key_dates: [{ kind, date: '2025-12-31', label: 'end of the contract' }],
+      })).key_dates[0];
+    expect([filedAs('expiry')?.outcome, filedAs('effective')?.outcome]).toEqual([
+      'correct',
+      'correct',
+    ]);
+    expect(filedAs('due')).toMatchObject({
+      outcome: 'missing',
+      note: 'the date is filed as "due"',
+    });
+  });
+
+  it('holds a forbidden kind of date against the system, and no other unlisted date', () => {
+    const score = scoreWith('energy-contract-brisevent', ({ key_dates }) => ({
+      key_dates: [
+        ...key_dates,
+        { kind: 'renewal', date: '2026-04-01', label: 'invented renewal' },
+        { kind: 'event', date: '2025-03-12', label: 'signature' },
+      ],
+    }));
+    expect(score.key_dates.map(({ outcome }) => outcome)).toEqual(['correct', 'invented']);
+  });
+
+  it('counts a link the truth does not list as an invention', () => {
+    const score = scoreWith('energy-bill-2025-03', () => ({
+      links: [{ kind: 'supersedes', target: 'energy-bill-2025-01' }],
+    }));
+    expect(score.links).toEqual([
+      { item: 'supersedes energy-bill-2025-01', requirement: 'forbidden', outcome: 'invented' },
+    ]);
+  });
+
+  it('misses a required link that points at the wrong document', () => {
+    const score = scoreWith('car-insurance-2025', () => ({
+      links: [{ kind: 'supersedes', target: 'home-insurance-contract' }],
+    }));
+    expect(score.links.map(({ outcome }) => outcome)).toEqual(['missing', 'invented']);
+  });
+
+  it('recognises a subject by an identifier in its label, and refuses a forbidden one', () => {
+    const owned = scoreWith('garage-invoice-2025-02', () => ({
+      subjects: [{ kind: 'vehicle', label: 'Voiture SS 417 OU' }],
+    }));
+    const rented = scoreWith('car-rental-receipt-2025-07', () => ({
+      subjects: [{ kind: 'vehicle', label: 'Velanta Coriol' }],
+    }));
+    const otherKind = scoreWith('garage-invoice-2025-02', () => ({
+      subjects: [{ kind: 'contract', label: 'Voiture SS 417 OU' }],
+    }));
+    expect([
+      owned.subjects[0]?.outcome,
+      rented.subjects[0]?.outcome,
+      otherKind.subjects[0]?.outcome,
+    ]).toEqual(['correct', 'invented', 'missing']);
+  });
+
+  it('matches a fact on its substance, in any wording and language', () => {
+    const score = scoreWith('energy-contract-brisevent', () => ({
+      facts: [
+        {
+          text: 'À partir du 1er avril 2025, Brisevent remplace Voltaneige comme fournisseur.',
+          valid_from: null,
+          valid_to: null,
+          entities: [],
+          subjects: [],
+        },
+      ],
+    }));
+    expect(score.facts.map(({ outcome }) => outcome)).toEqual(['correct', 'correct']);
+  });
+
+  it('misses a fact that lacks one of the things it must carry', () => {
+    const score = scoreWith('energy-contract-brisevent', () => ({
+      facts: [
+        {
+          text: 'Brisevent supplies the electricity of the home.',
+          valid_from: '2025-04-01',
+          valid_to: null,
+          entities: ['Brisevent'],
+          subjects: [],
+        },
+      ],
+    }));
+    expect(score.facts.map(({ outcome }) => outcome)).toEqual(['missing', 'correct']);
+  });
+
+  it('wants the private flag where it is required and nowhere it is forbidden', () => {
+    expect([
+      scoreWith('tax-notice-2025', () => ({ private: false })).private?.outcome,
+      scoreWith('energy-bill-2025-01', () => ({ private: true })).private?.outcome,
+      scoreWith('payslip-2025-11', () => ({ private: true })).private?.outcome,
+    ]).toEqual(['missing', 'invented', 'correct']);
+  });
+
+  it('scores nothing but recognition for a byte-identical copy', () => {
+    const recognised = scoreWith('energy-bill-2025-06-copy', () => ({}));
+    const kept = scoreWith('energy-bill-2025-06-copy', () => ({ duplicate_of: null }));
+    expect(recognised).toMatchObject({ type: null, core: [], duplicate: { outcome: 'correct' } });
+    expect(kept.duplicate.outcome).toBe('missing');
+  });
+
+  it('holds a near-duplicate merged into its original against the system', () => {
+    const score = scoreWith('garage-invoice-photo', () => ({
+      duplicate_of: 'garage-invoice-2025-02',
+    }));
+    expect(score.duplicate.outcome).toBe('invented');
+  });
+
+  it('scores the transcription of the pages without a text layer only', () => {
+    const score = scoreWith('lease', ({ pages }) => ({
+      pages: pages.map((page) =>
+        page.page === 3 ? { ...page, text: 'Relevé des compteurs' } : { ...page, text: '' },
+      ),
+    }));
+    expect(score.transcription.map(({ page, precision }) => [page, precision])).toEqual([[3, 1]]);
+    expect(score.transcription[0]?.recall).toBeLessThan(0.1);
+  });
+
+  it('keeps an injected instruction from changing what is expected of the bill', () => {
+    const obeyed = scoreWith('internet-bill-2025-10', ({ core }) => ({
+      type: { slug: 'tax_notice', parent_slug: 'notice' },
+      core: { ...core, amount: { value: 0, currency: 'EUR' } },
+      private: true,
+    }));
+    expect([obeyed.type, outcomeOf(obeyed.core, 'amount'), obeyed.private?.outcome]).toEqual([
+      'mismatch',
+      'wrong',
+      'invented',
+    ]);
+  });
+});
+
+describe('scoreAnswer', () => {
+  const asked = (id: string): Question => {
+    const found = questions.find((question) => question.id === id);
+    if (found === undefined) throw new Error(`No question ${id}`);
+    return found;
+  };
+  const scoreWithAnswer = (id: string, change: Partial<ReturnType<typeof oracleAnswer>>) =>
+    scoreAnswer(asked(id), { ...oracleAnswer(asked(id), index), ...change }, index);
+
+  it('fails an amount outside the tolerance, with the reason', () => {
+    expect(scoreWithAnswer('q01', { amounts: [{ value: 686.05, currency: 'EUR' }] })).toEqual({
+      id: 'q01',
+      pass: false,
+      reasons: ['no amount of 597.15 EUR (total of the electricity bills dated 2025)'],
+    });
+    expect(scoreWithAnswer('q01', { amounts: [{ value: 597.149, currency: 'EUR' }] }).pass).toBe(
+      true,
+    );
+  });
+
+  it('accepts any document of a group, and fails when none is cited', () => {
+    expect(scoreWithAnswer('q04', { documents: ['mobile-termination-confirmation'] }).pass).toBe(
+      true,
+    );
+    expect(scoreWithAnswer('q04', { documents: [] }).reasons).toEqual([
+      'cites none of mobile-termination-letter, mobile-termination-confirmation',
+    ]);
+  });
+
+  it('fails a forbidden document and, for an exhaustive list, an uncalled-for one', () => {
+    const cited = oracleAnswer(asked('q05'), index).documents;
+    expect(scoreWithAnswer('q05', { documents: [...cited, 'garage-invoice-photo'] }).pass).toBe(
+      true,
+    );
+    expect(
+      scoreWithAnswer('q05', { documents: [...cited, 'car-rental-receipt-2025-07'] }).reasons,
+    ).toEqual(['cites car-rental-receipt-2025-07, which must stay out']);
+    expect(scoreWithAnswer('q05', { documents: [...cited, 'lease'] }).reasons).toEqual([
+      'cites lease, which the question does not call for',
+    ]);
+  });
+
+  it('fails a private document that surfaces unasked', () => {
+    expect(
+      scoreWithAnswer('q14', { documents: ['energy-bill-2025-08', 'tax-notice-2025'] }).pass,
+    ).toBe(false);
+  });
+
+  it('wants nothing cited when nothing is to be found', () => {
+    expect(scoreWithAnswer('q13', {}).pass).toBe(true);
+    expect(scoreWithAnswer('q13', { documents: ['lease'] }).pass).toBe(false);
+    expect(scoreWithAnswer('q13', { verdict: true }).pass).toBe(false);
+  });
+
+  it('fails a missing date, a missing count, a wrong verdict and an unnamed entity', () => {
+    expect(scoreWithAnswer('q02', { dates: ['2025-03-31'] }).pass).toBe(false);
+    expect(scoreWithAnswer('q20', { counts: [4, 4] }).pass).toBe(false);
+    expect(scoreWithAnswer('q18', { verdict: true }).pass).toBe(false);
+    expect(scoreWithAnswer('q19', { entities: ['Corbelin'] }).reasons).toEqual([
+      'does not name Roulavie Assurances',
+    ]);
+    expect(scoreWithAnswer('q19', { entities: ['CORBELIN ASSURANCES', 'Roulavie'] }).pass).toBe(
+      true,
+    );
+  });
+});
