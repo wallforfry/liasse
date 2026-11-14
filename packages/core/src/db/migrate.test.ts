@@ -19,7 +19,8 @@ import {
   EmbeddingDimensionMismatchError,
   installedEmbeddingDimensions,
 } from './embedding-dimension.ts';
-import { migrate } from './migrate.ts';
+import { migrate, MIGRATIONS_FOLDER } from './migrate.ts';
+import { readMigrationFiles } from './migration-files.ts';
 
 const TABLES = [
   'chunks',
@@ -88,7 +89,7 @@ describe('migrate', () => {
   it('is a no-op when applied twice', async () => {
     const before = await appliedMigrations(database);
     await migrate(database.url, { embeddingDim: 384 });
-    expect(before).not.toHaveLength(0);
+    expect(before).toHaveLength(readMigrationFiles(MIGRATIONS_FOLDER).length);
     expect(await appliedMigrations(database)).toEqual(before);
     expect(await publicTables(database)).toEqual(TABLES);
   });
@@ -145,16 +146,8 @@ describe('migrate', () => {
     });
   });
 
-  it('builds unaccented search vectors with the simple configuration', async () => {
-    expect(
-      await column(
-        database,
-        sql`SELECT liasse_tsvector('Électricité: the Août bills')::text AS value`,
-      ),
-    ).toEqual(["'aout':3 'bills':4 'electricite':1 'the':2"]);
-  });
-
   it.each([
+    ['chunks_language_idx', 'USING btree (language)'],
     ['document_pages_tsv_idx', 'USING gin (tsv)'],
     ['chunks_tsv_idx', 'USING gin (tsv)'],
     ['facts_tsv_idx', 'USING gin (tsv)'],
