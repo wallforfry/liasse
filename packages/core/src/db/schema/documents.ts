@@ -1,4 +1,4 @@
-import { sql } from 'drizzle-orm';
+import { ne, sql } from 'drizzle-orm';
 import {
   boolean,
   check,
@@ -9,6 +9,7 @@ import {
   real,
   text,
 } from 'drizzle-orm/pg-core';
+import { TOMBSTONE_STATUS } from '../../domain/enums.ts';
 import { ID_PREFIXES, newId } from '../../domain/ids.ts';
 import {
   embeddingVector,
@@ -31,6 +32,8 @@ export const documents = pgTable(
     storageKey: text('storage_key').notNull(),
     mime: text('mime').notNull(),
     originalName: text('original_name').notNull(),
+    // What the caller said about the file at ingestion: untrusted free text.
+    hint: text('hint'),
     source: documentSource('source').notNull(),
     status: documentStatus('status').notNull().default('received'),
     state: documentState('state').notNull().default('current'),
@@ -47,6 +50,12 @@ export const documents = pgTable(
     confidence: real('confidence'),
     manualFields: textArray('manual_fields'),
     subjectIds: textArray('subject_ids'),
+    // How many times the watched folder queued this document again after a failure
+    // without a person asking: bounded, so a restart loop cannot spend on it forever.
+    watchRequeues: integer('watch_requeues').notNull().default(0),
+    // Set on a tombstone once its stored file is removed. Null on a tombstone means
+    // the removal is still owed, whatever became of its job.
+    fileDeletedAt: instant('file_deleted_at'),
     ingestedAt: instant('ingested_at').notNull().defaultNow(),
     updatedAt: updatedAt(),
   },
@@ -60,6 +69,14 @@ export const documents = pgTable(
     ),
   ],
 );
+
+/**
+ * A deleted document leaves a tombstone: its row, with the status `deleted`, the hash
+ * of its file and none of its content. A tombstone is not a document: every query that
+ * lists, counts, searches or serves documents adds this condition to its `where`.
+ * `isLiveStatus` in `@liasse/core/domain` is the same rule for a row already read.
+ */
+export const isLiveDocument = ne(documents.status, TOMBSTONE_STATUS);
 
 export const documentPages = pgTable(
   'document_pages',

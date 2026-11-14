@@ -32,6 +32,16 @@
       "types": "./dist/domain/index.d.ts",
       "default": "./dist/domain/index.js"
     },
+    "./ingest": {
+      "@liasse/source": "./src/ingest/index.ts",
+      "types": "./dist/ingest/index.d.ts",
+      "default": "./dist/ingest/index.js"
+    },
+    "./jobs": {
+      "@liasse/source": "./src/jobs/index.ts",
+      "types": "./dist/jobs/index.d.ts",
+      "default": "./dist/jobs/index.js"
+    },
     "./models": {
       "@liasse/source": "./src/models/index.ts",
       "types": "./dist/models/index.d.ts",
@@ -51,6 +61,11 @@
       "@liasse/source": "./src/text/index.ts",
       "types": "./dist/text/index.d.ts",
       "default": "./dist/text/index.js"
+    },
+    "./storage": {
+      "@liasse/source": "./src/storage/index.ts",
+      "types": "./dist/storage/index.d.ts",
+      "default": "./dist/storage/index.js"
     },
     "./testing": {
       "@liasse/source": "./src/testing/index.ts",
@@ -74,6 +89,7 @@
     "@ai-sdk/openai": "^4.0.118",
     "@ai-sdk/openai-compatible": "^3.0.92",
     "ai": "^7.0.173",
+    "aws4fetch": "^1.0.20",
     "drizzle-orm": "^0.45.4",
     "heic-decode": "^2.1.0",
     "jpeg-js": "^0.4.4",

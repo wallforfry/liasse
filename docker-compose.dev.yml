@@ -18,5 +18,22 @@ services:
       timeout: 3s
       retries: 30
 
+  # S3-compatible server for the tests of the s3 storage driver.
+  s3:
+    image: rustfs/rustfs:1.0.1
+    environment:
+      RUSTFS_ACCESS_KEY: liasse
+      RUSTFS_SECRET_KEY: liasse-secret
+    ports:
+      - '127.0.0.1:54330:9000'
+    volumes:
+      - s3-data:/data
+    healthcheck:
+      test: ['CMD-SHELL', 'curl -fsS http://127.0.0.1:9000/health']
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
 volumes:
   postgres-data:
+  s3-data:

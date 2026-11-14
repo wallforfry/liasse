@@ -132,6 +132,19 @@ describe('reading the registry', () => {
       expect(await count()).toEqual([1]);
     });
 
+    it('leaves deleted documents out of the count and of the examples', async () => {
+      // `deleteDocument` clears the type and the title of a tombstone; the count must
+      // not rely on that, so this row keeps both.
+      await insertSyntheticDocument(database.db, {
+        typeId: typeOf('lease').id,
+        title: 'Deleted lease',
+        status: 'deleted',
+      });
+      const listed = await listTypes({ includeExamples: true }, context);
+      const lease = listed.find(({ slug }) => slug === 'lease');
+      expect(lease).toMatchObject({ docCount: 0, examples: [] });
+    });
+
     it('gives the most recent titles as examples, without private or untitled documents', async () => {
       const listed = await listTypes({ includeExamples: true }, context);
       expect(listed.map(({ slug, examples }) => [slug, examples])).toEqual([

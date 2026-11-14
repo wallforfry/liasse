@@ -1,3 +1,4 @@
+export { createGate, type Gate, sleep, waitUntil } from './async.ts';
 export { createFakeEmbedder, type FakeEmbedderOptions } from './fake-embedder.ts';
 export {
   createFakeTextModel,
@@ -21,6 +22,15 @@ export {
 } from './synthetic-pdf.ts';
 export { buildSyntheticPng } from './synthetic-png.ts';
 export { buildSyntheticZip, type SyntheticZipEntry } from './synthetic-zip.ts';
+export {
+  syntheticEml,
+  syntheticHeic,
+  syntheticIsoMedia,
+  syntheticJpeg,
+  syntheticPdf,
+  syntheticPng,
+} from './synthetic-files.ts';
+export { createTestBucket, DEFAULT_TEST_S3_ENDPOINT, type TestBucket } from './test-bucket.ts';
 export {
   createTestDatabase,
   DEFAULT_TEST_DATABASE_URL,

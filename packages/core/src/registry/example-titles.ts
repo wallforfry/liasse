@@ -1,5 +1,5 @@
 import { and, eq, inArray, isNotNull, lte, sql } from 'drizzle-orm';
-import { documents } from '../db/schema/documents.ts';
+import { documents, isLiveDocument } from '../db/schema/documents.ts';
 import type { RegistryReader } from './type-store.ts';
 
 // The most recent titles of each type. They end up in prompts and in tool outputs, so a
@@ -24,6 +24,7 @@ export const exampleTitles = async (
         inArray(documents.typeId, [...typeIds]),
         isNotNull(documents.title),
         eq(documents.private, false),
+        isLiveDocument,
       ),
     )
     .as('ranked');

@@ -54,8 +54,22 @@ jobs:
           --health-interval 2s
           --health-timeout 3s
           --health-retries 30
+      # Same image and credentials as the `s3` service of docker-compose.dev.yml.
+      s3:
+        image: rustfs/rustfs:1.0.1
+        env:
+          RUSTFS_ACCESS_KEY: liasse
+          RUSTFS_SECRET_KEY: liasse-secret
+        ports:
+          - 54330:9000
+        options: >-
+          --health-cmd "curl -fsS http://127.0.0.1:9000/health"
+          --health-interval 2s
+          --health-timeout 3s
+          --health-retries 30
     env:
       TEST_DATABASE_URL: postgres://liasse:liasse@127.0.0.1:54329/liasse_test
+      TEST_S3_ENDPOINT: http://127.0.0.1:54330
     steps:
       - uses: actions/checkout@v7
       - uses: pnpm/action-setup@v6

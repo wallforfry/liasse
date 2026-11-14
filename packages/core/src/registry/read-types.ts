@@ -1,5 +1,5 @@
 import { and, asc, cosineDistance, eq, isNotNull, ne } from 'drizzle-orm';
-import { documents } from '../db/schema/documents.ts';
+import { documents, isLiveDocument } from '../db/schema/documents.ts';
 import { docTypes } from '../db/schema/registry.ts';
 import type { TypeStatus } from '../domain/enums.ts';
 import type { Embedding } from '../models/ports.ts';
@@ -39,7 +39,10 @@ export const listTypes = async (
   { db }: RegistryReadContext,
 ): Promise<readonly ListedType[]> => {
   const rows = await db
-    .select({ ...TYPE_COLUMNS, docCount: db.$count(documents, eq(documents.typeId, docTypes.id)) })
+    .select({
+      ...TYPE_COLUMNS,
+      docCount: db.$count(documents, and(eq(documents.typeId, docTypes.id), isLiveDocument)),
+    })
     .from(docTypes)
     .where(status === undefined ? ne(docTypes.status, 'merged') : eq(docTypes.status, status))
     .orderBy(asc(docTypes.slug));

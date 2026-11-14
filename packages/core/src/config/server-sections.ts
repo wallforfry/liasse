@@ -17,6 +17,11 @@ export const databaseSection = z
   })
   .transform((env) => Object.freeze({ url: env.DATABASE_URL }));
 
+// In bytes per second. An upload slower than this is given up; 64 KiB/s lets a 50 MiB
+// file take a little under fourteen minutes.
+const DEFAULT_S3_MIN_UPLOAD_RATE = 64 * 1024;
+const MAX_S3_MIN_UPLOAD_RATE = 1024 * 1024 * 1024;
+
 const storageFields = z.object({
   STORAGE_DRIVER: storageDriverSchema.default('fs'),
   STORAGE_PATH: text.default('/data/files'),
@@ -25,30 +30,30 @@ const storageFields = z.object({
   S3_ENDPOINT: z.url().optional(),
   S3_ACCESS_KEY_ID: text.optional(),
   S3_SECRET_ACCESS_KEY: text.optional(),
+  S3_REQUEST_TIMEOUT: duration.prefault('30s'),
+  S3_MIN_UPLOAD_RATE: integer(1, MAX_S3_MIN_UPLOAD_RATE).default(DEFAULT_S3_MIN_UPLOAD_RATE),
 });
 
-const s3CredentialProblems = (env: z.output<typeof storageFields>): readonly CrossFieldProblem[] =>
-  (env.S3_ACCESS_KEY_ID === undefined) === (env.S3_SECRET_ACCESS_KEY === undefined)
-    ? []
-    : [
-        {
-          key: env.S3_ACCESS_KEY_ID === undefined ? 'S3_ACCESS_KEY_ID' : 'S3_SECRET_ACCESS_KEY',
-          message: 'S3_ACCESS_KEY_ID and S3_SECRET_ACCESS_KEY must be set together',
-        },
-      ];
+const S3_REQUIRED_KEYS = ['S3_BUCKET', 'S3_ACCESS_KEY_ID', 'S3_SECRET_ACCESS_KEY'] as const;
+
+// The s3 driver signs its requests itself and reads no ambient credential (instance
+// role, shared profile), hence the explicit key pair.
+const missingS3Settings = (env: z.output<typeof storageFields>): readonly CrossFieldProblem[] =>
+  S3_REQUIRED_KEYS.filter((key) => env[key] === undefined).map((key) => ({
+    key,
+    message: 'required when STORAGE_DRIVER=s3',
+  }));
 
 export const storageSection = storageFields.transform((env, ctx) => {
   if (env.STORAGE_DRIVER === 'fs') {
     return Object.freeze({ driver: env.STORAGE_DRIVER, path: env.STORAGE_PATH });
   }
-  const credentialProblems = s3CredentialProblems(env);
-  if (env.S3_BUCKET === undefined || credentialProblems.length > 0) {
-    reportProblems(ctx, [
-      ...(env.S3_BUCKET === undefined
-        ? [{ key: 'S3_BUCKET', message: 'required when STORAGE_DRIVER=s3' }]
-        : []),
-      ...credentialProblems,
-    ]);
+  if (
+    env.S3_BUCKET === undefined ||
+    env.S3_ACCESS_KEY_ID === undefined ||
+    env.S3_SECRET_ACCESS_KEY === undefined
+  ) {
+    reportProblems(ctx, missingS3Settings(env));
     return z.NEVER;
   }
   return Object.freeze({
@@ -58,6 +63,8 @@ export const storageSection = storageFields.transform((env, ctx) => {
     endpoint: env.S3_ENDPOINT,
     accessKeyId: env.S3_ACCESS_KEY_ID,
     secretAccessKey: env.S3_SECRET_ACCESS_KEY,
+    requestTimeoutMs: env.S3_REQUEST_TIMEOUT,
+    minUploadBytesPerSecond: env.S3_MIN_UPLOAD_RATE,
   });
 });
 
