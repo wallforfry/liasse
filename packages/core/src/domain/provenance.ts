@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { CLASSIFICATION_OUTCOMES } from './enums.ts';
 import { entityMatchRuleSchema } from './schemas.ts';
 
 // `documents.provenance` is keyed by the bare name of the field it describes, for a core
@@ -26,3 +27,75 @@ export const entityProvenanceSchema = z.strictObject({
   confidence: z.number().min(0).max(1),
 });
 export type EntityProvenance = Readonly<z.output<typeof entityProvenanceSchema>>;
+
+const confidence = z.number().min(0).max(1);
+
+// The provenance entry of a value the extraction call produced. An entity-typed value has
+// the entry of `entityProvenanceSchema` instead: the specification gives it no quote.
+export const extractedProvenanceSchema = z.strictObject({
+  model: z.string().min(1),
+  // Null for a document without a type, which has the common core only.
+  schema_version: z.number().int().min(1).nullable(),
+  confidence,
+  page: z.number().int().min(1),
+  quote: z.string().min(1),
+});
+export type ExtractedProvenance = Readonly<z.output<typeof extractedProvenanceSchema>>;
+
+// The provenance entry of a value a person wrote through `update_document`.
+export const manualProvenanceSchema = z.strictObject({ manual: z.literal(true) });
+export type ManualProvenance = Readonly<z.output<typeof manualProvenanceSchema>>;
+
+export const MANUAL_PROVENANCE: ManualProvenance = Object.freeze({ manual: true });
+
+// A corrected entity name still designates an entity.
+export const manualEntityProvenanceSchema = z.strictObject({
+  ...entityProvenanceSchema.shape,
+  manual: z.literal(true),
+});
+export type ManualEntityProvenance = Readonly<z.output<typeof manualEntityProvenanceSchema>>;
+
+// The entry of `documents.manual_fields` that says the type itself was chosen by a
+// person. Field names are snake_case, so it cannot be one.
+export const MANUAL_TYPE_FIELD = '@type';
+
+// The one key of `documents.provenance` that is not a field name: how the pipeline
+// obtained what no field carries (the text, the type, the extraction as a whole).
+export const PIPELINE_PROVENANCE_KEY = '@pipeline';
+
+const textProvenanceSchema = z.object({
+  method: z.string(),
+  vision_model: z.string().optional(),
+  attachments_ingested: z.number().int().min(0),
+  // Parts displayed inside the message, and files of a format ingestion refuses.
+  attachments_skipped: z.number().int().min(0),
+});
+
+const typeProvenanceSchema = z.union([
+  manualProvenanceSchema,
+  z.object({ model: z.string(), confidence, outcome: z.enum(CLASSIFICATION_OUTCOMES) }),
+]);
+export type TypeProvenance = Readonly<z.output<typeof typeProvenanceSchema>>;
+
+const extractionProvenanceSchema = z.object({
+  model: z.string(),
+  schema_version: z.number().int().min(1).nullable(),
+  // True when the document was longer than the extraction budget: the model read its
+  // beginning only.
+  truncated: z.boolean(),
+  // Values the model returned that were dropped: no verifiable quote, or not valid.
+  rejected_values: z.number().int().min(0),
+});
+
+export const pipelineProvenanceSchema = z.object({
+  text: textProvenanceSchema.optional(),
+  type: typeProvenanceSchema.optional(),
+  extraction: extractionProvenanceSchema.optional(),
+});
+export type PipelineProvenance = Readonly<z.output<typeof pipelineProvenanceSchema>>;
+
+// A row written before a key existed, or around the pipeline, reads as an empty record.
+export const readPipelineProvenance = (
+  provenance: Readonly<Record<string, unknown>>,
+): PipelineProvenance =>
+  pipelineProvenanceSchema.safeParse(provenance[PIPELINE_PROVENANCE_KEY]).data ?? {};
