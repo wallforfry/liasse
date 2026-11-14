@@ -1,17 +1,14 @@
 import { and, eq, inArray, notInArray, or, type SQL, sql } from 'drizzle-orm';
-import { z } from 'zod';
-import { untrustedText } from '../contract/knowledge.ts';
+import {
+  type Recall,
+  type RecalledFact,
+  type RecallInput,
+  recallInputSchema,
+} from '../contract/knowledge-reads.ts';
 import type { Database } from '../db/client.ts';
 import { documents } from '../db/schema/documents.ts';
 import { facts } from '../db/schema/knowledge.ts';
-import {
-  DEFAULT_RECALL_LIMIT,
-  MAX_QUERY_STRING_LENGTH,
-  MAX_RECALL_LIMIT,
-  MAX_RECALL_RELATED,
-  RECALL_CANDIDATES_PER_RANKER,
-} from '../domain/limits.ts';
-import { isoDateSchema } from '../domain/values.ts';
+import { MAX_RECALL_RELATED, RECALL_CANDIDATES_PER_RANKER } from '../domain/limits.ts';
 import type { Embedder } from '../models/ports.ts';
 import { reciprocalRankFusion } from '../search/fusion.ts';
 import {
@@ -26,37 +23,6 @@ import { visibleDocument } from './read-shared.ts';
 export interface RecallContext extends KnowledgeReadContext {
   readonly embedder: Embedder;
 }
-
-export const recallInputSchema = z.strictObject({
-  query: z.string().max(MAX_QUERY_STRING_LENGTH),
-  // Only the facts valid on that day.
-  at: isoDateSchema.optional(),
-  limit: z.int().min(1).max(MAX_RECALL_LIMIT).default(DEFAULT_RECALL_LIMIT),
-  includePrivate: z.boolean().default(false),
-});
-export type RecallInput = z.input<typeof recallInputSchema>;
-
-export const RECALL_MATCHES = ['direct', 'related'] as const;
-
-export const recalledFactSchema = z.strictObject({
-  id: z.string(),
-  text: untrustedText,
-  validFrom: isoDateSchema.nullable(),
-  validTo: isoDateSchema.nullable(),
-  // The document the fact was read in.
-  documentId: z.string(),
-  entityIds: z.array(z.string()).readonly(),
-  subjectIds: z.array(z.string()).readonly(),
-  // `direct` for a fact the query found, `related` for one that shares an entity or a
-  // subject with such a fact.
-  match: z.enum(RECALL_MATCHES),
-});
-export type RecalledFact = z.output<typeof recalledFactSchema>;
-
-export const recallOutputSchema = z.strictObject({
-  facts: z.array(recalledFactSchema).readonly(),
-});
-export type Recall = z.output<typeof recallOutputSchema>;
 
 const FACT_SOURCE: RankedSource = {
   table: facts,

@@ -357,8 +357,8 @@ Fourteen tools, over Streamable HTTP (`/mcp`, Bearer token auth) and stdio. All 
 | `query` | Structured query (DSL) | DSL object | Rows (ID, core, requested fields) or aggregates |
 | `get_document` | Document details | `id`, `include` (`fields`, `text`, `pages`, `file_url`, `provenance`) | Document; paginated text if long |
 | `list_entities` | List or search entities | `query?`, `kind?` | Entities with aliases and document count |
-| `ingest` | Add a document | `file` (base64) or `url`, `filename`, `hint?` | ID and status; asynchronous processing |
-| `get_status` | Track processing | `id` | Status, error if any |
+| `ingest` | Add a document | `file` (base64) or `url`, `filename`, `hint?`, `private?` | ID and status; asynchronous processing |
+| `get_status` | Track processing | `id` | Status and state, error if any |
 | `update_document` | Correct a document | `id`, `type?`, `core?`, `fields?`, `private?` | Updated document (provenance `manual`) |
 | `list_pending_changes` | See consolidation proposals | `kind?` | Changes with rationale |
 | `apply_change` | Approve or reject | `id`, `decision` (`apply`/`reject`), `note?` | Result and number of documents to re-extract |
@@ -377,8 +377,20 @@ Fourteen tools, over Streamable HTTP (`/mcp`, Bearer token auth) and stdio. All 
 - Tool descriptions guide the agent: call `describe_types` before `query`, prefer `query` for numeric questions and `search` for fuzzy ones, never invent a missing value.
 - `file_url` is a signed URL valid for 15 minutes, never the storage path.
 - A manual correction (`update_document`) takes precedence: consolidation never overwrites it.
-- `ingest` is exposed to agents by default.
-- MCP resources: `doc://{id}` (text) and `types://` (registry), for clients that support them.
+- `ingest` is exposed to agents by default. It takes the file itself, base64-encoded; `url` answers `not_implemented` for now, since fetching an address an agent chose (possibly read from a document) needs its own safeguards against reaching the hosts of the server's network.
+- MCP resources: `doc://{id}` (the document with the first 100,000 characters of its text, as JSON; private documents included, as with `get_document`) and `types://` (the registry, counts without private documents), for clients that support them. Documents are not listed as resources.
+
+**Transports**
+
+- **Streamable HTTP** on `/mcp`, behind the same Bearer tokens as the REST API and with the request deadline of an upload. The server is stateless: one server per `POST`, answered as JSON, no session; `GET` and `DELETE` answer 405. A message may hold a base64 file of `MAX_FILE_SIZE` plus 1 MiB; the JSON depth limit of the REST API applies.
+- **stdio** with `liasse --stdio` (`node dist/main.js --stdio`): the same process as the server, workers and watched folder included, speaking MCP on its standard streams instead of listening on HTTP. No credential: whoever starts the process holds them. It exits with code 0 when its input ends. The `file_url` it signs opens on the HTTP server of `PUBLIC_URL`, when one runs. Everything the process says about itself goes to stderr.
+
+**Results and errors**
+
+- A tool answers compact JSON in one text content. A failure is a tool error (`isError`) whose text is `{"error": {"code", "message", …}}` with the codes of the REST API; a feature this build does not provide answers `not_implemented` where REST answers 501. An unexpected failure answers `internal_error`, and only its class is logged.
+- Arguments are checked against strict schemas derived from those of the REST API; the SDK refuses those that do not match with an "invalid arguments" tool error. `query` is the exception: the DSL reads its arguments itself, so its errors name the field, type or operator to correct, as `POST /query` does.
+- A resource that does not exist answers the JSON-RPC error -32002, with the body a tool would answer as its data.
+- `upcoming`, `timeline`, `recall` and `get_subject` reach the knowledge layer through the features the server binds, as `GET /upcoming` and `GET /subjects` do; their answers are those of the knowledge layer. `list_pending_changes` and `apply_change` answer `not_implemented` until consolidation is bound.
 
 ## API, configuration and deployment
 
