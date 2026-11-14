@@ -1,6 +1,11 @@
 import { Readable } from 'node:stream';
 import { ApiError, type ApiContext, uploadDocument } from '@liasse/core/api';
-import { uploadResultSchema } from '@liasse/core/contract';
+import {
+  UPLOAD_FILE_FIELD,
+  type UploadOptions,
+  uploadOptionsSchema,
+  uploadResultSchema,
+} from '@liasse/core/contract';
 import { Hono } from 'hono';
 import { bodyLimit } from 'hono/body-limit';
 import { resolver } from 'hono-openapi';
@@ -19,17 +24,18 @@ export const FILENAME_HEADER = 'X-Filename';
 // What the boundaries, part headers and the other fields of a form may add to the file.
 const MULTIPART_OVERHEAD_BYTES = 1024 * 1024;
 
-const options = {
-  hint: z.string().optional().describe('What the caller knows about the file; free text.'),
+// A form field and a query parameter carry text: these read it into the options.
+const textOptions = {
+  hint: uploadOptionsSchema.shape.hint,
   private: flagParam.optional(),
-};
+} satisfies Record<keyof UploadOptions, z.ZodType>;
 
 const formSchema = z.object({
-  file: z.file().describe('The document. Exactly one.'),
-  ...options,
+  [UPLOAD_FILE_FIELD]: z.file().describe('The document. Exactly one.'),
+  ...textOptions,
 });
 
-const optionsSchema = z.strictObject(options);
+const optionsSchema = z.strictObject(textOptions).pipe(uploadOptionsSchema);
 
 const FLAG_PROBLEM = '"private" is "true" or "false".';
 
@@ -51,9 +57,11 @@ const tooLarge = (maxFileSize: number): ApiError =>
 
 // Hono reads a form whole; the body limit of the route is what bounds that read.
 const readForm = async (context: AppContext) => {
-  const { file, ...others } = await context.req.parseBody({ all: true }).catch(() => {
-    throw invalid('The multipart body could not be read.');
-  });
+  const { [UPLOAD_FILE_FIELD]: file, ...others } = await context.req
+    .parseBody({ all: true })
+    .catch(() => {
+      throw invalid('The multipart body could not be read.');
+    });
   if (!(file instanceof File)) throw invalid('Expected exactly one file, in the field "file".');
   const fields = optionsSchema.safeParse(others);
   if (!fields.success) {

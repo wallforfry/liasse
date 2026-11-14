@@ -98,6 +98,20 @@ export const documentSchema = documentSummarySchema.extend({
 });
 export type DocumentView = z.output<typeof documentSchema>;
 
+// An upload is a multipart form: the file in this field, the options in fields of their
+// own name. The raw-bytes form carries the same options in its query string.
+export const UPLOAD_FILE_FIELD = 'file';
+
+export const uploadOptionsSchema = z.strictObject({
+  hint: z.string().optional().describe('What the caller knows about the file; free text.'),
+  private: z
+    .boolean()
+    .optional()
+    .describe('Kept out of search, Hindsight and external embeddings unless asked for.'),
+});
+export type UploadOptions = z.input<typeof uploadOptionsSchema>;
+export const UPLOAD_OPTION_FIELDS = uploadOptionsSchema.keyof().options;
+
 export const uploadResultSchema = z.object({
   id: z.string(),
   status: liveDocumentStatusSchema,

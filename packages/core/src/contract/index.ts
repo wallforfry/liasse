@@ -21,6 +21,10 @@ export {
   MAX_TEXT_LENGTH,
   PRIVATE_FILTERS,
   type PrivateFilter,
+  UPLOAD_FILE_FIELD,
+  UPLOAD_OPTION_FIELDS,
+  type UploadOptions,
+  uploadOptionsSchema,
   type UploadResult,
   uploadResultSchema,
 } from './documents.ts';

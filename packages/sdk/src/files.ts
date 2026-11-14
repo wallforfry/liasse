@@ -1,12 +1,7 @@
-interface UploadOptions {
-  /** What the caller knows about the file; free text that helps classification. */
-  readonly hint?: string | undefined;
-  /** Kept out of search, Hindsight and external embeddings unless asked for. */
-  readonly private?: boolean | undefined;
-}
+import { UPLOAD_FILE_FIELD, UPLOAD_OPTION_FIELDS, type UploadOptions } from '@liasse/core/contract';
 
 /** A `File` brings its name; a bare `Blob` needs one. */
-export type UploadInput = UploadOptions &
+export type UploadInput = Readonly<UploadOptions> &
   (
     | { readonly file: File; readonly filename?: string | undefined }
     | { readonly file: Blob; readonly filename: string }
@@ -16,13 +11,14 @@ export const uploadForm = (input: UploadInput): FormData => {
   const form = new FormData();
   // The union rules out a Blob without a name; FormData would call it "blob".
   form.append(
-    'file',
+    UPLOAD_FILE_FIELD,
     input.file,
     input.filename ?? (input.file instanceof File ? input.file.name : 'blob'),
   );
-  if (input.hint !== undefined) form.append('hint', input.hint);
-  if (input.private !== undefined) form.append('private', String(input.private));
-
+  UPLOAD_OPTION_FIELDS.forEach((field) => {
+    const value = input[field];
+    if (value !== undefined) form.append(field, String(value));
+  });
   return form;
 };
 
