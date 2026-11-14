@@ -95,6 +95,22 @@ export const SUBJECT_KINDS = [
 ] as const;
 export type SubjectKind = (typeof SUBJECT_KINDS)[number];
 
+// What identifies a subject. A plate, a vehicle identification number, an IBAN and a card
+// number name one subject whoever writes them. A contract number is scoped to its issuer,
+// and an address is only as precise as the document that writes it.
+export const SUBJECT_IDENTIFIER_TYPES = [
+  'license_plate',
+  'vin',
+  'contract_number',
+  'address',
+  'iban',
+  'card_number',
+] as const;
+export type SubjectIdentifierType = (typeof SUBJECT_IDENTIFIER_TYPES)[number];
+
+export const NOTICE_PERIOD_UNITS = ['days', 'weeks', 'months'] as const;
+export type NoticePeriodUnit = (typeof NOTICE_PERIOD_UNITS)[number];
+
 export const STORAGE_DRIVERS = ['fs', 's3'] as const;
 export type StorageDriver = (typeof STORAGE_DRIVERS)[number];
 

@@ -14,8 +14,10 @@ import {
   KEY_DATE_KINDS,
   LINK_KINDS,
   LLM_PROVIDERS,
+  NOTICE_PERIOD_UNITS,
   SCHEMA_LANGUAGES,
   STORAGE_DRIVERS,
+  SUBJECT_IDENTIFIER_TYPES,
   SUBJECT_KINDS,
   SUPPORTED_MIMES,
   TYPE_STATUSES,
@@ -34,6 +36,8 @@ export const entityIdentifierTypeSchema = z.enum(ENTITY_IDENTIFIER_TYPES);
 export const keyDateKindSchema = z.enum(KEY_DATE_KINDS);
 export const linkKindSchema = z.enum(LINK_KINDS);
 export const subjectKindSchema = z.enum(SUBJECT_KINDS);
+export const subjectIdentifierTypeSchema = z.enum(SUBJECT_IDENTIFIER_TYPES);
+export const noticePeriodUnitSchema = z.enum(NOTICE_PERIOD_UNITS);
 export const storageDriverSchema = z.enum(STORAGE_DRIVERS);
 export const llmProviderSchema = z.enum(LLM_PROVIDERS);
 export const embeddingProviderSchema = z.enum(EMBEDDING_PROVIDERS);
