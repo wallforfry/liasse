@@ -143,6 +143,8 @@ describe('search, query, registry and metrics routes', () => {
       expect(await response.json()).toEqual({ types: [] });
       expect((await harness.call('/types?status=archived')).status).toBe(400);
       expect((await harness.call('/types?include_examples=yes')).status).toBe(400);
+      expect((await harness.call('/types?include_private=true')).status).toBe(200);
+      expect((await harness.call('/types?include_private=1')).status).toBe(400);
     });
 
     it('lists entities, counting private documents only when asked', async () => {

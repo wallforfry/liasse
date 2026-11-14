@@ -7,6 +7,10 @@ import type { ApiContext } from './context.ts';
 export const describeTypesOptionsSchema = z.strictObject({
   status: typeStatusSchema.optional().describe('Without it, every type that is not merged.'),
   include_examples: z.boolean().default(false),
+  include_private: z
+    .boolean()
+    .default(false)
+    .describe('Whether the document counts include private documents.'),
 });
 export type DescribeTypesOptions = z.input<typeof describeTypesOptionsSchema>;
 
@@ -32,8 +36,11 @@ export const describeTypes = async (
   { db }: Pick<ApiContext, 'db'>,
   options: DescribeTypesOptions = {},
 ): Promise<TypeList> => {
-  const { status, include_examples } = describeTypesOptionsSchema.parse(options);
-  const types = await listTypes({ status, includeExamples: include_examples }, { db });
+  const { status, include_examples, include_private } = describeTypesOptionsSchema.parse(options);
+  const types = await listTypes(
+    { status, includeExamples: include_examples, includePrivate: include_private },
+    { db },
+  );
   return {
     types: types.map(({ slug, description, parentSlug, version, aliases, docCount, ...type }) => ({
       slug,

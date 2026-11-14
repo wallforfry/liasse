@@ -1,19 +1,21 @@
-import { sql } from 'drizzle-orm';
+import { inArray, sql } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { ZodError } from 'zod';
 import { createDb } from '../db/client.ts';
+import { documents } from '../db/schema/documents.ts';
 import { seedEntity, SYNTHETIC_IBAN } from '../entities/support.test-helper.ts';
 import { deleteFileJob } from '../ingest/delete-file-job.ts';
 import { enqueue } from '../jobs/enqueue.ts';
+import { QueryExecutionError } from '../query/execute.ts';
 import { CORPUS } from '../search/corpus.fixture.ts';
 import { describeTypes } from './describe-types.ts';
 import { ApiError } from './errors.ts';
 import { applyChange, correctDocument, listChanges, listSubjects, upcoming } from './features.ts';
 import { type ApiHarness, createApiHarness } from './harness.test-helper.ts';
 import { listEntities } from './list-entities.ts';
-import { QueryExecutionError } from '../query/execute.ts';
 import { executionFailure, queryDocuments } from './query-documents.ts';
 import { searchDocuments } from './search-documents.ts';
+import { insertSyntheticDocument } from '../testing/fixtures.ts';
 import { readStats } from './stats.ts';
 
 const failureOf = async (work: Promise<unknown>): Promise<ApiError> => {
@@ -184,6 +186,19 @@ describe('use cases of the API', () => {
       expect(merged.types.map((type) => type.slug)).toEqual(['legacy_power_bill']);
       expect(merged.types[0]?.examples).toBeInstanceOf(Array);
     });
+
+    it('leaves private documents out of the count unless they are asked for', async () => {
+      const taxes = CORPUS.filter(({ type }) => type === 'property_tax_notice');
+      const countOf = async (request: Parameters<typeof describeTypes>[1]) =>
+        (await describeTypes(harness.context, request)).types.find(
+          ({ slug }) => slug === 'property_tax_notice',
+        )?.document_count;
+      const publicCount = taxes.filter((document) => document.private !== true).length;
+      expect(publicCount).toBeLessThan(taxes.length);
+      expect(await countOf({})).toBe(publicCount);
+      expect(await countOf({ include_private: false })).toBe(publicCount);
+      expect(await countOf({ include_private: true })).toBe(taxes.length);
+    });
   });
 
   describe('listEntities', () => {
@@ -203,6 +218,32 @@ describe('use cases of the API', () => {
       });
       expect(JSON.stringify(list)).not.toContain(SYNTHETIC_IBAN);
       expect(JSON.stringify(list)).not.toContain('hash');
+    });
+
+    it('leaves private documents out of the count unless they are asked for', async () => {
+      const { db } = harness.database;
+      const entityId = await seedEntity(db, { name: 'Atelier Prisme' });
+      const naming = { issuer: { entity_id: entityId, match: 'name', confidence: 0.99 } };
+      const added = [
+        await insertSyntheticDocument(db, { status: 'indexed', provenance: naming }),
+        await insertSyntheticDocument(db, { status: 'indexed', provenance: naming, private: true }),
+      ];
+      const countOf = async (request: Parameters<typeof listEntities>[1]) =>
+        (await listEntities(harness.context, { query: 'prisme', ...request })).entities[0]
+          ?.document_count;
+      try {
+        expect(await countOf({})).toBe(1);
+        expect(await countOf({ include_private: false })).toBe(1);
+        expect(await countOf({ include_private: true })).toBe(2);
+      } finally {
+        // The counts of `readStats` below are those of the corpus alone.
+        await db.delete(documents).where(
+          inArray(
+            documents.id,
+            added.map(({ id }) => id),
+          ),
+        );
+      }
     });
   });
 

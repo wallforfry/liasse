@@ -25,7 +25,11 @@ import type { RouteDeps } from './deps.ts';
 const text = z.string().optional();
 
 const typesQuery = z
-  .strictObject({ status: text, include_examples: flagParam.optional() })
+  .strictObject({
+    status: text,
+    include_examples: flagParam.optional(),
+    include_private: flagParam.optional(),
+  })
   .pipe(describeTypesOptionsSchema);
 
 const entitiesQuery = z
