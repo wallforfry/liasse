@@ -1,0 +1,42 @@
+import type { JsonObject } from '../db/columns.ts';
+import { DuplicateJobHandlerError } from './errors.ts';
+import { type JobKind, parseJobPayload } from './kinds.ts';
+
+export interface JobRun {
+  /** Aborted when the workers stop past their deadline or when the job lock is lost. */
+  readonly signal: AbortSignal;
+  /** 1 for the first execution. */
+  readonly attempt: number;
+}
+
+export interface JobContext<Payload> extends JobRun {
+  readonly payload: Payload;
+}
+
+export type JobHandler<Payload> = (context: JobContext<Payload>) => Promise<void>;
+
+/** A handler bound to its kind, with the payload type erased behind the schema. */
+export interface RegisteredHandler {
+  readonly kind: string;
+  readonly run: (payload: unknown, run: JobRun) => Promise<void>;
+}
+
+export const handle = <Payload extends JsonObject>(
+  kind: JobKind<Payload>,
+  handler: JobHandler<Payload>,
+): RegisteredHandler => ({
+  kind: kind.name,
+  run: async (payload, { signal, attempt }) => {
+    await handler({ payload: parseJobPayload(kind, payload), signal, attempt });
+  },
+});
+
+export const createHandlerRegistry = (
+  handlers: readonly RegisteredHandler[],
+): ReadonlyMap<string, RegisteredHandler> => {
+  const duplicate = handlers.find(
+    ({ kind }, index) => handlers.findIndex((other) => other.kind === kind) !== index,
+  );
+  if (duplicate !== undefined) throw new DuplicateJobHandlerError(duplicate.kind);
+  return new Map(handlers.map((handler) => [handler.kind, handler]));
+};

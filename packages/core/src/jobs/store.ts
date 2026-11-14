@@ -1,0 +1,121 @@
+import { and, eq, inArray, lt, lte, sql } from 'drizzle-orm';
+import type { Database } from '../db/client.ts';
+import { jobs } from '../db/schema/jobs.ts';
+
+export interface ClaimedJob {
+  readonly id: string;
+  readonly kind: string;
+  readonly payload: unknown;
+  /** 1 for the first execution. Also the fencing token of this execution. */
+  readonly attempt: number;
+  readonly maxAttempts: number;
+}
+
+export type JobLease = Pick<ClaimedJob, 'id' | 'attempt'>;
+
+export const STALE_LOCK_ERROR = 'The worker stopped before the job finished';
+
+const elapsed = (milliseconds: number) => sql`make_interval(secs => ${milliseconds / 1000})`;
+
+export const claimJob = async (
+  db: Database,
+  kinds: readonly string[],
+): Promise<ClaimedJob | undefined> => {
+  if (kinds.length === 0) return undefined;
+  const next = db
+    .select({ id: jobs.id })
+    .from(jobs)
+    .where(
+      and(
+        eq(jobs.status, 'queued'),
+        lte(jobs.runAfter, sql`now()`),
+        inArray(jobs.kind, [...kinds]),
+      ),
+    )
+    .orderBy(jobs.runAfter, jobs.id)
+    .limit(1)
+    .for('update', { skipLocked: true });
+  const [claimed] = await db
+    .update(jobs)
+    .set({ status: 'running', lockedAt: sql`now()`, attempts: sql`${jobs.attempts} + 1` })
+    .where(eq(jobs.id, sql`(${next})`))
+    .returning({
+      id: jobs.id,
+      kind: jobs.kind,
+      payload: jobs.payload,
+      attempt: jobs.attempts,
+      maxAttempts: jobs.maxAttempts,
+    });
+  return claimed;
+};
+
+// Every claim increments `attempts`, so an execution whose lock expired and whose job
+// was claimed again no longer matches: its late writes change nothing.
+const heldBy = ({ id, attempt }: JobLease) =>
+  and(eq(jobs.id, id), eq(jobs.status, 'running'), eq(jobs.attempts, attempt));
+
+const settle = async (
+  db: Database,
+  lease: JobLease,
+  values: Parameters<ReturnType<Database['update']>['set']>[0],
+): Promise<boolean> => {
+  const settled = await db.update(jobs).set(values).where(heldBy(lease)).returning({ id: jobs.id });
+  return settled.length > 0;
+};
+
+/** Each of these resolves to false when the lease no longer holds the job. */
+export const completeJob = (db: Database, lease: JobLease): Promise<boolean> =>
+  settle(db, lease, { status: 'succeeded', lockedAt: null });
+
+export const failJob = (db: Database, lease: JobLease, lastError: string): Promise<boolean> =>
+  settle(db, lease, { status: 'failed', lockedAt: null, lastError });
+
+export const retryJob = (
+  db: Database,
+  lease: JobLease,
+  lastError: string,
+  delayMs: number,
+): Promise<boolean> =>
+  settle(db, lease, {
+    status: 'queued',
+    lockedAt: null,
+    lastError,
+    runAfter: sql`now() + ${elapsed(delayMs)}`,
+  });
+
+/** Gives an interrupted job back without counting the attempt. */
+export const releaseJob = (db: Database, lease: JobLease): Promise<boolean> =>
+  settle(db, lease, {
+    status: 'queued',
+    lockedAt: null,
+    attempts: sql`${jobs.attempts} - 1`,
+  });
+
+export const renewJobLock = (db: Database, lease: JobLease): Promise<boolean> =>
+  settle(db, lease, { lockedAt: sql`now()` });
+
+/**
+ * Requeues the running jobs whose lock was not renewed for `visibilityTimeoutMs`, and
+ * fails those that already used every attempt. Returns how many jobs it touched.
+ */
+export const recoverStaleJobs = async (
+  db: Database,
+  visibilityTimeoutMs: number,
+): Promise<number> => {
+  const recovered = await db
+    .update(jobs)
+    .set({
+      status: sql`CASE WHEN ${jobs.attempts} >= ${jobs.maxAttempts}
+        THEN 'failed'::job_status ELSE 'queued'::job_status END`,
+      lockedAt: null,
+      lastError: STALE_LOCK_ERROR,
+    })
+    .where(
+      and(
+        eq(jobs.status, 'running'),
+        lt(jobs.lockedAt, sql`now() - ${elapsed(visibilityTimeoutMs)}`),
+      ),
+    )
+    .returning({ id: jobs.id });
+  return recovered.length;
+};
