@@ -86,9 +86,10 @@ const UNSTORABLE = failure(
   'The request holds a character that cannot be stored or searched.',
 );
 
-const INTERNAL = failure(500, 'internal_error', 'The server failed to answer this request.');
+export const INTERNAL = failure(500, 'internal_error', 'The server failed to answer this request.');
 
-const failureOf = (error: unknown): Failure | undefined => {
+/** The failure a known error answers with; the web UI shows the same ones as pages. */
+export const failureOf = (error: unknown): Failure | undefined => {
   if (error instanceof HttpFailure) return error.failure;
   if (error instanceof ApiError) {
     return failure(STATUS_OF_KIND[error.kind], error.code, error.message, error.details);

@@ -16,7 +16,7 @@ const RAW = 'application/octet-stream';
 export const FILENAME_HEADER = 'X-Filename';
 
 // What the boundaries, part headers and the other fields of a form may add to the file.
-const MULTIPART_OVERHEAD_BYTES = 1024 * 1024;
+export const MULTIPART_OVERHEAD_BYTES = 1024 * 1024;
 
 const options = {
   hint: z.string().optional().describe('What the caller knows about the file; free text.'),
