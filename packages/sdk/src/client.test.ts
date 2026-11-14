@@ -174,6 +174,19 @@ describe('createLiasseClient', () => {
     await expect(client.listSubjects()).rejects.toBeInstanceOf(LiasseResponseError);
   });
 
+  it('holds the answers of consolidation changes to their schemas', async () => {
+    const server = answering(() => json({ changes: [{ id: 'chg_01' }] }));
+    const client = createLiasseClient({
+      baseUrl: 'http://x.test',
+      token: 't',
+      fetch: server.fetch,
+    });
+    await expect(client.listChanges()).rejects.toBeInstanceOf(LiasseResponseError);
+    await expect(client.decideChange('chg_01', { decision: 'apply' })).rejects.toBeInstanceOf(
+      LiasseResponseError,
+    );
+  });
+
   it('rejects a body that is not JSON as a LiasseResponseError', async () => {
     const server = answering(() => new Response('not json', { status: 200 }));
     const client = createLiasseClient({
