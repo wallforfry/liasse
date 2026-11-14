@@ -45,6 +45,7 @@ Inside `packages/core/src`, one directory per concern. A new concern gets its ow
 | `db/`         | Drizzle schema, `createDb`, the migration runner; SQL migrations are in `migrations/`               |
 | `domain/`     | Enumerations, ids, shared Zod schemas, limits                                                       |
 | `embeddings/` | `createEmbedder`; the local embedder runs an ONNX model in a child process, ended when idle         |
+| `entities/`   | Entity resolution, sensitive identifier masking, entity listing and merges                          |
 | `ingest/`     | `ingestFile`, deletion with tombstones, format detection, the watched folder                        |
 | `jobs/`       | The job queue on the `jobs` table: kinds, `enqueue`, workers                                        |
 | `models/`     | Ports for the text model, the vision model and the embedder; `providers/` adapts them               |
@@ -56,7 +57,7 @@ Inside `packages/core/src`, one directory per concern. A new concern gets its ow
 | `testing/`    | Test database and bucket helpers, model fakes and synthetic document builders                       |
 | `text/`       | `extractText`: native text of PDF, DOCX and email, vision transcription otherwise                   |
 
-Names reserved for the features to come, created only by the change that implements them: `pipeline/`, `entities/`, `knowledge/`, `consolidation/`, `hindsight/`.
+Names reserved for the features to come, created only by the change that implements them: `pipeline/`, `knowledge/`, `consolidation/`, `hindsight/`.
 
 Tests sit next to the code they cover, as `*.test.ts`. A helper that only the tests of one directory use is a `*.test-helper.ts` beside them; neither is compiled into `dist`. Two more suffixes are kept out of the build: `*.fixture.ts` for data shared by several test files, and `*.modeltest.ts` for the tests of `pnpm test:models`.
 
