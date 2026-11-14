@@ -32,7 +32,7 @@ export interface RankedRow {
 
 const rankedRows = z.array(z.object({ row_id: z.string(), document_id: z.string() }));
 
-const toRankedRows = (rows: unknown): readonly RankedRow[] =>
+export const toRankedRows = (rows: unknown): readonly RankedRow[] =>
   rankedRows.parse(rows).map((row) => ({ id: row.row_id, documentId: row.document_id }));
 
 const parsedRows = z.array(z.object({ tsquery: z.string().nullable() }));

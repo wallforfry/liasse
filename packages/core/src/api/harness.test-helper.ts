@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import { docTypes } from '../db/schema/registry.ts';
 import { renderTypeSchema } from '../registry/stored-schema.ts';
 import { seedCorpus, type SeededCorpus } from '../search/corpus.fixture.ts';
+import { rankByFullText } from '../search/rankers.ts';
 import { createFsStorage } from '../storage/fs.ts';
 import { createFakeEmbedder } from '../testing/fake-embedder.ts';
 import { createTestDatabase, type TestDatabase } from '../testing/test-database.ts';
@@ -35,6 +36,7 @@ export const createApiHarness = async (): Promise<ApiHarness> => {
     db: database.db,
     storage: createFsStorage(root),
     embedder,
+    fullText: rankByFullText,
     maxFileSize: TEST_MAX_FILE_SIZE,
     fileUrls: createFileUrls({ secret: TEST_FILE_URL_SECRET, publicUrl: TEST_PUBLIC_URL }),
     features: {},
