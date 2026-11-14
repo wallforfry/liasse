@@ -65,6 +65,11 @@ export const documents = pgTable(
     // Hash of the facts Hindsight confirmed it retained, and of the bank they went to:
     // what lets an unchanged sync make no request. Null says nothing about the bank.
     hindsightSentHash: text('hindsight_sent_hash'),
+    // Until when a retain sent for this document may still reach Hindsight: set before
+    // the request for its longest duration, retries included. A sync that lost its lock
+    // cannot say when its request ended, so a forget leaves `hindsight_held_since` set
+    // until this has passed. A tombstone keeps it, for the same reason.
+    hindsightRetainUntil: instant('hindsight_retain_until'),
     ingestedAt: instant('ingested_at').notNull().defaultNow(),
     updatedAt: updatedAt(),
   },

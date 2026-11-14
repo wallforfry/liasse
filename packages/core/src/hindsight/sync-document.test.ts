@@ -10,9 +10,10 @@ import { insertSyntheticDocument, type NewDocumentRow } from '../testing/fixture
 import { createTestDatabase, type TestDatabase } from '../testing/test-database.ts';
 import { createHindsightClient, type HindsightClientOptions } from './client.ts';
 import { flagsSyntheticIdentifiers, SYNTHETIC_IDENTIFIER } from './detector.test-helper.ts';
-import { HindsightError } from './errors.ts';
+import { HindsightError, HindsightRetainInFlightError } from './errors.ts';
 import { type HindsightStub, startHindsightStub, type StubOverride } from './stub.test-helper.ts';
 import { type HindsightSyncDeps, syncDocumentToHindsight } from './sync-document.ts';
+import { outlastRetains } from './sync-state.test-helper.ts';
 
 // Stands for everything of a document that is not a fact: none of it may be sent.
 const CONTENT_MARKER = 'synthetic-content-marker';
@@ -373,9 +374,15 @@ describe('syncDocumentToHindsight', () => {
 
       override = undefined;
       await flagPrivate(id);
-      expect(await actionOf(id)).toBe('forgotten');
+      // Only a success says the retain can no longer land: the forget is sent, and owed
+      // again until the retain is past its longest duration.
+      await expect(sync(id)).rejects.toBeInstanceOf(HindsightRetainInFlightError);
       expect(stub.calls.at(-1)).toMatchObject({ method: 'DELETE' });
       expect(retained(id)).toBeUndefined();
+      expect(await recordOf(id)).toEqual({ mayHold: true, hashed: false });
+
+      await outlastRetains(database.db, id);
+      expect(await actionOf(id)).toBe('forgotten');
       expect(await recordOf(id)).toEqual({ mayHold: false, hashed: false });
     });
 

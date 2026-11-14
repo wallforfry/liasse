@@ -9,6 +9,7 @@ export {
   type HindsightFailure,
   type HindsightFailureCode,
   type HindsightOperation,
+  HindsightRetainInFlightError,
   HindsightSyncBusyError,
   HindsightSyncLockLostError,
   HindsightUrlError,

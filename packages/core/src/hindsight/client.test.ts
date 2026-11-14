@@ -264,4 +264,14 @@ describe('createHindsightClient', () => {
     expect(create).toThrow(HindsightUrlError);
     expect(create).not.toThrow(/synthetic-password/);
   });
+
+  it('states the longest a request may stay in flight, its retries included', () => {
+    const settings = { url: 'http://127.0.0.1:8888', bank: 'documents', apiKey: undefined };
+    const windowOf = (options?: HindsightClientOptions) =>
+      createHindsightClient(settings, options).requestWindowMs;
+    // Three attempts of two minutes, and retries after 0.5 s then 1 s.
+    expect(windowOf()).toBe(361_500);
+    expect(windowOf({ timeoutMs: 1000, retries: 0 })).toBe(1000);
+    expect(windowOf({ timeoutMs: 1000, retries: 3, retryDelayMs: 100 })).toBe(4700);
+  });
 });
