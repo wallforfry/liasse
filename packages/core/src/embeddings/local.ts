@@ -1,3 +1,4 @@
+import { batchesOf } from '../models/batching.ts';
 import type { Embedder, Embedding, EmbeddingKind } from '../models/ports.ts';
 import { EmbeddingModelDimensionError, EmbeddingOutputError } from './errors.ts';
 import { createIdleResource, type ScheduleTimer } from './idle-resource.ts';
@@ -34,11 +35,6 @@ export interface LocalEmbedderOptions {
 export interface LocalEmbedder extends Embedder {
   readonly close: () => Promise<void>;
 }
-
-const batchesOf = <T>(items: readonly T[], size: number): readonly (readonly T[])[] =>
-  Array.from({ length: Math.ceil(items.length / size) }, (_, index) =>
-    items.slice(index * size, (index + 1) * size),
-  );
 
 const reportUnloadError = (error: unknown): void => {
   const reason = error instanceof Error ? error.message : String(error);
