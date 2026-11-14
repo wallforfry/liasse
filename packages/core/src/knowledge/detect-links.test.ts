@@ -454,11 +454,15 @@ describe('link detection', () => {
         );
       }
       expect(await stateOf(contract)).toBe('terminated');
+      // A copy of one day and as sure as the superseder already there does not replace it.
+      expect(await linksOf(database.db)).toEqual(
+        [`${newer} supersedes ${contract}`, `${letter} terminates ${contract}`].toSorted(),
+      );
       await deleteDocument({ db: database.db }, letter);
       expect(await stateOf(contract)).toBe('superseded');
-      await deleteDocument({ db: database.db }, newer);
-      expect(await stateOf(contract)).toBe('superseded');
       await deleteDocument({ db: database.db }, duplicate);
+      expect(await stateOf(contract)).toBe('superseded');
+      await deleteDocument({ db: database.db }, newer);
       expect(await stateOf(contract)).toBe('current');
       expect(await linksOf(database.db)).toEqual([]);
     });

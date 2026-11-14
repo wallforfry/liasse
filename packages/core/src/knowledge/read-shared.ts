@@ -38,30 +38,34 @@ export const visibleDocument = (includePrivate: boolean): SQL =>
 
 const AMENDED = 'amended';
 const amended = (column: PgColumn): SQL => qualified(column, AMENDED);
-const state = qualified(documents.state);
 
 const CURRENT = 'current' satisfies DocumentState;
 
 // The state of a document for a reader. `documents.state` says what the links pointing at
 // the document make of it. An amendment has no life of its own: while the document it
-// amends is terminated or superseded, so is it, the ended state first (the states are
-// ordered current, superseded, terminated). One step only: the amendment of an amendment
-// follows the amendment as it is stored.
-export const effectiveState = sql<DocumentState>`(CASE
-  WHEN ${state} <> ${CURRENT} THEN ${state}
-  ELSE COALESCE((
-    SELECT ${amended(documents.state)}
-    FROM ${documentLinks}
+// amends is terminated or superseded, so is it. The chain is followed from amendment to
+// amended document until one is not current, the ended state first where it forks (the
+// states are ordered current, superseded, terminated). The recursion keeps each document
+// once, so it ends on a cycle of amendments. A deleted document has no link left, so the
+// chain never reaches one.
+//
+// The anchor reads the outer row, the only `documents` in its scope. The amended document
+// is the same table under an alias, whose columns are named with `qualified`: Drizzle
+// prints a column given to `sql` bare in the selection of a query over one table.
+export const effectiveState = sql<DocumentState>`(
+  WITH RECURSIVE chain(id, state) AS (
+    SELECT ${documents.id}, ${documents.state}
+    UNION
+    SELECT ${amended(documents.id)}, ${amended(documents.state)}
+    FROM chain
+    JOIN ${documentLinks}
+      ON ${documentLinks.fromDocumentId} = chain.id AND ${documentLinks.kind} = 'amends'
     JOIN ${documents} AS ${sql.identifier(AMENDED)}
-      ON ${amended(documents.id)} = ${qualified(documentLinks.toDocumentId)}
-    WHERE ${qualified(documentLinks.fromDocumentId)} = ${qualified(documents.id)}
-      AND ${qualified(documentLinks.kind)} = 'amends'
-      AND ${amended(documents.state)} <> ${CURRENT}
-      AND ${amended(documents.status)} <> 'deleted'
-    ORDER BY ${amended(documents.state)} DESC
-    LIMIT 1
-  ), ${state})
-END)`;
+      ON ${amended(documents.id)} = ${documentLinks.toDocumentId}
+    WHERE chain.state = ${CURRENT}
+  )
+  SELECT chain.state FROM chain ORDER BY chain.state DESC LIMIT 1
+)`;
 
 export const holdsId = (column: PgColumn, id: string): SQL =>
   sql`${column} @> ARRAY[${id}]::text[]`;

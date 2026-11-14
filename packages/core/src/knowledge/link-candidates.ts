@@ -1,8 +1,15 @@
-import { and, desc, eq, isNotNull, ne, or, type SQL, sql } from 'drizzle-orm';
+import { and, desc, eq, inArray, isNotNull, ne, or, type SQL, sql } from 'drizzle-orm';
 import type { Database } from '../db/client.ts';
 import { documents, isLiveDocument } from '../db/schema/documents.ts';
+import { documentDates } from '../db/schema/knowledge.ts';
 import { docTypes } from '../db/schema/registry.ts';
-import { LINK_WINDOW_MONTHS, MAX_LINK_CANDIDATES } from '../domain/limits.ts';
+import type { KeyDateKind } from '../domain/enums.ts';
+import {
+  LINK_CANDIDATE_POOL,
+  LINK_WINDOW_MONTHS,
+  MAX_LINK_CANDIDATES,
+  MAX_LINK_CANDIDATES_PER_TYPE,
+} from '../domain/limits.ts';
 import { entityIdProvenancePath } from '../domain/provenance.ts';
 import { type Money, moneySchema } from '../domain/values.ts';
 import { documentDay, statedDocumentDate } from './document-day.ts';
@@ -89,13 +96,54 @@ const sharesSubject = ({ subjectIds }: LinkDocument): SQL | undefined =>
 const sharesIssuer = ({ issuerId }: LinkDocument): SQL | undefined =>
   issuerId === null ? undefined : sql`${ISSUER_ID} = ${issuerId}`;
 
+const isTrue = (condition: SQL | undefined): SQL =>
+  sql`COALESCE(${condition ?? sql`false`}, false)`;
+
+const sharesType = ({ type }: LinkDocument): SQL | undefined =>
+  type === null ? undefined : sql`${docTypes.slug} = ${type}`;
+
+const CONTRACT_DATE_KINDS: readonly KeyDateKind[] = ['renewal', 'expiry', 'effective'];
+
+// A document that states when it starts, renews or ends is the kind of document others
+// supersede, amend and terminate.
+const statesContractDates = sql`EXISTS (
+  SELECT 1 FROM ${documentDates}
+  WHERE ${documentDates.documentId} = ${documents.id}
+    AND ${inArray(documentDates.kind, [...CONTRACT_DATE_KINDS])}
+)`;
+
+// The candidates kept from the ranked pool, in its order: at most `perType` of one type
+// first, the documents without a type counting as one, then the best of the others for
+// the places left. A year of bills does not take every place of the contract they bill.
+export const withTypeQuota = <Candidate extends { readonly type: string | null }>(
+  ranked: readonly Candidate[],
+  places: number,
+  perType: number,
+): readonly Candidate[] => {
+  const firstPass = ranked.filter(
+    (candidate, index) =>
+      ranked.slice(0, index).filter(({ type }) => type === candidate.type).length < perType,
+  );
+  const kept = new Set(
+    [
+      ...firstPass.slice(0, places),
+      ...ranked.filter((candidate) => !firstPass.includes(candidate)),
+    ].slice(0, places),
+  );
+  return ranked.filter((candidate) => kept.has(candidate));
+};
+
 /**
  * The documents a document may be linked to, as the specification bounds them: the same
  * issuer, a shared subject or the same reference, dated within twelve months of it.
  * Before and after: documents are not ingested in the order they were written, and the
  * contract may come in after the letter that terminates it. Never a tombstone, never a
- * document without a title or a summary to judge it by, and at most `MAX_LINK_CANDIDATES`:
- * those that share its reference first, then a subject, then the most recent.
+ * document without a title or a summary to judge it by, and at most `MAX_LINK_CANDIDATES`.
+ *
+ * They are ranked by what makes a link likely: the type of the document first (a new
+ * contract supersedes a contract), then a document that states contract dates, then the
+ * same reference, a shared subject, and the most recent; and one type takes at most
+ * `MAX_LINK_CANDIDATES_PER_TYPE` places while others are there (`withTypeQuota`).
  *
  * A `private` document is a candidate like another. The flag keeps a document away from
  * Hindsight, from external embeddings and from search results; it never kept it from the
@@ -127,11 +175,13 @@ export const findLinkCandidates = async (
       ),
     )
     .orderBy(
-      desc(sql`COALESCE(${byReference ?? sql`false`}, false)`),
-      desc(sql`COALESCE(${bySubject ?? sql`false`}, false)`),
+      desc(isTrue(sharesType(source))),
+      desc(statesContractDates),
+      desc(isTrue(byReference)),
+      desc(isTrue(bySubject)),
       desc(documentDay),
       documents.id,
     )
-    .limit(MAX_LINK_CANDIDATES);
-  return rows.map(toLinkDocument);
+    .limit(LINK_CANDIDATE_POOL);
+  return withTypeQuota(rows.map(toLinkDocument), MAX_LINK_CANDIDATES, MAX_LINK_CANDIDATES_PER_TYPE);
 };

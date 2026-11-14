@@ -1,39 +1,13 @@
 import { and, eq, or, sql } from 'drizzle-orm';
-import { z } from 'zod';
 import type { Database } from '../db/client.ts';
 import { documentLinks } from '../db/schema/knowledge.ts';
 import type { Transaction } from '../ingest/existing-document.ts';
 import { writeIfBothLive } from '../ingest/live-write.ts';
 import { recomputeDocumentStates } from './document-state.ts';
 import type { ValidLink } from './link-rules.ts';
+import { admitSupersedes } from './supersede-rules.ts';
 
 const LINK_LOCK = sql`SELECT pg_advisory_xact_lock(hashtext('liasse.document_links'))`;
-
-const SUPERSEDES = 'supersedes';
-
-const reachedSchema = z.array(z.object({ reached: z.boolean() }));
-
-// True when the document to supersede already supersedes, through any number of
-// documents, the one that would supersede it: the new link would close a loop. The union
-// of the recursion keeps each document once, so it ends on a loop that is already there.
-const closesLoop = async (tx: Transaction, { fromDocumentId, toDocumentId }: ValidLink) => {
-  const rows = reachedSchema.parse(
-    await tx.execute(sql`
-      WITH RECURSIVE superseded(id) AS (
-        SELECT ${documentLinks.toDocumentId} FROM ${documentLinks}
-        WHERE ${documentLinks.fromDocumentId} = ${toDocumentId}
-          AND ${documentLinks.kind} = ${SUPERSEDES}
-        UNION
-        SELECT next_link.to_document_id
-        FROM ${documentLinks} AS next_link
-        JOIN superseded ON next_link.from_document_id = superseded.id
-        WHERE next_link.kind = ${SUPERSEDES}
-      )
-      SELECT EXISTS (SELECT 1 FROM superseded WHERE id = ${fromDocumentId}) AS reached
-    `),
-  );
-  return rows[0]?.reached ?? false;
-};
 
 const between = (left: string, right: string) =>
   or(
@@ -48,7 +22,7 @@ const insertLinks = async (
 ): Promise<number> => {
   let written = 0;
   for (const link of links) {
-    if (link.kind === SUPERSEDES && (await closesLoop(tx, link))) continue;
+    if (link.kind === 'supersedes' && !(await admitSupersedes(tx, link))) continue;
     const { rationale, ...row } = link;
     await tx.insert(documentLinks).values({ ...row, model, quote: rationale });
     written += 1;
