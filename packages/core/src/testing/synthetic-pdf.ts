@@ -1,4 +1,5 @@
 import { encryptPdfStream, pdfEncryptionDictionary } from './synthetic-pdf-encryption.ts';
+import { encodeWinAnsi } from './win-ansi.ts';
 
 const DEFAULT_PAGE_WIDTH_PT = 595;
 const DEFAULT_PAGE_HEIGHT_PT = 842;
@@ -6,16 +7,27 @@ const SCAN_PIXELS = 8;
 
 export interface SyntheticPdfPage {
   // Set in 12-point Helvetica from the top left. pdfjs drops the glyphs that fall outside
-  // the page, so keep a line under about 80 characters and a page under 50 lines.
+  // the page, so keep a line under about 80 characters and a page under 50 lines. The font
+  // uses WinAnsiEncoding: a character it does not have is refused.
   readonly lines?: readonly string[];
   // An image-only page, as a scanner produces: a grey bitmap stretched over the whole page.
   readonly scanned?: boolean;
+  // An image-only page showing this picture over the whole page, as a scanner that
+  // stores JPEG does. It replaces the grey bitmap of `scanned`.
+  readonly jpeg?: SyntheticPdfJpeg;
   readonly widthPt?: number;
   readonly heightPt?: number;
   // The visible part of the page, from its bottom left corner, when smaller than the page.
   readonly cropBoxPt?: readonly [width: number, height: number];
   // The size of one unit of the page in points (PDF 1.6 `UserUnit`), 1 when absent.
   readonly userUnit?: number;
+}
+
+export interface SyntheticPdfJpeg {
+  // A baseline JPEG file with three components, embedded as it is (`DCTDecode`).
+  readonly bytes: Uint8Array;
+  readonly widthPx: number;
+  readonly heightPx: number;
 }
 
 export interface SyntheticPdfOptions {
@@ -92,11 +104,22 @@ const scanContent = (widthPt: number, heightPt: number): string =>
 const scanBitmap = (): Uint8Array =>
   Uint8Array.from({ length: SCAN_PIXELS * SCAN_PIXELS }, (_, index) => (index * 4) % 256);
 
+const imageObject = (jpeg: SyntheticPdfJpeg | undefined): PdfObject =>
+  jpeg === undefined
+    ? {
+        dictionary: `/Type /XObject /Subtype /Image /Width ${String(SCAN_PIXELS)} /Height ${String(SCAN_PIXELS)} /ColorSpace /DeviceGray /BitsPerComponent 8`,
+        stream: scanBitmap(),
+      }
+    : {
+        dictionary: `/Type /XObject /Subtype /Image /Width ${String(jpeg.widthPx)} /Height ${String(jpeg.heightPx)} /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode`,
+        stream: jpeg.bytes,
+      };
+
 const pageObjects = (page: SyntheticPdfPage, index: number): readonly PdfObject[] => {
   const pageId = FIRST_PAGE_ID + index * OBJECTS_PER_PAGE;
   const widthPt = page.widthPt ?? DEFAULT_PAGE_WIDTH_PT;
   const heightPt = page.heightPt ?? DEFAULT_PAGE_HEIGHT_PT;
-  const scanned = page.scanned === true;
+  const scanned = page.scanned === true || page.jpeg !== undefined;
   const content = scanned
     ? scanContent(widthPt, heightPt)
     : textContent(page.lines ?? [], heightPt);
@@ -113,11 +136,8 @@ const pageObjects = (page: SyntheticPdfPage, index: number): readonly PdfObject[
         `/Resources << /Font << /F1 ${String(FONT_ID)} 0 R >> /XObject << /Im0 ${String(pageId + 2)} 0 R >> >>`,
       ].join(' '),
     },
-    { dictionary: '', stream: latin1(content) },
-    {
-      dictionary: `/Type /XObject /Subtype /Image /Width ${String(SCAN_PIXELS)} /Height ${String(SCAN_PIXELS)} /ColorSpace /DeviceGray /BitsPerComponent 8`,
-      stream: scanBitmap(),
-    },
+    { dictionary: '', stream: encodeWinAnsi(content) },
+    imageObject(page.jpeg),
   ];
 };
 
