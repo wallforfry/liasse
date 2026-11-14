@@ -181,6 +181,70 @@ describe('indexDocument', () => {
     expect(await storedChunks(id)).toEqual(before);
   });
 
+  describe('with an embedder that reads a bounded number of tokens', () => {
+    const WINDOW = 60;
+    const words = (text: string): number => text.split(/\s+/u).filter((word) => word !== '').length;
+
+    // One token per word, or per character for text without spaces, as CJK text is.
+    const windowed = (count: (text: string) => number) => {
+      const inputs: string[] = [];
+      const embedder: Embedder = {
+        ...createFakeEmbedder(),
+        maxInputTokens: WINDOW,
+        countTokens: (texts) => Promise.resolve(texts.map(count)),
+        embed: (texts, kind) => {
+          inputs.push(...texts);
+          return createFakeEmbedder().embed(texts, kind);
+        },
+      };
+      return { embedder, inputs };
+    };
+
+    it('sizes the chunks so that the model reads every word of the page', async () => {
+      const page = Array.from({ length: 700 }, (_, index) => `mot${String(index)}`);
+      const id = await documentWithPages([page.join(' ')], { title: 'Bail d’habitation' });
+      const { embedder, inputs } = windowed(words);
+      await indexDocument({ db: database.db, embedder }, id);
+      expect(inputs.length).toBeGreaterThan(12);
+      expect(Math.max(...inputs.map(words))).toBeLessThanOrEqual(WINDOW);
+      const stored = (await storedChunks(id)).flatMap((chunk) => chunk.text.split(' '));
+      expect([...new Set(stored)]).toEqual(page);
+    });
+
+    it('does the same for a text without spaces, one token per character', async () => {
+      const page = Array.from({ length: 900 }, (_, index) =>
+        String.fromCodePoint(0x4e_00 + index),
+      ).join('');
+      const id = await documentWithPages([page]);
+      const { embedder, inputs } = windowed((text) => Array.from(text).length);
+      await indexDocument({ db: database.db, embedder }, id);
+      expect(Math.max(...inputs.map((input) => Array.from(input).length))).toBeLessThanOrEqual(
+        WINDOW,
+      );
+      const stored = (await storedChunks(id)).map((chunk) => chunk.text);
+      expect(stored.every((chunk) => page.includes(chunk))).toBe(true);
+      const covered = new Set(
+        stored.flatMap((chunk) => Array.from(chunk, (_, at) => page.indexOf(chunk) + at)),
+      );
+      expect(covered.size).toBe(page.length);
+    });
+
+    it('keeps 800 tokens for an embedder that states no window', async () => {
+      const id = await documentWithPages([Array.from({ length: 2000 }, () => 'mot').join(' ')]);
+      const inputs: string[] = [];
+      const embedder: Embedder = {
+        ...createFakeEmbedder(),
+        countTokens: (texts) => Promise.resolve(texts.map(words)),
+        embed: (texts, kind) => {
+          inputs.push(...texts);
+          return createFakeEmbedder().embed(texts, kind);
+        },
+      };
+      await indexDocument({ db: database.db, embedder }, id);
+      expect(Math.max(...inputs.map(words))).toBe(800);
+    });
+  });
+
   it('never sends a private document to an embedder that is not local', async () => {
     const id = await documentWithPages(['Avis d’imposition confidentiel'], { private: true });
     const { embedder, calls } = recording(createFakeEmbedder({ isLocal: false }));
@@ -222,6 +286,19 @@ describe('indexDocument', () => {
     await database.db.update(documents).set({ private: true }).where(eq(documents.id, id));
     await indexDocument({ db: database.db, embedder }, id);
     expect((await storedChunks(id)).map((chunk) => chunk.embedding)).toEqual([null]);
+  });
+
+  it('does not ask a remote embedder to count the tokens of a private document', async () => {
+    const id = await documentWithPages(['Avis d’imposition confidentiel'], { private: true });
+    const embedder: Embedder = {
+      ...createFakeEmbedder({ isLocal: false }),
+      maxInputTokens: 60,
+      countTokens: () => Promise.reject(new Error('the document must not leave the server')),
+    };
+    expect(await indexDocument({ db: database.db, embedder }, id)).toEqual({
+      chunkCount: 1,
+      embedded: false,
+    });
   });
 
   it('rejects an unknown document', async () => {

@@ -5,6 +5,7 @@ import { docTypes } from '../db/schema/registry.ts';
 import { languageCodeSchema } from '../domain/values.ts';
 import { batchesOf } from '../models/batching.ts';
 import type { Embedder, Embedding } from '../models/ports.ts';
+import { chunkingFor } from './chunk-budget.ts';
 import { type Chunk, chunkPages, embeddingInput } from './chunking.ts';
 
 const EMBEDDING_BATCH_SIZE = 32;
@@ -110,9 +111,10 @@ export const indexDocument = async (
     .from(documentPages)
     .where(eq(documentPages.documentId, documentId))
     .orderBy(asc(documentPages.page));
-  const nextChunks = chunkPages(pages);
-  // Spec, Privacy: the content of a private document never reaches an external provider.
+  // Spec, Privacy: the content of a private document never reaches an external provider,
+  // not even to have its tokens counted.
   const embedded = embedder.isLocal || !document.private;
+  const nextChunks = await chunkPages(pages, embedded ? await chunkingFor(embedder, document) : {});
   const embeddings = embedded
     ? await embedInBatches(
         embedder,

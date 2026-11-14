@@ -1,12 +1,14 @@
+export { chunkingFor, EmbedderWindowError } from './chunk-budget.ts';
 export {
   type Chunk,
   CHUNK_MAX_TOKENS,
   CHUNK_OVERLAP_TOKENS,
+  ChunkBudgetError,
   type ChunkContext,
   type ChunkingOptions,
   chunkPages,
+  type CountTokens,
   embeddingInput,
-  estimateTokens,
   type PageText,
 } from './chunking.ts';
 export { RRF_K } from './fusion.ts';
@@ -28,3 +30,4 @@ export {
 export type { ChunkRanker, RankedChunk, RankRequest } from './rankers.ts';
 export { CANDIDATES_PER_RANKER, search, type SearchDeps, type SearchHit } from './search.ts';
 export { HIGHLIGHT_MARK, MAX_SNIPPET_LENGTH, type Snippet } from './snippets.ts';
+export { estimateTokens } from './token-estimate.ts';

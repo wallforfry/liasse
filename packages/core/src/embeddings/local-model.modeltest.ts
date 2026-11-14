@@ -1,16 +1,12 @@
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { fileURLToPath } from 'node:url';
 import { afterAll, describe, expect, it } from 'vitest';
 import type { Embedding } from '../models/ports.ts';
 import { createLocalEmbedder, type LocalEmbedder } from './local.ts';
 import type { LocalModelLoader } from './local-model.ts';
+import { MODEL_CACHE_DIR } from './model-cache.fixture.ts';
 import { modelProcessOptions, startModelProcess } from './model-process.ts';
-
-export const MODEL_CACHE_DIR =
-  process.env.EMBEDDING_CACHE_DIR ??
-  fileURLToPath(new URL('../../node_modules/.cache/liasse-models', import.meta.url));
 
 const cosine = (left: Embedding, right: Embedding): number =>
   left.reduce((sum, value, index) => sum + value * (right[index] ?? 0), 0);
