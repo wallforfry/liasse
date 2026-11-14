@@ -1,12 +1,18 @@
 import type { ApiFeatures } from '@liasse/core/api';
-import type { ChangeDecision } from '@liasse/core/contract';
 import type { JsonObject } from '@liasse/core/db';
-import { documents } from '@liasse/core/db';
-import { buildSyntheticPng, syntheticEml, syntheticPdf } from '@liasse/core/testing';
+import { documents, typeChanges } from '@liasse/core/db';
+import { applyChange, listChanges } from '@liasse/core/consolidation';
+import { createType } from '@liasse/core/registry';
+import {
+  buildSyntheticPng,
+  createFakeEmbedder,
+  syntheticEml,
+  syntheticPdf,
+} from '@liasse/core/testing';
 import { eq } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createHttpHarness, type HttpHarness } from '../http/harness.test-helper.ts';
-import { signIn, type SignedIn, uiApp, type UiAppOptions } from './ui.test-helper.ts';
+import { formRequest, signIn, type SignedIn, uiApp, type UiAppOptions } from './ui.test-helper.ts';
 
 describe('web UI actions', () => {
   let harness: HttpHarness;
@@ -191,42 +197,70 @@ describe('web UI actions', () => {
       expect((await session.post('/ui/changes/chg_1', { decision: 'apply' })).status).toBe(501);
     });
 
-    it('lists pending changes and records a decision', async () => {
-      const decisions: [string, ChangeDecision][] = [];
-      const { session } = await signedIn({
+    it('lists pending changes and decides them through bound consolidation', async () => {
+      const { db } = harness.database;
+      const created = await createType(
+        { slug: 'ui_payslip', description: 'Synthetic payslip', fields: {} },
+        { db, embedder: createFakeEmbedder(), maxNewTypesPerDay: 100, schemaLanguage: 'en' },
+      );
+      if (!created.ok) throw new Error(created.error.message);
+      const seed = async (typeId: string, rationale: string) => {
+        const [row] = await db
+          .insert(typeChanges)
+          .values({ kind: 'stabilize', payload: { type_id: typeId }, rationale, auto: true })
+          .returning({ id: typeChanges.id });
+        return row?.id ?? '';
+      };
+      const applied = await seed(created.value.id, '<i>synthetic</i> overlap');
+      const gone = await seed('typ_01JC0000000000000000000000', 'A type that is gone.');
+      const rejected = await seed(created.value.id, 'Proposed twice.');
+      const { app, session } = await signedIn({
         features: {
-          listChanges: () =>
-            Promise.resolve({
-              changes: [
-                {
-                  id: 'chg_1',
-                  kind: 'merge',
-                  rationale: '<i>synthetic</i> overlap',
-                  payload: { from: 'bill', into: 'invoice' },
-                },
-              ],
-            }),
-          applyChange: (id, decision) => {
-            decisions.push([id, decision]);
-            return Promise.resolve({ id, status: 'applied' });
-          },
+          listChanges: (options) => listChanges({ db }, options),
+          applyChange: (id, decision) => applyChange({ db }, id, decision),
         },
       });
+
       const listed = await (await session.get('/ui/changes')).text();
       expect(listed).toContain('&lt;i&gt;synthetic&lt;/i&gt; overlap');
-      expect(listed).toContain('action="/ui/changes/chg_1"');
-      expect(listed).toContain('&quot;into&quot;: &quot;invoice&quot;');
-      const response = await session.post('/ui/changes/chg_1', {
+      expect(listed).toContain(`action="/ui/changes/${applied}"`);
+      expect(listed).toContain(`&quot;type_id&quot;: &quot;${created.value.id}&quot;`);
+
+      const apply = await session.post(`/ui/changes/${applied}`, {
         decision: 'apply',
         note: 'synthetic note',
       });
-      expect(response.status).toBe(303);
-      expect(response.headers.get('Location')).toBe('/ui/changes?decided=apply');
-      expect(decisions).toEqual([['chg_1', { decision: 'apply', note: 'synthetic note' }]]);
+      expect(apply.status).toBe(303);
+      expect(apply.headers.get('Location')).toBe('/ui/changes?decided=apply');
+      const refused = await session.post(`/ui/changes/${gone}`, { decision: 'apply' });
+      expect(refused.headers.get('Location')).toBe('/ui/changes?decided=refused');
+      const reject = await session.post(`/ui/changes/${rejected}`, { decision: 'reject' });
+      expect(reject.headers.get('Location')).toBe('/ui/changes?decided=reject');
       expect(await (await session.get('/ui/changes?decided=apply')).text()).toContain(
         'The change was applied.',
       );
-      expect((await session.post('/ui/changes/chg_1', { decision: 'maybe' })).status).toBe(400);
+      expect(await (await session.get('/ui/changes')).text()).toContain(
+        'No change waits for approval.',
+      );
+      const decided = await db
+        .select({ id: typeChanges.id, status: typeChanges.status, note: typeChanges.note })
+        .from(typeChanges);
+      expect(decided).toEqual(
+        expect.arrayContaining([
+          { id: applied, status: 'applied', note: 'synthetic note' },
+          { id: rejected, status: 'rejected', note: null },
+        ]),
+      );
+      expect((await session.post(`/ui/changes/${applied}`, { decision: 'apply' })).status).toBe(
+        400,
+      );
+      expect((await session.post(`/ui/changes/${gone}`, { decision: 'maybe' })).status).toBe(400);
+      // Without the CSRF token of the session, nothing is decided.
+      const forged = await app.request(
+        `/ui/changes/${applied}`,
+        formRequest({ csrf: 'forged', decision: 'reject' }, session.cookie),
+      );
+      expect(forged.status).toBe(403);
     });
   });
 });

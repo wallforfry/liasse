@@ -27,6 +27,11 @@
       "types": "./dist/config/index.d.ts",
       "default": "./dist/config/index.js"
     },
+    "./consolidation": {
+      "@liasse/source": "./src/consolidation/index.ts",
+      "types": "./dist/consolidation/index.d.ts",
+      "default": "./dist/consolidation/index.js"
+    },
     "./contract": {
       "@liasse/source": "./src/contract/index.ts",
       "types": "./dist/contract/index.d.ts",

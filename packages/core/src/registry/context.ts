@@ -1,9 +1,15 @@
 import type { Database } from '../db/client.ts';
 import type { SchemaLanguage } from '../domain/enums.ts';
 import type { Embedder } from '../models/ports.ts';
+import type { RegistryExecutor } from './type-store.ts';
 
 export interface RegistryReadContext {
   readonly db: Database;
+}
+
+// For the writes a caller may want inside a transaction of its own.
+export interface RegistryWriteContext {
+  readonly db: RegistryExecutor;
 }
 
 export interface RegistryContext extends RegistryReadContext {

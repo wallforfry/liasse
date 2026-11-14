@@ -1,5 +1,9 @@
 import {
+  type ChangeDecisionResult,
+  changeDecisionResultSchema,
   type changeDecisionSchema,
+  type ChangeList,
+  changeListSchema,
   type DescribeTypesOptions,
   type DocumentCorrection,
   type DocumentList,
@@ -8,8 +12,6 @@ import {
   type DocumentView,
   entityListSchema,
   type EntityListView,
-  type FeatureResult,
-  featureResultSchema,
   type GetDocumentOptions,
   type Health,
   healthSchema,
@@ -73,8 +75,13 @@ export interface LiasseClient {
   readonly listSubjects: (options?: ListSubjectsRequest) => Promise<SubjectList>;
   /** Key dates of a window, both days included, sorted by date. */
   readonly upcoming: (options: UpcomingRequest) => Promise<Upcoming>;
-  readonly listChanges: (options?: ListChangesRequest) => Promise<FeatureResult>;
-  readonly decideChange: (id: string, decision: ChangeDecisionRequest) => Promise<FeatureResult>;
+  /** The pending consolidation changes, oldest first. */
+  readonly listChanges: (options?: ListChangesRequest) => Promise<ChangeList>;
+  /** Applies or rejects a pending change; a change already decided is refused. */
+  readonly decideChange: (
+    id: string,
+    decision: ChangeDecisionRequest,
+  ) => Promise<ChangeDecisionResult>;
 }
 
 const documentPath = (id: string): string => `/documents/${encodeURIComponent(id)}`;
@@ -118,8 +125,8 @@ export const createLiasseClient = (options: ClientOptions): LiasseClient => {
     listEntities: async (query = {}) => get(entityListSchema, '/entities', query),
     listSubjects: async (query = {}) => get(listSubjectsOutputSchema, '/subjects', query),
     upcoming: async (query) => get(upcomingOutputSchema, '/upcoming', query),
-    listChanges: async (query = {}) => get(featureResultSchema, '/changes', query),
+    listChanges: async (query = {}) => get(changeListSchema, '/changes', query),
     decideChange: async (id, decision) =>
-      post(featureResultSchema, `/changes/${encodeURIComponent(id)}`, decision),
+      post(changeDecisionResultSchema, `/changes/${encodeURIComponent(id)}`, decision),
   };
 };

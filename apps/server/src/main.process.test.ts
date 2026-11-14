@@ -187,7 +187,6 @@ describe('server process', () => {
         // stdout belongs to MCP over stdio: the server itself never writes there.
         expect(stdout()).toBe('');
         expect(stderr()).toContain('"event":"request"');
-        expect(stderr()).toContain('Notice: consolidation is not part of this build.');
         expect(stderr()).not.toContain(TOKEN);
       });
     },

@@ -1,19 +1,6 @@
+import { type ChangeView, changeListSchema } from '@liasse/core/contract';
 import { html } from 'hono/html';
-import { z } from 'zod';
 import { csrfField, type Markup, notice, UI_ROOT } from '../markup.ts';
-
-// The consolidation feature defines what it lists; this page needs an id per change and
-// shows the rest as it comes. Rationales and payloads quote type and field names drawn
-// from documents: they are escaped like any document content.
-const changeListSchema = z.looseObject({
-  changes: z.array(
-    z.looseObject({
-      id: z.string(),
-      kind: z.string().optional(),
-      rationale: z.string().nullable().optional(),
-    }),
-  ),
-});
 
 const changePath = (id: string): string => `${UI_ROOT}/changes/${encodeURIComponent(id)}`;
 
@@ -27,6 +14,23 @@ const decisionForm = (id: string, csrfToken: string): Markup =>
     </p>
   </form>`;
 
+// Rationales and payloads quote type and field names drawn from documents by a model:
+// they are escaped like any document content.
+const changeSection = (
+  { id, kind, rationale, payload, auto, created_at: createdAt }: ChangeView,
+  csrfToken: string,
+): Markup =>
+  html`<section>
+    <h2>${kind} <span class="muted">${id}</span></h2>
+    <p class="muted">
+      Proposed ${createdAt}.
+      ${auto ? 'Safe by the auto-apply policy.' : 'Needs an approval by the auto-apply policy.'}
+    </p>
+    <p>${rationale}</p>
+    <pre>${JSON.stringify(payload, null, 2)}</pre>
+    ${decisionForm(id, csrfToken)}
+  </section>`;
+
 export const changesPage = (
   listed: unknown,
   csrfToken: string,
@@ -36,19 +40,12 @@ export const changesPage = (
   if (!parsed.success) {
     return html`${notices}${notice('The pending changes could not be read.', 'error')}`;
   }
-  const { changes } = parsed.data;
+  const { changes, truncated } = parsed.data;
   return html`${notices}
   ${
     changes.length === 0
       ? html`<p>No change waits for approval.</p>`
-      : changes.map(
-          ({ id, kind, rationale, ...rest }) =>
-            html`<section>
-              <h2>${kind ?? 'change'} <span class="muted">${id}</span></h2>
-              ${rationale === undefined || rationale === null ? '' : html`<p>${rationale}</p>`}
-              <pre>${JSON.stringify(rest, null, 2)}</pre>
-              ${decisionForm(id, csrfToken)}
-            </section>`,
-        )
-  }`;
+      : changes.map((change) => changeSection(change, csrfToken))
+  }
+  ${truncated ? html`<p class="muted">More changes wait: decide these to see them.</p>` : ''}`;
 };
