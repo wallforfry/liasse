@@ -1,0 +1,195 @@
+import { eq, sql } from 'drizzle-orm';
+import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
+import { createDb } from '../db/client.ts';
+import { jobs } from '../db/schema/jobs.ts';
+import { createGate, sleep, waitUntil } from '../testing/async.ts';
+import { JobLockLostError, WorkersStoppingError } from './errors.ts';
+import { handle } from './handlers.ts';
+import { jobById, labelJob } from './kinds.test-helper.ts';
+import { aborted, createWorkersHarness, type WorkersHarness } from './workers.test-helper.ts';
+import { startWorkers } from './workers.ts';
+
+describe('workers: locks, wake-up and stop', () => {
+  let harness: WorkersHarness;
+
+  beforeAll(async () => {
+    harness = await createWorkersHarness();
+  });
+
+  afterEach(async () => {
+    await harness.reset();
+  });
+
+  afterAll(async () => {
+    await harness.dispose();
+  });
+
+  it('takes back a job whose worker died, after the visibility timeout', async () => {
+    const attempts: number[] = [];
+    const [orphan] = await harness.database.db
+      .insert(jobs)
+      .values({
+        kind: labelJob.name,
+        payload: { label: 'orphan' },
+        status: 'running',
+        attempts: 1,
+        lockedAt: sql`now() - interval '1 hour'`,
+      })
+      .returning();
+    await harness.start({
+      visibilityTimeoutMs: 200,
+      handlers: [
+        handle(labelJob, ({ attempt }) => {
+          attempts.push(attempt);
+          return Promise.resolve();
+        }),
+      ],
+    });
+    await waitUntil(async () => (await harness.statusOf(orphan?.id ?? '')) === 'succeeded');
+    expect(attempts).toEqual([2]);
+  });
+
+  it('keeps a job that outlives the visibility timeout while its worker is alive', async () => {
+    let runs = 0;
+    const handlers = [
+      handle(labelJob, async () => {
+        runs += 1;
+        await sleep(2000);
+      }),
+    ];
+    await harness.start({ visibilityTimeoutMs: 600, handlers });
+    await harness.start({ visibilityTimeoutMs: 600, handlers });
+    const id = await harness.queue('long');
+    await waitUntil(async () => (await harness.statusOf(id)) === 'succeeded');
+    expect(runs).toBe(1);
+    expect((await jobById(harness.database.db, id)).attempts).toBe(1);
+  });
+
+  it('aborts a handler whose job was taken over', async () => {
+    const reasons: unknown[] = [];
+    await harness.start({
+      visibilityTimeoutMs: 150,
+      handlers: [
+        handle(labelJob, async ({ signal }) => {
+          await aborted(signal);
+          reasons.push(signal.reason);
+        }),
+      ],
+    });
+    const id = await harness.queue('taken over');
+    await waitUntil(async () => (await harness.statusOf(id)) === 'running');
+    // What another worker's claim does to the row; its lock is dated ahead so that it
+    // does not expire in turn during the test.
+    await harness.database.db
+      .update(jobs)
+      .set({ attempts: sql`${jobs.attempts} + 1`, lockedAt: sql`now() + interval '1 hour'` })
+      .where(eq(jobs.id, id));
+    await waitUntil(() => reasons.length === 1);
+    expect(reasons[0]).toBeInstanceOf(JobLockLostError);
+    await sleep(100);
+    expect(await jobById(harness.database.db, id)).toMatchObject({
+      status: 'running',
+      attempts: 2,
+    });
+  });
+
+  it('wakes up for a new job without waiting for the next poll', async () => {
+    await harness.start({
+      pollIntervalMs: 60_000,
+      maxPollIntervalMs: 60_000,
+      handlers: [handle(labelJob, () => Promise.resolve())],
+    });
+    await sleep(200);
+    const id = await harness.queue('notified');
+    await waitUntil(async () => (await harness.statusOf(id)) === 'succeeded', 2000);
+  });
+
+  it('drains in-flight jobs on stop and claims nothing more', async () => {
+    const entered = createGate();
+    const workers = await harness.start({
+      handlers: [
+        handle(labelJob, async () => {
+          entered.open();
+          await sleep(200);
+        }),
+      ],
+    });
+    const id = await harness.queue('in flight');
+    await entered.opened;
+    expect(await workers.stop({ timeoutMs: 5000 })).toEqual({ aborted: [], abandoned: [] });
+    expect(await harness.statusOf(id)).toBe('succeeded');
+    const late = await harness.queue('after stop');
+    await sleep(150);
+    expect(await jobById(harness.database.db, late)).toMatchObject({
+      status: 'queued',
+      attempts: 0,
+    });
+  });
+
+  it('aborts a handler past the stop deadline and gives its job back uncounted', async () => {
+    const entered = createGate();
+    const reasons: unknown[] = [];
+    const workers = await harness.start({
+      handlers: [
+        handle(labelJob, async ({ signal }) => {
+          entered.open();
+          await aborted(signal);
+          reasons.push(signal.reason);
+          throw new Error('synthetic abort');
+        }),
+      ],
+    });
+    const id = await harness.queue('interrupted');
+    await entered.opened;
+    expect(await workers.stop({ timeoutMs: 30, abortGraceMs: 2000 })).toEqual({
+      aborted: [id],
+      abandoned: [],
+    });
+    expect(reasons[0]).toBeInstanceOf(WorkersStoppingError);
+    expect(await jobById(harness.database.db, id)).toMatchObject({
+      status: 'queued',
+      attempts: 0,
+      lockedAt: null,
+      lastError: null,
+    });
+  });
+
+  it('abandons a handler that ignores the abort, without releasing its job', async () => {
+    const entered = createGate();
+    const finish = createGate();
+    const workers = await harness.start({
+      handlers: [
+        handle(labelJob, async () => {
+          entered.open();
+          await finish.opened;
+        }),
+      ],
+    });
+    const id = await harness.queue('deaf');
+    await entered.opened;
+    expect(await workers.stop({ timeoutMs: 20, abortGraceMs: 40 })).toEqual({
+      aborted: [id],
+      abandoned: [id],
+    });
+    expect(await harness.statusOf(id)).toBe('running');
+    finish.open();
+    await waitUntil(async () => (await harness.statusOf(id)) === 'succeeded');
+  });
+
+  it('reports a database it cannot reach and still stops', async () => {
+    const unreachable = createDb(
+      harness.database.url.replace(/\/[^/]+$/, '/liasse_test_never_created'),
+    );
+    const errors: unknown[] = [];
+    const workers = await startWorkers({
+      db: unreachable.db,
+      concurrency: 1,
+      pollIntervalMs: 10,
+      handlers: [handle(labelJob, () => Promise.resolve())],
+      onError: (error) => errors.push(error),
+    });
+    await waitUntil(() => errors.length >= 3);
+    expect(await workers.stop({ timeoutMs: 0 })).toEqual({ aborted: [], abandoned: [] });
+    await unreachable.close();
+  });
+});
