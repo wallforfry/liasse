@@ -1,4 +1,4 @@
-import { type DocumentList, PRIVATE_FILTERS, type PrivateFilter } from '@liasse/core/api';
+import { type DocumentList, PRIVATE_FILTERS, type PrivateFilter } from '@liasse/core/contract';
 import { liveDocumentStatusSchema } from '@liasse/core/domain';
 import { html } from 'hono/html';
 import { documentPath, formatTime, type Markup } from '../markup.ts';

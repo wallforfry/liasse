@@ -1,10 +1,5 @@
-import {
-  type ApiContext,
-  ApiError,
-  applyChange,
-  changeDecisionSchema,
-  listChanges,
-} from '@liasse/core/api';
+import { type ApiContext, ApiError, applyChange, listChanges } from '@liasse/core/api';
+import { changeDecisionSchema } from '@liasse/core/contract';
 import { Hono, type MiddlewareHandler } from 'hono';
 import { idParam } from '../../http/query-params.ts';
 import type { UiEnv } from '../guards.ts';

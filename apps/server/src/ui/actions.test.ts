@@ -1,4 +1,5 @@
-import type { ApiFeatures, ChangeDecision } from '@liasse/core/api';
+import type { ApiFeatures } from '@liasse/core/api';
+import type { ChangeDecision } from '@liasse/core/contract';
 import type { JsonObject } from '@liasse/core/db';
 import { documents } from '@liasse/core/db';
 import { buildSyntheticPng, syntheticEml, syntheticPdf } from '@liasse/core/testing';
