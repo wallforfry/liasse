@@ -65,6 +65,12 @@ describe('the local multilingual e5 model', () => {
     expect(cosine(query, bill)).toBeGreaterThan(cosine(query, trail));
   });
 
+  it('embeds a chunk longer than the 512 tokens the model reads, by truncating it', async () => {
+    const chunk = 'Clause relative au paiement du loyer et des charges. '.repeat(80);
+    const [embedding] = await localEmbedder(CACHE_DIR).embed([chunk, 'court'], 'passage');
+    expect(embedding).toHaveLength(384);
+  });
+
   it('needs no network once the model files are in the cache directory', async () => {
     env.fetch = refuseNetwork;
     const [embedding] = await localEmbedder(CACHE_DIR).embed(['hors ligne'], 'passage');

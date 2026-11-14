@@ -130,7 +130,9 @@ describe('chunkPages', () => {
     expect(chunks.join('')).toBe(blob);
     expect(Math.max(...chunks.map(estimateTokens))).toBeLessThanOrEqual(25);
     expect(
-      chunks.every((chunk) => Array.from(chunk).every((character) => 'a😀'.includes(character))),
+      chunks.every((chunk) =>
+        Array.from(chunk).every((character) => character === 'a' || character === '😀'),
+      ),
     ).toBe(true);
   });
 
