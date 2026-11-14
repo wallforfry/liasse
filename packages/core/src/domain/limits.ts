@@ -1,3 +1,5 @@
+import type { NoticePeriodUnit } from './enums.ts';
+
 // pgvector cannot build an HNSW index over a `vector` column wider than 2000 dimensions.
 export const MAX_EMBEDDING_DIM = 2000;
 
@@ -74,3 +76,51 @@ export const DEFAULT_QUERY_TIMEOUT_MILLISECONDS = 5000;
 
 // Below this, an embedding model has no room for a chunk worth embedding next to its header.
 export const MIN_EMBEDDING_INPUT_TOKENS = 64;
+
+// The knowledge of one document, as the specification bounds it (1 to 5 facts) and as the
+// extraction call may return it at most.
+export const MAX_FACTS_PER_DOCUMENT = 5;
+export const MAX_FACT_LENGTH = 500;
+export const MAX_KEY_DATES_PER_DOCUMENT = 50;
+export const MAX_KEY_DATE_LABEL_LENGTH = 200;
+export const MAX_SUBJECTS_PER_DOCUMENT = 10;
+export const MAX_SUBJECT_NAME_LENGTH = 200;
+export const MAX_KNOWLEDGE_QUOTE_LENGTH = 300;
+// A notice period longer than five years is a misreading, not a clause.
+export const MAX_NOTICE_PERIOD: Readonly<Record<NoticePeriodUnit, number>> = {
+  days: 1826,
+  weeks: 260,
+  months: 60,
+};
+
+// Under these lengths a value is a fragment, not an identifier of a subject. A contract
+// number follows the rule of the customer numbers of entities.
+export const MIN_LICENSE_PLATE_LENGTH = 4;
+export const MIN_ATTACHING_CONTRACT_NUMBER_LENGTH = MIN_ATTACHING_CUSTOMER_NUMBER_LENGTH;
+
+// Link detection, as the specification sets it: candidates dated within this many months
+// of the document. Their number is bounded so that the one call stays small.
+export const LINK_WINDOW_MONTHS = 12;
+export const MAX_LINK_CANDIDATES = 12;
+// The candidates ranked before the places are given out, and the places one type takes
+// while documents of other types are there.
+export const LINK_CANDIDATE_POOL = 100;
+export const MAX_LINK_CANDIDATES_PER_TYPE = 6;
+export const MAX_LINK_RATIONALE_LENGTH = 300;
+// A link changes the state of a document, which hides its deadlines: one the text model is
+// not sure of is not kept.
+export const MIN_LINK_CONFIDENCE = 0.7;
+
+export const DEFAULT_UPCOMING_LIMIT = 100;
+export const MAX_UPCOMING_LIMIT = 500;
+export const DEFAULT_TIMELINE_LIMIT = 100;
+export const MAX_TIMELINE_LIMIT = 500;
+export const DEFAULT_RECALL_LIMIT = 10;
+export const MAX_RECALL_LIMIT = 50;
+// Facts each ranking contributes to the fusion, and facts reached through the entities and
+// the subjects of the direct hits.
+export const RECALL_CANDIDATES_PER_RANKER = 50;
+export const MAX_RECALL_RELATED = 10;
+export const MAX_SUBJECT_DOCUMENTS = 50;
+export const MAX_SUBJECT_NEXT_DATES = 5;
+export const MAX_SUBJECT_SUGGESTIONS = 5;

@@ -1,6 +1,11 @@
 import { z } from 'zod';
 import { defineJobKind } from '../jobs/kinds.ts';
 
+// One model call already makes up to three provider attempts, with a backoff, inside
+// its own time limit: three executions of the job are at most nine attempts per call,
+// and a failure the provider says is final ends the job at the first.
+export const PROCESS_DOCUMENT_MAX_ATTEMPTS = 3;
+
 /**
  * Queued once per document to process, new or handed back. The pipeline registers its
  * handler with `handle`. The handler reads the document itself, `documents.hint`
@@ -16,4 +21,5 @@ import { defineJobKind } from '../jobs/kinds.ts';
 export const processDocumentJob = defineJobKind({
   name: 'process_document',
   schema: z.object({ documentId: z.string().min(1) }),
+  maxAttempts: PROCESS_DOCUMENT_MAX_ATTEMPTS,
 });

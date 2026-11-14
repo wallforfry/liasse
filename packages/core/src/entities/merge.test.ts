@@ -1,12 +1,15 @@
 import { eq, sql } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { z } from 'zod';
-import type { Database } from '../db/client.ts';
 import { documents } from '../db/schema/documents.ts';
-import { facts } from '../db/schema/knowledge.ts';
+import { facts, subjects } from '../db/schema/knowledge.ts';
 import { entities, typeChanges } from '../db/schema/registry.ts';
 import { ID_PREFIXES, newId } from '../domain/ids.ts';
 import { deleteDocument } from '../ingest/delete-document.ts';
+import {
+  storeSubjectIdentifier,
+  toSubjectIdentifiersColumn,
+} from '../knowledge/subject-identifiers.ts';
+import { columnsHolding } from '../testing/column-scan.ts';
 import { insertSyntheticDocument } from '../testing/fixtures.ts';
 import { createTestDatabase, type TestDatabase } from '../testing/test-database.ts';
 import { mergeEntities } from './merge.ts';
@@ -17,31 +20,6 @@ import {
   SYNTHETIC_IBAN,
   TEST_IDENTIFIER_KEY,
 } from './support.test-helper.ts';
-
-const columnsSchema = z.array(z.object({ table_name: z.string(), column_name: z.string() }));
-const hitsSchema = z.tuple([z.object({ hits: z.number() })]);
-
-// Every column of every table, whatever its type, read as text.
-const columnsHolding = async (db: Database, needle: string): Promise<readonly string[]> => {
-  const columns = columnsSchema.parse(
-    await db.execute(sql`
-      SELECT table_name, column_name FROM information_schema.columns
-      WHERE table_schema = 'public' ORDER BY table_name, column_name
-    `),
-  );
-  const found = await Promise.all(
-    columns.map(async ({ table_name: table, column_name: column }) => {
-      const [{ hits }] = hitsSchema.parse(
-        await db.execute(sql`
-          SELECT count(*)::int AS hits FROM ${sql.identifier(table)}
-          WHERE strpos(${sql.identifier(column)}::text, ${needle}) > 0
-        `),
-      );
-      return hits > 0 ? [`${table}.${column}`] : [];
-    }),
-  );
-  return found.flat();
-};
 
 describe('mergeEntities', () => {
   let database: TestDatabase;
@@ -137,10 +115,21 @@ describe('mergeEntities', () => {
       payload: { source_id: third, target_id: source },
       rationale: 'Synthetic rationale.',
     });
+    const [contract] = await database.db
+      .insert(subjects)
+      .values({
+        kind: 'contract',
+        canonicalName: 'Synthetic contract',
+        identifiers: toSubjectIdentifiersColumn(
+          storeSubjectIdentifier(TEST_IDENTIFIER_KEY, 'contract', 'CT-123456', source),
+        ),
+      })
+      .returning({ id: subjects.id });
     expect(await columnsHolding(database.db, source)).toEqual([
       'documents.provenance',
       'entities.id',
       'facts.entity_ids',
+      'subjects.identifiers',
       'type_changes.payload',
     ]);
 
@@ -157,6 +146,13 @@ describe('mergeEntities', () => {
         insurer: by(target),
         parties: [by(third), by(target)],
       },
+    });
+    const [rewritten] = await database.db
+      .select({ identifiers: subjects.identifiers })
+      .from(subjects)
+      .where(eq(subjects.id, contract?.id ?? ''));
+    expect(rewritten?.identifiers).toEqual({
+      items: [{ type: 'contract_number', value: 'CT123456', issuer_id: target }],
     });
   });
 

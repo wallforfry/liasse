@@ -1,5 +1,5 @@
 import { sql } from 'drizzle-orm';
-import { check, date, index, pgTable, real, text, uniqueIndex } from 'drizzle-orm/pg-core';
+import { boolean, check, date, index, pgTable, text, uniqueIndex } from 'drizzle-orm/pg-core';
 import { ID_PREFIXES, newId } from '../../domain/ids.ts';
 import {
   createdAt,
@@ -53,7 +53,8 @@ export const documentLinks = pgTable(
       .notNull()
       .references(() => documents.id, { onDelete: 'cascade' }),
     kind: linkKind('kind').notNull(),
-    confidence: real('confidence'),
+    // The quote of a link is what the text model gave as its reason, not document text.
+    ...traceColumns(),
     createdAt: createdAt(),
   },
   (table) => [
@@ -64,6 +65,10 @@ export const documentLinks = pgTable(
     ),
     index('document_links_to_document_id_idx').on(table.toDocumentId),
     check('document_links_distinct', sql`${table.fromDocumentId} <> ${table.toDocumentId}`),
+    check(
+      'document_links_confidence_range',
+      sql`${table.confidence} IS NULL OR ${table.confidence} BETWEEN 0 AND 1`,
+    ),
   ],
 );
 
@@ -76,6 +81,9 @@ export const subjects = pgTable('subjects', {
   aliases: textArray('aliases'),
   identifiers: jsonObject('identifiers'),
   embedding: embeddingVector('embedding'),
+  // True while only private documents have named it: it is then shown to no reader who
+  // did not ask for private documents.
+  private: boolean('private').notNull().default(false),
   createdAt: createdAt(),
   updatedAt: updatedAt(),
 });

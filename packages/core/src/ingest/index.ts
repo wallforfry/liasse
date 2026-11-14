@@ -14,9 +14,9 @@ export {
   requeueFileDeletions,
 } from './file-deletion-sweep.ts';
 export { type IngestDeps, ingestFile, type IngestInput } from './ingest-file.ts';
-export { type LiveWrite, writeIfLive } from './live-write.ts';
+export { type LiveWrite, writeIfBothLive, writeIfLive } from './live-write.ts';
 export { detectMimeType } from './mime.ts';
-export { processDocumentJob } from './process-document-job.ts';
+export { PROCESS_DOCUMENT_MAX_ATTEMPTS, processDocumentJob } from './process-document-job.ts';
 export type { FileContent } from './read-content.ts';
 export type { WatchedFile } from './watch-visitor.ts';
 export { startWatcher, type Watcher, type WatcherOptions } from './watcher.ts';

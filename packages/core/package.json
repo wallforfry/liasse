@@ -52,6 +52,11 @@
       "types": "./dist/jobs/index.d.ts",
       "default": "./dist/jobs/index.js"
     },
+    "./knowledge": {
+      "@liasse/source": "./src/knowledge/index.ts",
+      "types": "./dist/knowledge/index.d.ts",
+      "default": "./dist/knowledge/index.js"
+    },
     "./models": {
       "@liasse/source": "./src/models/index.ts",
       "types": "./dist/models/index.d.ts",

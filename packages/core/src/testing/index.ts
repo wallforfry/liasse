@@ -1,4 +1,5 @@
 export { createGate, type Gate, sleep, waitUntil } from './async.ts';
+export { columnsHolding } from './column-scan.ts';
 export { createFakeEmbedder, type FakeEmbedderOptions } from './fake-embedder.ts';
 export {
   createFakeTextModel,

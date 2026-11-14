@@ -19,7 +19,7 @@ const withoutLatinDiacritics = (text: string): string =>
 // its marks. Dotted abbreviations such as "S.A." or "Inc." must end up as one token.
 // Letters, marks and digits of every script make the words: a name must not lose what
 // tells it apart because it is not written in Latin letters.
-const tokenize = (name: string): readonly string[] =>
+export const nameTokens = (name: string): readonly string[] =>
   withoutLatinDiacritics(name.normalize('NFKC'))
     .replace(/\./g, '')
     .toLowerCase()
@@ -48,7 +48,7 @@ const MIN_SIGNIFICANT_LENGTH = 3;
 // Lowercase tokens of an entity name, without accents and without the legal form around
 // it. A name made only of legal-form words keeps them, so it never becomes empty.
 export const normalizeEntityName = (name: string): readonly string[] =>
-  withoutLegalForm(tokenize(name));
+  withoutLegalForm(nameTokens(name));
 
 // What two names must share to name the same entity. A name written without any letter
 // or digit has no token: it is compared as written, so that two such names are not equal

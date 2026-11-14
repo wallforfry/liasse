@@ -1,5 +1,20 @@
-import { sql } from 'drizzle-orm';
-import { customType, integer, jsonb, real, text, timestamp } from 'drizzle-orm/pg-core';
+import { getTableName, type SQL, sql } from 'drizzle-orm';
+import {
+  customType,
+  integer,
+  jsonb,
+  type PgColumn,
+  real,
+  text,
+  timestamp,
+} from 'drizzle-orm/pg-core';
+
+// A column written with the name of its table, or with the alias given. In the selection
+// of a query over one table, Drizzle prints a column given to `sql` by its bare name
+// (`qualified.test.ts`); inside a subquery that reads the same table under an alias, the
+// bare name would designate the alias.
+export const qualified = (column: PgColumn, tableAlias?: string): SQL =>
+  sql`${sql.identifier(tableAlias ?? getTableName(column.table))}.${sql.identifier(column.name)}`;
 
 // The migration runner replaces this token with EMBEDDING_DIM, so generated SQL
 // never hard-codes a dimension.
