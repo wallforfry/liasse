@@ -1,23 +1,24 @@
 import {
   applyChange,
-  changeDecisionResultSchema,
-  changeDecisionSchema,
-  changeListSchema,
   describeTypes,
+  listChanges,
+  listEntities,
+  listSubjects,
+  upcoming,
+} from '@liasse/core/api';
+import {
+  changeDecisionSchema,
   describeTypesOptionsSchema,
   entityListSchema,
-  listChanges,
+  featureResultSchema,
   listChangesOptionsSchema,
-  listEntities,
   listEntitiesRequestSchema,
-  listSubjects,
   listSubjectsOptionsSchema,
   listSubjectsOutputSchema,
   typeListSchema,
-  upcoming,
   upcomingOptionsSchema,
   upcomingOutputSchema,
-} from '@liasse/core/api';
+} from '@liasse/core/contract';
 import { Hono } from 'hono';
 import { z } from 'zod';
 import { failures, jsonResponse, operation, valid } from '../describe.ts';
@@ -119,7 +120,7 @@ export const registryRoutes = ({ api, authenticated }: RouteDeps): Hono<AppEnv> 
         summary: 'List consolidation proposals',
         tag: 'Registry',
         responses: {
-          200: jsonResponse('The pending changes, oldest first.', changeListSchema),
+          200: jsonResponse('The changes.', featureResultSchema),
           ...failures(400, 501),
         },
       }),
@@ -133,7 +134,7 @@ export const registryRoutes = ({ api, authenticated }: RouteDeps): Hono<AppEnv> 
         summary: 'Apply or reject a consolidation proposal',
         tag: 'Registry',
         responses: {
-          200: jsonResponse('The change as decided.', changeDecisionResultSchema),
+          200: jsonResponse('The outcome.', featureResultSchema),
           ...failures(400, 404, 413, 415, 501),
         },
       }),

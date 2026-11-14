@@ -1,5 +1,6 @@
 import { count, sql } from 'drizzle-orm';
 import { z } from 'zod';
+import type { SubjectList } from '../contract/knowledge.ts';
 import type { Database } from '../db/client.ts';
 import { documents } from '../db/schema/documents.ts';
 import {
@@ -9,7 +10,7 @@ import {
 } from '../domain/limits.ts';
 import { subjectKindSchema } from '../domain/schemas.ts';
 import type { KnowledgeReadContext } from './context.ts';
-import { untrustedText, visibleDocument } from './read-shared.ts';
+import { visibleDocument } from './read-shared.ts';
 import { designatedBy, shownTo } from './subject-designation.ts';
 import { loadSubjects } from './subject-store.ts';
 
@@ -21,23 +22,6 @@ export const listSubjectsInputSchema = z.strictObject({
   limit: z.int().min(1).max(MAX_SUBJECT_LIST_LIMIT).default(DEFAULT_SUBJECT_LIST_LIMIT),
 });
 export type ListSubjectsInput = z.input<typeof listSubjectsInputSchema>;
-
-export const listedSubjectSchema = z.strictObject({
-  id: z.string(),
-  kind: subjectKindSchema,
-  name: untrustedText,
-  aliases: z.array(untrustedText).readonly(),
-  // The visible documents that concern it.
-  documentCount: z.int().min(1),
-});
-export type ListedSubject = z.output<typeof listedSubjectSchema>;
-
-export const listSubjectsOutputSchema = z.strictObject({
-  subjects: z.array(listedSubjectSchema).readonly(),
-  // True when more subjects match than the limit: narrow the query, or raise the limit.
-  truncated: z.boolean(),
-});
-export type SubjectList = z.output<typeof listSubjectsOutputSchema>;
 
 // How many visible documents concern each subject; a subject no visible document
 // concerns is absent.

@@ -1,5 +1,11 @@
 import { and, desc, eq, sql } from 'drizzle-orm';
 import { z } from 'zod';
+import {
+  documentRefSchema,
+  subjectRefSchema,
+  untrustedText,
+  upcomingDateSchema,
+} from '../contract/knowledge.ts';
 import type { Database } from '../db/client.ts';
 import { documents } from '../db/schema/documents.ts';
 import { docTypes } from '../db/schema/registry.ts';
@@ -18,20 +24,12 @@ import {
 import { isoDateSchema } from '../domain/values.ts';
 import type { KnowledgeReadContext } from './context.ts';
 import { statedDocumentDate } from './document-day.ts';
-import {
-  documentRefSchema,
-  effectiveState,
-  holdsId,
-  subjectRefSchema,
-  untrustedText,
-  visibleDocument,
-  visibleSubjectIds,
-} from './read-shared.ts';
+import { effectiveState, holdsId, visibleDocument, visibleSubjectIds } from './read-shared.ts';
 import { designatedBy, loadVisibleSubjects, shownTo } from './subject-designation.ts';
 import { viewSubjectIdentifier } from './subject-identifiers.ts';
 import { deriveSubjectState, readSubjectDocumentStates } from './subject-state.ts';
 import { findSubjectById, type Subject } from './subject-store.ts';
-import { upcoming, upcomingDateSchema } from './upcoming.ts';
+import { upcoming } from './upcoming.ts';
 
 const LAST_DAY = '9999-12-31';
 

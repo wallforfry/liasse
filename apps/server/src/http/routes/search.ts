@@ -1,11 +1,10 @@
+import { queryDocuments, searchDocuments } from '@liasse/core/api';
 import {
-  queryDocuments,
+  queryDslSchema,
   queryResultSchema,
-  searchDocuments,
   searchRequestSchema,
   searchResultsSchema,
-} from '@liasse/core/api';
-import { queryDslSchema } from '@liasse/core/query';
+} from '@liasse/core/contract';
 import { Hono } from 'hono';
 import { resolver } from 'hono-openapi';
 import { failures, jsonResponse, operation, valid } from '../describe.ts';

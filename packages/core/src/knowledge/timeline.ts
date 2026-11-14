@@ -1,5 +1,6 @@
 import { and, asc, eq, type SQL, sql } from 'drizzle-orm';
 import { z } from 'zod';
+import { documentRefSchema, untrustedText } from '../contract/knowledge.ts';
 import type { Database } from '../db/client.ts';
 import { documents } from '../db/schema/documents.ts';
 import { facts } from '../db/schema/knowledge.ts';
@@ -10,13 +11,7 @@ import { isoDateSchema } from '../domain/values.ts';
 import { namesEntity } from '../entities/references.ts';
 import type { KnowledgeReadContext } from './context.ts';
 import { statedDocumentDate } from './document-day.ts';
-import {
-  documentRefSchema,
-  effectiveState,
-  holdsId,
-  untrustedText,
-  visibleDocument,
-} from './read-shared.ts';
+import { effectiveState, holdsId, visibleDocument } from './read-shared.ts';
 
 export const timelineInputSchema = z
   .strictObject({
