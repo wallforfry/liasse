@@ -8,6 +8,7 @@ import {
   typeNotFound,
 } from './errors.ts';
 import { checkField, checkTypeFields, type TypeFields } from './fields.ts';
+import { ownValue } from './own.ts';
 import type { FieldDefinition } from './primitives.ts';
 import { err, ok, type Result } from './result.ts';
 import {
@@ -63,7 +64,7 @@ export const addField = (
   changeFields(typeId, context, (fields) => {
     const proposed = checkDefinition(name, definition);
     if (!proposed.ok) return proposed;
-    const existing = fields[name];
+    const existing = ownValue(fields, name);
     if (existing === undefined) return ok({ ...fields, [name]: proposed.value });
     return isDeepStrictEqual(existing, proposed.value)
       ? err(exists(name))
@@ -83,9 +84,9 @@ export const renameField = (
   context: RegistryReadContext,
 ): Promise<Result<RegisteredType, RegistryError>> =>
   changeFields(typeId, context, (fields) => {
-    const definition = fields[from];
+    const definition = ownValue(fields, from);
     if (definition === undefined) return err(notFound(from));
-    if (fields[to] !== undefined) return err(exists(to));
+    if (ownValue(fields, to) !== undefined) return err(exists(to));
     return ok({ ...without(fields, from), [to]: definition });
   });
 
@@ -96,7 +97,7 @@ export const retypeField = (
   context: RegistryReadContext,
 ): Promise<Result<RegisteredType, RegistryError>> =>
   changeFields(typeId, context, (fields) => {
-    const existing = fields[name];
+    const existing = ownValue(fields, name);
     if (existing === undefined) return err(notFound(name));
     const proposed = checkDefinition(name, definition);
     if (!proposed.ok) return proposed;
@@ -117,5 +118,5 @@ export const removeField = (
   context: RegistryReadContext,
 ): Promise<Result<RegisteredType, RegistryError>> =>
   changeFields(typeId, context, (fields) =>
-    fields[name] === undefined ? err(notFound(name)) : ok(without(fields, name)),
+    ownValue(fields, name) === undefined ? err(notFound(name)) : ok(without(fields, name)),
   );

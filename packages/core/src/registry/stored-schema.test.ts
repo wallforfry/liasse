@@ -93,6 +93,23 @@ describe('parseTypeSchema', () => {
     expect(parseTypeSchema(stored)).toEqual(FIELDS);
   });
 
+  it('reads back a field named constructor', () => {
+    const fields = { constructor: { type: 'text' } };
+    expect(Object.entries(parseTypeSchema(renderTypeSchema(fields)))).toEqual([
+      ['constructor', { type: 'text' }],
+    ]);
+    expect(renderTypeSchema(fields)).toMatchObject({
+      properties: { constructor: { type: 'string', minLength: 1 } },
+    });
+  });
+
+  it('sees a stored property named __proto__ and refuses it', () => {
+    const stored: unknown = JSON.parse(
+      '{"type":"object","additionalProperties":false,"properties":{"__proto__":{"x-liasse-field":{"type":"text"}}}}',
+    );
+    expect(() => parseTypeSchema(stored)).toThrow(InvalidTypeSchemaError);
+  });
+
   it.each([
     ['an empty object', {}],
     ['the registry format instead of a JSON Schema', { fields: FIELDS }],

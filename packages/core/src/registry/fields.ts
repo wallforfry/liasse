@@ -1,6 +1,7 @@
-import { z } from 'zod';
+import type { z } from 'zod';
 import { MAX_FIELDS_PER_TYPE } from '../domain/limits.ts';
 import { fieldNameViolations, type NamingRule } from './naming.ts';
+import { isPlainRecord } from './own.ts';
 import { type FieldDefinition, fieldDefinitionSchema } from './primitives.ts';
 import { err, ok, type Result } from './result.ts';
 
@@ -14,8 +15,6 @@ export interface FieldIssue {
   readonly rule: FieldRule;
   readonly message: string;
 }
-
-const rawFieldsSchema = z.record(z.string(), z.unknown());
 
 const describePath = (field: string, path: readonly PropertyKey[]): string =>
   [field, ...path.map(String)].join('.');
@@ -42,8 +41,7 @@ export const checkField = (name: string, raw: unknown): CheckedField => {
 
 // Reports every broken rule at once, so one round of feedback is enough to fix a proposal.
 export const checkTypeFields = (input: unknown): Result<TypeFields, readonly FieldIssue[]> => {
-  const raw = rawFieldsSchema.safeParse(input);
-  if (!raw.success) {
+  if (!isPlainRecord(input)) {
     return err([
       {
         rule: 'not_an_object',
@@ -51,9 +49,7 @@ export const checkTypeFields = (input: unknown): Result<TypeFields, readonly Fie
       },
     ]);
   }
-  const checked = Object.entries(raw.data).map(([name, definition]) =>
-    checkField(name, definition),
-  );
+  const checked = Object.entries(input).map(([name, definition]) => checkField(name, definition));
   const count: readonly FieldIssue[] =
     checked.length <= MAX_FIELDS_PER_TYPE
       ? []

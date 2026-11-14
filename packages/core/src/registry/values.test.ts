@@ -228,6 +228,17 @@ describe('validateDocumentFields', () => {
     ]);
   });
 
+  it('validates a field named constructor like any other', () => {
+    const named = { fields: { constructor: { type: 'number' } } } as const;
+    expect(validateDocumentFields(named, {})).toEqual({ ok: true, value: {} });
+    const filled = validateDocumentFields(named, { constructor: 12 });
+    expect(filled.ok && Object.entries(filled.value)).toEqual([['constructor', 12]]);
+    const wrong = validateDocumentFields(named, { constructor: 'twelve' });
+    expect((wrong.ok ? [] : wrong.error).map(({ field, code }) => [field, code])).toEqual([
+      ['constructor', 'invalid_value'],
+    ]);
+  });
+
   it('rejects fields that are not an object', () => {
     const result = validateDocumentFields(type, 'gas');
     expect(result.ok ? [] : result.error).toMatchObject([{ code: 'invalid_value', path: '' }]);

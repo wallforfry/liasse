@@ -224,6 +224,68 @@ describe('field operations', () => {
     });
   });
 
+  describe('names that every object inherits', () => {
+    const codeOf = async (operation: Promise<{ ok: boolean; error?: { code: string } }>) =>
+      (await operation).error?.code ?? 'ok';
+
+    it.each(['constructor', 'toString', '__proto__', 'hasOwnProperty', 'valueOf'])(
+      'does not find %s on a type that does not define it',
+      async (name) => {
+        const type = await newType(`absent_${name.toLowerCase().replaceAll('_', '')}`);
+        expect(await codeOf(removeField(type.id, name, context))).toBe('field_not_found');
+        expect(await codeOf(retypeField(type.id, name, { type: 'text' }, context))).toBe(
+          'field_not_found',
+        );
+        expect(await codeOf(renameField(type.id, name, 'renamed_field', context))).toBe(
+          'field_not_found',
+        );
+        expect(await stored(type.id)).toMatchObject({ version: 1 });
+        expect(await storedFieldNames(type.id)).toEqual(['consumption_kwh', 'meter_id']);
+      },
+    );
+
+    it.each(['toString', '__proto__', 'hasOwnProperty', 'valueOf'])(
+      'refuses %s as a new name because it is not snake_case',
+      async (name) => {
+        const type = await newType(`refused_${name.toLowerCase().replaceAll('_', '')}`);
+        expect(await codeOf(addField(type.id, name, { type: 'text' }, context))).toBe(
+          'invalid_fields',
+        );
+        expect(await codeOf(renameField(type.id, 'meter_id', name, context))).toBe(
+          'invalid_fields',
+        );
+        expect(await stored(type.id)).toMatchObject({ version: 1 });
+      },
+    );
+
+    it('handles constructor, a valid snake_case name, like any other field', async () => {
+      const type = await newType('ordinary_constructor');
+      expect(await codeOf(addField(type.id, 'constructor', { type: 'text' }, context))).toBe('ok');
+      expect(await storedFieldNames(type.id)).toEqual([
+        'constructor',
+        'consumption_kwh',
+        'meter_id',
+      ]);
+      expect(await codeOf(addField(type.id, 'constructor', { type: 'text' }, context))).toBe(
+        'field_exists',
+      );
+      expect(await codeOf(addField(type.id, 'constructor', { type: 'number' }, context))).toBe(
+        'primitive_conflict',
+      );
+      expect(await codeOf(renameField(type.id, 'meter_id', 'constructor', context))).toBe(
+        'field_exists',
+      );
+      expect(await codeOf(retypeField(type.id, 'constructor', { type: 'number' }, context))).toBe(
+        'ok',
+      );
+      expect(await codeOf(renameField(type.id, 'constructor', 'builder', context))).toBe('ok');
+      expect(await codeOf(renameField(type.id, 'meter_id', 'constructor', context))).toBe('ok');
+      expect(await codeOf(removeField(type.id, 'constructor', context))).toBe('ok');
+      expect(await storedFieldNames(type.id)).toEqual(['builder', 'consumption_kwh']);
+      expect(await stored(type.id)).toMatchObject({ version: 6 });
+    });
+  });
+
   it('rejects every operation on an unknown type and on a merged type', async () => {
     const source = await newType('merged_source');
     const target = await newType('merged_target');

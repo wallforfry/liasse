@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { keyDateSchema, languageCodeSchema } from '../domain/values.ts';
 import { CORE_FIELDS, KEY_DATES_FIELD } from './core-fields.ts';
 import type { TypeFields } from './fields.ts';
+import { ownProperties } from './own.ts';
 import {
   fieldValueSchema,
   untypedValueSchema,
@@ -11,7 +12,7 @@ import {
 
 type Shape = Readonly<Record<string, z.ZodType>>;
 
-const closedObject = (shape: Shape) => z.strictObject(shape);
+const closedObject = (shape: Shape) => z.preprocess(ownProperties, z.strictObject(shape));
 
 // Every field is optional: a document only carries the values that were found in it.
 const shapeOf = (fields: TypeFields, wrap: ValueWrapper): Shape =>

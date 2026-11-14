@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import type { JsonObject } from '../db/columns.ts';
 import { checkTypeFields, type FieldIssue, type TypeFields } from './fields.ts';
+import { isPlainRecord, ownValue } from './own.ts';
 import { valueSchemaForFields } from './values.ts';
 
 // JSON Schema ignores a keyword it does not know, so the definition travels with the
@@ -17,13 +18,19 @@ export class InvalidTypeSchemaError extends Error {
   }
 }
 
-const propertySchema = z.record(z.string(), z.unknown());
-
 const storedSchema = z.looseObject({
   type: z.literal('object'),
   additionalProperties: z.literal(false),
-  properties: z.record(z.string(), propertySchema),
+  properties: z.custom<Readonly<Record<string, unknown>>>(isPlainRecord),
 });
+
+const renderedProperty = (
+  properties: Readonly<Record<string, unknown>>,
+  name: string,
+): Readonly<Record<string, unknown>> => {
+  const property = ownValue(properties, name);
+  return isPlainRecord(property) ? property : {};
+};
 
 const validFields = (input: unknown): TypeFields => {
   const checked = checkTypeFields(input);
@@ -41,7 +48,7 @@ export const renderTypeSchema = (input: unknown): JsonObject => {
     properties: Object.fromEntries(
       Object.entries(fields).map(([name, definition]) => [
         name,
-        { ...schema.properties[name], [FIELD_ANNOTATION]: definition },
+        { ...renderedProperty(schema.properties, name), [FIELD_ANNOTATION]: definition },
       ]),
     ),
   };
@@ -64,7 +71,7 @@ export const parseTypeSchema = (stored: unknown): TypeFields => {
     Object.fromEntries(
       Object.entries(schema.data.properties).map(([name, property]) => [
         name,
-        property[FIELD_ANNOTATION],
+        isPlainRecord(property) ? property[FIELD_ANNOTATION] : undefined,
       ]),
     ),
   );

@@ -32,6 +32,25 @@ describe('checkTypeFields', () => {
     expect(issuesOf(input)).toEqual([{ field: undefined, rule: 'not_an_object' }]);
   });
 
+  it.each([new Date(0), new Map([['note', { type: 'text' }]])])(
+    'rejects an object that is not a plain record',
+    (input) => {
+      expect(issuesOf(input)).toEqual([{ field: undefined, rule: 'not_an_object' }]);
+    },
+  );
+
+  it('sees a field named __proto__ and refuses it, instead of dropping it', () => {
+    const parsed: unknown = JSON.parse('{"__proto__": {"type": "text"}}');
+    const computed = { ['__proto__']: { type: 'text' }, note: { type: 'text' } };
+    expect(issuesOf(parsed)).toEqual([{ field: '__proto__', rule: 'snake_case' }]);
+    expect(issuesOf(computed)).toEqual([{ field: '__proto__', rule: 'snake_case' }]);
+  });
+
+  it('accepts a field named constructor, which is snake_case, as an own field', () => {
+    const result = checkTypeFields({ constructor: { type: 'text' } });
+    expect(result.ok && Object.entries(result.value)).toEqual([['constructor', { type: 'text' }]]);
+  });
+
   it(`caps a type at ${String(MAX_FIELDS_PER_TYPE)} fields`, () => {
     expect(checkTypeFields(manyFields(MAX_FIELDS_PER_TYPE)).ok).toBe(true);
     expect(issuesOf(manyFields(MAX_FIELDS_PER_TYPE + 1))).toEqual([
