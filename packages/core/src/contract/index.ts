@@ -46,6 +46,21 @@ export {
   upcomingOptionsSchema,
 } from './registry.ts';
 export {
+  type DocumentRef,
+  documentRefSchema,
+  type ListedSubject,
+  listedSubjectSchema,
+  listSubjectsOutputSchema,
+  type SubjectList,
+  type SubjectRef,
+  subjectRefSchema,
+  untrustedText,
+  type Upcoming,
+  type UpcomingDate,
+  upcomingDateSchema,
+  upcomingOutputSchema,
+} from './knowledge.ts';
+export {
   type QueryResultEnvelope,
   queryResultSchema,
   type SearchRequest,

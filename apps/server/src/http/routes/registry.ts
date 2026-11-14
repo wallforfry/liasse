@@ -4,9 +4,7 @@ import {
   listChanges,
   listEntities,
   listSubjects,
-  listSubjectsOutputSchema,
   upcoming,
-  upcomingOutputSchema,
 } from '@liasse/core/api';
 import {
   changeDecisionSchema,
@@ -16,8 +14,10 @@ import {
   listChangesOptionsSchema,
   listEntitiesRequestSchema,
   listSubjectsOptionsSchema,
+  listSubjectsOutputSchema,
   typeListSchema,
   upcomingOptionsSchema,
+  upcomingOutputSchema,
 } from '@liasse/core/contract';
 import { Hono } from 'hono';
 import { z } from 'zod';

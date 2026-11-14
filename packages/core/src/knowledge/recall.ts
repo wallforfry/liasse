@@ -1,5 +1,6 @@
 import { and, eq, inArray, notInArray, or, type SQL, sql } from 'drizzle-orm';
 import { z } from 'zod';
+import { untrustedText } from '../contract/knowledge.ts';
 import type { Database } from '../db/client.ts';
 import { documents } from '../db/schema/documents.ts';
 import { facts } from '../db/schema/knowledge.ts';
@@ -20,7 +21,7 @@ import {
   type RankedSource,
 } from '../search/ranked-source.ts';
 import type { KnowledgeReadContext } from './context.ts';
-import { untrustedText, visibleDocument } from './read-shared.ts';
+import { visibleDocument } from './read-shared.ts';
 
 export interface RecallContext extends KnowledgeReadContext {
   readonly embedder: Embedder;

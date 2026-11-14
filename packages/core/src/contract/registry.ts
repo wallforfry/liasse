@@ -99,7 +99,7 @@ export const changeDecisionSchema = z.strictObject({
 });
 export type ChangeDecision = z.output<typeof changeDecisionSchema>;
 
-// The modules behind subjects, key dates and changes define their answers; until they
-// are bound, the contract only says an object comes back.
+// Consolidation is not part of this build: until it is, the contract of its routes only
+// says an object comes back.
 export const featureResultSchema = z.looseObject({});
 export type FeatureResult = z.output<typeof featureResultSchema>;
