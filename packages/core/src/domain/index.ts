@@ -5,5 +5,6 @@ export * from './errors.ts';
 export * from './ids.ts';
 export * from './languages.ts';
 export * from './limits.ts';
+export * from './provenance.ts';
 export * from './schemas.ts';
 export * from './values.ts';

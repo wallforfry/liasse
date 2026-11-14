@@ -20,3 +20,14 @@ export const MAX_FILENAME_LENGTH = 255;
 // How many times the watched folder may queue a failed document again by itself. A
 // person handing the file back through the API or MCP resets the count.
 export const MAX_WATCH_REQUEUES = 1;
+
+export const DEFAULT_QUERY_LIMIT = 50;
+export const MAX_QUERY_LIMIT = 200;
+export const MAX_QUERY_CONDITIONS = 20;
+export const MAX_QUERY_IN_VALUES = 100;
+export const MAX_QUERY_GROUP_BY = 3;
+export const MAX_QUERY_SELECT = 40;
+export const MAX_QUERY_STRING_LENGTH = 200;
+export const MAX_QUERY_LISTED_FIELDS = 40;
+export const MAX_QUERY_SUGGESTED_ENTITIES = 5;
+export const DEFAULT_QUERY_TIMEOUT_MILLISECONDS = 5000;
