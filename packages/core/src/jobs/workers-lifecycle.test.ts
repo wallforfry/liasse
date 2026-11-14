@@ -51,20 +51,32 @@ describe('workers: locks, wake-up and stop', () => {
   });
 
   it('keeps a job that outlives the visibility timeout while its worker is alive', async () => {
+    const visibilityTimeoutMs = 3000;
+    const finish = createGate();
     let runs = 0;
     const handlers = [
       handle(labelJob, async () => {
         runs += 1;
-        await sleep(2000);
+        await finish.opened;
       }),
     ];
-    await harness.start({ visibilityTimeoutMs: 600, handlers });
-    await harness.start({ visibilityTimeoutMs: 600, handlers });
+    await harness.start({ visibilityTimeoutMs, handlers });
+    await harness.start({ visibilityTimeoutMs, handlers });
     const id = await harness.queue('long');
-    await waitUntil(async () => (await harness.statusOf(id)) === 'succeeded');
+    await waitUntil(async () => (await harness.statusOf(id)) === 'running', 60_000);
+    const claimedAt = (await jobById(harness.database.db, id)).lockedAt?.getTime() ?? 0;
+    // The handler is held until the database shows renewals spanning twice the
+    // timeout: by then a lock left alone would have been stale through a whole
+    // recovery period of both workers. A second run ends the wait at once.
+    await waitUntil(async () => {
+      const renewedAt = (await jobById(harness.database.db, id)).lockedAt?.getTime() ?? 0;
+      return runs > 1 || renewedAt - claimedAt >= 2 * visibilityTimeoutMs;
+    }, 120_000);
+    finish.open();
+    await waitUntil(async () => (await harness.statusOf(id)) === 'succeeded', 60_000);
     expect(runs).toBe(1);
     expect((await jobById(harness.database.db, id)).attempts).toBe(1);
-  });
+  }, 240_000);
 
   it('aborts a handler whose job was taken over', async () => {
     const reasons: unknown[] = [];
@@ -95,15 +107,20 @@ describe('workers: locks, wake-up and stop', () => {
   });
 
   it('wakes up for a new job without waiting for the next poll', async () => {
+    // Polling is out of the picture for the length of the test, so only a notification
+    // can start a job. Several jobs in a row, because the very first claim of a
+    // dispatcher, and the one that follows a finished job, need no notification.
+    const pollIntervalMs = 3_600_000;
     await harness.start({
-      pollIntervalMs: 60_000,
-      maxPollIntervalMs: 60_000,
+      pollIntervalMs,
+      maxPollIntervalMs: pollIntervalMs,
       handlers: [handle(labelJob, () => Promise.resolve())],
     });
-    await sleep(200);
-    const id = await harness.queue('notified');
-    await waitUntil(async () => (await harness.statusOf(id)) === 'succeeded', 2000);
-  });
+    for (const label of ['first', 'second', 'third', 'fourth', 'fifth']) {
+      const id = await harness.queue(label);
+      await waitUntil(async () => (await harness.statusOf(id)) === 'succeeded', 60_000);
+    }
+  }, 360_000);
 
   it('drains in-flight jobs on stop and claims nothing more', async () => {
     const entered = createGate();

@@ -1,7 +1,7 @@
 import { eq, sql } from 'drizzle-orm';
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 import { jobs } from '../db/schema/jobs.ts';
-import { createGate, sleep } from '../testing/async.ts';
+import { createGate, waitUntil } from '../testing/async.ts';
 import { createTestDatabase, type TestDatabase } from '../testing/test-database.ts';
 import { enqueue } from './enqueue.ts';
 import {
@@ -102,14 +102,24 @@ describe('job store', () => {
       await release.opened;
     });
     await rowLocked.opened;
-    const outcome = await Promise.race([
-      claimJob(database.db, KINDS),
-      sleep(1500).then(() => 'blocked' as const),
-    ]);
+    // No deadline decides the outcome: either the claim returns, or Postgres itself
+    // reports a session of this database waiting on a lock.
+    let returned = false;
+    const claim = claimJob(database.db, KINDS).finally(() => {
+      returned = true;
+    });
+    await waitUntil(async () => {
+      const [activity] = await database.db.execute<{ waiting: number }>(sql`
+        SELECT count(*)::int AS waiting FROM pg_stat_activity
+        WHERE datname = current_database() AND wait_event_type = 'Lock'`);
+      return returned || (activity?.waiting ?? 0) > 0;
+    }, 60_000);
+    const skipped = returned;
     release.open();
     await holder;
-    expect(outcome).toMatchObject({ id: freeId });
-  });
+    expect(skipped).toBe(true);
+    expect(await claim).toMatchObject({ id: freeId });
+  }, 90_000);
 
   it('writes a success, a retry and a failure back', async () => {
     await queue('succeeds');
