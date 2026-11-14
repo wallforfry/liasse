@@ -113,6 +113,18 @@ describe('the terminal failure of a job', () => {
     expect(await markers()).toBe(0);
   });
 
+  it('runs it from the recovery the workers run by themselves', async () => {
+    const id = await runningOnLastAttempt('recovered by the workers', 2);
+    await harness.start({
+      handlers: [handle(watchedJob, () => Promise.resolve())],
+      visibilityTimeoutMs: 60_000,
+    });
+    await waitUntil(async () => (await jobById(harness.database.db, id)).status === 'failed');
+    expect(seen).toEqual([
+      { jobId: id, payload: { label: 'recovered by the workers' }, cause: 'stale' },
+    ]);
+  });
+
   it('runs no hook for a kind that has none', async () => {
     const [row] = await harness.database.db
       .insert(jobs)

@@ -171,6 +171,26 @@ describe('interpret', () => {
     expect(document.rejectedCore).toBe(2);
   });
 
+  it('drops a valid enum value or key date its quote does not state', async () => {
+    const { document } = await read({
+      core: {
+        language: at('fr', 'Invoice SYN-1'),
+        key_dates: [
+          at({ kind: 'due', date: '2026-10-03', label: 'Issued' }, 'of 03/10/2026'),
+          at({ kind: 'due', date: '2026-11-03', label: 'Payment' }, 'of 03/10/2026'),
+        ],
+      },
+      fields: { energy: at('electricity', '350 kWh gas') },
+      extra: {},
+    });
+    expect(document.core).toEqual({
+      language: 'fr',
+      key_dates: [{ kind: 'due', date: '2026-10-03', label: 'Issued' }],
+    });
+    expect(document.fields).toEqual({});
+    expect(document.rejected).toBe(2);
+  });
+
   it('drops a value the registry refuses, and the items of a list one by one', async () => {
     const { document } = await read({
       core: { period: at({ start: '2026-12-01', end: '2026-01-01' }, 'of 03/10/2026') },

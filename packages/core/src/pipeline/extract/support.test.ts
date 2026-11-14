@@ -191,6 +191,8 @@ describe('factSupport', () => {
   it('drops a fact that states a date or a number its quote does not', () => {
     const quote = 'Contract renewed on 1 March 2026 for 12 months';
     expect(factSupport(fact('Renewed on 1 March 2027.', quote), 'en')).toBeUndefined();
+    // Every number of this one is in the quote; the date it makes is not.
+    expect(factSupport(fact('Renewed on 12 March 2026.', quote), 'en')).toBeUndefined();
     expect(factSupport(fact('Renewed for 24 months.', quote), 'en')).toBeUndefined();
     expect(factSupport(fact('The fee is 84,20 EUR.', quote), 'en')).toBeUndefined();
   });

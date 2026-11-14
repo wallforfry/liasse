@@ -211,12 +211,19 @@ describe('the classification stage', () => {
   // prompt.
   it('masks a sensitive identifier in the definition of a new type before it is stored', async () => {
     const id = await harness.ingest('type leak');
-    await classify(id, () =>
-      proposal('bank_statement', {
+    await classify(id, () => {
+      const leaking = proposal('bank_statement', {
         account: { type: 'enum', values: [SYNTHETIC_IBAN, 'savings'] },
         holder: { type: 'identifier', format: 'DE37999999990123456789' },
-      }),
-    );
+      });
+      return {
+        ...leaking,
+        new_type: {
+          ...leaking.new_type,
+          description: `Statement of the account ${SYNTHETIC_IBAN}`,
+        },
+      };
+    });
     const [type] = await harness.db.select().from(docTypes);
     const stored = JSON.stringify(type);
     expect(type?.slug).toBe('bank_statement');
