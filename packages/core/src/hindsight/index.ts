@@ -10,6 +10,7 @@ export {
   type HindsightFailureCode,
   type HindsightOperation,
   HindsightSyncBusyError,
+  HindsightSyncLockLostError,
   HindsightUrlError,
 } from './errors.ts';
 export {

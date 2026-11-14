@@ -6,6 +6,6 @@ Add the optional Hindsight sync (`@liasse/core/hindsight`). With `HINDSIGHT_URL`
 
 `createHindsightIntegration` gives the server the hook to call, the handler to register, the per-kind concurrency to apply and `requeueForgets`, to call at startup for the forgets that are still owed; `describeHindsight` gives the line of the startup privacy summary. The integration requires a detector of sensitive identifiers (`isSensitive`): a fact it flags is left out, and the count is reported through `onFactsWithheld`.
 
-`documents.hindsight_held_since` records, before any request, that a bank may hold facts of a document, and survives deletion; `documents.hindsight_sent_hash` records the facts Hindsight confirmed. Migration `0007` adds both.
+`documents.hindsight_held_since` records, before any request, that a bank may hold facts of a document, and survives deletion; `documents.hindsight_sent_hash` records the facts Hindsight confirmed. Migration `0008` adds both.
 
-Base URLs (`LLM_BASE_URL`, `EMBEDDING_BASE_URL`, `HINDSIGHT_URL`) share one rule: http or https, without credentials, query string or fragment; a fragment and a trailing `?` or `#` are now refused. `deleteDocument` takes an optional `onDeleted(tx, document)` that runs in the transaction of the deletion.
+`HINDSIGHT_URL` follows the rule of the model base URLs: http or https, without credentials, query string or fragment. `withReservedConnection` (`@liasse/core/db`) runs a function on one connection of the pool, kept for it alone. `deleteDocument` takes an optional `onDeleted(tx, document)` that runs in the transaction of the deletion.

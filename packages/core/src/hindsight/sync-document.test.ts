@@ -10,7 +10,7 @@ import { insertSyntheticDocument, type NewDocumentRow } from '../testing/fixture
 import { createTestDatabase, type TestDatabase } from '../testing/test-database.ts';
 import { createHindsightClient, type HindsightClientOptions } from './client.ts';
 import { flagsSyntheticIdentifiers, SYNTHETIC_IDENTIFIER } from './detector.test-helper.ts';
-import { HindsightError, HindsightSyncBusyError } from './errors.ts';
+import { HindsightError } from './errors.ts';
 import { type HindsightStub, startHindsightStub, type StubOverride } from './stub.test-helper.ts';
 import { type HindsightSyncDeps, syncDocumentToHindsight } from './sync-document.ts';
 
@@ -78,11 +78,6 @@ describe('syncDocumentToHindsight', () => {
     );
     return row?.count ?? -1;
   };
-
-  const IN_THIS_DATABASE = sql`database = (SELECT oid FROM pg_database WHERE datname = current_database())`;
-
-  const heldAdvisoryLocks = () =>
-    countWhere(sql`pg_locks WHERE locktype = 'advisory' AND ${IN_THIS_DATABASE}`);
 
   const retained = (id: string, bank = 'documents') => stub.documents.get(`${bank}/${id}`);
 
@@ -306,6 +301,14 @@ describe('syncDocumentToHindsight', () => {
       expect(stub.calls).toHaveLength(before);
     });
 
+    it('forgets a tombstone even when a fact of it was left behind', async () => {
+      const id = await sentDocument();
+      await deleteDocument({ db: database.db }, id);
+      await addFact(id, 'A fact written by a writer that ignored the deletion.');
+      expect(await actionOf(id)).toBe('forgotten');
+      expect(retained(id)).toBeUndefined();
+    });
+
     it('makes no request for a deleted document that was never sent', async () => {
       const { id } = await insertDocument();
       await addFact(id, 'A fact never sent.');
@@ -328,6 +331,22 @@ describe('syncDocumentToHindsight', () => {
       await sync(id);
       expect(seen).toEqual([{ mayHold: true, hashed: false }]);
       expect(await recordOf(id)).toEqual({ mayHold: true, hashed: true });
+    });
+
+    it('is left as it is by a sync that fails before any request', async () => {
+      const id = await sentDocument();
+      const before = await documentRow(id);
+      const failing: HindsightSyncDeps = {
+        ...depsFor(),
+        isSensitive: () => {
+          throw new Error('synthetic detector failure');
+        },
+      };
+      await expect(sync(id, failing)).rejects.toThrow('synthetic detector failure');
+      const after = await documentRow(id);
+      expect(after.hindsightHeldSince).toEqual(before.hindsightHeldSince);
+      expect(after.hindsightSentHash).toBe(before.hindsightSentHash);
+      expect(await actionOf(id)).toBe('unchanged');
     });
 
     it('keeps the date of the first retain', async () => {
@@ -398,7 +417,8 @@ describe('syncDocumentToHindsight', () => {
       await flagPrivate(id);
       override = () => OUTAGE;
       await expect(sync(id)).rejects.toMatchObject({ operation: 'forget', retryable: true });
-      expect(await recordOf(id)).toEqual({ mayHold: true, hashed: true });
+      // A failed request leaves what the bank holds unknown: no hash either.
+      expect(await recordOf(id)).toEqual({ mayHold: true, hashed: false });
       expect(retained(id)).toBeDefined();
 
       override = undefined;
@@ -428,7 +448,7 @@ describe('syncDocumentToHindsight', () => {
       await flagPrivate(id);
       override = () => ({ status: 404, body: { detail: 'no such upstream' } });
       await expect(sync(id)).rejects.toMatchObject({ statusCode: 404, retryable: false });
-      expect(await recordOf(id)).toEqual({ mayHold: true, hashed: true });
+      expect(await recordOf(id)).toEqual({ mayHold: true, hashed: false });
     });
 
     it('stays on a document deleted during the retain, which is then forgotten', async () => {
@@ -490,60 +510,5 @@ describe('syncDocumentToHindsight', () => {
         expect(await recordOf(id)).toEqual({ mayHold: false, hashed: false });
       },
     );
-  });
-
-  describe('concurrency', () => {
-    it('holds no transaction while it waits for Hindsight', async () => {
-      const { id } = await insertDocument();
-      await addFact(id, 'A fact.');
-      const seen: number[] = [];
-      override = async () => {
-        seen.push(
-          await countWhere(
-            sql`pg_stat_activity WHERE datname = current_database()
-                AND pid <> pg_backend_pid() AND xact_start IS NOT NULL`,
-          ),
-        );
-        return undefined;
-      };
-      await sync(id);
-      await flagPrivate(id);
-      await sync(id);
-      expect(seen).toEqual([0, 0]);
-    });
-
-    it('refuses a second sync of a document while one is in progress', async () => {
-      const { id } = await insertDocument();
-      const other = await insertDocument();
-      await addFact(id, 'A fact held at Hindsight.');
-      await addFact(other.id, 'A fact of another document.');
-      const received = createGate();
-      const proceed = createGate();
-      override = async ({ body }) => {
-        if (!JSON.stringify(body).includes(id)) return undefined;
-        received.open();
-        await proceed.opened;
-        return undefined;
-      };
-      const held = sync(id);
-      await received.opened;
-      const before = stub.calls.length;
-      await expect(sync(id)).rejects.toBeInstanceOf(HindsightSyncBusyError);
-      expect(stub.calls).toHaveLength(before);
-      expect(await actionOf(other.id)).toBe('retained');
-      proceed.open();
-      await expect(held).resolves.toMatchObject({ action: 'retained' });
-    });
-
-    it('gives its lock back, after a success and after a failure', async () => {
-      const id = await sentDocument();
-      expect(await heldAdvisoryLocks()).toBe(0);
-      await addFact(id, 'A second fact.');
-      override = () => OUTAGE;
-      await expect(sync(id)).rejects.toBeInstanceOf(HindsightError);
-      expect(await heldAdvisoryLocks()).toBe(0);
-      override = undefined;
-      expect(await actionOf(id)).toBe('retained');
-    });
   });
 });

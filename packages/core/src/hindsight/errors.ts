@@ -44,6 +44,19 @@ export class HindsightSyncBusyError extends Error {
   }
 }
 
+/**
+ * The sync lost the lock of its document, with the connection that held it, while a
+ * request may have reached Hindsight: what it did is recorded as unknown, and the queue
+ * tries again, which forgets or retains as the document now asks.
+ */
+export class HindsightSyncLockLostError extends Error {
+  override readonly name = 'HindsightSyncLockLostError';
+
+  constructor() {
+    super('The Hindsight sync lost the lock of the document');
+  }
+}
+
 export class HindsightUrlError extends StartupError {
   override readonly name = 'HindsightUrlError';
 

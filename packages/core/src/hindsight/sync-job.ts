@@ -24,10 +24,10 @@ export const hindsightSyncJob = defineJobKind({
 
 /**
  * The most `hindsight_sync` jobs the workers may run at once: the value to give
- * `perKindConcurrency` for this kind. A sync in flight holds one database connection
- * for its lock, for as long as Hindsight takes to answer (up to three attempts of two
- * minutes each): without the cap, a stalled Hindsight and a backlog of syncs could
- * take every connection of the pool.
+ * `perKindConcurrency` for this kind. A sync in flight holds one database connection,
+ * its only one, for as long as Hindsight takes to answer (up to three attempts of two
+ * minutes each). Any number of syncs is correct; the cap keeps a stalled Hindsight and
+ * a backlog of syncs from taking the connections the rest of the server needs.
  */
 export const HINDSIGHT_SYNC_CONCURRENCY = 2;
 
