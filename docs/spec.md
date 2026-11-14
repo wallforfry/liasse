@@ -86,7 +86,7 @@ Eleven Postgres tables: documents, text pages, chunks, types, entities, change l
 
 | Table | Role | Key columns |
 | --- | --- | --- |
-| `documents` | One ingested document | `id`, `sha256` (unique), `storage_key`, `mime`, `original_name`, `hint`, `source` (watch/api/mcp), `status`, `type_id`, `schema_version`, `core` (jsonb), `fields` (jsonb), `extra` (jsonb), `provenance` (jsonb), `title`, `summary`, `private`, `watch_requeues`, `file_deleted_at`, `ingested_at` |
+| `documents` | One ingested document | `id`, `sha256` (unique), `storage_key`, `mime`, `original_name`, `hint`, `source` (watch/api/mcp), `status`, `type_id`, `schema_version`, `core` (jsonb), `fields` (jsonb), `extra` (jsonb), `provenance` (jsonb), `title`, `summary`, `private`, `watch_requeues`, `file_deleted_at`, `hindsight_held_since`, `hindsight_sent_hash`, `ingested_at` |
 | `document_pages` | Full text per page | `document_id`, `page`, `text`, `language`, `tsv` (tsvector) |
 | `chunks` | Search units | `id`, `document_id`, `page_from`, `page_to`, `text`, `language`, `embedding` (vector), `tsv` |
 | `doc_types` | Type registry | `id`, `slug`, `description`, `schema` (jsonb), `version`, `status`, `parent_slug`, `aliases` (text[]), `embedding`; the document count is computed from `documents`, never stored |
@@ -293,15 +293,23 @@ Liasse answers relational and temporal questions on its own ("which contracts ex
 
 The Hindsight integration is optional: the native knowledge layer is enough for relational and temporal questions. It serves users who want their agents to find their documents in the same memory as the rest of their context. Liasse never delegates storage or exact retrieval to it.
 
-**What is sent.** After indexing, a `retain` into a dedicated bank (default `documents`) with the document's facts (`facts` table), never its full text:
+**What is sent.** After indexing, one `retain` into a dedicated bank (default `documents`) with the document's facts (`facts` table), never its full text. The memory is one line per fact, each citing its document and its validity, stored under the document ID as its Hindsight `document_id`:
 
 ```text
-[doc:01JC…] EDF energy bill dated 2026-10-03 for 2026-09-01 to 2026-09-30, amount €84.20, due 2026-10-18, supply address 12 rue des Lilas, Lyon.
+[doc:01JC…] EDF energy bill dated 2026-10-03 for 2026-09-01 to 2026-09-30, amount €84.20, due 2026-10-18, supply address 12 rue des Lilas, Lyon. (valid_from 2026-10-03)
 ```
 
-**What is not sent**: full text, identifiers (IBAN, tax numbers), documents flagged `private`.
+It carries as metadata the document ID, the type slug, the document date and the validity range of the facts, and the document date as its timestamp. The bank needs no setup: Hindsight creates it at the first retain.
 
-**Updates.** A re-extraction that changes the core or fields sends a corrected `retain` with the same ID; deleting a document triggers a forget request if the API allows it (to be checked, see open questions).
+**What is not sent**: full text, title, summary, core and type fields, documents flagged `private`, deleted documents, and any fact in which the sensitive-identifier detector finds an identifier. A fact is free text written by the model and nothing masks it upstream, so the detector is the only guard at this boundary: the integration cannot be created without one, a flagged fact is left out of the retain, and the count of facts left out is reported. The detector is the one of entity resolution, which finds IBANs and card numbers; a tax or social security number written in a fact is not detected.
+
+**Updates.** Every change Hindsight must follow queues a `hindsight_sync` job in the transaction of that change: a document indexed, extracted again, flagged private or public, or deleted. The job reads the document and decides. For a live document that is not private, it retains the facts again under the same ID when they differ from the ones Hindsight confirmed, which replaces them: Hindsight deletes the memories of an existing `document_id` before it stores the new ones. For a document that is private, deleted or left without a fact to send, it asks Hindsight to delete the document and its memories (`DELETE /v1/default/banks/{bank}/documents/{id}`) whenever the bank may hold them.
+
+**What the bank may hold.** `documents.hindsight_held_since` is set, and committed, before the first retain of a document is sent, and cleared only when Hindsight confirms that it holds nothing of it: a successful delete, or its 404 `Document not found`. Whatever happens in between (a retain that timed out after Hindsight stored it, an answer the client refused, a deletion, the same bytes ingested again, which revives the document under its ID), the row still says a forget may be owed; a tombstone keeps this column. `documents.hindsight_sent_hash` is the hash of the facts Hindsight confirmed and of the bank they went to; it only lets an unchanged sync make no request. A forget whose job gave up stays owed on the row: at startup, a sweep queues a sync again for every deleted or private document the bank may hold and that has no sync queued or running.
+
+**Concurrency.** No transaction is open while a request to Hindsight is in flight. Syncs of one document exclude each other through an advisory lock held on a dedicated connection; a second one fails at once and is retried by the queue. The workers run at most 2 `hindsight_sync` jobs at a time, so a stalled Hindsight holds at most 2 connections.
+
+**Limits.** Forgetting is per document, which is all Liasse needs; Hindsight has no deletion of a single memory. What Hindsight derived from the facts before the deletion and stored outside the document (observations consolidated across documents) is its own to maintain. A document flagged private while its retain is in flight is sent, then forgotten by the sync its flag queued. Changing `HINDSIGHT_URL` or `HINDSIGHT_BANK` retains the documents again in the new bank as they are synced and does not empty the previous one: a forget then asks the new bank, which answers that it holds nothing, and the record is cleared although the old bank still holds the facts. Empty the old bank by hand before changing either variable. Disabling the integration leaves in Hindsight what was sent, and leaves the owed forgets on the rows until it is enabled again. Any 404 other than Hindsight's own `Document not found` fails the forget and leaves it owed. Hindsight must be version 1.2 or later.
 
 **Agent side.** Without Hindsight, the agent uses `upcoming`, `timeline` and `recall`. With Hindsight, it can also query its global memory, collect the cited `[doc:…]` IDs, then call `get_document` for exact details.
 
@@ -411,7 +419,7 @@ A single Node binary, configured through environment variables, shipped as a mul
 | `CONFIDENCE_THRESHOLD` | `0.7` | Below: `needs_review` |
 | `MAX_NEW_TYPES_PER_DAY` | `5` | Beyond: closest type + `needs_review` |
 | `SCHEMA_LANGUAGE` | `en` | Language of generated slugs and field names: `en`, `fr`, `de`, `es` or `it` |
-| `HINDSIGHT_URL` / `HINDSIGHT_BANK` / `HINDSIGHT_API_KEY` | empty | Optional integration |
+| `HINDSIGHT_URL` / `HINDSIGHT_BANK` / `HINDSIGHT_API_KEY` | empty / `documents` / empty | Optional integration: base URL of the Hindsight server (disabled if empty), bank, Bearer key |
 | `API_TOKENS` | — | Bearer tokens (list) for API and MCP |
 | `FILE_URL_SECRET` | required | Secret the keys of signed file URLs and of identifier hashes are derived from |
 | `UI_PASSWORD` | empty | Enables the web UI (plain value or `$argon2id$…` hash) |
@@ -502,5 +510,5 @@ v0.1 is useful on its own: an archive searchable by agents, before classificatio
 
 Still open:
 
-- [ ] Does Hindsight support targeted forgetting by memory ID? To be checked during v0.3; otherwise, document that document deletion is not propagated.
+- [x] Does Hindsight support targeted forgetting by memory ID? Not by memory ID, but by document ID, which is the granularity Liasse retains at: `DELETE /v1/default/banks/{bank}/documents/{id}` deletes a document and its memories, and a retain under an existing `document_id` replaces them (checked against Hindsight 1.2.1, 2026-11-14). Document deletion and the `private` flag are therefore propagated; see [Hindsight integration](#hindsight-integration-optional).
 - [ ] Consolidation thresholds (0.85 similarity, 60% presence, 5 documents): to be calibrated on the evaluation set.

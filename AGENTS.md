@@ -49,6 +49,7 @@ Inside `packages/core/src`, one directory per concern. A new concern gets its ow
 | `embeddings/` | `createEmbedder`; the local embedder runs an ONNX model in a child process, ended when idle         |
 | `entities/`   | Entity resolution, sensitive identifier masking, entity listing and merges                          |
 | `formats/`    | What a PDF, an image, a DOCX and an email are, from their bytes: one rule for ingestion and text    |
+| `hindsight/`  | The optional sync of document facts to a Hindsight bank: client, `hindsight_sync` job, forget sweep |
 | `ingest/`     | `ingestFile`, deletion with tombstones, the watched folder                                          |
 | `jobs/`       | The job queue on the `jobs` table: kinds, `enqueue`, workers                                        |
 | `knowledge/`  | Key dates, subjects, facts and links of a document, derived state, and the four knowledge tools     |
@@ -62,7 +63,7 @@ Inside `packages/core/src`, one directory per concern. A new concern gets its ow
 | `testing/`    | Test database and bucket helpers, model fakes and synthetic document builders                       |
 | `text/`       | `extractText`: native text of PDF, DOCX and email, vision transcription otherwise                   |
 
-Names reserved for the features to come, created only by the change that implements them: `consolidation/`, `hindsight/`.
+Names reserved for the features to come, created only by the change that implements them: `consolidation/`.
 
 Tests sit next to the code they cover, as `*.test.ts`. A helper that only the tests of one directory use is a `*.test-helper.ts` beside them; neither is compiled into `dist`. Two more suffixes are kept out of the build: `*.fixture.ts` for data shared by several test files, and `*.modeltest.ts` for the tests of `pnpm test:models`.
 
@@ -97,7 +98,7 @@ Tests sit next to the code they cover, as `*.test.ts`. A helper that only the te
 - Edit the Drizzle schema in `packages/core/src/db/schema/`, then run `pnpm db:generate` and commit the generated SQL and snapshot.
 - Never edit a migration that is on `main`: `migrate` compares the recorded content hashes with the files and refuses to run on a database where one changed. Add a new migration instead.
 - A migration must not use an enum value added by a migration that can run in the same `migrate` call. The runner applies every pending migration in one transaction, and Postgres refuses a new enum value used in the transaction that added it (`unsafe use of new value`). Migration `0003` adds `deleted` to `document_status`: an index or a constraint on `status <> 'deleted'` needs the runner to commit each migration on its own first.
-- A deleted document keeps its row as a tombstone, so the cascade of the foreign keys to `documents` does not run on deletion. A new table that references `documents` is added to `DOCUMENT_REFERENCES` in `packages/core/src/ingest/delete-document.ts`, and a new column of `documents` gets its tombstone value in `BLANK_CONTENT` there; a test fails for each until it is done. Queries that list, count, search or serve documents add `isLiveDocument` from `@liasse/core/db`.
+- A deleted document keeps its row as a tombstone, so the cascade of the foreign keys to `documents` does not run on deletion. A new table that references `documents` is added to `DOCUMENT_REFERENCES` in `packages/core/src/ingest/delete-document.ts`, and a new column of `documents` gets its tombstone value in `BLANK_CONTENT` there; a test fails for each until it is done. A column a tombstone must keep, such as `hindsight_held_since`, is left out of `BLANK_CONTENT` on purpose and that same test states its kept value. Queries that list, count, search or serve documents add `isLiveDocument` from `@liasse/core/db`.
 - Migrations from parallel branches are all applied, whatever their timestamps: a migration is pending when its journal entry (content hash at its journal date) is not recorded, and pending ones run in journal order. Never change the date of a journal entry that is on `main` either. When two branches both add a migration, rebase, delete yours and generate it again, so the journal and the snapshot stay consistent.
 - An entity id or a subject id stored in an array or a JSON column has no foreign key. Every place one lives is listed in `entities/references.ts` or `knowledge/subject-references.ts`, which a merge rewrites; a test scans every column of the database for the merged id and fails until a new place is listed. Such an id is written under `withEntityLock` (`withSubjectLock` is the same lock), taken before the row of any document; `deleteDocument` takes it too, after the lock of the hash.
 - Rows of `documents` are locked in the order of their ids. A row over two documents, such as a link, is written through `writeIfBothLive`; an UPDATE that rewrites several documents, such as a merge, first calls `lockDocumentRows` with its condition. `documents.state` is derived from `document_links` by `recomputeDocumentStates`, called by whoever changes the links of a document, the deletion included.
