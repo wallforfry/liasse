@@ -1,0 +1,9 @@
+export { EmbeddingModelDimensionError, EmbeddingOutputError } from './errors.ts';
+export {
+  createLocalEmbedder,
+  DEFAULT_LOCAL_EMBEDDING_MODEL,
+  LOCAL_EMBEDDER_IDLE_MS,
+  type LocalEmbedder,
+  type LocalEmbedderOptions,
+} from './local.ts';
+export type { LocalModel, LocalModelLoader, LocalModelSpec } from './local-model.ts';
