@@ -45,9 +45,10 @@ const FORCED_EXIT_CODE = 1;
 /**
  * The first SIGTERM or SIGINT stops everything, then exits with 0, or 1 when a step
  * failed. Any second one, the same or the other, exits at once with 1: it is the way out
- * of a shutdown that hangs.
+ * of a shutdown that hangs. Returns the same shutdown, for a reason to stop that is not a
+ * signal.
  */
-export const installShutdown = ({ signals, stop, exit }: ShutdownTargets): void => {
+export const installShutdown = ({ signals, stop, exit }: ShutdownTargets): (() => void) => {
   let started = false;
   let exited = false;
   const exitOnce = (code: number): void => {
@@ -73,4 +74,5 @@ export const installShutdown = ({ signals, stop, exit }: ShutdownTargets): void 
   SHUTDOWN_SIGNALS.forEach((signal) => {
     signals.on(signal, shutdown);
   });
+  return shutdown;
 };

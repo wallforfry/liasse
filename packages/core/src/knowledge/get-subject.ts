@@ -1,27 +1,18 @@
 import { and, desc, eq, sql } from 'drizzle-orm';
-import { z } from 'zod';
 import {
-  documentRefSchema,
-  subjectRefSchema,
-  untrustedText,
-  upcomingDateSchema,
-} from '../contract/knowledge.ts';
+  type GetSubjectInput,
+  getSubjectInputSchema,
+  type GetSubjectOutput,
+} from '../contract/knowledge-reads.ts';
 import type { Database } from '../db/client.ts';
 import { documents } from '../db/schema/documents.ts';
 import { docTypes } from '../db/schema/registry.ts';
 import { ID_PREFIXES, isId } from '../domain/ids.ts';
 import {
   MAX_SUBJECT_DOCUMENTS,
-  MAX_SUBJECT_NAME_LENGTH,
   MAX_SUBJECT_NEXT_DATES,
   MAX_SUBJECT_SUGGESTIONS,
 } from '../domain/limits.ts';
-import {
-  documentStateSchema,
-  subjectIdentifierTypeSchema,
-  subjectKindSchema,
-} from '../domain/schemas.ts';
-import { isoDateSchema } from '../domain/values.ts';
 import type { KnowledgeReadContext } from './context.ts';
 import { statedDocumentDate } from './document-day.ts';
 import { effectiveState, holdsId, visibleDocument, visibleSubjectIds } from './read-shared.ts';
@@ -34,60 +25,6 @@ import { upcoming } from './upcoming.ts';
 const LAST_DAY = '9999-12-31';
 
 const today = (): string => new Date().toISOString().slice(0, 10);
-
-export const getSubjectInputSchema = z
-  .strictObject({
-    // The id of a subject, or words to find it by: a label, a plate, an address.
-    id: z.string().min(1).optional(),
-    query: z.string().trim().min(1).max(MAX_SUBJECT_NAME_LENGTH).optional(),
-    // The day the next dates are counted from: today (UTC) when absent.
-    asOf: isoDateSchema.optional(),
-    includePrivate: z.boolean().default(false),
-  })
-  .refine(({ id, query }) => (id === undefined) !== (query === undefined), {
-    message: 'expected either an id or a query',
-  });
-export type GetSubjectInput = z.input<typeof getSubjectInputSchema>;
-
-const subjectDocumentSchema = documentRefSchema.extend({
-  // The date the document states, null when it states none.
-  date: isoDateSchema.nullable(),
-  state: documentStateSchema,
-});
-
-export const subjectDetailsSchema = z.strictObject({
-  found: z.literal(true),
-  subject: z.strictObject({
-    id: z.string(),
-    kind: subjectKindSchema,
-    name: untrustedText,
-    aliases: z.array(untrustedText).readonly(),
-    // An IBAN or a card number is masked.
-    identifiers: z
-      .array(z.strictObject({ type: subjectIdentifierTypeSchema, value: untrustedText }))
-      .readonly(),
-  }),
-  // Derived from the states of its documents: see `deriveSubjectState`.
-  state: documentStateSchema,
-  // The most recent first, at most `MAX_SUBJECT_DOCUMENTS`.
-  documents: z.array(subjectDocumentSchema).readonly(),
-  documentCount: z.int().min(0),
-  // The first key dates on or after `asOf`, those of ended documents left out.
-  nextDates: z.array(upcomingDateSchema).readonly(),
-});
-export type SubjectDetails = z.output<typeof subjectDetailsSchema>;
-
-export const subjectNotFoundSchema = z.strictObject({
-  found: z.literal(false),
-  // The subjects a query may have meant, when it names none or several.
-  suggestions: z.array(subjectRefSchema).readonly(),
-});
-
-export const getSubjectOutputSchema = z.discriminatedUnion('found', [
-  subjectDetailsSchema,
-  subjectNotFoundSchema,
-]);
-export type GetSubjectOutput = z.output<typeof getSubjectOutputSchema>;
 
 const toRef = ({ id, kind, canonicalName }: Subject) => ({ id, kind, name: canonicalName });
 

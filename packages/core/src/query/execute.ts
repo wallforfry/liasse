@@ -1,5 +1,6 @@
 import { DrizzleQueryError, type SQL, sql } from 'drizzle-orm';
 import type { Database } from '../db/client.ts';
+import { sqlStateOf } from '../db/sql-state.ts';
 import { err, ok, type Result } from '../registry/result.ts';
 import { failure, type QueryError } from './errors.ts';
 
@@ -7,16 +8,6 @@ export type StoredRow = Readonly<Record<string, unknown>>;
 
 // SQLSTATE `query_canceled`, which is what a statement timeout raises.
 const QUERY_CANCELED = '57014';
-
-const SQLSTATE = /^[0-9A-Z]{5}$/;
-
-// The driver error is wrapped by Drizzle, so the code is looked for down the causes.
-const sqlStateOf = (error: unknown): string | undefined => {
-  if (!(error instanceof Error)) return undefined;
-  return 'code' in error && typeof error.code === 'string' && SQLSTATE.test(error.code)
-    ? error.code
-    : sqlStateOf(error.cause);
-};
 
 const isDatabaseFailure = (error: unknown): boolean =>
   error instanceof DrizzleQueryError || sqlStateOf(error) !== undefined;

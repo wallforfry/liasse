@@ -1,3 +1,4 @@
+import { idSchema } from '@liasse/core/contract';
 import { z } from 'zod';
 
 // A query string only carries text. These read the text of one parameter into the value
@@ -18,7 +19,4 @@ export const listParam = z.string().transform((value) =>
     .filter((item) => item !== ''),
 );
 
-// The alphabet of the ids Liasse mints, so nothing else reaches a statement: Postgres
-// refuses a NUL character in a parameter. An id of this shape that names nothing is
-// answered 404 by the use case.
-export const idParam = z.object({ id: z.string().regex(/^[A-Za-z0-9_]{1,64}$/, 'not an id') });
+export const idParam = z.object({ id: idSchema });
