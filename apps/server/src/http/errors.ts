@@ -1,8 +1,12 @@
-import { ApiError, type ApiErrorKind } from '@liasse/core/api';
+import {
+  type ApiError,
+  type ApiErrorKind,
+  invalidRequest as invalidApiRequest,
+  toApiError,
+} from '@liasse/core/api';
 import { HTTPException } from 'hono/http-exception';
 import type { ContentfulStatusCode } from 'hono/utils/http-status';
-import { z } from 'zod';
-import { describeError, type Logger, sqlStateOf } from '../log.ts';
+import { describeError, type Logger } from '../log.ts';
 import type { AppContext } from './env.ts';
 
 const STATUS_OF_KIND: Readonly<Record<ApiErrorKind, ContentfulStatusCode>> = {
@@ -50,16 +54,11 @@ export const respondWith = (
     status,
   );
 
-interface Issue {
-  readonly path: readonly PropertyKey[];
-  readonly message: string;
-}
+const ofApiError = ({ kind, code, message, details }: ApiError): Failure =>
+  failure(STATUS_OF_KIND[kind], code, message, details);
 
-// Only where the problem is and what Zod says of it: never the value that was sent.
-export const invalidRequest = (issues: readonly Issue[]): Failure =>
-  failure(400, 'invalid_request', 'The request is not valid.', {
-    issues: issues.map(({ path, message }) => ({ path: path.map(String).join('.'), message })),
-  });
+export const invalidRequest = (issues: Parameters<typeof invalidApiRequest>[0]): Failure =>
+  ofApiError(invalidApiRequest(issues));
 
 // What Hono itself refuses: a body that is not JSON, a multipart body it cannot read.
 const OF_HTTP_STATUS: Readonly<Partial<Record<number, Failure>>> = {
@@ -68,27 +67,14 @@ const OF_HTTP_STATUS: Readonly<Partial<Record<number, Failure>>> = {
   504: failure(504, 'request_timeout', 'The request took too long and was abandoned.'),
 };
 
-// SQLSTATE `character_not_in_repertoire`: a NUL character in a text parameter, which
-// Postgres cannot hold. It is the caller's to fix, wherever in the request it was.
-const UNSTORABLE_TEXT = '22021';
-const UNSTORABLE = failure(
-  400,
-  'invalid_request',
-  'The request holds a character that cannot be stored or searched.',
-);
-
 export const INTERNAL = failure(500, 'internal_error', 'The server failed to answer this request.');
 
 /** The failure a known error answers with; the web UI shows the same ones as pages. */
 export const failureOf = (error: unknown): Failure | undefined => {
   if (error instanceof HttpFailure) return error.failure;
-  if (error instanceof ApiError) {
-    return failure(STATUS_OF_KIND[error.kind], error.code, error.message, error.details);
-  }
-  if (error instanceof z.ZodError) return invalidRequest(error.issues);
   if (error instanceof HTTPException) return OF_HTTP_STATUS[error.status];
-  if (sqlStateOf(error) === UNSTORABLE_TEXT) return UNSTORABLE;
-  return undefined;
+  const known = toApiError(error);
+  return known === undefined ? undefined : ofApiError(known);
 };
 
 /**

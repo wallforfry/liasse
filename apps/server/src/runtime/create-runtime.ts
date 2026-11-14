@@ -5,12 +5,11 @@ import { StartupError } from '@liasse/core/domain';
 import { createEmbedder, type CreateEmbedderOptions } from '@liasse/core/embeddings';
 import { createTextModel, createVisionModel } from '@liasse/core/models';
 import { createStorage } from '@liasse/core/storage';
-import { createApp } from '../http/app.ts';
 import { createLogger, describeError, type Logger } from '../log.ts';
 import { runShutdown, type ShutdownStep } from '../shutdown.ts';
 import { startFolder, startQueue } from './background.ts';
 import { type Bind, bindFeatures } from './bindings.ts';
-import { listen } from './listen.ts';
+import { type Front, startFront, type Transport } from './front.ts';
 import { startupNotices } from './notices.ts';
 
 export const DEFAULT_SHUTDOWN_GRACE_MS = 30_000;
@@ -22,12 +21,11 @@ export interface RuntimeOptions {
   readonly embedder?: CreateEmbedderOptions;
   /** How long requests and jobs in progress may take to finish once `stop` is called. */
   readonly shutdownGraceMs?: number;
+  /** `http` by default; `stdio` serves MCP on the standard streams and listens on nothing. */
+  readonly transport?: Transport;
 }
 
-export interface Runtime {
-  /** The address and port the server listens on, as the system bound them. */
-  readonly address: string;
-  readonly port: number;
+export interface Runtime extends Omit<Front, 'stop'> {
   /** Resolves to false when something could not be stopped cleanly. Runs once. */
   readonly stop: () => Promise<boolean>;
 }
@@ -71,6 +69,7 @@ export const createRuntime = async (
     bind = bindFeatures,
     embedder: embedderOptions,
     shutdownGraceMs = DEFAULT_SHUTDOWN_GRACE_MS,
+    transport = 'http',
   }: RuntimeOptions = {},
 ): Promise<Runtime> => {
   // Filled as the parts start, in the order they must stop.
@@ -122,33 +121,19 @@ export const createRuntime = async (
       }),
       features: bindings.features,
     };
-    const { ui } = config.auth;
-    const app = createApp({
+    const { stop: stopFront, ...front } = await startFront({
+      transport,
       api,
-      apiTokens: config.auth.apiTokens,
+      config,
       ping: database.ping,
       logger,
-      ui:
-        ui === undefined
-          ? undefined
-          : {
-              password: ui.password,
-              sessionTtlMs: ui.sessionTtlMs,
-              secureCookies: config.server.publicUrl.startsWith('https:'),
-            },
+      graceMs: shutdownGraceMs,
     });
-    const listener = await listen({
-      fetch: app.fetch,
-      host: config.server.host,
-      port: config.server.port,
-    });
-    stopsBefore({ name: 'http', run: () => listener.close(shutdownGraceMs) });
-    logger.notice(`Liasse is listening on http://${config.server.host}:${String(listener.port)}`);
+    stopsBefore(stopFront);
 
     let stopped: Promise<boolean> | undefined;
     return {
-      address: listener.address,
-      port: listener.port,
+      ...front,
       stop: () => {
         stopped ??= runShutdown(stopping, logger);
         return stopped;

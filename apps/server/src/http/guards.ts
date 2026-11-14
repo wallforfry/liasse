@@ -82,7 +82,7 @@ const exceedsDepth = (text: string, maxDepth: number): boolean => {
   return false;
 };
 
-const jsonDepth: MiddlewareHandler<AppEnv> = async (context, next) => {
+export const jsonDepth: MiddlewareHandler<AppEnv> = async (context, next) => {
   // Hono keeps the body it read: the validator that follows parses this same text.
   if (exceedsDepth(await context.req.text(), MAX_JSON_DEPTH)) {
     throw new HttpFailure(

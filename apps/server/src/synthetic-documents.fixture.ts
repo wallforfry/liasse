@@ -32,6 +32,14 @@ export const LETTER: SyntheticDocument = {
     fields: {},
     extra: {},
     subjects: subjectQuoted('Your home insurance contract is noted'),
+    facts: [
+      {
+        text: 'The next review is due on 15/03/2027.',
+        page: 1,
+        quote: 'The next review is due on 15/03/2027.',
+        confidence: 0.9,
+      },
+    ],
   },
 };
 

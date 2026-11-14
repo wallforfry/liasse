@@ -5,6 +5,7 @@ import { generateSpecs } from 'hono-openapi';
 import { createLogger, type Logger } from '../log.ts';
 import { createUi, type UiOptions } from '../ui/app.ts';
 import { UI_ROOT } from '../ui/markup.ts';
+import { reportMcpFailure } from '../mcp-failures.ts';
 import { accessLog } from './access-log.ts';
 import { bearerToken, type Credential, requireAny, signedFileUrl } from './auth.ts';
 import { BEARER_SCHEME, operation, SIGNED_URL_SCHEME } from './describe.ts';
@@ -14,6 +15,7 @@ import { requestId, requestTimeout, securityHeaders } from './guards.ts';
 import { createHttpMetrics } from './metrics.ts';
 import { documentRoutes } from './routes/documents.ts';
 import { fileRoutes } from './routes/file.ts';
+import { mcpRoutes } from './routes/mcp.ts';
 import { registryRoutes } from './routes/registry.ts';
 import { searchRoutes } from './routes/search.ts';
 import { systemRoutes } from './routes/system.ts';
@@ -93,6 +95,11 @@ export const createApp = ({
     app.route(UI_ROOT, createUi({ ...ui, api, logger, requestTimeoutMs, uploadTimeoutMs }));
     app.get('/', (context) => context.redirect(UI_ROOT, 302));
   }
+  // `ingest` carries a file: an MCP call gets the deadline of an upload.
+  app.route(
+    '/',
+    mcpRoutes({ api, authenticated: within(uploadTimeoutMs), report: reportMcpFailure(logger) }),
+  );
 
   app.get(
     '/openapi.json',
