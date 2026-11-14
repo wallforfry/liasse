@@ -1,5 +1,5 @@
 import { type ApiContext, ApiError, applyChange, listChanges } from '@liasse/core/api';
-import { changeDecisionSchema } from '@liasse/core/contract';
+import { changeDecisionResultSchema, changeDecisionSchema } from '@liasse/core/contract';
 import { Hono, type MiddlewareHandler } from 'hono';
 import { idParam } from '../../http/query-params.ts';
 import type { UiEnv } from '../guards.ts';
@@ -16,6 +16,8 @@ export interface ChangePageDeps {
 const DECIDED: Readonly<Record<string, string>> = {
   apply: 'The change was applied.',
   reject: 'The change was rejected.',
+  refused:
+    'The change could not be applied as things stand, so it was rejected; its note says why.',
 };
 
 export const changePages = ({ api, signedIn, form }: ChangePageDeps): Hono<UiEnv> =>
@@ -42,6 +44,7 @@ export const changePages = ({ api, signedIn, form }: ChangePageDeps): Hono<UiEnv
         decision,
         ...(typeof note === 'string' && note.trim() !== '' ? { note } : {}),
       });
-      await applyChange(api, id, parsed);
-      return context.redirect(`${UI_ROOT}/changes?decided=${parsed.decision}`, 303);
+      const { refusal } = changeDecisionResultSchema.parse(await applyChange(api, id, parsed));
+      const decided = refusal === undefined ? parsed.decision : 'refused';
+      return context.redirect(`${UI_ROOT}/changes?decided=${decided}`, 303);
     });
