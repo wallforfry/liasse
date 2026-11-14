@@ -24,6 +24,8 @@ Node 22 or later and pnpm (version pinned in `package.json`). Run everything fro
 | `pnpm typecheck`                   | `tsc --noEmit` on every package                                  |
 | `pnpm test`                        | Vitest, all packages (needs `pnpm db:up`)                        |
 | `pnpm test:models`                 | Tests that download and run the real local embedding model       |
+| `pnpm db:up:paradedb`              | Start Postgres with ParadeDB `pg_search` (`:54331`), for BM25    |
+| `pnpm test:paradedb`               | BM25 tests, on the ParadeDB server of `pnpm db:up:paradedb`      |
 | `pnpm build`                       | Compile every package with `tsc`                                 |
 | `pnpm --filter @liasse/server dev` | Run the server from source (copy `.env.example` to `.env` first) |
 | `pnpm changeset`                   | Describe a user-facing change for the changelog                  |
@@ -67,7 +69,7 @@ Inside `packages/core/src`, one directory per concern. A new concern gets its ow
 
 Names reserved for the features to come, created only by the change that implements them: `consolidation/`.
 
-Tests sit next to the code they cover, as `*.test.ts`. A helper that only the tests of one directory use is a `*.test-helper.ts` beside them; neither is compiled into `dist`. Two more suffixes are kept out of the build: `*.fixture.ts` for data shared by several test files, and `*.modeltest.ts` for the tests of `pnpm test:models`.
+Tests sit next to the code they cover, as `*.test.ts`. A helper that only the tests of one directory use is a `*.test-helper.ts` beside them; neither is compiled into `dist`. Three more suffixes are kept out of the build: `*.fixture.ts` for data shared by several test files, `*.modeltest.ts` for the tests of `pnpm test:models`, and `*.paradedbtest.ts` for the tests of `pnpm test:paradedb`.
 
 ## Testing rules
 
@@ -75,6 +77,7 @@ Tests sit next to the code they cover, as `*.test.ts`. A helper that only the te
 - **Test databases are copies.** A migrated database is a copy (`CREATE DATABASE … TEMPLATE`) of a template, `liasse_template_<migrations digest>_<dimension>`, which the first test that needs it builds and the others wait for under an advisory lock. A changed migration names a new template. Test databases are named `liasse_test_<random>`; a killed run never reaches `dispose()` and leaves its database behind. `pnpm db:clean-test` drops, on `TEST_DATABASE_URL`, every test database without a session that is more than 15 minutes old (so a suite still setting one up keeps it) and every template no test is copying. It never forces a drop: a database someone connected to in the meantime is kept.
 - **Real poppler.** Scanned PDFs are measured and rendered by the real `pdfinfo` and `pdftoppm` (`poppler-utils`), which must be in `PATH`; a missing binary fails the tests.
 - **Real S3.** The `s3` storage driver is tested against the S3-compatible server of `docker-compose.dev.yml` (RustFS, started by `pnpm db:up`), never a mock. `createTestBucket()` creates one throwaway bucket per call. It connects to `TEST_S3_ENDPOINT` (default `http://127.0.0.1:54330`).
+- **Real ParadeDB for BM25.** BM25 ranking needs ParadeDB `pg_search`, which the server of `pnpm test` does not have: its tests are `*.paradedbtest.ts`, run by `pnpm test:paradedb` against the `paradedb` service of `docker-compose.dev.yml` (`127.0.0.1:54331`, set by `vitest.paradedb.config.ts` over any `TEST_DATABASE_URL`), and by a CI job of their own. Its databases have `pg_search` through `template1`; a test that needs the plain path drops the extension in its own database.
 - **An unreachable database or S3 server fails the tests.** Never skip such a test or guard it behind a condition.
 - **Asynchronous effects are awaited, not slept for.** Use `waitUntil` and `createGate` from `@liasse/core/testing` to wait for a job or a watcher and to order concurrent steps.
 - **Fakes for models.** Tests never call a provider. Use `createFakeEmbedder`, `createFakeTextModel` and `createFakeVisionModel` from `@liasse/core/testing`. The one exception is `pnpm test:models`, which downloads the local embedding model (about 120 MB, cached in `packages/core/node_modules/.cache/liasse-models` or `EMBEDDING_CACHE_DIR`) and is not part of `pnpm test` or of CI.
@@ -109,6 +112,7 @@ Tests sit next to the code they cover, as `*.test.ts`. A helper that only the te
 - Extracted values keep their trace: spread `traceColumns()` (`model`, `schema_version`, `page`, `quote`, `confidence`) into a table that stores them.
 - Vector columns use `embeddingVector`. The generated SQL contains the token `__EMBEDDING_DIM__`, which the migration runner replaces with `EMBEDDING_DIM`. The installed dimension is read back from the Postgres catalog, and `migrate` refuses to run when `EMBEDDING_DIM` differs from it.
 - Full-text columns use `searchVector`, next to a `searchLanguage` column that holds the ISO 639-1 code of the row's text (null when unknown). The SQL function `liasse_tsvector(language, text)` picks the text search configuration `liasse_<code>` (unaccent, then the Snowball stemmer of that language), or `liasse_simple` for a language without one. The configuration is decided there and nowhere else, but stored generated columns are not rewritten when the function body changes: a change of configuration needs a migration that redefines the three `tsv` columns. Setting `language` on a row does rewrite its `tsv`.
+- The optional BM25 index (`chunks_bm25_idx`) is created at startup by `prepareFullTextRanking` when `pg_search` is installed, never by a migration, and indexes `liasse_bm25_document(language, text)`, the lexemes of `liasse_tsvector`. Its comment holds a signature of the pg_search version, of its definition, of `liasse_bm25_document`, `liasse_tsvector` and `liasse_regconfig`, and of the mappings of the `liasse_*` text search configurations; a startup that finds another signature builds the index again. A change to the rules file of the `unaccent` dictionary is not detected.
 - A full-text query goes through `liasse_tsquery(languages, query)`, which reads the query in each of the given languages; never call `to_tsquery` on user input, it raises on malformed input.
 - `drizzle-kit` does not order a redefined generated column after the column it reads, and does not recreate the indexes dropped with it: read the generated SQL of such a migration and fix it before committing.
 - Ids are text, `<prefix>_<ULID>`, created by `newId` with a prefix from `ID_PREFIXES`.

@@ -32,10 +32,10 @@ export interface RankedChunk {
 }
 
 // The seam between hybrid search and one way of ranking chunks, best first. The full-text side
-// goes through it so that another engine, such as BM25, can replace `rankByFullText`.
+// goes through it, so `rankByBm25` can replace `rankByFullText` (see `prepareFullTextRanking`).
 export type ChunkRanker = (db: Database, request: RankRequest) => Promise<readonly RankedChunk[]>;
 
-const toRankedChunks = (rows: readonly RankedRow[]): readonly RankedChunk[] =>
+export const toRankedChunks = (rows: readonly RankedRow[]): readonly RankedChunk[] =>
   rows.map(({ id, documentId }) => ({ chunkId: id, documentId }));
 
 export const fullTextCandidates = (request: RankRequest): SQL =>

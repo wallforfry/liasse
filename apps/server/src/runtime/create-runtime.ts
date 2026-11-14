@@ -4,6 +4,7 @@ import { createDb, migrate } from '@liasse/core/db';
 import { StartupError } from '@liasse/core/domain';
 import { createEmbedder, type CreateEmbedderOptions } from '@liasse/core/embeddings';
 import { createTextModel, createVisionModel } from '@liasse/core/models';
+import { prepareFullTextRanking } from '@liasse/core/search';
 import { createStorage } from '@liasse/core/storage';
 import { createLogger, describeError, type Logger } from '../log.ts';
 import { runShutdown, type ShutdownStep } from '../shutdown.ts';
@@ -87,6 +88,10 @@ export const createRuntime = async (
     const database = createDb(config.database.url);
     stopsBefore({ name: 'database', run: database.close });
     const { db } = database;
+    const fullTextRanking = await step('preparing full-text ranking', () =>
+      prepareFullTextRanking(db),
+    );
+    if (fullTextRanking.notice !== undefined) logger.notice(fullTextRanking.notice);
 
     const storage = createStorage(config.storage);
     await step('checking the file storage', storage.check);
@@ -114,6 +119,7 @@ export const createRuntime = async (
       db,
       storage,
       embedder,
+      fullText: fullTextRanking.ranker,
       maxFileSize: config.pipeline.maxFileSize,
       fileUrls: createFileUrls({
         secret: config.auth.fileUrlSecret,

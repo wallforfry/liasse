@@ -1,5 +1,6 @@
 import type { Database } from '../db/client.ts';
 import type { Embedder } from '../models/ports.ts';
+import type { ChunkRanker } from '../search/rankers.ts';
 import type { Storage } from '../storage/port.ts';
 import type { ApiFeatures } from './features.ts';
 import type { FileUrls } from './file-url.ts';
@@ -9,6 +10,8 @@ export interface ApiContext {
   readonly db: Database;
   readonly storage: Storage;
   readonly embedder: Embedder;
+  /** The full-text side of hybrid search, chosen at startup by `prepareFullTextRanking`. */
+  readonly fullText: ChunkRanker;
   /** In bytes; `config.pipeline.maxFileSize`. */
   readonly maxFileSize: number;
   readonly fileUrls: FileUrls;
