@@ -25,14 +25,17 @@ export interface Calibration {
   readonly same: Spread;
   /** Names of two entities of one kind: the rule must not attach them. */
   readonly different: Spread;
-  readonly current: SimilarityThresholdPair & {
-    readonly sameAttached: number;
-    readonly sameBelowArbitrate: number;
-    readonly differentAttached: number;
-    readonly differentArbitrated: number;
-  };
+  readonly current: ThresholdOutcomes;
   /** Null when the corpus has no pair of one of the two sorts to measure. */
-  readonly suggested: SimilarityThresholdPair | null;
+  readonly suggested: ThresholdOutcomes | null;
+}
+
+/** What a pair of thresholds does with the pairs of names measured. */
+export interface ThresholdOutcomes extends SimilarityThresholdPair {
+  readonly sameAttached: number;
+  readonly sameBelowArbitrate: number;
+  readonly differentAttached: number;
+  readonly differentArbitrated: number;
 }
 
 /** Every name of every entity, canonical name and aliases, once each. */
@@ -87,21 +90,22 @@ export const calibrate = (
   const [sameSpread, differentSpread] = [spread(same), spread(different)];
   const count = (values: readonly number[], keep: (value: number) => boolean) =>
     values.filter(keep).length;
+  const outcomes = (thresholds: SimilarityThresholdPair): ThresholdOutcomes => ({
+    ...thresholds,
+    sameAttached: count(same, (value) => value > thresholds.attach),
+    sameBelowArbitrate: count(same, (value) => value < thresholds.arbitrate),
+    differentAttached: count(different, (value) => value > thresholds.attach),
+    differentArbitrated: count(different, (value) => value >= thresholds.arbitrate),
+  });
   const attach = differentSpread.max === null ? null : up(differentSpread.max);
   const arbitrate = sameSpread.min === null ? null : down(sameSpread.min);
   return {
     same: sameSpread,
     different: differentSpread,
-    current: {
-      ...current,
-      sameAttached: count(same, (value) => value > current.attach),
-      sameBelowArbitrate: count(same, (value) => value < current.arbitrate),
-      differentAttached: count(different, (value) => value > current.attach),
-      differentArbitrated: count(different, (value) => value >= current.arbitrate),
-    },
+    current: outcomes(current),
     suggested:
       attach === null || arbitrate === null
         ? null
-        : { attach, arbitrate: Math.min(arbitrate, attach) },
+        : outcomes({ attach, arbitrate: Math.min(arbitrate, attach) }),
   };
 };

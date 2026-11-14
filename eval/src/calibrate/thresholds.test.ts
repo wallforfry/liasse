@@ -40,6 +40,13 @@ describe('calibrate', () => {
     expect(calibration.suggested).toEqual({
       attach: Math.ceil(Math.cos((20 * Math.PI) / 180) * 100) / 100,
       arbitrate: Math.floor(Math.cos((30 * Math.PI) / 180) * 100) / 100,
+      // Of the names of one entity, the pair 10 degrees apart attaches and the other is
+      // arbitrated; no names of two entities attach, the two 20 and 30 degrees apart are
+      // arbitrated.
+      sameAttached: 1,
+      sameBelowArbitrate: 0,
+      differentAttached: 0,
+      differentArbitrated: 2,
     });
   });
 
