@@ -9,8 +9,6 @@ import {
   applyMerge,
   applyPromotion,
   applyStabilization,
-  ChangeRefusedError,
-  orRefuse,
 } from './apply-type-changes.ts';
 import {
   type ChangeTransaction,
@@ -22,6 +20,7 @@ import {
 import { isStillSafe } from './eligibility.ts';
 import { type ConsolidationChange, readChange } from './payloads.ts';
 import { appliesAutomatically } from './policy.ts';
+import { ChangeRefusedError, orRefuse } from './refusal.ts';
 
 export type Decision = 'apply' | 'reject';
 

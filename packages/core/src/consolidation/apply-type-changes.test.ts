@@ -122,6 +122,37 @@ describe('applying a change to the type registry', () => {
       expect(await typeOf(db(), source.id)).toMatchObject({ status: 'provisional' });
       expect(await queuedReextractions(db())).toEqual([]);
     });
+    it('refuses a merge that would leave a corrected value without a place, and moves nothing', async () => {
+      const source = await seedType(db(), {
+        slug: 'card_statement',
+        fields: { name: { type: 'text' }, owner: { type: 'text' } },
+      });
+      const target = await seedType(db(), {
+        slug: 'account_statement',
+        fields: { owner: { type: 'text' } },
+      });
+      // Stored as jsonb, `name` comes before `owner`: it takes the field first.
+      const document = await seedDocument(db(), source.id, {
+        fields: { name: 'Jane Manual', owner: 'John Manual' },
+        provenance: { name: MANUAL_PROVENANCE, owner: MANUAL_PROVENANCE },
+        manualFields: ['name', 'owner'],
+      });
+      const change = await seedChange(db(), 'merge', {
+        source_id: source.id,
+        target_id: target.id,
+        field_mapping: { name: 'owner', owner: 'owner' },
+        confidence: 0.95,
+      });
+      expect(await apply(change)).toMatchObject({
+        decided: { change: { status: 'rejected' }, refusal: { code: 'manual_collision' } },
+      });
+      expect(await documentOf(db(), document)).toMatchObject({
+        typeId: source.id,
+        fields: { name: 'Jane Manual', owner: 'John Manual' },
+        manualFields: ['name', 'owner'],
+      });
+      expect(await typeOf(db(), source.id)).toMatchObject({ status: 'provisional' });
+    });
   });
 
   describe('a promotion', () => {

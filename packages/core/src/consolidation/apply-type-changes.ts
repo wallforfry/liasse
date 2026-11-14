@@ -3,7 +3,6 @@ import type { TypeFields } from '../registry/fields.ts';
 import { addField, removeField, retypeField } from '../registry/field-operations.ts';
 import { markMerged, setStatus } from '../registry/lifecycle.ts';
 import { ownValue } from '../registry/own.ts';
-import type { Result } from '../registry/result.ts';
 import {
   findTypeById,
   type RegisteredType,
@@ -11,6 +10,7 @@ import {
   withRegistryLock,
 } from '../registry/type-store.ts';
 import type { ChangeTransaction } from './change-store.ts';
+import { ChangeRefusedError, orRefuse } from './refusal.ts';
 import { moveDocuments } from './document-moves.ts';
 import type {
   MergePayload,
@@ -18,29 +18,6 @@ import type {
   RemoveFieldPayload,
   StabilizePayload,
 } from './payloads.ts';
-
-/**
- * A change the registry, the entities or the subjects refuse as they are now: thrown
- * inside the savepoint of the change so that what it moved is undone, then recorded as
- * the reason the change was rejected.
- */
-export class ChangeRefusedError extends Error {
-  override readonly name = 'ChangeRefusedError';
-  readonly code: string;
-
-  constructor({ code, message }: { readonly code: string; readonly message: string }) {
-    super(message);
-    this.code = code;
-  }
-}
-
-/** The value of a result, or the refusal of the change. */
-export const orRefuse = <Value>(
-  result: Result<Value, { code: string; message: string }>,
-): Value => {
-  if (!result.ok) throw new ChangeRefusedError(result.error);
-  return result.value;
-};
 
 const liveType = async (tx: RegistryTransaction, id: string): Promise<RegisteredType> => {
   const type = await findTypeById(tx, id);

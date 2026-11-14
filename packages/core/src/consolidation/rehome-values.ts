@@ -1,5 +1,6 @@
 import type { TypeFields } from '../registry/fields.ts';
 import { ownValue } from '../registry/own.ts';
+import { err, ok, type Result } from '../registry/result.ts';
 import { validateDocumentFields } from '../registry/validate-document-fields.ts';
 
 type Values = Readonly<Record<string, unknown>>;
@@ -17,6 +18,18 @@ export interface Rehoming {
   readonly fields: TypeFields;
   /** The name each value of `fields` or `extra` takes; a value not named keeps its own. */
   readonly renames: ReadonlyMap<string, string>;
+}
+
+export interface RehomedValues {
+  readonly fields: Values;
+  readonly extra: Values;
+  readonly provenance: Values;
+  readonly manualFields: readonly string[];
+}
+
+/** Values a person corrected that the change would leave with no key of their own. */
+export interface ManualCollision {
+  readonly manual: readonly string[];
 }
 
 interface Entry {
@@ -80,9 +93,14 @@ const sectionOf = (placements: readonly Placement[], section: 'fields' | 'extra'
  *
  * On a collision a value a person corrected wins, and a mark of a field a person cleared
  * keeps its name free. An extracted value that loses its own name to a manual one is
- * dropped: the correction stands for it, and the re-extraction can give it back.
+ * dropped: the correction stands for it, and the re-extraction can give it back. Two
+ * corrected values that would leave one of them nowhere are a `ManualCollision`: no value
+ * a person corrected is ever dropped.
  */
-export const rehomeValues = (document: DocumentValues, { fields, renames }: Rehoming) => {
+export const rehomeValues = (
+  document: DocumentValues,
+  { fields, renames }: Rehoming,
+): Result<RehomedValues, ManualCollision> => {
   const isManual = (name: string) => document.manualFields.includes(name);
   const entryOf = ([name, value]: readonly [string, unknown]): Entry => {
     const destination = renames.get(name) ?? name;
@@ -102,12 +120,16 @@ export const rehomeValues = (document: DocumentValues, { fields, renames }: Reho
   const valueNames = new Set(ranked.map(({ name }) => name));
   const cleared = new Set(document.manualFields.filter((name) => !valueNames.has(name)));
   const placements = place(ranked, cleared);
+  const lost = placements.flatMap((placement) =>
+    placement.section === 'dropped' && placement.entry.manual ? [placement.entry.name] : [],
+  );
+  if (lost.length > 0) return err({ manual: lost });
   const keyOf = new Map(
     placements.flatMap((placement) =>
       placement.section === 'dropped' ? [] : [[placement.entry.name, placement.key] as const],
     ),
   );
-  return {
+  return ok({
     fields: sectionOf(placements, 'fields'),
     extra: sectionOf(placements, 'extra'),
     provenance: {
@@ -126,5 +148,5 @@ export const rehomeValues = (document: DocumentValues, { fields, renames }: Reho
       const key = keyOf.get(name);
       return key === undefined ? [] : [key];
     }),
-  };
+  });
 };

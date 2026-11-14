@@ -1,12 +1,18 @@
 import { describe, expect, it } from 'vitest';
 import { MANUAL_PROVENANCE } from '../domain/provenance.ts';
-import { rehomeValues } from './rehome-values.ts';
+import { type DocumentValues, type Rehoming, rehomeValues } from './rehome-values.ts';
+
+const rehomed = (document: DocumentValues, rehoming: Rehoming) => {
+  const result = rehomeValues(document, rehoming);
+  if (!result.ok) throw new Error(`Manual collision on ${result.error.manual.join(', ')}`);
+  return result.value;
+};
 
 const EXTRACTED = { model: 'm', schema_version: 1, confidence: 0.9, page: 1, quote: 'q' };
 
 describe('rehomeValues', () => {
   it('makes a renamed value the field it fits, with its provenance and manual mark', () => {
-    const moved = rehomeValues(
+    const moved = rehomed(
       {
         fields: { meter: 'PDL-1' },
         extra: { customer_no: 'C-42', usage: 350 },
@@ -27,7 +33,7 @@ describe('rehomeValues', () => {
   });
 
   it('keeps in extra, under its own name, a value the schema has no field for', () => {
-    const moved = rehomeValues(
+    const moved = rehomed(
       {
         fields: { meter: 'PDL-1', rate: 'blue' },
         extra: {},
@@ -45,7 +51,7 @@ describe('rehomeValues', () => {
   });
 
   it('keeps in extra a value that does not fit the definition of its field', () => {
-    const moved = rehomeValues(
+    const moved = rehomed(
       { fields: {}, extra: { amount_due: 'twelve' }, provenance: {}, manualFields: [] },
       { fields: { amount: { type: 'number' } }, renames: new Map([['amount_due', 'amount']]) },
     );
@@ -53,7 +59,7 @@ describe('rehomeValues', () => {
   });
 
   it('gives a field one value: a field wins over a variant of extra', () => {
-    const moved = rehomeValues(
+    const moved = rehomed(
       {
         fields: { customer_number: 'C-1' },
         extra: { customer_no: 'C-2' },
@@ -76,7 +82,7 @@ describe('rehomeValues', () => {
   const TEXT = { type: 'text' } as const;
 
   it('follows a chain of renames with each provenance and mark under its own value', () => {
-    const moved = rehomeValues(
+    const moved = rehomed(
       {
         fields: { a: 'one', b: 'two' },
         extra: {},
@@ -100,7 +106,7 @@ describe('rehomeValues', () => {
   });
 
   it('swaps two values with their provenance', () => {
-    const moved = rehomeValues(
+    const moved = rehomed(
       {
         fields: { a: 'one', b: 'two' },
         extra: {},
@@ -124,7 +130,7 @@ describe('rehomeValues', () => {
   });
 
   it('never lands a renamed value on the name of a manual value kept in extra', () => {
-    const moved = rehomeValues(
+    const moved = rehomed(
       {
         fields: { a: 'extracted' },
         extra: { b: 42 },
@@ -142,7 +148,7 @@ describe('rehomeValues', () => {
   });
 
   it('gives the field to a manual variant over an extracted value', () => {
-    const moved = rehomeValues(
+    const moved = rehomed(
       {
         fields: {},
         extra: { customer_number: 'C-1', customer_no: 'C-MANUAL' },
@@ -160,7 +166,7 @@ describe('rehomeValues', () => {
   });
 
   it('keeps the name of a field a person cleared free of any renamed value', () => {
-    const moved = rehomeValues(
+    const moved = rehomed(
       { fields: { a: 'one' }, extra: {}, provenance: { a: QUOTE_A }, manualFields: ['b'] },
       { fields: { b: TEXT }, renames: new Map([['a', 'b']]) },
     );
@@ -170,5 +176,19 @@ describe('rehomeValues', () => {
       provenance: { a: QUOTE_A },
       manualFields: ['b'],
     });
+  });
+
+  it('never drops a value a person corrected: two that compete for one field collide', () => {
+    expect(
+      rehomeValues(
+        {
+          fields: { a: 'manual a', x: 'manual x' },
+          extra: {},
+          provenance: { a: MANUAL_PROVENANCE, x: MANUAL_PROVENANCE },
+          manualFields: ['a', 'x'],
+        },
+        { fields: { x: TEXT }, renames: new Map([['a', 'x']]) },
+      ),
+    ).toEqual({ ok: false, error: { manual: ['x'] } });
   });
 });

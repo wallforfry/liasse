@@ -4,6 +4,7 @@ import { enqueue } from '../jobs/enqueue.ts';
 import { reextractDocumentJob } from '../pipeline/jobs.ts';
 import { SETTLED_STATUSES } from '../pipeline/document.ts';
 import type { ChangeTransaction } from './change-store.ts';
+import { ChangeRefusedError } from './refusal.ts';
 import { type Rehoming, rehomeValues } from './rehome-values.ts';
 
 export interface DocumentMove {
@@ -24,6 +25,7 @@ export interface DocumentMove {
  * A document moved to another type has no `schema_version` until it is extracted again;
  * its confidence stays, since nobody vouched for or against its values. A document still
  * on its way is left to `process_document`, which extracts it for its type as it is then.
+ * A document whose corrected values the change could not all keep refuses the change.
  */
 export const moveDocuments = async (
   tx: ChangeTransaction,
@@ -44,10 +46,17 @@ export const moveDocuments = async (
     .for('update');
   const retyped = fromTypeId !== toTypeId;
   for (const row of rows) {
+    const rehomed = rehomeValues(row, rehoming);
+    if (!rehomed.ok) {
+      throw new ChangeRefusedError({
+        code: 'manual_collision',
+        message: `The document ${row.id} has values a person corrected (${rehomed.error.manual.join(', ')}) that the change would leave without a place of their own.`,
+      });
+    }
     await tx
       .update(documents)
       .set({
-        ...rehomeValues(row, rehoming),
+        ...rehomed.value,
         ...(retyped ? { typeId: toTypeId, schemaVersion: null } : {}),
       })
       .where(eq(documents.id, row.id));
