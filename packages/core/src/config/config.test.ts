@@ -34,6 +34,7 @@ describe('loadConfig', () => {
         maxNewTypesPerDay: 5,
         schemaLanguage: 'en',
         workers: 2,
+        maxVisionPages: 100,
       },
       hindsight: undefined,
       auth: {
@@ -71,6 +72,7 @@ describe('loadConfig', () => {
       EMBEDDING_MODEL: 'embedding-model',
       CONFIDENCE_THRESHOLD: '0.55',
       WORKERS: '4',
+      MAX_VISION_PAGES: '25',
       WATCH_DIR: '/inbox',
       UI_PASSWORD: 'synthetic-ui-password',
       UI_SESSION_TTL: '12h',
@@ -90,6 +92,7 @@ describe('loadConfig', () => {
     expect(config.llm.timeoutMs).toBe(90_000);
     expect(config.pipeline.confidenceThreshold).toBe(0.55);
     expect(config.pipeline.workers).toBe(4);
+    expect(config.pipeline.maxVisionPages).toBe(25);
     expect(config.pipeline.watchDir).toBe('/inbox');
     expect(config.auth.ui).toEqual({
       password: 'synthetic-ui-password',

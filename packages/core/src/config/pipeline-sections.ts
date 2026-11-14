@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { DEFAULT_MAX_VISION_PAGES } from '../domain/limits.ts';
 import { autoApplyModeSchema, schemaLanguageSchema } from '../domain/schemas.ts';
 import { decimal, integer, text } from './fields.ts';
 
@@ -10,6 +11,7 @@ export const pipelineSection = z
     MAX_NEW_TYPES_PER_DAY: integer(0, 1000).default(5),
     SCHEMA_LANGUAGE: schemaLanguageSchema.default('en'),
     WORKERS: integer(1, 64).default(2),
+    MAX_VISION_PAGES: integer(1, 10_000).default(DEFAULT_MAX_VISION_PAGES),
   })
   .transform((env) =>
     Object.freeze({
@@ -19,6 +21,7 @@ export const pipelineSection = z
       maxNewTypesPerDay: env.MAX_NEW_TYPES_PER_DAY,
       schemaLanguage: env.SCHEMA_LANGUAGE,
       workers: env.WORKERS,
+      maxVisionPages: env.MAX_VISION_PAGES,
     }),
   );
 
