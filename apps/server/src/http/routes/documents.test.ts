@@ -170,6 +170,24 @@ describe('document routes', () => {
       expect(await codeOf(response)).toBe(code);
     });
 
+    it('says what a flag accepts, without echoing what it was given', async () => {
+      const expected = '"private" is "true" or "false".';
+      const refusals = [
+        await post(form(syntheticPdf('flag message'), { private: 'synthetic-maybe' })),
+        await harness.call('/documents?private=synthetic-maybe', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/octet-stream', 'X-Filename': 'flag.pdf' },
+          body: syntheticPdf('flag message raw'),
+        }),
+      ];
+      for (const response of refusals) {
+        expect(response.status).toBe(400);
+        const text = await response.text();
+        expect(failed.parse(JSON.parse(text)).error.message).toBe(expected);
+        expect(text).not.toContain('synthetic-maybe');
+      }
+    });
+
     it('refuses a body that is neither a form nor raw bytes', async () => {
       const response = await harness.call('/documents', jsonRequest('POST', { file: 'x' }));
       expect(response.status).toBe(415);

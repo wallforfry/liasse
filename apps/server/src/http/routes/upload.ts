@@ -30,6 +30,14 @@ const formSchema = z.object({
 
 const optionsSchema = z.strictObject(options);
 
+const FLAG_PROBLEM = '"private" is "true" or "false".';
+
+// Says what is wrong with the options, never what was sent.
+const optionsProblem = (error: z.ZodError, otherwise: string): string =>
+  error.issues.some(({ code, path }) => code !== 'unrecognized_keys' && path[0] === 'private')
+    ? FLAG_PROBLEM
+    : otherwise;
+
 const NO_BODY: AsyncIterable<Uint8Array> = Readable.from([]);
 
 const invalid = (message: string): HttpFailure =>
@@ -47,7 +55,11 @@ const readForm = async (context: AppContext) => {
   });
   if (!(file instanceof File)) throw invalid('Expected exactly one file, in the field "file".');
   const fields = optionsSchema.safeParse(others);
-  if (!fields.success) throw invalid('Besides "file", a form holds "hint" and "private" only.');
+  if (!fields.success) {
+    throw invalid(
+      optionsProblem(fields.error, 'Besides "file", a form holds "hint" and "private" only.'),
+    );
+  }
   return {
     bytes: new Uint8Array(await file.arrayBuffer()),
     filename: file.name,
@@ -68,7 +80,9 @@ const readRaw = (context: AppContext, { maxFileSize }: Pick<ApiContext, 'maxFile
   const declared = Number(context.req.header('Content-Length') ?? 0);
   if (declared > maxFileSize) throw tooLarge(maxFileSize);
   const fields = optionsSchema.safeParse(context.req.query());
-  if (!fields.success) throw invalid('The query holds "hint" and "private" only.');
+  if (!fields.success) {
+    throw invalid(optionsProblem(fields.error, 'The query holds "hint" and "private" only.'));
+  }
   return {
     stream: context.req.raw.body ?? NO_BODY,
     filename: decodedName(context.req.header(FILENAME_HEADER)),
