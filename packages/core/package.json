@@ -42,6 +42,11 @@
       "types": "./dist/prompt/index.d.ts",
       "default": "./dist/prompt/index.js"
     },
+    "./registry": {
+      "@liasse/source": "./src/registry/index.ts",
+      "types": "./dist/registry/index.d.ts",
+      "default": "./dist/registry/index.js"
+    },
     "./testing": {
       "@liasse/source": "./src/testing/index.ts",
       "types": "./dist/testing/index.d.ts",
