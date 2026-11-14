@@ -12,6 +12,10 @@ export interface SyntheticPdfPage {
   readonly scanned?: boolean;
   readonly widthPt?: number;
   readonly heightPt?: number;
+  // The visible part of the page, from its bottom left corner, when smaller than the page.
+  readonly cropBoxPt?: readonly [width: number, height: number];
+  // The size of one unit of the page in points (PDF 1.6 `UserUnit`), 1 when absent.
+  readonly userUnit?: number;
 }
 
 export interface SyntheticPdfOptions {
@@ -93,6 +97,10 @@ const pageObjects = (page: SyntheticPdfPage, index: number): readonly PdfObject[
       dictionary: [
         `/Type /Page /Parent ${String(PAGES_ID)} 0 R`,
         `/MediaBox [0 0 ${String(widthPt)} ${String(heightPt)}]`,
+        ...(page.cropBoxPt === undefined
+          ? []
+          : [`/CropBox [0 0 ${String(page.cropBoxPt[0])} ${String(page.cropBoxPt[1])}]`]),
+        ...(page.userUnit === undefined ? [] : [`/UserUnit ${String(page.userUnit)}`]),
         `/Contents ${String(pageId + 1)} 0 R`,
         `/Resources << /Font << /F1 ${String(FONT_ID)} 0 R >> /XObject << /Im0 ${String(pageId + 2)} 0 R >> >>`,
       ].join(' '),
