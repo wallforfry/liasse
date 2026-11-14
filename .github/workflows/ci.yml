@@ -80,7 +80,11 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - name: Install poppler-utils (pdfinfo and pdftoppm handle scanned PDFs in the tests)
         run: sudo apt-get update && sudo apt-get install --yes --no-install-recommends poppler-utils
+      # Typed linting holds one TypeScript program per package. The default heap of the
+      # runner is about 2 GB: main peaked near it, and the types of the MCP SDK passed it.
       - run: pnpm lint
+        env:
+          NODE_OPTIONS: --max-old-space-size=4096
       - run: pnpm typecheck
       - run: pnpm test
       - run: pnpm build
