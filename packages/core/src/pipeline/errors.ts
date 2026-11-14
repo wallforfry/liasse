@@ -1,3 +1,4 @@
+import { DOCUMENT_JOB_FAILURE_CODES } from '../domain/enums.ts';
 import { EntityResolutionContendedError } from '../entities/resolve.ts';
 import { PermanentJobError } from '../jobs/errors.ts';
 import { ModelOutputError, ModelProviderError } from '../models/errors.ts';
@@ -6,16 +7,17 @@ import { IndexingConflictError } from '../search/indexing.ts';
 import { TextExtractionError } from '../text/errors.ts';
 import { TextProcessError } from './text-process/extract-in-child.ts';
 
-// What `documents.error` may hold besides the codes of text extraction: short,
-// machine-readable, and never a message, which could quote the document.
+// What `documents.error` may hold besides the codes of text extraction and of the
+// reading process: short, machine-readable, and never a message, which could quote the
+// document.
 export const PIPELINE_ERROR_CODES = [
   'file_missing',
   'no_text',
   'model_provider_failed',
   'model_output_invalid',
   'processing_conflict',
-  'processing_abandoned',
   'internal_error',
+  ...Object.values(DOCUMENT_JOB_FAILURE_CODES),
 ] as const;
 export type PipelineErrorCode = (typeof PIPELINE_ERROR_CODES)[number];
 

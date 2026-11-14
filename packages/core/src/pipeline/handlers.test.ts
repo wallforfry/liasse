@@ -1,15 +1,19 @@
-import { eq } from 'drizzle-orm';
+import { eq, sql } from 'drizzle-orm';
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 import { documents } from '../db/schema/documents.ts';
 import { jobs } from '../db/schema/jobs.ts';
+import { deleteDocument } from '../ingest/delete-document.ts';
+import { ingestFile } from '../ingest/ingest-file.ts';
 import { processDocumentJob } from '../ingest/process-document-job.ts';
 import { enqueue } from '../jobs/enqueue.ts';
 import { PermanentJobError } from '../jobs/errors.ts';
-import type { RegisteredHandler } from '../jobs/handlers.ts';
+import { createHandlerRegistry, type RegisteredHandler } from '../jobs/handlers.ts';
+import { recoverStaleJobs, terminalFailureHooks } from '../jobs/store.ts';
 import { startWorkers } from '../jobs/workers.ts';
 import { ModelOutputError, ModelProviderError } from '../models/errors.ts';
 import { waitUntil } from '../testing/async.ts';
 import { insertSyntheticDocument } from '../testing/fixtures.ts';
+import { syntheticPdf } from '../testing/synthetic-files.ts';
 import { TextExtractionError } from '../text/errors.ts';
 import type { PipelineDeps } from './deps.ts';
 import { createPipelineHandlers, failAbandonedDocuments } from './handlers.ts';
@@ -20,6 +24,7 @@ import {
   scriptedModel,
 } from './harness.test-helper.ts';
 import { reextractDocumentJob, reindexDocumentJob } from './jobs.ts';
+import { processDocument } from './process-document.ts';
 
 const SECRET = 'text of the document that must not leak';
 
@@ -235,5 +240,107 @@ describe('failAbandonedDocuments', () => {
     expect(statusOf(settled)).toMatchObject({ status: 'indexed', error: null });
     expect(statusOf(failed)).toMatchObject({ status: 'failed', error: null });
     expect(await failAbandonedDocuments(db)).toBe(0);
+  });
+});
+
+const processDocumentNow = (harness: PipelineHarness, id: string): Promise<void> =>
+  processDocument(harness.deps(), id, live());
+
+describe('a document whose job the queue fails by itself', () => {
+  let harness: PipelineHarness;
+
+  beforeAll(async () => {
+    harness = await createPipelineHarness();
+  });
+
+  afterEach(async () => {
+    await harness.reset();
+  });
+
+  afterAll(async () => {
+    await harness.dispose();
+  });
+
+  const hooks = () =>
+    terminalFailureHooks(createHandlerRegistry(createPipelineHandlers(harness.deps())));
+
+  // Verdict P1: a worker dies during the last attempt and the server is back within the
+  // visibility timeout. The sweep at startup still sees the job running; the recovery
+  // fails it later.
+  it('ends failed when the recovery fails the last attempt of process_document', async () => {
+    const id = await harness.ingest('stuck');
+    await harness.db.update(jobs).set({ status: 'running', attempts: 3, lockedAt: sql`now()` });
+    expect(await failAbandonedDocuments(harness.db)).toBe(0);
+    await harness.db.update(jobs).set({ lockedAt: sql`now() - interval '10 minutes'` });
+    expect(await recoverStaleJobs(harness.db, 300_000, hooks())).toBe(1);
+    expect(await harness.document(id)).toMatchObject({
+      status: 'failed',
+      error: 'processing_abandoned',
+    });
+    // An upload of the same bytes now queues it again, as for any failed document.
+    const again = await ingestFile(harness.ingestHarness.deps, {
+      bytes: syntheticPdf('stuck'),
+      filename: 'stuck.pdf',
+      source: 'api',
+    });
+    expect(again).toMatchObject({ id, status: 'received' });
+  });
+
+  it('keeps the code the handler gave when the last attempt fails in it', async () => {
+    const id = await harness.ingest('encrypted');
+    const deps = harness.deps({
+      extractText: () => Promise.reject(new TextExtractionError('pdf_encrypted', 'locked')),
+    });
+    const workers = await startWorkers({
+      db: harness.db,
+      handlers: createPipelineHandlers(deps),
+      concurrency: 1,
+      pollIntervalMs: 20,
+    });
+    try {
+      await waitUntil(async () => (await harness.document(id)).status === 'failed');
+    } finally {
+      await workers.stop();
+    }
+    expect(await harness.document(id)).toMatchObject({ error: 'pdf_encrypted' });
+  });
+
+  it('leaves a settled document indexed but flagged when its re-extraction fails for good', async () => {
+    const id = await harness.ingest('reextract');
+    await processDocumentNow(harness, id);
+    const jobId = await enqueue(harness.db, {
+      kind: reextractDocumentJob,
+      payload: { documentId: id },
+    });
+    await harness.db
+      .update(jobs)
+      .set({ status: 'running', attempts: 3, lockedAt: sql`now() - interval '10 minutes'` })
+      .where(eq(jobs.id, jobId));
+    expect(await recoverStaleJobs(harness.db, 300_000, hooks())).toBe(1);
+    expect(await harness.document(id)).toMatchObject({
+      status: 'needs_review',
+      error: 'reextraction_failed',
+    });
+    // A re-extraction that succeeds later takes the flag away.
+    const reextract = createPipelineHandlers(harness.deps()).find(
+      ({ kind }) => kind === reextractDocumentJob.name,
+    );
+    await reextract?.run({ documentId: id }, { signal: live(), attempt: 1 });
+    expect(await harness.document(id)).toMatchObject({ error: null });
+  });
+
+  it('does nothing to a document that is gone, nor for a payload without one', async () => {
+    const id = await harness.ingest('gone');
+    await deleteDocument({ db: harness.db }, id);
+    await harness.db.insert(jobs).values([
+      { kind: processDocumentJob.name, payload: { documentId: id } },
+      { kind: processDocumentJob.name, payload: { nothing: true } },
+    ]);
+    await harness.db
+      .update(jobs)
+      .set({ status: 'running', attempts: 3, lockedAt: sql`now() - interval '10 minutes'` })
+      .where(eq(jobs.kind, processDocumentJob.name));
+    expect(await recoverStaleJobs(harness.db, 300_000, hooks())).toBe(2);
+    expect(await harness.document(id)).toMatchObject({ status: 'deleted', error: null });
   });
 });

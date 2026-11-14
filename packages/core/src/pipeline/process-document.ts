@@ -7,12 +7,10 @@ import { indexerOf } from './bindings.ts';
 import { runClassificationStage } from './classification-stage.ts';
 import { settledStatus } from './confidence.ts';
 import type { PipelineDeps } from './deps.ts';
-import { loadDocument, writeFromStatus } from './document.ts';
+import { loadDocument, SETTLED_STATUSES, writeFromStatus } from './document.ts';
 import { PipelineConflictError } from './errors.ts';
 import { extractDocument } from './extraction-stage.ts';
 import { runTextStage } from './text-stage.ts';
-
-const SETTLED: readonly DocumentStatus[] = ['indexed', 'needs_review'];
 
 // More steps than a document has stages: a status that does not move is a defect or a
 // writer working against this one, and the job fails rather than spin.
@@ -32,6 +30,7 @@ const settle = (
           readPipelineProvenance(current.provenance).type,
           settings.confidenceThreshold,
         ),
+        error: null,
       })
       .where(eq(documents.id, documentId));
   });
@@ -70,7 +69,7 @@ export const processDocument = async (
     signal.throwIfAborted();
     const document = await loadDocument(deps.db, documentId);
     if (document === undefined || document.status === 'failed') return;
-    if (SETTLED.includes(document.status)) {
+    if (SETTLED_STATUSES.includes(document.status)) {
       await deps.afterIndexed?.(documentId);
       return;
     }
@@ -90,13 +89,13 @@ export const reextractDocument = async (
   signal: AbortSignal,
 ): Promise<void> => {
   if (!(await extractDocument(deps, documentId, 'reextract', signal))) return;
-  await indexAndSettle(deps, documentId, SETTLED);
+  await indexAndSettle(deps, documentId, SETTLED_STATUSES);
   await deps.afterIndexed?.(documentId);
 };
 
 export const reindexDocument = async (deps: PipelineDeps, documentId: string): Promise<void> => {
   const document = await loadDocument(deps.db, documentId);
-  if (document === undefined || !SETTLED.includes(document.status)) return;
+  if (document === undefined || !SETTLED_STATUSES.includes(document.status)) return;
   await index(deps, documentId);
   await deps.afterIndexed?.(documentId);
 };

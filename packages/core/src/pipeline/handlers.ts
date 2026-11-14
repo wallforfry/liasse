@@ -2,7 +2,7 @@ import { and, eq, inArray, notExists, sql } from 'drizzle-orm';
 import type { Database } from '../db/client.ts';
 import { documents } from '../db/schema/documents.ts';
 import { jobs } from '../db/schema/jobs.ts';
-import { IN_PROGRESS_STATUSES } from '../domain/enums.ts';
+import { DOCUMENT_JOB_FAILURE_CODES, IN_PROGRESS_STATUSES } from '../domain/enums.ts';
 import {
   PROCESS_DOCUMENT_MAX_ATTEMPTS,
   processDocumentJob,
@@ -10,13 +10,8 @@ import {
 import { PermanentJobError } from '../jobs/errors.ts';
 import { handle, type JobContext, type RegisteredHandler } from '../jobs/handlers.ts';
 import type { PipelineDeps } from './deps.ts';
-import { markDocumentFailed } from './document.ts';
-import {
-  DocumentProcessingError,
-  documentErrorCode,
-  isPermanentFailure,
-  type PipelineErrorCode,
-} from './errors.ts';
+import { failDocumentInProgress } from '../ingest/document-failure.ts';
+import { DocumentProcessingError, documentErrorCode, isPermanentFailure } from './errors.ts';
 import { reextractDocumentJob, reindexDocumentJob } from './jobs.ts';
 import { processDocument, reextractDocument, reindexDocument } from './process-document.ts';
 
@@ -34,7 +29,7 @@ const failingTheDocument =
       if (signal.aborted) throw error;
       const permanent = isPermanentFailure(error);
       if (permanent || attempt >= PROCESS_DOCUMENT_MAX_ATTEMPTS) {
-        await markDocumentFailed(deps.db, documentId, documentErrorCode(error));
+        await failDocumentInProgress(deps.db, documentId, documentErrorCode(error));
       }
       throw permanent && !(error instanceof PermanentJobError)
         ? new DocumentProcessingError(documentErrorCode(error))
@@ -54,14 +49,14 @@ export const createPipelineHandlers = (deps: PipelineDeps): readonly RegisteredH
   handle(reindexDocumentJob, ({ payload }) => reindexDocument(deps, payload.documentId)),
 ];
 
-const ABANDONED = 'processing_abandoned' satisfies PipelineErrorCode;
+const ABANDONED = DOCUMENT_JOB_FAILURE_CODES.stale;
 
 /**
- * For startup. A worker that dies during a job never runs the code that fails the
- * document, and the queue fails the job by itself once its attempts are spent: the
- * document would stay `received`, `extracted` or `classified` with nothing left to move
- * it. Fails the documents on their way that no queued or running job will take further,
- * and returns how many.
+ * For startup. The queue fails the document of a `process_document` job it fails for
+ * good, through the hook of the kind, in every process that registered these handlers.
+ * This catches what that leaves: a job failed by the recovery of a process that had no
+ * handler for the kind, or before the hook existed. Fails the documents on their way that
+ * no queued or running job will take further, and returns how many.
  */
 export const failAbandonedDocuments = async (db: Database): Promise<number> => {
   const pending = db

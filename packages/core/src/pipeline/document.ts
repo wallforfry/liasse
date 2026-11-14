@@ -1,8 +1,8 @@
-import { and, eq, inArray } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import type { Database } from '../db/client.ts';
 import type { JsonObject } from '../db/columns.ts';
 import { documents, isLiveDocument } from '../db/schema/documents.ts';
-import { type DocumentStatus, IN_PROGRESS_STATUSES } from '../domain/enums.ts';
+import type { DocumentStatus } from '../domain/enums.ts';
 import {
   PIPELINE_PROVENANCE_KEY,
   type PipelineProvenance,
@@ -12,6 +12,9 @@ import type { Transaction } from '../ingest/existing-document.ts';
 import { writeIfLive } from '../ingest/live-write.ts';
 
 export type Reader = Database | Transaction;
+
+/** Indexed and queryable; `needs_review` is also flagged for a person to look at. */
+export const SETTLED_STATUSES: readonly DocumentStatus[] = ['indexed', 'needs_review'];
 
 const DOCUMENT_COLUMNS = {
   id: documents.id,
@@ -68,18 +71,4 @@ export const writeFromStatus = async (
     return true;
   });
   return outcome.written && outcome.result;
-};
-
-/** Leaves alone a document that is no longer on its way through the pipeline. */
-export const markDocumentFailed = async (
-  db: Database,
-  documentId: string,
-  code: string,
-): Promise<void> => {
-  await writeIfLive(db, documentId, (tx) =>
-    tx
-      .update(documents)
-      .set({ status: 'failed', error: code })
-      .where(and(eq(documents.id, documentId), inArray(documents.status, IN_PROGRESS_STATUSES))),
-  );
 };

@@ -22,6 +22,15 @@ export const IN_PROGRESS_STATUSES = [
   'classified',
 ] as const satisfies readonly DocumentStatus[];
 
+// What `documents.error` says when the queue failed the job of a document for good: the
+// worker stopped during the last attempt, the handler failed in a way it could not give
+// a code for, or a re-extraction never succeeded.
+export const DOCUMENT_JOB_FAILURE_CODES = {
+  stale: 'processing_abandoned',
+  error: 'processing_failed',
+  reextraction: 'reextraction_failed',
+} as const;
+
 // How a document got its type: an offered type the model chose, a type it created, the
 // closest candidate when a new type was refused or over quota, or no type at all.
 export const CLASSIFICATION_OUTCOMES = ['existing', 'new', 'fallback', 'untyped'] as const;
