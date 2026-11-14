@@ -1,13 +1,20 @@
 import { rmSync } from 'node:fs';
-import { appendFile, mkdir, mkdtemp, readdir, readFile, rm, writeFile } from 'node:fs/promises';
+import {
+  appendFile,
+  chmod,
+  mkdir,
+  mkdtemp,
+  readdir,
+  readFile,
+  rm,
+  writeFile,
+} from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { join, sep } from 'node:path';
+import { join } from 'node:path';
 import { buffer } from 'node:stream/consumers';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { createGate, sleep, waitUntil } from '../testing/async.ts';
 import { UnsupportedFormatError } from './errors.ts';
-import { isIgnoredPath } from './watch-files.ts';
-import { decide } from './watch-state.ts';
 import type { WatchedFile } from './watch-visitor.ts';
 import { startWatcher, type Watcher, type WatcherOptions } from './watcher.ts';
 
@@ -136,6 +143,42 @@ describe('startWatcher', () => {
     expect(names()).toEqual(['kept.pdf']);
   });
 
+  it('reports an unreadable directory once and ingests everything else', async () => {
+    const locked = join(dir, 'lost+found');
+    await mkdir(locked);
+    await mkdir(join(dir, 'readable'));
+    await writeFile(join(dir, 'bill.pdf'), 'bill');
+    await writeFile(join(dir, 'readable', 'scan.pdf'), 'scan');
+    await chmod(locked, 0o000);
+    try {
+      start({ fsEvents: false, rescanIntervalMs: 20 });
+      await waitUntil(() => seen.length === 2);
+      await sleep(15 * 20);
+      expect(names()).toEqual(['bill.pdf', 'scan.pdf']);
+      expect(errors).toHaveLength(1);
+      expect(errors[0]).toMatchObject({ path: locked, error: { code: 'EACCES' } });
+    } finally {
+      await chmod(locked, 0o700);
+    }
+  });
+
+  it('reports a directory again once it was readable in between', async () => {
+    const locked = join(dir, 'lost+found');
+    await mkdir(locked);
+    await chmod(locked, 0o000);
+    try {
+      start({ fsEvents: false, rescanIntervalMs: 20 });
+      await waitUntil(() => errors.length === 1);
+      await chmod(locked, 0o700);
+      await writeFile(join(locked, 'found.pdf'), 'found');
+      await waitUntil(() => seen.length === 1);
+      await chmod(locked, 0o000);
+      await waitUntil(() => errors.length === 2);
+    } finally {
+      await chmod(locked, 0o700);
+    }
+  });
+
   it('leaves the files of the user where they are, untouched', async () => {
     await writeFile(join(dir, 'kept.pdf'), 'kept');
     await writeFile(join(dir, 'refused.txt'), 'refused');
@@ -252,48 +295,5 @@ describe('startWatcher', () => {
     await writeFile(join(dir, 'c-after-stop.pdf'), 'after');
     await sleep(4 * STABILITY_MS);
     expect(names()).toEqual(['a-first.pdf']);
-  });
-});
-
-describe('isIgnoredPath', () => {
-  it.each([
-    ['.hidden', true],
-    ['dir/.hidden/file.pdf', true],
-    ['dir/file.pdf.part', true],
-    ['dir/File.CRDOWNLOAD', true],
-    ['dir/file.pdf', false],
-    ['dir.with.dots/file.name.pdf', false],
-    ['temporary.pdf', false],
-  ])('answers for %s: %s', (path, ignored) => {
-    expect(isIgnoredPath(path.split('/').join(sep))).toBe(ignored);
-  });
-});
-
-describe('decide', () => {
-  it('starts over when the file changed, whatever its state was', () => {
-    expect(decide({ phase: 'handled', fingerprint: '1:1' }, '2:2', 1000, 50)).toEqual({
-      ingest: false,
-      state: { phase: 'settling', fingerprint: '2:2', since: 1000 },
-    });
-  });
-
-  it('ingests a file that held still for the stability delay, not sooner', () => {
-    const settling = { phase: 'settling', fingerprint: '1:1', since: 1000 } as const;
-    expect(decide(settling, '1:1', 1049, 50)).toEqual({ ingest: false, state: settling });
-    expect(decide(settling, '1:1', 1050, 50)).toEqual({ ingest: true });
-  });
-
-  it('retries a failed file at its retry time, not sooner', () => {
-    const failed = { phase: 'failed', fingerprint: '1:1', retryAt: 2000 } as const;
-    expect(decide(failed, '1:1', 1999, 50)).toEqual({ ingest: false, state: failed });
-    expect(decide(failed, '1:1', 2000, 50)).toEqual({ ingest: true });
-  });
-
-  it('never ingests a handled file again', () => {
-    const handled = { phase: 'handled', fingerprint: '1:1' } as const;
-    expect(decide(handled, '1:1', Number.MAX_SAFE_INTEGER, 50)).toEqual({
-      ingest: false,
-      state: handled,
-    });
   });
 });

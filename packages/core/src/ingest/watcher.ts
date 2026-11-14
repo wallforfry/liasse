@@ -2,6 +2,7 @@ import { type FSWatcher, watch } from 'node:fs';
 import { createWakeSignal } from '../jobs/wake-signal.ts';
 import { isFileNotFound } from '../storage/node-errors.ts';
 import { listWatchedFiles } from './watch-files.ts';
+import { createWatchProblems } from './watch-problems.ts';
 import { createVisitor, type WatchedFile } from './watch-visitor.ts';
 
 export interface WatcherOptions {
@@ -24,6 +25,13 @@ export interface Watcher {
   readonly stop: () => Promise<void>;
 }
 
+// A watcher that failed once is started again at every scan; its failure is not
+// reported again, since a tree it cannot watch fails the same way each time.
+const EVENTS_PROBLEM = 'events';
+const SCAN_PROBLEM = 'scan';
+const DIRECTORY_PROBLEM = 'directory:';
+const FILE_PROBLEM = 'file:';
+
 const DEFAULT_STABILITY_MS = 2000;
 const DEFAULT_RESCAN_INTERVAL_MS = 60_000;
 
@@ -44,6 +52,7 @@ export const startWatcher = (options: WatcherOptions): Watcher => {
     retryDelayMs: rescanIntervalMs,
     onError,
   });
+  const problems = createWatchProblems(onError);
   const wake = createWakeSignal();
   let events: FSWatcher | undefined;
   let stopped = false;
@@ -61,33 +70,44 @@ export const startWatcher = (options: WatcherOptions): Watcher => {
         if (!settling) wake.notify();
       });
       started.on('error', (error) => {
-        onError(error, undefined);
+        problems.raise(EVENTS_PROBLEM, error, undefined);
         started.close();
         events = undefined;
       });
       events = started;
     } catch (error) {
       // The scan that follows reports a missing directory itself.
-      if (!isFileNotFound(error)) onError(error, undefined);
+      if (!isFileNotFound(error)) problems.raise(EVENTS_PROBLEM, error, undefined);
     }
   };
 
   const scan = async (): Promise<void> => {
     listenForEvents();
-    const paths = await listWatchedFiles(dir);
-    visitor.keepOnly(paths);
-    for (const path of paths) {
+    const { files, unreadable } = await listWatchedFiles(dir);
+    problems.keepOnly(SCAN_PROBLEM, []);
+    unreadable.forEach(({ path, error }) => {
+      problems.raise(DIRECTORY_PROBLEM + path, error, path);
+    });
+    problems.keepOnly(
+      DIRECTORY_PROBLEM,
+      unreadable.map(({ path }) => DIRECTORY_PROBLEM + path),
+    );
+    visitor.keepOnly(files);
+    const unreadableFiles: string[] = [];
+    for (const path of files) {
       if (stopped) return;
       await visitor.visit(path).catch((error: unknown) => {
-        onError(error, path);
+        unreadableFiles.push(FILE_PROBLEM + path);
+        problems.raise(FILE_PROBLEM + path, error, path);
       });
     }
+    problems.keepOnly(FILE_PROBLEM, unreadableFiles);
   };
 
   const run = async (): Promise<void> => {
     while (!stopped) {
       await scan().catch((error: unknown) => {
-        onError(error, undefined);
+        problems.raise(SCAN_PROBLEM, error, undefined);
       });
       // An event ignored during a settling scan may be about a file that scan did not
       // list: one more scan follows before the watcher goes idle.
