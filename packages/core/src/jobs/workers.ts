@@ -19,6 +19,8 @@ export interface WorkersOptions {
   readonly maxPollIntervalMs?: number;
   /** A running job whose lock was not renewed for this long is taken back. */
   readonly visibilityTimeoutMs?: number;
+  /** How often a running job renews its lock. A third of the visibility timeout by default. */
+  readonly lockRenewalMs?: number;
   readonly retry?: RetryPolicy;
   readonly onJobFailed?: (failure: JobFailure) => void;
   /** Called for a failure of the queue itself, such as an unreachable database. */
@@ -96,7 +98,7 @@ export const startWorkers = async (options: WorkersOptions): Promise<Workers> =>
       db,
       handlers,
       retry: options.retry ?? DEFAULT_RETRY_POLICY,
-      lockRenewalMs: visibilityTimeoutMs / LOCK_RENEWALS_PER_TIMEOUT,
+      lockRenewalMs: options.lockRenewalMs ?? visibilityTimeoutMs / LOCK_RENEWALS_PER_TIMEOUT,
       onJobFailed: options.onJobFailed ?? (() => undefined),
       onError,
     },

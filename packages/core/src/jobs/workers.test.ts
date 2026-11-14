@@ -1,6 +1,6 @@
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 import { jobs } from '../db/schema/jobs.ts';
-import { sleep, waitUntil } from '../testing/async.ts';
+import { createGate, sleep, waitUntil } from '../testing/async.ts';
 import { enqueue } from './enqueue.ts';
 import { DuplicateJobHandlerError, PermanentJobError } from './errors.ts';
 import type { JobFailure } from './execution.ts';
@@ -191,9 +191,14 @@ describe('workers: running, retrying and limiting jobs', () => {
   it('never runs more jobs at once than its concurrency, all kinds together', async () => {
     let active = 0;
     let peak = 0;
+    // The first handlers are held until two of them run together, however slowly the
+    // jobs are claimed: the peak then says the limit was reached, and never passed.
+    const together = createGate();
     const track = async (): Promise<void> => {
       active += 1;
       peak = Math.max(peak, active);
+      if (active >= 2) together.open();
+      await together.opened;
       await sleep(40);
       active -= 1;
     };
@@ -216,10 +221,13 @@ describe('workers: running, retrying and limiting jobs', () => {
   it('limits one kind to its own concurrency while other kinds run beside it', async () => {
     const active = { limited: 0, free: 0 };
     const peak = { limited: 0, together: 0 };
+    const together = createGate();
     const track = (kind: 'limited' | 'free') => async (): Promise<void> => {
       active[kind] += 1;
       peak.limited = Math.max(peak.limited, active.limited);
       peak.together = Math.max(peak.together, active.limited + active.free);
+      if (active.limited + active.free >= 2) together.open();
+      await together.opened;
       await sleep(40);
       active[kind] -= 1;
     };

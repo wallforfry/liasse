@@ -38,7 +38,7 @@ describe('workers: locks, wake-up and stop', () => {
       })
       .returning();
     await harness.start({
-      visibilityTimeoutMs: 200,
+      visibilityTimeoutMs: 60_000,
       handlers: [
         handle(labelJob, ({ attempt }) => {
           attempts.push(attempt);
@@ -50,38 +50,45 @@ describe('workers: locks, wake-up and stop', () => {
     expect(attempts).toEqual([2]);
   });
 
-  it('keeps a job that outlives the visibility timeout while its worker is alive', async () => {
-    const visibilityTimeoutMs = 3000;
+  // The visibility timeouts of these tests are far out of reach and the renewal period
+  // is set apart: a stall of the shared Postgres must not let the worker's own recovery
+  // take the job back in the middle of a test.
+  const OUT_OF_REACH_MS = 3_600_000;
+
+  it('renews the lock of a job for as long as its handler runs', async () => {
     const finish = createGate();
     let runs = 0;
-    const handlers = [
-      handle(labelJob, async () => {
-        runs += 1;
-        await finish.opened;
-      }),
-    ];
-    await harness.start({ visibilityTimeoutMs, handlers });
-    await harness.start({ visibilityTimeoutMs, handlers });
+    await harness.start({
+      visibilityTimeoutMs: OUT_OF_REACH_MS,
+      lockRenewalMs: 50,
+      handlers: [
+        handle(labelJob, async () => {
+          runs += 1;
+          await finish.opened;
+        }),
+      ],
+    });
     const id = await harness.queue('long');
-    await waitUntil(async () => (await harness.statusOf(id)) === 'running', 60_000);
-    const claimedAt = (await jobById(harness.database.db, id)).lockedAt?.getTime() ?? 0;
-    // The handler is held until the database shows renewals spanning twice the
-    // timeout: by then a lock left alone would have been stale through a whole
-    // recovery period of both workers. A second run ends the wait at once.
-    await waitUntil(async () => {
-      const renewedAt = (await jobById(harness.database.db, id)).lockedAt?.getTime() ?? 0;
-      return runs > 1 || renewedAt - claimedAt >= 2 * visibilityTimeoutMs;
-    }, 120_000);
+    await waitUntil(async () => (await harness.statusOf(id)) === 'running');
+    const lockedAt = async (): Promise<number> =>
+      (await jobById(harness.database.db, id)).lockedAt?.getTime() ?? 0;
+    const claimedAt = await lockedAt();
+    await waitUntil(async () => (await lockedAt()) > claimedAt);
+    const renewedAt = await lockedAt();
+    await waitUntil(async () => (await lockedAt()) > renewedAt);
+    // A lock that keeps being renewed is never as old as a timeout of several periods.
+    expect(await recoverStaleJobs(harness.database.db, 30_000)).toBe(0);
     finish.open();
-    await waitUntil(async () => (await harness.statusOf(id)) === 'succeeded', 60_000);
+    await waitUntil(async () => (await harness.statusOf(id)) === 'succeeded');
     expect(runs).toBe(1);
     expect((await jobById(harness.database.db, id)).attempts).toBe(1);
-  }, 240_000);
+  });
 
   it('aborts a handler whose job was taken over', async () => {
     const reasons: unknown[] = [];
     await harness.start({
-      visibilityTimeoutMs: 150,
+      visibilityTimeoutMs: OUT_OF_REACH_MS,
+      lockRenewalMs: 50,
       handlers: [
         handle(labelJob, async ({ signal }) => {
           await aborted(signal);
@@ -198,7 +205,8 @@ describe('workers: locks, wake-up and stop', () => {
     const entered = createGate();
     const finish = createGate();
     const workers = await harness.start({
-      visibilityTimeoutMs: 300,
+      visibilityTimeoutMs: OUT_OF_REACH_MS,
+      lockRenewalMs: 50,
       handlers: [
         handle(labelJob, async () => {
           entered.open();
@@ -211,14 +219,15 @@ describe('workers: locks, wake-up and stop', () => {
     expect(await workers.stop({ timeoutMs: 0, abortGraceMs: 20 })).toMatchObject({
       abandoned: [id],
     });
-    await waitUntil(async () => (await recoverStaleJobs(harness.database.db, 300)) === 1, 15_000);
+    // The lock was renewed every 50 ms until then; left alone, it ages past 300 ms.
+    await waitUntil(async () => (await recoverStaleJobs(harness.database.db, 300)) === 1);
     expect(await jobById(harness.database.db, id)).toMatchObject({
       status: 'queued',
       attempts: 1,
       lockedAt: null,
     });
     finish.open();
-  }, 30_000);
+  });
 
   it('tracks both executions of a job it lost and claimed again', async () => {
     const gates = [createGate(), createGate()];
