@@ -5,6 +5,8 @@ export const DOCUMENT_STATUSES = [
   'indexed',
   'failed',
   'needs_review',
+  // A tombstone: the row keeps the hash of a deleted file and nothing of its content.
+  'deleted',
 ] as const;
 export type DocumentStatus = (typeof DOCUMENT_STATUSES)[number];
 

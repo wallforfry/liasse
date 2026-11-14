@@ -31,6 +31,8 @@ export const documents = pgTable(
     storageKey: text('storage_key').notNull(),
     mime: text('mime').notNull(),
     originalName: text('original_name').notNull(),
+    // What the caller said about the file at ingestion: untrusted free text.
+    hint: text('hint'),
     source: documentSource('source').notNull(),
     status: documentStatus('status').notNull().default('received'),
     state: documentState('state').notNull().default('current'),
