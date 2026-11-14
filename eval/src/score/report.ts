@@ -1,9 +1,11 @@
-import type { DocumentScore, ScoredSection } from './document.ts';
+import type { DocumentResult, DocumentScore, ScoredSection } from './document.ts';
 import type { TypeVerdict } from './knowledge.ts';
 import { type Judgement, type Tally, tally } from './outcome.ts';
 
 export interface EvaluationReport {
+  // Documents that were scored, and outputs that were not system outputs at all.
   readonly documents: number;
+  readonly invalid: number;
   // How many documents got each type verdict; byte-identical copies have none.
   readonly types: Readonly<Record<TypeVerdict, number>>;
   // Precision and recall of each part of a document, over the whole corpus.
@@ -28,7 +30,8 @@ const byItem = (judgements: readonly Judgement[]): Readonly<Record<string, Tally
 const present = <Value>(value: Value | null): readonly Value[] => (value === null ? [] : [value]);
 
 // Sums the scores of the documents of a run into one report.
-export const aggregateReport = (scores: readonly DocumentScore[]): EvaluationReport => {
+export const aggregateReport = (results: readonly DocumentResult[]): EvaluationReport => {
+  const scores = results.filter((result): result is DocumentScore => result.kind === 'scored');
   const section = (name: ScoredSection): readonly Judgement[] =>
     scores.flatMap((score) => score[name]);
   const withVerdict = (verdict: TypeVerdict): number =>
@@ -37,6 +40,7 @@ export const aggregateReport = (scores: readonly DocumentScore[]): EvaluationRep
   const pages = scores.flatMap((score) => score.transcription);
   return {
     documents: scores.length,
+    invalid: results.length - scores.length,
     types: {
       exact: withVerdict('exact'),
       acceptable: withVerdict('acceptable'),

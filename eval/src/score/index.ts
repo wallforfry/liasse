@@ -16,7 +16,9 @@ export {
   UnknownKeyError,
 } from './corpus-index.ts';
 export {
+  type DocumentResult,
   type DocumentScore,
+  type InvalidOutput,
   SCORED_SECTIONS,
   type ScoredSection,
   scoreDocument,

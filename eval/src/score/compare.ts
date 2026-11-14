@@ -13,7 +13,7 @@ import type { TruthPrimitive } from '../schema/index.ts';
 //   the same IBAN is printed in groups of four or in one run;
 // - amounts and numbers compare within half a cent, and an amount needs its currency;
 // - names compare as entity resolution does: without case, accents or legal form;
-// - free text must carry the expected words, whatever surrounds them.
+// - free text must carry the expected words, whole and in order, whatever surrounds them.
 export const AMOUNT_TOLERANCE = 0.005;
 
 // Lowercase, without accents, with single spaces.
@@ -36,8 +36,17 @@ export const sameIdentifier = (expected: string, actual: string): boolean =>
 export const nameMatches = (actual: string, accepted: readonly string[]): boolean =>
   accepted.some((name) => entityNameKey(name) === entityNameKey(actual));
 
-export const textCarries = (expected: string, actual: string): boolean =>
-  foldText(actual).includes(foldText(expected));
+const wordsOf = (text: string): readonly string[] => foldText(text).match(/[a-z0-9]+/g) ?? [];
+
+// The expected words, in order and whole: "favorable" is not in "defavorable".
+export const textCarries = (expected: string, actual: string): boolean => {
+  const wanted = wordsOf(expected);
+  const given = wordsOf(actual);
+  return (
+    wanted.length > 0 &&
+    given.some((_, start) => wanted.every((word, offset) => given[start + offset] === word))
+  );
+};
 
 // A masked identifier keeps its last characters and never the clear value.
 export const isMasked = (actual: string, visibleTail: string, clear: string): boolean =>

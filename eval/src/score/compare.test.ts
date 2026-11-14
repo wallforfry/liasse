@@ -41,7 +41,7 @@ describe('the tolerance rules', () => {
 
   it('accepts a text that carries the expected words', () => {
     expect(textCarries('Anselme Rouvière', 'Dr ANSELME ROUVIERE, médecin')).toBe(true);
-    expect(textCarries('Anselme Rouvière', 'Dr Castagnet')).toBe(false);
+    expect(textCarries('Anselme Rouvière', 'Dr Quivrenne')).toBe(false);
   });
 
   it('accepts a masked identifier that keeps its tail and not the clear value', () => {

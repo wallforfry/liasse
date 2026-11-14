@@ -1,4 +1,4 @@
-import type { GroundTruth, SystemDocument } from '../schema/index.ts';
+import { type GroundTruth, type SystemDocument, systemDocumentSchema } from '../schema/index.ts';
 import type { CorpusIndex } from './corpus-index.ts';
 import { scoreFacts } from './facts.ts';
 import { scoreCore, scoreTypeFields } from './fields.ts';
@@ -10,6 +10,7 @@ import {
   typeVerdict,
   type TypeVerdict,
 } from './knowledge.ts';
+import { issuesOf } from './invalid.ts';
 import { type MaskingResult, scoreMasking } from './masking.ts';
 import { type Judgement, judgePresence } from './outcome.ts';
 import { scoreTranscriptions, type TranscriptionScore } from './transcription.ts';
@@ -26,6 +27,7 @@ export const SCORED_SECTIONS = [
 export type ScoredSection = (typeof SCORED_SECTIONS)[number];
 
 export interface DocumentScore extends Readonly<Record<ScoredSection, readonly Judgement[]>> {
+  readonly kind: 'scored';
   readonly id: string;
   // Whether ingestion recognised a file with the bytes of another document, and only then.
   readonly duplicate: Judgement;
@@ -36,6 +38,17 @@ export interface DocumentScore extends Readonly<Record<ScoredSection, readonly J
   readonly transcription: readonly TranscriptionScore[];
 }
 
+// What `scoreDocument` answers for an input that is not a system output: nothing of it
+// is scored, and the issues say why.
+export interface InvalidOutput {
+  readonly kind: 'invalid';
+  // The document of the corpus the output was given for.
+  readonly id: string;
+  readonly issues: readonly string[];
+}
+
+export type DocumentResult = DocumentScore | InvalidOutput;
+
 const EMPTY_SECTIONS = { core: [], fields: [], key_dates: [], links: [], subjects: [], facts: [] };
 
 const scoreDuplicate = (truth: GroundTruth, output: SystemDocument): Judgement => {
@@ -45,9 +58,7 @@ const scoreDuplicate = (truth: GroundTruth, output: SystemDocument): Judgement =
     : judgePresence(item, 'required', output.duplicate_of === truth.duplicate_of);
 };
 
-// Compares what the system derived from one document with its ground truth. Pure: it
-// reads the two records and the corpus they belong to, nothing else.
-export const scoreDocument = (
+const scoreParsed = (
   truth: GroundTruth,
   output: SystemDocument,
   index: CorpusIndex,
@@ -55,6 +66,7 @@ export const scoreDocument = (
   const duplicate = scoreDuplicate(truth, output);
   if (truth.duplicate_of !== null) {
     return {
+      kind: 'scored',
       id: truth.id,
       duplicate,
       type: null,
@@ -65,6 +77,7 @@ export const scoreDocument = (
     };
   }
   return {
+    kind: 'scored',
     id: truth.id,
     duplicate,
     type: typeVerdict(truth.type, output.type),
@@ -78,4 +91,25 @@ export const scoreDocument = (
     masking: scoreMasking(truth, output),
     transcription: scoreTranscriptions(truth, output),
   };
+};
+
+// Compares what the system derived from one document with its ground truth. Pure: it
+// reads the two records and the corpus they belong to, nothing else. The output is
+// whatever the harness hands over: it is parsed here, and one that is not a system output
+// of this document is answered as invalid instead of being scored or throwing.
+export const scoreDocument = (
+  truth: GroundTruth,
+  output: unknown,
+  index: CorpusIndex,
+): DocumentResult => {
+  const parsed = systemDocumentSchema.safeParse(output);
+  if (!parsed.success) return { kind: 'invalid', id: truth.id, issues: issuesOf(parsed.error) };
+  if (parsed.data.id !== truth.id) {
+    return {
+      kind: 'invalid',
+      id: truth.id,
+      issues: [`id: expected "${truth.id}", the output is for "${parsed.data.id}"`],
+    };
+  }
+  return scoreParsed(truth, parsed.data, index);
 };

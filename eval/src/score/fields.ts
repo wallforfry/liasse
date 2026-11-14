@@ -3,6 +3,7 @@ import type {
   CoreTruth,
   GroundTruth,
   SystemDocument,
+  TruthPrimitive,
   TypeFieldTruth,
 } from '../schema/index.ts';
 import { COMPARISONS, isMasked, nameMatches } from './compare.ts';
@@ -88,9 +89,15 @@ const matcherOf =
     );
   };
 
-// Field names are emergent, so a value is looked for under the names the truth accepts,
-// then under any other name: found there, it is correct and the note says where, so that
-// a report can tell a naming disagreement from a missing value.
+// The primitives whose values identify themselves: an amount with its currency, an
+// identifier, a date. A number, a flag or a word found under an unrelated name proves
+// nothing: `copies: 2` is not a notice period of two months.
+const SELF_IDENTIFYING: readonly TruthPrimitive[] = ['money', 'identifier', 'date'];
+
+// Field names are emergent, so a value is looked for under the names the truth accepts.
+// An amount, an identifier or a date is then looked for under any other name: found
+// there, it is correct and the note says where, so that a report can tell a naming
+// disagreement from a missing value.
 const scoreTypeField = (
   field: TypeFieldTruth,
   truth: GroundTruth,
@@ -102,7 +109,11 @@ const scoreTypeField = (
   const named = stored.find(({ name }) => field.names.includes(name));
   const matches = matcherOf(field, truth, index);
   const judgement = judgeValue(preferred, field.expectation, named?.value, matches);
-  if (judgement.outcome === 'correct' || field.expectation.requirement === 'forbidden') {
+  if (
+    judgement.outcome === 'correct' ||
+    field.expectation.requirement === 'forbidden' ||
+    !SELF_IDENTIFYING.includes(field.primitive)
+  ) {
     return judgement;
   }
   const { value } = field.expectation;

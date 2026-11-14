@@ -87,9 +87,9 @@ export const oracleAnswer = ({ expected }: Question, index: CorpusIndex): Answer
     ...expected.documents.required,
     ...expected.documents.any_of.flatMap(([first]) => (first === undefined ? [] : [first])),
   ],
-  amounts: expected.amounts.map(({ value }) => value),
-  dates: expected.dates.map(({ date }) => date),
-  counts: expected.counts.map(({ value }) => value),
-  entities: expected.entities.map((key) => index.entityNames(key)[0] ?? key),
+  amounts: expected.amounts.map(({ key, value }) => ({ key, value })),
+  dates: expected.dates.map(({ key, date }) => ({ key, date })),
+  counts: expected.counts.map(({ key, value }) => ({ key, value })),
+  entities: expected.entities.required.map((key) => index.entityNames(key)[0] ?? key),
   verdict: expected.verdict,
 });

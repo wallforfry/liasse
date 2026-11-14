@@ -106,15 +106,31 @@ const expectedDocumentsSchema = z.strictObject({
   exhaustive: z.boolean(),
 });
 
+// A value the answer must give is a slot with a key: the harness asks for each slot by
+// its key and label, and the answer files its value under that key. A value is then
+// bound to what it measures: the count of one supplier cannot stand for another's, and
+// two values under one key contradict each other.
+const slot = { key: keySchema, label: text };
+
+const expectedEntitiesSchema = z.strictObject({
+  // Entities of the corpus the answer must name.
+  required: z.array(keySchema),
+  // True when naming anything else is an error: the question asks for an exact set.
+  exhaustive: z.boolean(),
+});
+
+const hasDistinctKeys = (slots: readonly { readonly key: string }[]): boolean =>
+  new Set(slots.map(({ key }) => key)).size === slots.length;
+
+const slots = <Slot extends z.ZodType<{ key: string }>>(schema: Slot) =>
+  z.array(schema).refine(hasDistinctKeys, 'expected one slot per key');
+
 export const answerExpectationSchema = z.strictObject({
   documents: expectedDocumentsSchema,
-  amounts: z.array(
-    z.strictObject({ label: text, value: moneySchema, tolerance: z.number().min(0) }),
-  ),
-  dates: z.array(z.strictObject({ label: text, date: isoDateSchema })),
-  counts: z.array(z.strictObject({ label: text, value: z.int().min(0) })),
-  // Entities of the corpus the answer must name.
-  entities: z.array(keySchema),
+  amounts: slots(z.strictObject({ ...slot, value: moneySchema, tolerance: z.number().min(0) })),
+  dates: slots(z.strictObject({ ...slot, date: isoDateSchema })),
+  counts: slots(z.strictObject({ ...slot, value: z.int().min(0) })),
+  entities: expectedEntitiesSchema,
   // The answer to a yes-or-no question; null when the question is not one.
   verdict: z.boolean().nullable(),
 });
@@ -142,12 +158,14 @@ export const questionSetSchema = z.strictObject({
 
 export type QuestionSet = z.output<typeof questionSetSchema>;
 
-// What an agent hands back for one question, with documents named by their corpus id.
+// What an agent hands back for one question, with documents named by their corpus id and
+// each value under the key of the slot it fills. A value under a key the question does
+// not have is not judged.
 export const answerSchema = z.strictObject({
   documents: z.array(keySchema),
-  amounts: z.array(moneySchema),
-  dates: z.array(isoDateSchema),
-  counts: z.array(z.number()),
+  amounts: z.array(z.strictObject({ key: keySchema, value: moneySchema })),
+  dates: z.array(z.strictObject({ key: keySchema, date: isoDateSchema })),
+  counts: z.array(z.strictObject({ key: keySchema, value: z.number() })),
   entities: z.array(z.string()),
   verdict: z.boolean().nullable(),
 });
