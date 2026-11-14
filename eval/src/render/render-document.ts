@@ -32,11 +32,23 @@ const DOCX = 'application/vnd.openxmlformats-officedocument.wordprocessingml.doc
 
 const pageText = (lines: readonly string[]): string => lines.join('\n').trimEnd();
 
-const draw = (id: string, lines: readonly string[], paper: PaperName, page: number): GrayImage =>
-  renderPage(lines, paperStyle(paper, lines.length), `${id}/page-${String(page)}`);
+const draw = (
+  id: string,
+  lines: readonly string[],
+  paper: PaperName,
+  page: number,
+  stamp?: string,
+): GrayImage =>
+  renderPage(lines, paperStyle(paper, lines.length), `${id}/page-${String(page)}`, stamp);
 
-const scannedPage = (id: string, lines: readonly string[], paper: PaperName, page: number) => {
-  const image = draw(id, lines, paper, page);
+const scannedPage = (
+  id: string,
+  lines: readonly string[],
+  paper: PaperName,
+  page: number,
+  stamp?: string,
+) => {
+  const image = draw(id, lines, paper, page, stamp);
   return {
     jpeg: {
       bytes: encodeJpeg(image, PAPERS[paper].jpegQuality),
@@ -48,17 +60,18 @@ const scannedPage = (id: string, lines: readonly string[], paper: PaperName, pag
   };
 };
 
-const pdfPage = (id: string, { lines, scan }: PageSpec, index: number): SyntheticPdfPage =>
-  scan === undefined ? { lines } : scannedPage(id, lines, scan, index + 1);
+const pdfPage = (id: string, { lines, scan, stamp }: PageSpec, index: number): SyntheticPdfPage =>
+  scan === undefined ? { lines } : scannedPage(id, lines, scan, index + 1, stamp);
 
 const renderPdf = (id: string, pages: readonly PageSpec[]): RenderedDocument => ({
   bytes: buildSyntheticPdf(pages.map((page, index) => pdfPage(id, page, index))),
   mime: 'application/pdf',
   extension: 'pdf',
-  pages: pages.map(({ lines, scan }, index) => ({
+  pages: pages.map(({ lines, scan, stamp }, index) => ({
     page: index + 1,
     method: scan === undefined ? 'native' : 'vision',
-    text: pageText(lines),
+    // A stamp is on the page like the rest: a faithful transcription has its words.
+    text: pageText(scan === undefined || stamp === undefined ? lines : [...lines, '', stamp]),
   })),
 });
 

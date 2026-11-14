@@ -35,8 +35,8 @@ const bikeInvoice: ScenarioDocument = {
     'Bill to: Ms Jane Doe',
     `${HOME_ADDRESS}, France`,
     '',
-    `1 x Fernway E-Tourer electric bicycle, frame size M: GBP ${englishNumber(1180)}`,
-    'Frame number: FW24M0093311',
+    `1 x Quorvel E-Tourer electric bicycle, frame size M: GBP ${englishNumber(1180)}`,
+    'Frame number: QV24M0093311',
     `1 x Delivery to France: GBP ${englishNumber(69)}`,
     '',
     `Total (export sale, no UK VAT): GBP ${englishNumber(BIKE_TOTAL)}`,
@@ -58,7 +58,7 @@ const bikeInvoice: ScenarioDocument = {
       field(
         ['frame_number', 'serial_number'],
         'identifier',
-        optional('FW24M0093311', 'FW24M0093311'),
+        optional('QV24M0093311', 'QV24M0093311'),
       ),
       field(['order_number', 'order_reference'], 'identifier', optional('WEB-58231', 'WEB-58231')),
     ],
@@ -117,7 +117,10 @@ const cloudInvoice: ScenarioDocument = {
       period: required({ start: CLOUD_DATE, end: CLOUD_END }, CLOUD_PERIOD),
       reference: required('QF-2025-004417', 'QF-2025-004417'),
     }),
-    key_dates: [keyDate('renewal', CLOUD_RENEWAL, usDate(CLOUD_RENEWAL)), noKeyDate('due')],
+    key_dates: [
+      keyDate(['renewal', 'expiry'], CLOUD_RENEWAL, usDate(CLOUD_RENEWAL)),
+      noKeyDate('due'),
+    ],
     facts: [
       fact(
         'The Quillfern cloud storage subscription costs 96 USD a year and renews on 2026-05-01.',
@@ -144,13 +147,13 @@ const furnitureInvoice: ScenarioDocument = {
     'FACTURE N° 98-1147',
     `Le ${frDate(FURNITURE_DATE)}`,
     '',
-    'Vendu à : Mme Jane Doe, 9 rue du Lavoir, Valmont-sur-Orbe',
+    'Vendu à : Mme Jane Doe, 9 rue du Lavoir, Trévolzac-sur-Yvrelle',
     '',
     '1 armoire en chêne massif, 2 portes, réf. A212 : 4 350,00 F',
     'Livraison et installation : 500,00 F',
     '',
     'Total TTC : 4 850,00 F',
-    'dont TVA 20,6 % : 828,46 F',
+    'dont TVA 20,6 % : 828,44 F',
     'Soit, à titre indicatif : 739,38 euros',
     '',
     'Payé par chèque. Marchandise garantie deux ans.',
@@ -162,7 +165,8 @@ const furnitureInvoice: ScenarioDocument = {
       document_date: required(FURNITURE_DATE, frDate(FURNITURE_DATE)),
       issuer: required(PARTIES.furniture.key, PARTIES.furniture.printed),
       recipient: required(PARTIES.jane.key, 'Jane Doe'),
-      amount: required(money(4850, 'FRF'), 'Total TTC : 4 850,00 F', [money(739.38)]),
+      // The invoice is in francs. The euro figure it prints is an indication, not its amount.
+      amount: required(money(4850, 'FRF'), 'Total TTC : 4 850,00 F'),
       reference: required('98-1147', '98-1147'),
     }),
     key_dates: [noKeyDate('due')],
@@ -193,7 +197,7 @@ const hardwareReceipt: ScenarioDocument = {
     lines: [
       PARTIES.hardware.printed,
       'ZA des Gravières',
-      'Valmont-sur-Orbe',
+      'Trévolzac-sur-Yvrelle',
       'Tél. 01 99 00 71 18',
       '',
       'Ticket 0417-0032-118',
@@ -222,10 +226,13 @@ const hardwareReceipt: ScenarioDocument = {
     }),
     key_dates: [noKeyDate('due')],
     facts: [
-      fact('Paint and decorating supplies were bought at Bricorbe for 57.30 EUR on 2025-04-19.', {
-        entities: [PARTIES.hardware.key],
-        amounts: [money(57.3)],
-      }),
+      fact(
+        'Paint and decorating supplies were bought at Brico Yvrelle for 57.30 EUR on 2025-04-19.',
+        {
+          entities: [PARTIES.hardware.key],
+          amounts: [money(57.3)],
+        },
+      ),
     ],
   }),
 };

@@ -17,6 +17,8 @@ export interface PageSpec {
   readonly lines: readonly string[];
   // The page has no text layer: it is drawn on this paper and stored as a picture.
   readonly scan?: PaperName;
+  // Words stamped across a scanned page by whoever filed the paper.
+  readonly stamp?: string;
 }
 
 export interface Mailbox {

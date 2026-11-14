@@ -1,6 +1,7 @@
 import { KEY_DATE_KINDS, LINK_KINDS, SUPPORTED_MIMES, entityNameKey } from '@liasse/core/domain';
 import { CORE_FIELDS, fieldNameViolations, slugViolations } from '@liasse/core/registry';
 import { beforeAll, describe, expect, it } from 'vitest';
+import { noticeDeadline } from './calendar.ts';
 import { loadCorpus, loadQuestions } from './corpus.ts';
 import {
   CORE_TRUTH_VALUES,
@@ -26,6 +27,35 @@ const stated = <Value>(expectation: {
 
 const unknownAmong = (keys: readonly string[], known: ReadonlySet<string>): readonly string[] =>
   [...new Set(keys)].filter((key) => !known.has(key));
+
+const NOTICE_FIELD = 'notice_period_months';
+
+interface NoticeDeadlineCheck {
+  readonly id: string;
+  readonly stated: string | undefined;
+  readonly computed: string;
+}
+
+// The specification computes the last day to give notice: the renewal minus the notice
+// period. Every record that states a renewal and a notice period is held to that day.
+const noticeDeadlineChecks = (documents: readonly GroundTruth[]): readonly NoticeDeadlineCheck[] =>
+  documents.flatMap(({ id, fields, key_dates }) => {
+    const months = fields
+      .filter(({ names }) => names.includes(NOTICE_FIELD))
+      .flatMap(({ expectation }) => stated(expectation))
+      .find((value) => typeof value === 'number');
+    const dateOf = (kind: string): string | undefined =>
+      key_dates
+        .filter(({ kinds }) => kinds[0] === kind)
+        .flatMap(({ expectation }) => stated(expectation))[0];
+    const renewal = dateOf('renewal');
+    return months === undefined || renewal === undefined
+      ? []
+      : [{ id, stated: dateOf('notice_deadline'), computed: noticeDeadline(renewal, months) }];
+  });
+
+const wrongNoticeDeadlines = (documents: readonly GroundTruth[]): readonly NoticeDeadlineCheck[] =>
+  noticeDeadlineChecks(documents).filter((check) => check.stated !== check.computed);
 
 describe('the ground truth', () => {
   it('describes 50 files and the one document an email carries', () => {
@@ -160,6 +190,37 @@ describe('the ground truth', () => {
     expect(undeclared).toEqual([]);
   });
 
+  it('states the notice deadline the renewal and the notice period give', () => {
+    expect(noticeDeadlineChecks(corpus.documents).map(({ id }) => id)).toEqual([
+      'home-insurance-contract',
+      'home-insurance-renewal-2026',
+    ]);
+    expect(wrongNoticeDeadlines(corpus.documents)).toEqual([]);
+  });
+
+  it('would catch a notice deadline moved by a day, or by a month', () => {
+    const moved = (id: string, to: string): readonly GroundTruth[] =>
+      corpus.documents.map((document) =>
+        document.id === id
+          ? {
+              ...document,
+              key_dates: document.key_dates.map((entry) =>
+                entry.kinds[0] === 'notice_deadline' &&
+                entry.expectation.requirement !== 'forbidden'
+                  ? { ...entry, expectation: { ...entry.expectation, value: to } }
+                  : entry,
+              ),
+            }
+          : document,
+      );
+    expect(wrongNoticeDeadlines(moved('home-insurance-renewal-2026', '2026-01-02'))).toEqual([
+      { id: 'home-insurance-renewal-2026', stated: '2026-01-02', computed: '2026-01-01' },
+    ]);
+    expect(wrongNoticeDeadlines(moved('home-insurance-contract', '2023-12-01'))).toEqual([
+      { id: 'home-insurance-contract', stated: '2023-12-01', computed: '2024-01-01' },
+    ]);
+  });
+
   it('states one to three facts for every document with enough text to hold one', () => {
     const without = corpus.documents.filter(
       ({ facts, hard_cases }) => facts.length === 0 && !hard_cases.includes('little_text'),
@@ -253,7 +314,7 @@ describe('the reference questions', () => {
     expect(unknownAmong(cited, documents)).toEqual([]);
     expect(
       unknownAmong(
-        questions.questions.flatMap(({ expected }) => expected.entities),
+        questions.questions.flatMap(({ expected }) => expected.entities.required),
         entities,
       ),
     ).toEqual([]);
@@ -299,7 +360,7 @@ describe('the reference questions', () => {
           amounts.length +
           dates.length +
           counts.length +
-          entities.length ===
+          entities.required.length ===
           0 &&
         verdict === null &&
         !documents.exhaustive,

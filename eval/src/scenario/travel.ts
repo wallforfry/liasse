@@ -96,7 +96,7 @@ const hotelInvoice: ScenarioDocument = {
     `Kurtaxe, 6 x 2,00 EUR: ${euroNumber(12)} EUR`,
     '',
     `Gesamtbetrag: ${euroNumber(363)} EUR`,
-    'Im Gesamtbetrag enthaltene Mehrwertsteuer: 26,17 EUR',
+    'Im Gesamtbetrag enthaltene Mehrwertsteuer (7 % und 19 %): 28,33 EUR',
     '',
     `Betrag dankend erhalten, bezahlt mit Karte am ${deDate(HOTEL_DEPARTURE)}.`,
     'Wir danken für Ihren Besuch und freuen uns auf ein Wiedersehen.',
@@ -138,13 +138,13 @@ const carRental: ScenarioDocument = {
     lines: [
       PARTIES.carRental.printed,
       PARTIES.carRental.address,
-      'reservas@sotomar.example',
+      'reservas@zubrenal.example',
       '',
       'FACTURA NUM. A-2025-1187',
       `Fecha: ${esDate(RENTAL_END)}`,
       '',
       'Cliente: Jane Doe',
-      `Vehículo alquilado: Tessaro Lumo, matrícula ${RENTAL_PLATE}`,
+      `Vehículo alquilado: Vrenko Lumo, matrícula ${RENTAL_PLATE}`,
       `Recogida: ${esDate(RENTAL_START)}`,
       `Devolución: ${esDate(RENTAL_END)}`,
       '',
@@ -182,7 +182,7 @@ const carRental: ScenarioDocument = {
     subjects: [about(SUBJECTS.car, 'forbidden')],
     facts: [
       fact(
-        'Jane Doe rented a car from Alquileres Sotomar from 2025-07-18 to 2025-07-23 for 214.50 EUR.',
+        'Jane Doe rented a car from Alquileres Zubrenal from 2025-07-18 to 2025-07-23 for 214.50 EUR.',
         {
           entities: [PARTIES.carRental.key],
           amounts: [money(214.5)],

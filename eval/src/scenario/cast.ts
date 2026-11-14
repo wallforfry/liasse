@@ -1,19 +1,20 @@
 import type { EntityKind } from '@liasse/core/domain';
 import {
-  cardNumber,
   frenchIban,
   seededDigits,
   siren,
   siret,
   socialSecurityNumber,
   taxNumber,
+  TEST_CARD_NUMBER,
 } from '../identifiers.ts';
 import type { EntityTruth, SubjectDefinition } from '../schema/index.ts';
 
-// Everyone and everything here is invented. The towns do not exist and their postcodes
-// start with 99 (France), 00 (Germany, Spain) or use a made-up outward code (United
-// Kingdom), which no postal service assigns. Phone numbers are in the ranges the French
-// and British regulators reserve for fiction, and e-mail addresses on reserved domains.
+// Everyone and everything here is invented. The names of companies, brands, towns and
+// the river are coinages, each searched on the web before it was adopted (the README
+// lists them). Postcodes start with 99 (France) or 00 (Germany, Spain), or use the
+// outward code ZZ (United Kingdom). Phone numbers are in the ranges the French and
+// British regulators reserve for fiction; e-mail and web addresses are on reserved domains.
 
 // The day the household looks at its documents: every "now", "this quarter" and "still"
 // of the reference questions is relative to it.
@@ -44,8 +45,8 @@ const party = (
   address,
 });
 
-export const HOME_ADDRESS = '4 allée des Sorbiers, 99120 Valmont-sur-Orbe';
-const TOWN = '99120 Valmont-sur-Orbe';
+export const HOME_ADDRESS = '4 allée des Hirondelles, 99120 Trévolzac-sur-Yvrelle';
+const TOWN = '99120 Trévolzac-sur-Yvrelle';
 
 // prettier-ignore
 export const PARTIES = {
@@ -55,27 +56,27 @@ export const PARTIES = {
   brisevent: party('brisevent', 'org', 'Brisevent Électricité', 'BRISEVENT ÉLECTRICITÉ SA', '3 place du Moulin-Neuf, 99300 Port-Lanvec', ['Brisevent'], 'brisevent'),
   telorca: party('telorca', 'org', 'Telorca', 'TELORCA SAS', '27 avenue des Câbliers, 99410 Sainte-Orme', ['Telorca Mobile'], 'telorca'),
   fibrenoix: party('fibrenoix', 'org', 'Fibrenoix', 'FIBRENOIX SAS', `5 rue du Noyer, ${TOWN}`, [], 'fibrenoix'),
-  waterBoard: party('regie-des-eaux', 'org', "Régie des Eaux de l'Orbe", "RÉGIE DES EAUX DE L'ORBE", `1 chemin du Captage, ${TOWN}`, ['Régie des Eaux']),
-  corbelin: party('corbelin', 'org', 'Assurances Corbelin', 'ASSURANCES CORBELIN SA', '40 boulevard des Tisserands, 99200 Corbelin-la-Forêt', ['Corbelin', 'Corbelin Assurances'], 'corbelin'),
+  waterBoard: party('regie-des-eaux', 'org', "Régie des Eaux de l'Yvrelle", "RÉGIE DES EAUX DE L'YVRELLE", `1 chemin du Captage, ${TOWN}`, ['Régie des Eaux']),
+  tolverane: party('tolverane', 'org', 'Assurances Tolvérane', 'ASSURANCES TOLVÉRANE SA', '40 boulevard des Tisserands, 99200 Quivrenne-la-Forêt', ['Tolvérane', 'Tolvérane Assurances'], 'tolverane'),
   roulavie: party('roulavie', 'org', 'Roulavie Assurances', 'ROULAVIE ASSURANCES SA', '11 rue des Charrons, 99300 Port-Lanvec', ['Roulavie'], 'roulavie'),
-  agency: party('agence-du-belvedere', 'org', 'Agence Immobilière du Belvédère', 'AGENCE IMMOBILIÈRE DU BELVÉDÈRE SARL', `2 place du Belvédère, ${TOWN}`, ['Agence du Belvédère'], 'agency'),
+  agency: party('agence-vouzelin', 'org', 'Agence Immobilière Vouzelin', 'AGENCE IMMOBILIÈRE VOUZELIN SARL', `2 place du Marché, ${TOWN}`, ['Agence Vouzelin'], 'agency'),
   landlord: party('hector-vasseur', 'person', 'Hector Vasseur', 'Hector Vasseur', '31 route des Crêtes, 99150 Montbrisac', ['M. Hector Vasseur']),
   employer: party('ostrelia', 'org', 'Ostrelia Conseil', 'OSTRELIA CONSEIL SAS', '8 rue des Imprimeurs, 99300 Port-Lanvec', ['Ostrelia'], 'ostrelia'),
-  bank: party('credit-orbien', 'org', 'Crédit Orbien', 'CRÉDIT ORBIEN', `14 cours des Halles, ${TOWN}`, ['Credit Orbien'], 'credit-orbien'),
-  taxOffice: party('centre-des-finances-publiques', 'org', 'Centre des Finances Publiques de Valmont-sur-Orbe', 'CENTRE DES FINANCES PUBLIQUES DE VALMONT-SUR-ORBE', `6 rue de la Trésorerie, ${TOWN}`, ['Service des impôts des particuliers de Valmont-sur-Orbe']),
-  finesAgency: party('agence-des-contraventions', 'org', "Agence de Traitement des Contraventions de l'Orbe", "AGENCE DE TRAITEMENT DES CONTRAVENTIONS DE L'ORBE", 'CS 40017, 99309 Port-Lanvec Cedex', ["Agence de Traitement des Contraventions"]),
-  garage: party('garage-du-belvedere', 'org', 'Garage du Belvédère', 'GARAGE DU BELVÉDÈRE SARL', `21 route de Montbrisac, ${TOWN}`, [], 'garage'),
-  inspection: party('autobilan-valmont', 'org', 'Autobilan Valmont', 'AUTOBILAN VALMONT', `ZA des Gravières, ${TOWN}`, [], 'autobilan'),
-  lab: party('laboratoire-des-sorbiers', 'org', 'Laboratoire des Sorbiers', 'LABORATOIRE DES SORBIERS', `9 allée des Sorbiers, ${TOWN}`),
-  mutual: party('mutuelle-sorbier-sante', 'org', 'Mutuelle Sorbier Santé', 'MUTUELLE SORBIER SANTÉ', '55 rue des Drapiers, 99200 Corbelin-la-Forêt', ['Sorbier Santé']),
+  bank: party('credit-yvrellois', 'org', 'Crédit Yvrellois', 'CRÉDIT YVRELLOIS', `14 cours des Halles, ${TOWN}`, ['Credit Yvrellois'], 'credit-yvrellois'),
+  taxOffice: party('centre-des-finances-publiques', 'org', 'Centre des Finances Publiques de Trévolzac-sur-Yvrelle', 'CENTRE DES FINANCES PUBLIQUES DE TRÉVOLZAC-SUR-YVRELLE', `6 rue de la Trésorerie, ${TOWN}`, ['Service des impôts des particuliers de Trévolzac-sur-Yvrelle']),
+  finesAgency: party('agence-des-contraventions', 'org', "Agence de Traitement des Contraventions de l'Yvrelle", "AGENCE DE TRAITEMENT DES CONTRAVENTIONS DE L'YVRELLE", 'CS 40017, 99309 Port-Lanvec Cedex', ["Agence de Traitement des Contraventions"]),
+  garage: party('garage-brumezac', 'org', 'Garage Brumezac', 'GARAGE BRUMEZAC SARL', `21 route de Montbrisac, ${TOWN}`, [], 'garage'),
+  inspection: party('zerubane-controle', 'org', 'Zérubane Contrôle', 'ZÉRUBANE CONTRÔLE', `ZA des Gravières, ${TOWN}`, [], 'zerubane'),
+  lab: party('laboratoire-zolmea', 'org', 'Laboratoire Zolméa', 'LABORATOIRE ZOLMÉA', `9 allée des Hirondelles, ${TOWN}`),
+  mutual: party('mutuelle-ozvalie-sante', 'org', 'Mutuelle Ozvalie Santé', 'MUTUELLE OZVALIE SANTÉ', '55 rue des Drapiers, 99200 Quivrenne-la-Forêt', ['Ozvalie Santé']),
   bikeShop: party('brindlemoor-cycles', 'org', 'Brindlemoor Cycles', 'Brindlemoor Cycles Ltd', '7 Tannery Row, Brindlemoor, ZZ4 9QX, United Kingdom'),
   cloud: party('quillfern-cloud', 'org', 'Quillfern Cloud', 'Quillfern Cloud Inc.', '900 Example Parkway, Suite 12, Fernhollow, ZZ 00042, USA', ['Quillfern']),
   travelInsurer: party('northmere-travel-cover', 'org', 'Northmere Travel Cover', 'Northmere Travel Cover Ltd', '2 Quay Street, Northmere, ZZ1 4NM, United Kingdom', ['Northmere']),
   hotel: party('gasthof-lindenhoehe', 'org', 'Gasthof Lindenhöhe', 'Gasthof Lindenhöhe', 'Seeuferweg 3, 00917 Tannwald am See', ['Gasthof Lindenhoehe']),
-  carRental: party('alquileres-sotomar', 'org', 'Alquileres Sotomar', 'Alquileres Sotomar S.L.', 'Avenida del Faro 18, 00420 Puerto Sotomar', ['Sotomar']),
+  carRental: party('alquileres-zubrenal', 'org', 'Alquileres Zubrenal', 'Alquileres Zubrenal S.L.', 'Avenida del Faro 18, 00420 Puerto Zubrenal', ['Zubrenal']),
   furniture: party('meubles-sauvageon', 'org', 'Meubles Sauvageon', 'MEUBLES SAUVAGEON', `33 rue du Lavoir, ${TOWN}`, ['Sauvageon']),
-  hardware: party('bricorbe', 'org', 'Bricorbe', 'BRICORBE', `ZA des Gravières, ${TOWN}`),
-  parking: party('parking-du-belvedere', 'org', 'Parking du Belvédère', 'PARKING DU BELVEDERE', `Place du Belvédère, ${TOWN}`, ['Parking du Belvedere']),
+  hardware: party('brico-yvrelle', 'org', 'Brico Yvrelle', 'BRICO YVRELLE', `ZA des Gravières, ${TOWN}`),
+  parking: party('parking-halle-yvrelle', 'org', 'Parking Halle Yvrelle', 'PARKING HALLE YVRELLE', `Place du Marché, ${TOWN}`),
 } as const satisfies Readonly<Record<string, Party>>;
 
 export const OWNER = PARTIES.jane.key;
@@ -85,13 +86,13 @@ export const companyLine = (label: keyof typeof PARTIES): string => {
   return company === undefined ? '' : `SIREN ${company}`;
 };
 
-// Identifiers of the household. Each is well formed and belongs to nobody: see
+// Identifiers of the household. None can designate anything real: see
 // `identifiers.ts` for how they are built.
 export const JANE = {
   email: 'jane.doe@example.org',
   mobile: '06 39 98 01 23',
   iban: frenchIban('jane'),
-  card: (cardNumber('jane').match(/.{4}/g) ?? []).join(' '),
+  card: (TEST_CARD_NUMBER.match(/.{4}/g) ?? []).join(' '),
   socialSecurityNumber: socialSecurityNumber('jane'),
   taxNumber: taxNumber('jane'),
   employeeNumber: `M${seededDigits('employee', 4)}`,
@@ -138,17 +139,17 @@ const subject = (
 
 // prettier-ignore
 export const SUBJECTS = {
-  home: subject('home', 'property', 'Appartement du 4 allée des Sorbiers, Valmont-sur-Orbe', ['4 allée des Sorbiers', METER_ID], ['Logement de Valmont-sur-Orbe']),
+  home: subject('home', 'property', 'Appartement du 4 allée des Hirondelles, Trévolzac-sur-Yvrelle', ['4 allée des Hirondelles', METER_ID], ['Logement de Trévolzac-sur-Yvrelle']),
   car: subject('car', 'vehicle', `${CAR.model} ${CAR.plate}`, [CAR.plate, CAR.vin], ['Velanta Coriol']),
-  lease: subject('lease', 'contract', 'Bail du 4 allée des Sorbiers', [CONTRACTS.lease], ['Bail d’habitation', "Bail d'habitation"]),
-  homeInsurance: subject('home-insurance', 'contract', 'Assurance habitation Corbelin', [CONTRACTS.homeInsurance], ['Assurance habitation']),
+  lease: subject('lease', 'contract', 'Bail du 4 allée des Hirondelles', [CONTRACTS.lease], ['Bail d’habitation', "Bail d'habitation"]),
+  homeInsurance: subject('home-insurance', 'contract', 'Assurance habitation Tolvérane', [CONTRACTS.homeInsurance], ['Assurance habitation']),
   carInsurance: subject('car-insurance', 'contract', 'Assurance automobile Roulavie', [CONTRACTS.carInsurance2023, CONTRACTS.carInsurance2025], ['Assurance auto']),
   energyVoltaneige: subject('energy-contract-voltaneige', 'contract', "Contrat d'électricité Voltaneige", [CONTRACTS.voltaneige]),
   energyBrisevent: subject('energy-contract-brisevent', 'contract', "Contrat d'électricité Brisevent", [CONTRACTS.brisevent]),
   mobilePlan: subject('mobile-plan', 'contract', 'Forfait mobile Telorca', [CONTRACTS.mobile, JANE.mobile], ['Forfait Horizon 60 Go']),
   internet: subject('internet-subscription', 'contract', 'Abonnement internet Fibrenoix', [CONTRACTS.internet]),
   employment: subject('employment', 'employment', 'Emploi chez Ostrelia Conseil', [JANE.employeeNumber, 'Ostrelia Conseil']),
-  bankAccount: subject('bank-account', 'account', 'Compte courant Crédit Orbien', [IBAN_TAIL], ['Compte chèques']),
+  bankAccount: subject('bank-account', 'account', 'Compte courant Crédit Yvrellois', [IBAN_TAIL], ['Compte chèques']),
 } as const satisfies Readonly<Record<string, SubjectDefinition>>;
 
 export const entityTruths = (): readonly EntityTruth[] =>

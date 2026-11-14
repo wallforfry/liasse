@@ -55,6 +55,7 @@
         },
         "amounts": [
           {
+            "key": "total",
             "label": "total of the electricity bills dated 2025",
             "value": {
               "value": 597.15,
@@ -66,11 +67,15 @@
         "dates": [],
         "counts": [
           {
+            "key": "bills",
             "label": "electricity bills dated 2025",
             "value": 6
           }
         ],
-        "entities": [],
+        "entities": {
+          "required": [],
+          "exhaustive": false
+        },
         "verdict": null
       },
       "rationale": "Six bills are dated 2025, from two suppliers. The June bill exists twice as the same bytes: counted twice, the total becomes 686.05. The 2024 bill and the internet bills stay out."
@@ -89,7 +94,7 @@
         {
           "tool": "timeline",
           "arguments": {
-            "subject": "Appartement du 4 allée des Sorbiers, Valmont-sur-Orbe"
+            "subject": "Appartement du 4 allée des Hirondelles, Trévolzac-sur-Yvrelle"
           }
         }
       ],
@@ -110,14 +115,18 @@
         "amounts": [],
         "dates": [
           {
+            "key": "switch",
             "label": "first day of supply by the new supplier",
             "date": "2025-04-01"
           }
         ],
         "counts": [],
-        "entities": [
-          "brisevent"
-        ],
+        "entities": {
+          "required": [
+            "brisevent"
+          ],
+          "exhaustive": false
+        },
         "verdict": null
       },
       "rationale": "The Brisevent contract states the start of supply and names the supplier it replaces; the closing bill of Voltaneige and the first Brisevent bill confirm the date."
@@ -164,16 +173,21 @@
         "amounts": [],
         "dates": [
           {
+            "key": "lease-end",
             "label": "end of the lease term",
             "date": "2026-01-31"
           },
           {
+            "key": "home-insurance-renewal",
             "label": "renewal of the home insurance",
             "date": "2026-03-01"
           }
         ],
         "counts": [],
-        "entities": [],
+        "entities": {
+          "required": [],
+          "exhaustive": false
+        },
         "verdict": null
       },
       "rationale": "The lease term ends on 31 January and the home insurance renews on 1 March. The mobile commitment would end on 9 February, but that contract was terminated; the 2023 car insurance was superseded and the 2025 one renews in June."
@@ -206,12 +220,16 @@
         "amounts": [],
         "dates": [
           {
+            "key": "contract-end",
             "label": "day the contract ended",
             "date": "2025-12-31"
           }
         ],
         "counts": [],
-        "entities": [],
+        "entities": {
+          "required": [],
+          "exhaustive": false
+        },
         "verdict": false
       },
       "rationale": "A termination letter and its confirmation by Telorca end the contract on 31 December 2025, before the reference date."
@@ -257,7 +275,10 @@
         "amounts": [],
         "dates": [],
         "counts": [],
-        "entities": [],
+        "entities": {
+          "required": [],
+          "exhaustive": false
+        },
         "verdict": null
       },
       "rationale": "Six documents name the plate of the car. The photo shows the garage invoice again and the car park ticket names no vehicle. The Spanish invoice is for a rented car, which is not the household car."
@@ -311,9 +332,12 @@
         "amounts": [],
         "dates": [],
         "counts": [],
-        "entities": [
-          "brisevent"
-        ],
+        "entities": {
+          "required": [
+            "brisevent"
+          ],
+          "exhaustive": true
+        },
         "verdict": null
       },
       "rationale": "The contract and three bills are issued by Brisevent, written \"BRISEVENT ÉLECTRICITÉ SA\" on the letterhead: the name must resolve to one entity. The bank statement only mentions Brisevent."
@@ -364,6 +388,7 @@
         },
         "amounts": [
           {
+            "key": "total",
             "label": "total of the three mobile bills",
             "value": {
               "value": 64.47,
@@ -375,11 +400,15 @@
         "dates": [],
         "counts": [
           {
+            "key": "bills",
             "label": "mobile bills",
             "value": 3
           }
         ],
-        "entities": [],
+        "entities": {
+          "required": [],
+          "exhaustive": false
+        },
         "verdict": null
       },
       "rationale": "Three bills: 19.99, 24.49 and 19.99. The November bill only exists as the attachment of an email, and the email repeats its amount: counted as a bill too, the total becomes 84.46."
@@ -412,7 +441,10 @@
         "amounts": [],
         "dates": [],
         "counts": [],
-        "entities": [],
+        "entities": {
+          "required": [],
+          "exhaustive": false
+        },
         "verdict": null
       },
       "rationale": "Only the garage invoice lists tyres (\"2 pneus avant\"), under other words than the question: a fuzzy search. Its photo is the same paper."
@@ -431,7 +463,7 @@
               "notice_deadline",
               "renewal"
             ],
-            "subject": "Assurance habitation Corbelin"
+            "subject": "Assurance habitation Tolvérane"
           }
         }
       ],
@@ -451,12 +483,16 @@
         "amounts": [],
         "dates": [
           {
+            "key": "notice-deadline",
             "label": "last day to give notice",
             "date": "2026-01-01"
           }
         ],
         "counts": [],
-        "entities": [],
+        "entities": {
+          "required": [],
+          "exhaustive": false
+        },
         "verdict": null
       },
       "rationale": "The renewal notice prints the deadline, which is also the renewal of 1 March 2026 minus the two months of notice of the contract."
@@ -491,12 +527,16 @@
         "amounts": [],
         "dates": [
           {
+            "key": "test-expiry",
             "label": "last day of validity of the test",
             "date": "2027-02-19"
           }
         ],
         "counts": [],
-        "entities": [],
+        "entities": {
+          "required": [],
+          "exhaustive": false
+        },
         "verdict": null
       },
       "rationale": "The test report is a scan: the date only exists in the transcription of the page. The question is in English, the document in French."
@@ -527,6 +567,7 @@
         },
         "amounts": [
           {
+            "key": "monthly-rent",
             "label": "monthly rent with charges",
             "value": {
               "value": 840,
@@ -537,12 +578,16 @@
         ],
         "dates": [
           {
+            "key": "lease-end",
             "label": "end of the lease term",
             "date": "2026-01-31"
           }
         ],
         "counts": [],
-        "entities": [],
+        "entities": {
+          "required": [],
+          "exhaustive": false
+        },
         "verdict": null
       },
       "rationale": "The lease states 780 EUR of rent and 60 EUR of charges, and a term ending on 31 January 2026."
@@ -573,6 +618,7 @@
         },
         "amounts": [
           {
+            "key": "paid",
             "label": "amount paid",
             "value": {
               "value": 203.45,
@@ -583,12 +629,16 @@
         ],
         "dates": [
           {
+            "key": "payment-day",
             "label": "day of the payment",
             "date": "2025-07-28"
           }
         ],
         "counts": [],
-        "entities": [],
+        "entities": {
+          "required": [],
+          "exhaustive": false
+        },
         "verdict": true
       },
       "rationale": "A receipt of the water board pays the bill of 16 July 2025 in full on 28 July."
@@ -616,7 +666,10 @@
         "amounts": [],
         "dates": [],
         "counts": [],
-        "entities": [],
+        "entities": {
+          "required": [],
+          "exhaustive": false
+        },
         "verdict": false
       },
       "rationale": "Nothing in the corpus is a loan: the right answer is that nothing was found, without a near miss such as the lease or the bank statement."
@@ -662,7 +715,10 @@
         "amounts": [],
         "dates": [],
         "counts": [],
-        "entities": [],
+        "entities": {
+          "required": [],
+          "exhaustive": false
+        },
         "verdict": null
       },
       "rationale": "Two documents are dated 4 August 2025. The tax notice is private: nobody asked for private documents, so it must not surface."
@@ -695,6 +751,7 @@
         },
         "amounts": [
           {
+            "key": "balance",
             "label": "balance of income tax",
             "value": {
               "value": 1284,
@@ -705,12 +762,16 @@
         ],
         "dates": [
           {
+            "key": "deadline",
             "label": "payment deadline",
             "date": "2025-09-15"
           }
         ],
         "counts": [],
-        "entities": [],
+        "entities": {
+          "required": [],
+          "exhaustive": false
+        },
         "verdict": null
       },
       "rationale": "The same private notice, asked for explicitly this time. The notice also prints the total tax (1902 EUR): the balance is what remains to pay."
@@ -750,6 +811,7 @@
         },
         "amounts": [
           {
+            "key": "bicycle",
             "label": "electric bicycle",
             "value": {
               "value": 1249,
@@ -758,6 +820,7 @@
             "tolerance": 0.01
           },
           {
+            "key": "cloud-storage",
             "label": "cloud storage subscription",
             "value": {
               "value": 96,
@@ -766,6 +829,7 @@
             "tolerance": 0.01
           },
           {
+            "key": "wardrobe",
             "label": "oak wardrobe",
             "value": {
               "value": 4850,
@@ -776,7 +840,10 @@
         ],
         "dates": [],
         "counts": [],
-        "entities": [],
+        "entities": {
+          "required": [],
+          "exhaustive": false
+        },
         "verdict": null
       },
       "rationale": "Pounds, US dollars and French francs. The franc invoice also prints an indicative value in euros, which is not its amount. The travel insurance is British but billed in euros."
@@ -809,6 +876,7 @@
         },
         "amounts": [
           {
+            "key": "net-taxable",
             "label": "net taxable pay of 2025",
             "value": {
               "value": 31170.5,
@@ -819,7 +887,10 @@
         ],
         "dates": [],
         "counts": [],
-        "entities": [],
+        "entities": {
+          "required": [],
+          "exhaustive": false
+        },
         "verdict": null
       },
       "rationale": "The year-end summary states it, and the December payslip carries the same cumulative figure. Only three of the twelve payslips are in the corpus: summing them is wrong."
@@ -851,12 +922,16 @@
         "amounts": [],
         "dates": [
           {
+            "key": "replaced-on",
             "label": "first day of the contract that replaced it",
             "date": "2025-06-01"
           }
         ],
         "counts": [],
-        "entities": [],
+        "entities": {
+          "required": [],
+          "exhaustive": false
+        },
         "verdict": false
       },
       "rationale": "The 2025 contract says it cancels and replaces the 2023 one from 1 June 2025."
@@ -875,7 +950,7 @@
         {
           "tool": "get_subject",
           "arguments": {
-            "query": "Assurance habitation Corbelin"
+            "query": "Assurance habitation Tolvérane"
           }
         },
         {
@@ -898,13 +973,16 @@
         "amounts": [],
         "dates": [],
         "counts": [],
-        "entities": [
-          "corbelin",
-          "roulavie"
-        ],
+        "entities": {
+          "required": [
+            "tolverane",
+            "roulavie"
+          ],
+          "exhaustive": true
+        },
         "verdict": null
       },
-      "rationale": "Corbelin insures the home and Roulavie the car. The travel insurer covered one trip that ended in July 2025, and the health mutual insures neither."
+      "rationale": "Tolvérane insures the home and Roulavie the car. The travel insurer covered one trip that ended in July 2025, and the health mutual insures neither."
     },
     {
       "id": "q20",
@@ -940,18 +1018,23 @@
         "dates": [],
         "counts": [
           {
+            "key": "voltaneige",
             "label": "bills from Voltaneige",
             "value": 4
           },
           {
+            "key": "brisevent",
             "label": "bills from Brisevent",
             "value": 3
           }
         ],
-        "entities": [
-          "voltaneige",
-          "brisevent"
-        ],
+        "entities": {
+          "required": [
+            "voltaneige",
+            "brisevent"
+          ],
+          "exhaustive": true
+        },
         "verdict": null
       },
       "rationale": "Four bills from Voltaneige, one of them scanned, and three from Brisevent once the byte-identical copy is deduplicated: the scanned bill and the native ones must land in one type, and each supplier in one entity."

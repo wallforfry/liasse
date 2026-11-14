@@ -1,17 +1,18 @@
 import { describe, expect, it } from 'vitest';
 import {
-  cardNumber,
   FICTITIOUS_BANK_CODE,
-  FICTITIOUS_CARD_PREFIX,
   frenchBankCode,
   frenchIban,
+  frenchNationalKey,
   isLuhnValid,
   isValidIban,
   seededDigits,
   siren,
   siret,
+  socialSecurityKey,
   socialSecurityNumber,
   taxNumber,
+  TEST_CARD_NUMBER,
 } from './identifiers.ts';
 
 const digitsOf = (text: string): string => text.replace(/\D/g, '');
@@ -55,7 +56,7 @@ describe('the generated identifiers', () => {
     },
   );
 
-  it('build an IBAN whose national key is valid too', () => {
+  it('build an IBAN whose national key is not the one a French bank requires', () => {
     const bban = digitsOf(frenchIban('jane')).slice(2);
     const [bank, branch, account, key] = [
       bban.slice(0, 5),
@@ -63,31 +64,39 @@ describe('the generated identifiers', () => {
       bban.slice(10, 21),
       bban.slice(21),
     ];
-    const expected =
+    const required =
       97n - ((89n * BigInt(bank) + 15n * BigInt(branch) + 3n * BigInt(account)) % 97n);
-    expect(BigInt(key)).toBe(expected);
+    expect(BigInt(frenchNationalKey(bank, branch, account))).toBe(required);
+    expect(BigInt(key)).not.toBe(required);
   });
 
-  it('build company numbers that pass the Luhn check', () => {
-    expect(siren('a')).toMatch(/^\d{9}$/);
-    expect(isLuhnValid(siren('a'))).toBe(true);
-    expect(siret('a')).toMatch(/^\d{14}$/);
-    expect(siret('a').startsWith(siren('a'))).toBe(true);
-    expect(isLuhnValid(siret('a'))).toBe(true);
+  it.each(Array.from({ length: 40 }, (_, index) => `company-${String(index)}`))(
+    'build company numbers that fail the Luhn check for %s',
+    (label) => {
+      expect(siren(label)).toMatch(/^\d{9}$/);
+      expect(isLuhnValid(siren(label))).toBe(false);
+      expect(siret(label)).toMatch(/^\d{14}$/);
+      expect(siret(label).startsWith(siren(label))).toBe(true);
+      expect(isLuhnValid(siret(label))).toBe(false);
+    },
+  );
+
+  it('use a card number that a detector of card numbers recognises', () => {
+    expect(TEST_CARD_NUMBER).toMatch(/^4\d{15}$/);
+    expect(isLuhnValid(TEST_CARD_NUMBER)).toBe(true);
   });
 
-  it('build a card number no network issues, valid by Luhn', () => {
-    expect(cardNumber('a')).toMatch(/^\d{16}$/);
-    expect(cardNumber('a').startsWith(FICTITIOUS_CARD_PREFIX)).toBe(true);
-    expect(isLuhnValid(cardNumber('a'))).toBe(true);
-  });
-
-  it('build a social security number with a valid key and a place of birth that does not exist', () => {
-    const digits = digitsOf(socialSecurityNumber('a'));
-    expect(digits).toHaveLength(15);
-    expect(97n - (BigInt(digits.slice(0, 13)) % 97n)).toBe(BigInt(digits.slice(13)));
-    expect(digits.slice(5, 10)).toBe('99999');
-  });
+  it.each(['jane', 'a', 'b', 'c'])(
+    'build a social security number whose key is not the valid one for %s',
+    (label) => {
+      const digits = digitsOf(socialSecurityNumber(label));
+      expect(digits).toHaveLength(15);
+      expect(Number(digits.slice(13))).not.toBe(socialSecurityKey(digits.slice(0, 13)));
+      expect(97n - (BigInt(digits.slice(0, 13)) % 97n)).toBe(
+        BigInt(socialSecurityKey(digits.slice(0, 13))),
+      );
+    },
+  );
 
   it('build a tax number outside the range the administration assigns', () => {
     expect(digitsOf(taxNumber('a'))).toMatch(/^99\d{11}$/);

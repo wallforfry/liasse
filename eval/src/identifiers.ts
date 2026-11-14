@@ -2,12 +2,19 @@ import { createPrng } from './prng.ts';
 
 export const CORPUS_SEED = 'liasse-eval-v1';
 
-// No bank holds this code: every IBAN of the corpus is built on it, which is what lets a
-// test refuse any other.
+// Every identifier of the corpus is built so that it cannot designate anything real, by
+// one of three means: a check that real ones always pass and this one fails (company
+// numbers, the national key of the bank account, the key of the social security number),
+// a range that is never assigned (the tax number, the bank code), or a value published
+// for tests (the card number). Drawing well-formed numbers at random is not enough: one
+// valid French company number in three is assigned.
+
 export const FICTITIOUS_BANK_CODE = '99999';
-// Major industry identifier 9 is left to national standards bodies: no card network
-// issues numbers under it.
-export const FICTITIOUS_CARD_PREFIX = '9999';
+
+// The test number the card networks publish for a card that is never issued. It is in a
+// real issuer range and passes the Luhn check, which is what a detector of card numbers
+// looks for: the corpus needs it found and masked.
+export const TEST_CARD_NUMBER = '4111111111111111';
 
 // Digits drawn from the seed and a label, so that each identifier is the same at every
 // generation and independent of the others.
@@ -28,20 +35,25 @@ const luhnSum = (digits: string): number =>
 export const isLuhnValid = (digits: string): boolean =>
   /^\d+$/.test(digits) && luhnSum(digits) % 10 === 0;
 
-const withLuhnCheck = (payload: string): string =>
-  `${payload}${String((10 - (luhnSum(`${payload}0`) % 10)) % 10)}`;
+// How far the last digit is moved from the one the Luhn check wants: any shift from 1 to
+// 9 makes the number fail the check.
+const WRONG_CHECK_SHIFT = 5;
 
-// A French company number: nine digits that pass the Luhn check. It is drawn from the
-// seed, not looked up, so it identifies no company on purpose.
-export const siren = (label: string): string => withLuhnCheck(seededDigits(`siren/${label}`, 8));
+const withWrongLuhnCheck = (payload: string): string => {
+  const valid = (10 - (luhnSum(`${payload}0`) % 10)) % 10;
+  return `${payload}${String((valid + WRONG_CHECK_SHIFT) % 10)}`;
+};
 
-// The number of an establishment: the company number, four digits and a Luhn check.
-export const siret = (label: string): string => withLuhnCheck(`${siren(label)}0001`);
+// Nine digits shaped like a French company number that fail the Luhn check. The register
+// only holds numbers that pass it, so this one is in no register, whatever its digits.
+export const siren = (label: string): string =>
+  withWrongLuhnCheck(seededDigits(`siren/${label}`, 8));
 
-export const cardNumber = (label: string): string =>
-  withLuhnCheck(`${FICTITIOUS_CARD_PREFIX}${seededDigits(`card/${label}`, 11)}`);
+// The number of an establishment: the company number, four digits and a check digit,
+// wrong as well.
+export const siret = (label: string): string => withWrongLuhnCheck(`${siren(label)}0001`);
 
-// Remainder of a decimal number of any length, taken a few digits at a time.
+// Remainder of a decimal number of any length, taken a digit at a time.
 const mod97 = (digits: string): number =>
   Array.from(digits).reduce((remainder, digit) => (remainder * 10 + Number(digit)) % 97, 0);
 
@@ -68,24 +80,31 @@ export const frenchBankCode = (iban: string): string | undefined => {
   return value.startsWith('FR') ? value.slice(4, 9) : undefined;
 };
 
-// A French IBAN on the fictitious bank code, with a valid national key and valid check
-// digits, printed in groups of four.
+// The national key a French account number must end with, from 1 to 97.
+export const frenchNationalKey = (bank: string, branch: string, account: string): number =>
+  97 - ((89 * mod97(bank) + 15 * mod97(branch) + 3 * mod97(account)) % 97);
+
+// A French IBAN that passes the international check, so that a detector finds it, and
+// names no account: its bank code is not a bank, and its national key is one more than
+// the key French banks require, so no French bank could hold it.
 export const frenchIban = (label: string): string => {
   const branch = seededDigits(`iban/branch/${label}`, 5);
   const account = seededDigits(`iban/account/${label}`, 11);
-  const key =
-    97 - ((89 * Number(FICTITIOUS_BANK_CODE) + 15 * Number(branch) + 3 * mod97(account)) % 97);
-  const bban = `${FICTITIOUS_BANK_CODE}${branch}${account}${String(key).padStart(2, '0')}`;
+  const wrongKey = (frenchNationalKey(FICTITIOUS_BANK_CODE, branch, account) % 97) + 1;
+  const bban = `${FICTITIOUS_BANK_CODE}${branch}${account}${String(wrongKey).padStart(2, '0')}`;
   const check = 98 - mod97(lettersToDigits(`${bban}FR00`));
   return (`FR${String(check).padStart(2, '0')}${bban}`.match(/.{1,4}/g) ?? []).join(' ');
 };
 
-// A French social security number with its key. The department is 99 (born abroad) and
-// the country code 999, which names no country: the number is well formed and nobody's.
+// The key a French social security number must end with.
+export const socialSecurityKey = (thirteenDigits: string): number => 97 - mod97(thirteenDigits);
+
+// Shaped like the social security number of a woman born in May 1972 abroad, with a key
+// that is one more than the valid one: no register can hold it.
 export const socialSecurityNumber = (label: string): string => {
-  const body = `2850599999${seededDigits(`nir/${label}`, 3)}`;
-  const key = 97 - mod97(body);
-  return `${body.slice(0, 1)} ${body.slice(1, 3)} ${body.slice(3, 5)} ${body.slice(5, 7)} ${body.slice(7, 10)} ${body.slice(10)} ${String(key).padStart(2, '0')}`;
+  const body = `2720599999${seededDigits(`nir/${label}`, 3)}`;
+  const wrongKey = (socialSecurityKey(body) % 97) + 1;
+  return `${body.slice(0, 1)} ${body.slice(1, 3)} ${body.slice(3, 5)} ${body.slice(5, 7)} ${body.slice(7, 10)} ${body.slice(10)} ${String(wrongKey).padStart(2, '0')}`;
 };
 
 // A French tax number has thirteen digits and starts with 0 to 3; this one starts with 99.

@@ -127,7 +127,7 @@ const waterPayment: ScenarioDocument = {
   render: pdf([
     ...letterhead('waterBoard', 'Accueil : 01 99 00 30 08'),
     `REÇU DE PAIEMENT N° ${PAYMENT_NUMBER}`,
-    `Valmont-sur-Orbe, le ${frDate(PAYMENT_DATE)}`,
+    `Trévolzac-sur-Yvrelle, le ${frDate(PAYMENT_DATE)}`,
     '',
     'Abonné : Mme Jane Doe',
     `Référence abonné : ${WATER_CUSTOMER}`,

@@ -8,6 +8,7 @@ import {
   fact,
   field,
   keyDate,
+  link,
   maskedField,
   money,
   noKeyDate,
@@ -44,9 +45,9 @@ const bankStatement: ScenarioDocument = {
     `Solde au ${frDate('2025-09-30')} : ${eur(OPENING_BALANCE)}`,
     '',
     'Date   Libellé                                   Débit      Crédit',
-    operation('05', 'Virement loyer Agence du Belvédère', 840),
+    operation('05', 'Virement loyer Agence Vouzelin', 840),
     operation('12', 'Prélèvement Telorca', 24.49),
-    operation('12', 'Paiement carte Parking du Belvédère', 4.5),
+    operation('12', 'Paiement carte Parking Halle Yvrelle', 4.5),
     operation('16', 'Prélèvement Fibrenoix', 39.99),
     operation('18', 'Prélèvement Brisevent Électricité', 74.85),
     operation('22', 'Retrait distributeur', 60),
@@ -86,9 +87,13 @@ const bankStatement: ScenarioDocument = {
       ),
     ],
     key_dates: [noKeyDate('due', 'expiry', 'renewal')],
+    // The statement debits these three bills to the cent on the day each one announces.
+    links: ['mobile-bill-2025-10', 'internet-bill-2025-10', 'energy-bill-2025-10'].map((bill) =>
+      link('pays', bill, 'optional'),
+    ),
     subjects: [about(SUBJECTS.bankAccount)],
     facts: [
-      fact('The current account at Crédit Orbien held 3214.65 EUR on 2025-10-31.', {
+      fact('The current account at Crédit Yvrellois held 3214.65 EUR on 2025-10-31.', {
         entities: [PARTIES.bank.key],
         amounts: [money(CLOSING_BALANCE)],
         dates: [STATEMENT_END],
@@ -110,7 +115,7 @@ const cardNotice: ScenarioDocument = {
   render: pdf([
     ...letterhead('bank', BANK_CONTACT),
     ...ADDRESSEE,
-    `Valmont-sur-Orbe, le ${frDate(NOTICE_DATE)}`,
+    `Trévolzac-sur-Yvrelle, le ${frDate(NOTICE_DATE)}`,
     '',
     'Objet : confirmation de mise en opposition de votre carte bancaire',
     `Référence : ${BLOCK_REFERENCE}`,
@@ -128,7 +133,7 @@ const cardNotice: ScenarioDocument = {
     'carte vous sera envoyée sous dix jours ouvrés ; son code confidentiel',
     'reste inchangé. Cette opposition est gratuite.',
     '',
-    'Votre conseiller Crédit Orbien',
+    'Votre conseiller Crédit Yvrellois',
   ]),
   truth: truth({
     type: TYPES.bankNotice,
@@ -149,7 +154,7 @@ const cardNotice: ScenarioDocument = {
     ],
     subjects: [about(SUBJECTS.bankAccount)],
     facts: [
-      fact('Crédit Orbien blocked the lost bank card on 2025-09-09 and sends a new one.', {
+      fact('Crédit Yvrellois blocked the lost bank card on 2025-09-09 and sends a new one.', {
         entities: [PARTIES.bank.key],
         dates: [BLOCKED_ON],
       }),

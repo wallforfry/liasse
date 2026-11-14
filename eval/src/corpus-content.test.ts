@@ -1,15 +1,16 @@
 import { createHash } from 'node:crypto';
 import { entityNameKey } from '@liasse/core/domain';
+import { findSensitiveIdentifiers } from '@liasse/core/entities';
 import { createFakeVisionModel } from '@liasse/core/testing';
 import { extractText, type ExtractedText } from '@liasse/core/text';
 import { beforeAll, describe, expect, it } from 'vitest';
 import { loadCorpus, readDocumentFile } from './corpus.ts';
 import {
   FICTITIOUS_BANK_CODE,
-  FICTITIOUS_CARD_PREFIX,
   frenchBankCode,
   isLuhnValid,
   isValidIban,
+  TEST_CARD_NUMBER,
 } from './identifiers.ts';
 import type { Corpus, GroundTruth } from './schema/index.ts';
 import { SCENARIO } from './scenario/index.ts';
@@ -205,14 +206,24 @@ describe('the forbidden-data rule', () => {
     expect(ibans.map(frenchBankCode)).toEqual(ibans.map(() => FICTITIOUS_BANK_CODE));
   });
 
-  it('only prints card numbers no network issues', () => {
+  it('only prints the card number published for tests', () => {
     const cards = [...new Set(everything().replace(IBAN, '').match(CARD) ?? [])];
-    expect(cards.length).toBeGreaterThanOrEqual(1);
-    expect(
-      cards.filter(
-        (card) => !card.startsWith(FICTITIOUS_CARD_PREFIX) || !isLuhnValid(card.replace(/ /g, '')),
-      ),
-    ).toEqual([]);
+    expect(cards.map((card) => card.replace(/ /g, ''))).toEqual([TEST_CARD_NUMBER]);
+  });
+
+  // The identifiers the truth wants masked must be ones the system under test can see:
+  // its detector only takes an IBAN that passes mod 97 and a card in an issuer range.
+  it('prints its IBAN and its card number in a form the detector of Liasse finds', () => {
+    const undetected = corpus.documents.flatMap((document) => {
+      const found = findSensitiveIdentifiers(document.pages.map(({ text }) => text).join('\n')).map(
+        ({ value }) => value.replace(/\s/g, ''),
+      );
+      return document.masking
+        .filter(({ kind }) => kind === 'iban' || kind === 'card_number')
+        .filter(({ clear }) => !found.includes(clear.replace(/\s/g, '')))
+        .map(({ kind }) => `${document.id}: ${kind}`);
+    });
+    expect(undetected).toEqual([]);
   });
 
   it('only prints phone numbers reserved for fiction', () => {
@@ -220,5 +231,33 @@ describe('the forbidden-data rule', () => {
     const phones = [...(text.match(FRENCH_PHONE) ?? []), ...(text.match(BRITISH_PHONE) ?? [])];
     expect(phones.length).toBeGreaterThan(10);
     expect([...new Set(phones)].filter((phone) => !FICTION_PHONE.test(phone))).toEqual([]);
+  });
+
+  // A French company number always passes the Luhn check: one that fails it is in no
+  // register, whatever its digits.
+  it('only prints company numbers that cannot be register entries', () => {
+    const numbers = [...everything().matchAll(/\bSIRE[NT] (\d{9}(?:\d{5})?)\b/g)].map(
+      ([, digits = '']) => digits,
+    );
+    expect(new Set(numbers).size).toBeGreaterThanOrEqual(10);
+    expect([...new Set(numbers)].filter(isLuhnValid)).toEqual([]);
+  });
+
+  it('only prints web addresses on reserved domains', () => {
+    const hosts = [...everything().matchAll(/\b(?:https?:\/\/|www\.)([\w-]+(?:\.[\w-]+)+)/g)].map(
+      ([, host = '']) => host,
+    );
+    expect(hosts.length).toBeGreaterThanOrEqual(3);
+    expect([...new Set(hosts)].filter((host) => !RESERVED_EMAIL_DOMAIN.test(host))).toEqual([]);
+  });
+
+  it('gives the owner a year of birth that makes her an adult in her oldest document', () => {
+    const [, year = ''] = /N° de sécurité sociale : \d (\d{2})/.exec(everything()) ?? [];
+    const oldest = corpus.documents
+      .flatMap(({ core }) =>
+        core.document_date.requirement === 'forbidden' ? [] : [core.document_date.value],
+      )
+      .sort()[0];
+    expect(Number(oldest?.slice(0, 4)) - (1900 + Number(year))).toBeGreaterThanOrEqual(18);
   });
 });

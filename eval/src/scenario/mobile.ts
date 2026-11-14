@@ -40,7 +40,7 @@ const mobileContract: ScenarioDocument = {
     ...letterhead('telorca', TELORCA_CONTACT),
     "CONTRAT D'ABONNEMENT MOBILE",
     `Contrat n° ${CONTRACTS.mobile}`,
-    `Souscrit le ${frDate(SUBSCRIBED_ON)} en boutique Telorca de Valmont-sur-Orbe`,
+    `Souscrit le ${frDate(SUBSCRIBED_ON)} en boutique Telorca de Trévolzac-sur-Yvrelle`,
     '',
     'Titulaire : Mme Jane Doe',
     `Adresse : ${HOME_ADDRESS}`,
@@ -67,6 +67,8 @@ const mobileContract: ScenarioDocument = {
       issuer: required(PARTIES.telorca.key, PARTIES.telorca.printed),
       recipient: required(PARTIES.jane.key, 'Jane Doe'),
       amount: optional(money(PLAN_PRICE), eur(PLAN_PRICE)),
+      // The commitment, which the contract does not print as a period.
+      period: optional({ start: SUBSCRIBED_ON, end: COMMITMENT_END }, null),
       reference: required(CONTRACTS.mobile, CONTRACTS.mobile),
     }),
     fields: [
@@ -80,7 +82,9 @@ const mobileContract: ScenarioDocument = {
     ],
     key_dates: [
       keyDate('effective', SUBSCRIBED_ON, frDate(SUBSCRIBED_ON)),
-      keyDate('expiry', COMMITMENT_END, frDate(COMMITMENT_END)),
+      // The day the commitment ends, not the contract, which goes on without a term:
+      // an end of validity for one reader, an event for another.
+      keyDate(['expiry', 'event'], COMMITMENT_END, frDate(COMMITMENT_END)),
     ],
     subjects: [about(SUBJECTS.mobilePlan)],
     facts: [
@@ -240,7 +244,7 @@ const terminationLetter: ScenarioDocument = {
       'Telorca - Service clients',
       '27 avenue des Câbliers, 99410 Sainte-Orme',
       '',
-      `Valmont-sur-Orbe, le ${frDate(TERMINATION_LETTER_DATE)}`,
+      `Trévolzac-sur-Yvrelle, le ${frDate(TERMINATION_LETTER_DATE)}`,
       'Lettre recommandée avec accusé de réception',
       '',
       `Objet : résiliation du contrat mobile n° ${CONTRACTS.mobile}`,

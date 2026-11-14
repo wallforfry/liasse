@@ -23,6 +23,21 @@ export const PAPERS = {
     desk: 248,
     jpegQuality: 55,
   },
+  // The same scanner with the sheet laid in carelessly: a few degrees off.
+  crooked: {
+    scale: 2,
+    columns: 76,
+    minRows: 50,
+    marginPx: 72,
+    skew: 22,
+    paper: 236,
+    ink: 38,
+    noise: 5,
+    shade: 12,
+    deskPx: 0,
+    desk: 248,
+    jpegQuality: 55,
+  },
   // A sheet that spent decades in a folder, scanned in a hurry: grey, grainy, askew.
   archive: {
     scale: 2,

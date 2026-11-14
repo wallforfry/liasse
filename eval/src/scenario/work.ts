@@ -1,6 +1,6 @@
 import { EMPLOYER_SIRET, HOME_ADDRESS, IBAN_TAIL, JANE, PARTIES, SUBJECTS } from './cast.ts';
-import { eur, frDate } from '../format.ts';
-import { ADDRESSEE, letterhead, pdf, scannedPdf } from './layout.ts';
+import { eur, euroNumber, frDate } from '../format.ts';
+import { ADDRESSEE, letterhead, pdf, scannedPdf, table } from './layout.ts';
 import {
   about,
   core,
@@ -39,7 +39,8 @@ const employmentContract: ScenarioDocument = {
     '',
     `Entre la société Ostrelia Conseil SAS, SIRET ${EMPLOYER_SIRET},`,
     'représentée par Mme Solène Abgrall, directrice générale,',
-    `et Mme Jane Doe, demeurant ${HOME_ADDRESS}.`,
+    'et Mme Jane Doe, demeurant',
+    `${HOME_ADDRESS}.`,
     '',
     'Article 1 - Engagement',
     `Mme Jane Doe est engagée à compter du ${frDate(HIRED_ON)} en qualité de`,
@@ -92,6 +93,8 @@ const employmentContract: ScenarioDocument = {
       noKeyDate('renewal', 'due'),
     ],
     subjects: [about(SUBJECTS.employment)],
+    // A contract of employment states a salary: flagging it private is a fair call.
+    private: 'optional',
     facts: [
       fact('Jane Doe has worked for Ostrelia Conseil on a permanent contract since 2023-09-01.', {
         entities: [PARTIES.employer.key],
@@ -119,6 +122,9 @@ interface Payslip {
   readonly scanned?: boolean;
 }
 
+// Share of the gross pay withheld as contributions, on every payslip of the scenario.
+const CONTRIBUTION_RATE = '21,80 %';
+
 const round2 = (value: number): number => Math.round(value * 100) / 100;
 
 const payslip = (slip: Payslip): ScenarioDocument => {
@@ -137,13 +143,28 @@ const payslip = (slip: Payslip): ScenarioDocument => {
     'Emploi : consultante en organisation - statut cadre',
     `Entrée dans l'entreprise : ${frDate(HIRED_ON)}`,
     '',
-    `Salaire de base : ${eur(BASE_SALARY)}`,
-    ...(slip.bonus === 0 ? [] : [`Prime de fin d'année : ${eur(slip.bonus)}`]),
-    `Salaire brut : ${eur(gross)}`,
-    `Cotisations et contributions salariales : - ${eur(slip.contributions)}`,
-    `Net à payer avant impôt sur le revenu : ${eur(round2(gross - slip.contributions))}`,
-    `Net imposable : ${eur(slip.netTaxable)}`,
-    `Impôt sur le revenu prélevé à la source (taux 2,0 %) : - ${eur(slip.taxWithheld)}`,
+    ...table(
+      ['Rubrique', 'Base', 'Taux', 'Montant'],
+      [
+        ['Salaire de base', '', '', euroNumber(BASE_SALARY)],
+        ...(slip.bonus === 0 ? [] : [["Prime de fin d'année", '', '', euroNumber(slip.bonus)]]),
+        ['Salaire brut', '', '', euroNumber(gross)],
+        [
+          'Cotisations et contributions',
+          euroNumber(gross),
+          CONTRIBUTION_RATE,
+          `- ${euroNumber(slip.contributions)}`,
+        ],
+        ['Net à payer avant impôt', '', '', euroNumber(round2(gross - slip.contributions))],
+        ['Net imposable', '', '', euroNumber(slip.netTaxable)],
+        [
+          'Impôt sur le revenu prélevé',
+          euroNumber(slip.netTaxable),
+          '2,00 %',
+          `- ${euroNumber(slip.taxWithheld)}`,
+        ],
+      ],
+    ),
     '',
     `Net payé : ${eur(netPaid)}`,
     `Versement par virement sur le compte se terminant par ${IBAN_TAIL}`,
@@ -164,18 +185,26 @@ const payslip = (slip: Payslip): ScenarioDocument => {
         recipient: required(PARTIES.jane.key, 'Jane Doe'),
         amount: required(money(netPaid), `Net payé : ${eur(netPaid)}`),
         period: required({ start, end }, `du ${frDate(start)} au ${frDate(end)}`),
+        // The day the salary is paid, and the number that identifies the employee: neither is
+        // a payment deadline or a document number, and either may be read as one.
+        due_date: optional(slip.paidOn, frDate(slip.paidOn)),
+        reference: optional(JANE.employeeNumber, JANE.employeeNumber),
       }),
       fields: [
-        field(GROSS_NAMES, 'money', required(money(gross), `Salaire brut : ${eur(gross)}`)),
+        field(
+          GROSS_NAMES,
+          'money',
+          required(money(gross), `Salaire brut | | | ${euroNumber(gross)}`),
+        ),
         field(
           NET_TAXABLE_NAMES,
           'money',
-          optional(money(slip.netTaxable), `Net imposable : ${eur(slip.netTaxable)}`),
+          optional(money(slip.netTaxable), `Net imposable | | | ${euroNumber(slip.netTaxable)}`),
         ),
         field(
           ['income_tax_withheld', 'withholding_tax', 'tax_withheld'],
           'money',
-          optional(money(slip.taxWithheld), eur(slip.taxWithheld)),
+          optional(money(slip.taxWithheld), euroNumber(slip.taxWithheld)),
         ),
         field(
           ['employee_number', 'employee_id'],
@@ -189,7 +218,7 @@ const payslip = (slip: Payslip): ScenarioDocument => {
           'optional',
         ),
       ],
-      key_dates: [noKeyDate('due', 'expiry', 'renewal')],
+      key_dates: [noKeyDate('expiry', 'renewal')],
       subjects: [about(SUBJECTS.employment), about(SUBJECTS.bankAccount, 'optional')],
       facts: [
         fact(
@@ -256,6 +285,7 @@ const paySummary: ScenarioDocument = {
         { start: '2025-01-01', end: '2025-12-31' },
         `du ${frDate('2025-01-01')} au ${frDate('2025-12-31')}`,
       ),
+      reference: optional(JANE.employeeNumber, JANE.employeeNumber),
     }),
     fields: [
       field(

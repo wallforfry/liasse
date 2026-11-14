@@ -141,7 +141,7 @@ const energyBill = (bill: EnergyBill): ScenarioDocument => {
         keyDate('due', bill.due, frDate(bill.due)),
         ...(bill.closedOn === undefined
           ? [noKeyDate('renewal')]
-          : [keyDate('expiry', bill.closedOn, frDate(bill.closedOn), 'optional')]),
+          : [keyDate(['expiry', 'event'], bill.closedOn, frDate(bill.closedOn), 'optional')]),
       ],
       subjects: [about(SUBJECTS.home), about(supplier.subject, 'optional')],
       facts: [
@@ -219,7 +219,15 @@ const supplyContract: ScenarioDocument = {
     ],
     key_dates: [
       keyDate('effective', SWITCH_DATE, frDate(SWITCH_DATE)),
-      noKeyDate('expiry', 'renewal', 'notice_deadline'),
+      // The contract has no term of its own, but it prints the last day of the one it
+      // replaces.
+      keyDate(
+        ['expiry', 'event'],
+        LAST_DAY_WITH_VOLTANEIGE,
+        frDate(LAST_DAY_WITH_VOLTANEIGE),
+        'optional',
+      ),
+      noKeyDate('renewal', 'notice_deadline'),
     ],
     subjects: [
       about(SUBJECTS.home),

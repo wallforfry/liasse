@@ -23,12 +23,13 @@ const expected = (stated: Partial<AnswerExpectation>): AnswerExpectation => ({
   amounts: [],
   dates: [],
   counts: [],
-  entities: [],
+  entities: { required: [], exhaustive: false },
   verdict: null,
   ...stated,
 });
 
-const amount = (label: string, value: number, currency = 'EUR') => ({
+const amount = (key: string, label: string, value: number, currency = 'EUR') => ({
+  key,
   label,
   value: money(value, currency),
   tolerance: CENT,
@@ -65,8 +66,10 @@ export const QUESTIONS: readonly QuestionInput[] = [
       },
     ],
     expected: expected({
-      amounts: [amount('total of the electricity bills dated 2025', 597.15)],
-      counts: [{ label: 'electricity bills dated 2025', value: ENERGY_BILLS_2025.length }],
+      amounts: [amount('total', 'total of the electricity bills dated 2025', 597.15)],
+      counts: [
+        { key: 'bills', label: 'electricity bills dated 2025', value: ENERGY_BILLS_2025.length },
+      ],
       documents: documents({ optional: ENERGY_BILLS_2025, forbidden: ['energy-bill-2024-11'] }),
     }),
     rationale:
@@ -81,8 +84,10 @@ export const QUESTIONS: readonly QuestionInput[] = [
       { tool: 'timeline', arguments: { subject: SUBJECTS.home.label } },
     ],
     expected: expected({
-      dates: [{ label: 'first day of supply by the new supplier', date: '2025-04-01' }],
-      entities: [PARTIES.brisevent.key],
+      dates: [
+        { key: 'switch', label: 'first day of supply by the new supplier', date: '2025-04-01' },
+      ],
+      entities: { required: [PARTIES.brisevent.key], exhaustive: false },
       documents: documents({
         any_of: [
           ['energy-contract-brisevent', 'energy-closing-bill-2025-04', 'energy-bill-2025-06'],
@@ -108,8 +113,12 @@ export const QUESTIONS: readonly QuestionInput[] = [
     ],
     expected: expected({
       dates: [
-        { label: 'end of the lease term', date: '2026-01-31' },
-        { label: 'renewal of the home insurance', date: '2026-03-01' },
+        { key: 'lease-end', label: 'end of the lease term', date: '2026-01-31' },
+        {
+          key: 'home-insurance-renewal',
+          label: 'renewal of the home insurance',
+          date: '2026-03-01',
+        },
       ],
       documents: documents({
         required: ['lease'],
@@ -129,7 +138,7 @@ export const QUESTIONS: readonly QuestionInput[] = [
     tools: [{ tool: 'get_subject', arguments: { query: SUBJECTS.mobilePlan.label } }],
     expected: expected({
       verdict: false,
-      dates: [{ label: 'day the contract ended', date: '2025-12-31' }],
+      dates: [{ key: 'contract-end', label: 'day the contract ended', date: '2025-12-31' }],
       documents: documents({
         any_of: [['mobile-termination-letter', 'mobile-termination-confirmation']],
       }),
@@ -178,7 +187,7 @@ export const QUESTIONS: readonly QuestionInput[] = [
       },
     ],
     expected: expected({
-      entities: [PARTIES.brisevent.key],
+      entities: { required: [PARTIES.brisevent.key], exhaustive: true },
       documents: documents({
         required: [
           'energy-contract-brisevent',
@@ -213,8 +222,8 @@ export const QUESTIONS: readonly QuestionInput[] = [
       },
     ],
     expected: expected({
-      amounts: [amount('total of the three mobile bills', 64.47)],
-      counts: [{ label: 'mobile bills', value: 3 }],
+      amounts: [amount('total', 'total of the three mobile bills', 64.47)],
+      counts: [{ key: 'bills', label: 'mobile bills', value: 3 }],
     }),
     rationale:
       'Three bills: 19.99, 24.49 and 19.99. The November bill only exists as the attachment of an email, and the email repeats its amount: counted as a bill too, the total becomes 84.46.',
@@ -247,7 +256,7 @@ export const QUESTIONS: readonly QuestionInput[] = [
       },
     ],
     expected: expected({
-      dates: [{ label: 'last day to give notice', date: '2026-01-01' }],
+      dates: [{ key: 'notice-deadline', label: 'last day to give notice', date: '2026-01-01' }],
       documents: documents({
         required: ['home-insurance-renewal-2026'],
         optional: ['home-insurance-contract', 'home-insurance-amendment'],
@@ -272,7 +281,9 @@ export const QUESTIONS: readonly QuestionInput[] = [
       },
     ],
     expected: expected({
-      dates: [{ label: 'last day of validity of the test', date: '2027-02-19' }],
+      dates: [
+        { key: 'test-expiry', label: 'last day of validity of the test', date: '2027-02-19' },
+      ],
       documents: documents({ required: ['vehicle-inspection-2025-02'] }),
     }),
     rationale:
@@ -284,8 +295,8 @@ export const QUESTIONS: readonly QuestionInput[] = [
     language: 'fr',
     tools: [{ tool: 'get_subject', arguments: { query: 'bail' } }],
     expected: expected({
-      amounts: [amount('monthly rent with charges', 840)],
-      dates: [{ label: 'end of the lease term', date: '2026-01-31' }],
+      amounts: [amount('monthly-rent', 'monthly rent with charges', 840)],
+      dates: [{ key: 'lease-end', label: 'end of the lease term', date: '2026-01-31' }],
       documents: documents({ required: ['lease'], optional: ['rent-receipt-2025-11'] }),
     }),
     rationale:
@@ -298,8 +309,8 @@ export const QUESTIONS: readonly QuestionInput[] = [
     tools: [{ tool: 'search', arguments: { query: "paiement facture d'eau juillet 2025" } }],
     expected: expected({
       verdict: true,
-      amounts: [amount('amount paid', 203.45)],
-      dates: [{ label: 'day of the payment', date: '2025-07-28' }],
+      amounts: [amount('paid', 'amount paid', 203.45)],
+      dates: [{ key: 'payment-day', label: 'day of the payment', date: '2025-07-28' }],
       documents: documents({
         required: ['water-payment-2025-07'],
         optional: ['water-bill-2025-07'],
@@ -348,8 +359,8 @@ export const QUESTIONS: readonly QuestionInput[] = [
     language: 'fr',
     tools: [{ tool: 'query', arguments: { type: 'tax_notice', include_private: true } }],
     expected: expected({
-      amounts: [amount('balance of income tax', 1284)],
-      dates: [{ label: 'payment deadline', date: '2025-09-15' }],
+      amounts: [amount('balance', 'balance of income tax', 1284)],
+      dates: [{ key: 'deadline', label: 'payment deadline', date: '2025-09-15' }],
       documents: documents({ required: ['tax-notice-2025'] }),
     }),
     rationale:
@@ -362,9 +373,9 @@ export const QUESTIONS: readonly QuestionInput[] = [
     tools: [{ tool: 'query', arguments: { where: [['core.amount.currency', '!=', 'EUR']] } }],
     expected: expected({
       amounts: [
-        amount('electric bicycle', 1249, 'GBP'),
-        amount('cloud storage subscription', 96, 'USD'),
-        amount('oak wardrobe', 4850, 'FRF'),
+        amount('bicycle', 'electric bicycle', 1249, 'GBP'),
+        amount('cloud-storage', 'cloud storage subscription', 96, 'USD'),
+        amount('wardrobe', 'oak wardrobe', 4850, 'FRF'),
       ],
       documents: documents({
         required: ['bike-invoice-2024-08', 'cloud-invoice-2025-05', 'furniture-invoice-1998'],
@@ -380,7 +391,7 @@ export const QUESTIONS: readonly QuestionInput[] = [
     language: 'fr',
     tools: [{ tool: 'recall', arguments: { query: 'net imposable total 2025', at: '2026-01-15' } }],
     expected: expected({
-      amounts: [amount('net taxable pay of 2025', 31170.5)],
+      amounts: [amount('net-taxable', 'net taxable pay of 2025', 31170.5)],
       documents: documents({ any_of: [['pay-summary-2025', 'payslip-2025-12']] }),
     }),
     rationale:
@@ -393,7 +404,13 @@ export const QUESTIONS: readonly QuestionInput[] = [
     tools: [{ tool: 'get_subject', arguments: { query: SUBJECTS.carInsurance.label } }],
     expected: expected({
       verdict: false,
-      dates: [{ label: 'first day of the contract that replaced it', date: '2025-06-01' }],
+      dates: [
+        {
+          key: 'replaced-on',
+          label: 'first day of the contract that replaced it',
+          date: '2025-06-01',
+        },
+      ],
       documents: documents({ required: ['car-insurance-2025'], optional: ['car-insurance-2023'] }),
     }),
     rationale: 'The 2025 contract says it cancels and replaces the 2023 one from 1 June 2025.',
@@ -408,11 +425,11 @@ export const QUESTIONS: readonly QuestionInput[] = [
       { tool: 'get_subject', arguments: { query: SUBJECTS.carInsurance.label } },
     ],
     expected: expected({
-      entities: [PARTIES.corbelin.key, PARTIES.roulavie.key],
+      entities: { required: [PARTIES.tolverane.key, PARTIES.roulavie.key], exhaustive: true },
       documents: documents({ forbidden: ['travel-insurance-2025-07'] }),
     }),
     rationale:
-      'Corbelin insures the home and Roulavie the car. The travel insurer covered one trip that ended in July 2025, and the health mutual insures neither.',
+      'Tolvérane insures the home and Roulavie the car. The travel insurer covered one trip that ended in July 2025, and the health mutual insures neither.',
   },
   {
     id: 'q20',
@@ -429,10 +446,10 @@ export const QUESTIONS: readonly QuestionInput[] = [
       },
     ],
     expected: expected({
-      entities: [PARTIES.voltaneige.key, PARTIES.brisevent.key],
+      entities: { required: [PARTIES.voltaneige.key, PARTIES.brisevent.key], exhaustive: true },
       counts: [
-        { label: 'bills from Voltaneige', value: 4 },
-        { label: 'bills from Brisevent', value: 3 },
+        { key: 'voltaneige', label: 'bills from Voltaneige', value: 4 },
+        { key: 'brisevent', label: 'bills from Brisevent', value: 3 },
       ],
     }),
     rationale:

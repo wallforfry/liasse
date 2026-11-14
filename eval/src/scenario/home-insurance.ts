@@ -1,6 +1,7 @@
 import { CONTRACTS, HOME_ADDRESS, IBAN_TAIL, PARTIES, SUBJECTS } from './cast.ts';
+import { noticeDeadline } from '../calendar.ts';
 import { eur, frDate } from '../format.ts';
-import { ADDRESSEE, letterhead, pdf, scannedPdf } from './layout.ts';
+import { ADDRESSEE, letterhead, pdf, scannedPdf, stamped } from './layout.ts';
 import {
   about,
   core,
@@ -16,9 +17,13 @@ import {
 } from './model.ts';
 import { TYPES } from './types.ts';
 
-const CORBELIN_CONTACT = 'Service clients : 01 99 00 24 60';
+const TOLVERANE_CONTACT = 'Service clients : 01 99 00 24 60';
 const HOME_POLICY = CONTRACTS.homeInsurance;
 const HOME_EFFECTIVE = '2023-03-01';
+// The notice a policyholder owes before a renewal, and the first renewal: every
+// deadline of the contract and of its renewal notice is computed from them.
+const NOTICE_MONTHS = 2;
+const FIRST_RENEWAL = '2024-03-01';
 const HOME_PREMIUM_2023 = 214.8;
 const HOME_PREMIUM_2024 = 236.4;
 const HOME_PREMIUM_2026 = 243.1;
@@ -27,7 +32,7 @@ const homeContract: ScenarioDocument = {
   id: 'home-insurance-contract',
   description: 'Home insurance contract with automatic yearly renewal and a two-month notice',
   render: pdf([
-    ...letterhead('corbelin', CORBELIN_CONTACT),
+    ...letterhead('tolverane', TOLVERANE_CONTACT),
     "CONTRAT D'ASSURANCE HABITATION - CONDITIONS PARTICULIÈRES",
     `Contrat n° ${HOME_POLICY}`,
     `Établi le ${frDate('2023-02-14')}`,
@@ -42,7 +47,7 @@ const homeContract: ScenarioDocument = {
     '',
     `Date d'effet : ${frDate(HOME_EFFECTIVE)}`,
     'Échéance annuelle : le 1er mars de chaque année',
-    `Première échéance : ${frDate('2024-03-01')}`,
+    `Première échéance : ${frDate(FIRST_RENEWAL)}`,
     "Le contrat est reconduit automatiquement d'année en année à chaque",
     'échéance.',
     '',
@@ -52,14 +57,14 @@ const homeContract: ScenarioDocument = {
     `Cotisation annuelle TTC : ${eur(HOME_PREMIUM_2023)}, payable à l'échéance par`,
     `prélèvement sur le compte se terminant par ${IBAN_TAIL}.`,
     '',
-    'Fait à Corbelin-la-Forêt en deux exemplaires.',
-    "Pour l'assureur : Assurances Corbelin - Le souscripteur : Jane Doe",
+    'Fait à Quivrenne-la-Forêt en deux exemplaires.',
+    "Pour l'assureur : Assurances Tolvérane - Le souscripteur : Jane Doe",
   ]),
   truth: truth({
     type: TYPES.homeInsuranceContract,
     core: core('fr', {
       document_date: required('2023-02-14', frDate('2023-02-14')),
-      issuer: required(PARTIES.corbelin.key, PARTIES.corbelin.printed),
+      issuer: required(PARTIES.tolverane.key, PARTIES.tolverane.printed),
       recipient: required(PARTIES.jane.key, 'Jane Doe'),
       amount: required(money(HOME_PREMIUM_2023), eur(HOME_PREMIUM_2023)),
       period: optional({ start: HOME_EFFECTIVE, end: '2024-02-29' }, null),
@@ -69,7 +74,7 @@ const homeContract: ScenarioDocument = {
       field(
         ['notice_period_months', 'notice_period', 'cancellation_notice_months'],
         'number',
-        required(2, 'deux mois'),
+        required(NOTICE_MONTHS, 'deux mois'),
       ),
       field(
         ['annual_premium', 'premium', 'yearly_premium'],
@@ -85,18 +90,18 @@ const homeContract: ScenarioDocument = {
     ],
     key_dates: [
       keyDate('effective', HOME_EFFECTIVE, frDate(HOME_EFFECTIVE)),
-      keyDate('renewal', '2024-03-01', frDate('2024-03-01')),
+      keyDate('renewal', FIRST_RENEWAL, frDate(FIRST_RENEWAL)),
       // The renewal minus the notice period, which the pipeline computes itself.
-      keyDate('notice_deadline', '2024-01-01', null, 'optional'),
+      keyDate('notice_deadline', noticeDeadline(FIRST_RENEWAL, NOTICE_MONTHS), null, 'optional'),
     ],
     subjects: [about(SUBJECTS.homeInsurance), about(SUBJECTS.home)],
     facts: [
       fact(
-        'The Corbelin home insurance renews automatically every 1 March; notice of two months.',
-        { entities: [PARTIES.corbelin.key], subjects: [SUBJECTS.homeInsurance.key] },
+        'The Tolvérane home insurance renews automatically every 1 March; notice of two months.',
+        { entities: [PARTIES.tolverane.key], subjects: [SUBJECTS.homeInsurance.key] },
       ),
       fact('The home insurance took effect on 2023-03-01 for 214.80 EUR a year.', {
-        entities: [PARTIES.corbelin.key],
+        entities: [PARTIES.tolverane.key],
         dates: [HOME_EFFECTIVE],
         amounts: [money(HOME_PREMIUM_2023)],
       }),
@@ -109,37 +114,40 @@ const AMENDMENT_EFFECTIVE = '2024-10-01';
 const homeAmendment: ScenarioDocument = {
   id: 'home-insurance-amendment',
   description: 'Amendment to the home insurance contract adding theft cover for an e-bike, scanned',
-  render: scannedPdf('scan', [
-    ...letterhead('corbelin', CORBELIN_CONTACT),
-    `AVENANT N° 1 AU CONTRAT D'ASSURANCE HABITATION N° ${HOME_POLICY}`,
-    `Établi le ${frDate('2024-09-10')}`,
-    '',
-    'Souscripteur : Mme Jane Doe',
-    `Logement assuré : ${HOME_ADDRESS}`,
-    '',
-    "Objet de l'avenant : extension de la garantie vol aux vélos à",
-    'assistance électrique, à la demande du souscripteur.',
-    'Bien ajouté : vélo Fernway E-Tourer, valeur 1 480 €, facture du',
-    `${frDate('2024-08-17')}.`,
-    '',
-    `Date d'effet de l'avenant : ${frDate(AMENDMENT_EFFECTIVE)}`,
-    `Nouvelle cotisation annuelle TTC : ${eur(HOME_PREMIUM_2024)}`,
-    `(ancienne cotisation : ${eur(HOME_PREMIUM_2023)})`,
-    `Complément dû pour la période du ${frDate(AMENDMENT_EFFECTIVE)} au`,
-    `${frDate('2025-02-28')} : ${eur(9)}`,
-    '',
-    'Les autres clauses du contrat demeurent inchangées, notamment',
-    "l'échéance annuelle du 1er mars et le préavis de résiliation de deux",
-    'mois.',
-    '',
-    'Fait à Corbelin-la-Forêt en deux exemplaires.',
-    "Pour l'assureur : Assurances Corbelin - Le souscripteur : Jane Doe",
-  ]),
+  render: stamped(
+    scannedPdf('scan', [
+      ...letterhead('tolverane', TOLVERANE_CONTACT),
+      `AVENANT N° 1 AU CONTRAT D'ASSURANCE HABITATION N° ${HOME_POLICY}`,
+      `Établi le ${frDate('2024-09-10')}`,
+      '',
+      'Souscripteur : Mme Jane Doe',
+      `Logement assuré : ${HOME_ADDRESS}`,
+      '',
+      "Objet de l'avenant : extension de la garantie vol aux vélos à",
+      'assistance électrique, à la demande du souscripteur.',
+      'Bien ajouté : vélo Quorvel E-Tourer, valeur 1 480 €, facture du',
+      `${frDate('2024-08-17')}.`,
+      '',
+      `Date d'effet de l'avenant : ${frDate(AMENDMENT_EFFECTIVE)}`,
+      `Nouvelle cotisation annuelle TTC : ${eur(HOME_PREMIUM_2024)}`,
+      `(ancienne cotisation : ${eur(HOME_PREMIUM_2023)})`,
+      `Complément dû pour la période du ${frDate(AMENDMENT_EFFECTIVE)} au`,
+      `${frDate('2025-02-28')} : ${eur(9)}`,
+      '',
+      'Les autres clauses du contrat demeurent inchangées, notamment',
+      "l'échéance annuelle du 1er mars et le préavis de résiliation de deux",
+      'mois.',
+      '',
+      'Fait à Quivrenne-la-Forêt en deux exemplaires.',
+      "Pour l'assureur : Assurances Tolvérane - Le souscripteur : Jane Doe",
+    ]),
+    'DUPLICATA',
+  ),
   truth: truth({
     type: TYPES.contractAmendment,
     core: core('fr', {
       document_date: required('2024-09-10', frDate('2024-09-10')),
-      issuer: required(PARTIES.corbelin.key, PARTIES.corbelin.printed),
+      issuer: required(PARTIES.tolverane.key, PARTIES.tolverane.printed),
       recipient: required(PARTIES.jane.key, 'Jane Doe'),
       amount: optional(money(HOME_PREMIUM_2024), eur(HOME_PREMIUM_2024), [money(9)]),
       period: optional({ start: AMENDMENT_EFFECTIVE, end: '2025-02-28' }, null),
@@ -160,7 +168,7 @@ const homeAmendment: ScenarioDocument = {
       fact(
         'From 2024-10-01 the home insurance covers the theft of an e-bike and costs 236.40 EUR a year.',
         {
-          entities: [PARTIES.corbelin.key],
+          entities: [PARTIES.tolverane.key],
           dates: [AMENDMENT_EFFECTIVE],
           amounts: [money(HOME_PREMIUM_2024)],
         },
@@ -170,18 +178,18 @@ const homeAmendment: ScenarioDocument = {
 };
 
 const HOME_RENEWAL = '2026-03-01';
-const HOME_NOTICE_DEADLINE = '2026-01-01';
+const HOME_NOTICE_DEADLINE = noticeDeadline(HOME_RENEWAL, NOTICE_MONTHS);
 
 const homeRenewalNotice: ScenarioDocument = {
   id: 'home-insurance-renewal-2026',
   description:
     'Renewal notice of the home insurance for March 2026, with the last day to give notice',
   render: pdf([
-    ...letterhead('corbelin', CORBELIN_CONTACT),
+    ...letterhead('tolverane', TOLVERANE_CONTACT),
     ...ADDRESSEE,
     "AVIS D'ÉCHÉANCE - ASSURANCE HABITATION",
     `Contrat n° ${HOME_POLICY}`,
-    `Corbelin-la-Forêt, le ${frDate('2025-12-18')}`,
+    `Quivrenne-la-Forêt, le ${frDate('2025-12-18')}`,
     '',
     'Madame,',
     '',
@@ -196,13 +204,13 @@ const homeRenewalNotice: ScenarioDocument = {
     `par lettre recommandée reçue au plus tard le ${frDate(HOME_NOTICE_DEADLINE)}, soit deux`,
     "mois avant l'échéance.",
     '',
-    'Votre conseiller Assurances Corbelin',
+    'Votre conseiller Assurances Tolvérane',
   ]),
   truth: truth({
     type: TYPES.renewalNotice,
     core: core('fr', {
       document_date: required('2025-12-18', frDate('2025-12-18')),
-      issuer: required(PARTIES.corbelin.key, PARTIES.corbelin.printed),
+      issuer: required(PARTIES.tolverane.key, PARTIES.tolverane.printed),
       recipient: required(PARTIES.jane.key, 'Jane Doe'),
       amount: required(money(HOME_PREMIUM_2026), eur(HOME_PREMIUM_2026)),
       period: required(
@@ -212,15 +220,22 @@ const homeRenewalNotice: ScenarioDocument = {
       due_date: required(HOME_RENEWAL, `Date de prélèvement : ${frDate(HOME_RENEWAL)}`),
       reference: required(HOME_POLICY, HOME_POLICY),
     }),
+    fields: [
+      field(
+        ['notice_period_months', 'notice_period', 'cancellation_notice_months'],
+        'number',
+        optional(NOTICE_MONTHS, 'deux mois'),
+      ),
+    ],
     key_dates: [
-      keyDate('renewal', HOME_RENEWAL, `arrive à échéance le ${frDate(HOME_RENEWAL)}`),
+      keyDate(['renewal', 'expiry'], HOME_RENEWAL, `arrive à échéance le ${frDate(HOME_RENEWAL)}`),
       keyDate('notice_deadline', HOME_NOTICE_DEADLINE, frDate(HOME_NOTICE_DEADLINE)),
       keyDate('due', HOME_RENEWAL, `Date de prélèvement : ${frDate(HOME_RENEWAL)}`, 'optional'),
     ],
     subjects: [about(SUBJECTS.homeInsurance), about(SUBJECTS.home, 'optional')],
     facts: [
       fact('The home insurance renews on 2026-03-01 for 243.10 EUR; notice until 2026-01-01.', {
-        entities: [PARTIES.corbelin.key],
+        entities: [PARTIES.tolverane.key],
         dates: [HOME_RENEWAL],
         amounts: [money(HOME_PREMIUM_2026)],
       }),

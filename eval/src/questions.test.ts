@@ -147,8 +147,11 @@ describe('the expected answers, recomputed from the ground truth', () => {
   it('q20 counts the electricity bills of each supplier', () => {
     const bills = ofType('energy_bill');
     const { counts, entities } = question('q20').expected;
-    expect(counts.map(({ value }) => value)).toEqual(
-      entities.map((issuer) => bills.filter(({ core }) => stated(core.issuer) === issuer).length),
+    expect(counts.map(({ key, value }) => [key, value])).toEqual(
+      entities.required.map((issuer) => [
+        issuer,
+        bills.filter(({ core }) => stated(core.issuer) === issuer).length,
+      ]),
     );
   });
 
@@ -156,8 +159,12 @@ describe('the expected answers, recomputed from the ground truth', () => {
     const unsupported = questions.questions.flatMap(({ id, expected }) => {
       const cited = [...expected.documents.required, ...expected.documents.any_of.flat()];
       if (cited.length === 0) return [];
+      // Only what the truth expects of the cited documents, with the quotes: a date that
+      // survives in the free text of a fact or of a page supports nothing.
       const text = JSON.stringify(
-        corpus.documents.filter((document) => cited.includes(document.id)),
+        corpus.documents
+          .filter((document) => cited.includes(document.id))
+          .map(({ core, fields, key_dates }) => ({ core, fields, key_dates })),
       );
       return [
         ...expected.dates

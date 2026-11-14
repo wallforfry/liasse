@@ -21,7 +21,7 @@ const labReport: ScenarioDocument = {
   id: 'lab-report-2025-06',
   description: 'Blood test report from a medical laboratory',
   render: pdf([
-    'LABORATOIRE DES SORBIERS - Biologie médicale',
+    'LABORATOIRE ZOLMÉA - Biologie médicale',
     `${PARTIES.lab.address} - Tél. 01 99 00 44 09`,
     '',
     "COMPTE RENDU D'ANALYSES",
@@ -41,7 +41,7 @@ const labReport: ScenarioDocument = {
     'Ferritine : 18 ng/mL (15 - 150)',
     '',
     "* Valeur en dehors de l'intervalle de référence",
-    'Résultats validés par le biologiste : Dr Mireille Castagnet',
+    'Résultats validés par le biologiste : Dr Nadège Quivrenne',
   ]),
   truth: truth({
     type: TYPES.labReport,
@@ -80,11 +80,11 @@ const healthStatement: ScenarioDocument = {
   render: pdf([
     ...letterhead('mutual', 'Service adhérents : 01 99 00 66 21'),
     `DÉCOMPTE DE REMBOURSEMENT N° ${STATEMENT_NUMBER}`,
-    `Corbelin-la-Forêt, le ${frDate(STATEMENT_DATE)}`,
+    `Quivrenne-la-Forêt, le ${frDate(STATEMENT_DATE)}`,
     '',
     `Adhérente : Mme Jane Doe - n° d'adhérent ${MEMBER_NUMBER}`,
     '',
-    `Soins du ${frDate(CARE_DATE)} - Laboratoire des Sorbiers`,
+    `Soins du ${frDate(CARE_DATE)} - Laboratoire Zolméa`,
     'Nature : analyses de biologie médicale',
     `Montant des soins : ${eur(46)}`,
     `Remboursement de l'assurance maladie : ${eur(27.6)}`,

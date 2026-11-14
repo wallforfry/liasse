@@ -1,4 +1,5 @@
 import { CAR, CONTRACTS, IBAN_TAIL, PARTIES, SUBJECTS } from './cast.ts';
+import { addDays, addMonths } from '../calendar.ts';
 import { eur, frDate } from '../format.ts';
 import { letterhead, pdf } from './layout.ts';
 import {
@@ -82,6 +83,11 @@ const carPolicy = (policy: CarPolicy): ScenarioDocument => ({
       issuer: required(PARTIES.roulavie.key, PARTIES.roulavie.printed),
       recipient: required(PARTIES.jane.key, 'Jane Doe'),
       amount: required(money(policy.premium), eur(policy.premium)),
+      // The first insured year, which the contract does not print as a period.
+      period: optional(
+        { start: policy.effective, end: addDays(addMonths(policy.effective, 12), -1) },
+        null,
+      ),
       reference: required(policy.number, policy.number),
     }),
     fields: [

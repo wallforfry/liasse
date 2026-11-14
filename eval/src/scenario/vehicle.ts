@@ -1,7 +1,7 @@
 import { seededDigits } from '../identifiers.ts';
-import { CAR, HOME_ADDRESS, PARTIES, SUBJECTS } from './cast.ts';
+import { CAR, PARTIES, SUBJECTS } from './cast.ts';
 import { eur, frDate } from '../format.ts';
-import { letterhead, pdf, scannedPdf, SENDER, wrap } from './layout.ts';
+import { ADDRESSEE, letterhead, pdf, scannedPdf, SENDER, twoColumns, wrap } from './layout.ts';
 import {
   about,
   core,
@@ -96,7 +96,7 @@ const INSPECTION_NUMBER = `CT-2025-${seededDigits('inspection', 6)}`;
 const inspection: ScenarioDocument = {
   id: 'vehicle-inspection-2025-02',
   description: 'Roadworthiness test report of the car, valid two years, scanned',
-  render: scannedPdf('scan', [
+  render: scannedPdf('crooked', [
     ...letterhead('inspection', 'Centre agréé n° S099X042'),
     `PROCÈS-VERBAL DE CONTRÔLE TECHNIQUE N° ${INSPECTION_NUMBER}`,
     `Date du contrôle : ${frDate(INSPECTION_DATE)}`,
@@ -124,6 +124,8 @@ const inspection: ScenarioDocument = {
       issuer: required(PARTIES.inspection.key, PARTIES.inspection.printed),
       recipient: required(PARTIES.jane.key, 'Jane Doe'),
       amount: required(money(78), eur(78)),
+      // The day the next test is due by: not a payment, but a date by which something is due.
+      due_date: optional(INSPECTION_VALID_UNTIL, frDate(INSPECTION_VALID_UNTIL)),
       reference: required(INSPECTION_NUMBER, INSPECTION_NUMBER),
     }),
     fields: [
@@ -154,20 +156,27 @@ const fine: ScenarioDocument = {
   id: 'parking-fine-2025-05',
   description: 'Parking fine notice for the car, scanned',
   render: scannedPdf('scan', [
-    ...letterhead('finesAgency'),
-    'AVIS DE CONTRAVENTION',
-    `Numéro de l'avis : ${FINE_NUMBER}`,
-    `Date de l'avis : ${frDate(FINE_DATE)}`,
+    PARTIES.finesAgency.printed,
+    PARTIES.finesAgency.address,
     '',
-    'Destinataire : Mme Jane Doe',
-    HOME_ADDRESS,
+    ...twoColumns(
+      [
+        'AVIS DE CONTRAVENTION',
+        `Numéro de l'avis :`,
+        FINE_NUMBER,
+        `Date de l'avis :`,
+        frDate(FINE_DATE),
+      ],
+      ['Destinataire :', ...ADDRESSEE.slice(0, 3)],
+    ),
+    '',
     "Titulaire du certificat d'immatriculation du véhicule",
     `${CAR.plate} (${CAR.model})`,
     '',
     'Infraction : stationnement gênant sur un emplacement réservé aux',
     'livraisons',
     `Date et heure : ${frDate(OFFENCE_DATE)} à 10 h 42`,
-    'Lieu : rue des Halles, Valmont-sur-Orbe',
+    'Lieu : rue des Halles, Trévolzac-sur-Yvrelle',
     'Agent verbalisateur n° 0417',
     '',
     `Amende forfaitaire : ${eur(35)}`,
@@ -205,6 +214,8 @@ const fine: ScenarioDocument = {
       keyDate('due', FINE_DUE, frDate(FINE_DUE)),
       keyDate('event', OFFENCE_DATE, frDate(OFFENCE_DATE), 'optional'),
     ],
+    // An offence notice is a paper a person may well want kept private.
+    private: 'optional',
     subjects: [about(SUBJECTS.car)],
     facts: [
       fact('A parking fine of 35 EUR was issued for the car, payable by 2025-06-28.', {
@@ -223,10 +234,10 @@ const contestLetter: ScenarioDocument = {
   description: 'Letter from Jane Doe contesting the parking fine notice',
   render: pdf([
     ...SENDER,
-    "Agence de Traitement des Contraventions de l'Orbe",
+    "Agence de Traitement des Contraventions de l'Yvrelle",
     'CS 40017, 99309 Port-Lanvec Cedex',
     '',
-    `Valmont-sur-Orbe, le ${frDate(CONTEST_DATE)}`,
+    `Trévolzac-sur-Yvrelle, le ${frDate(CONTEST_DATE)}`,
     'Lettre recommandée avec accusé de réception',
     '',
     `Objet : contestation de l'avis de contravention n° ${FINE_NUMBER}`,
@@ -234,11 +245,11 @@ const contestLetter: ScenarioDocument = {
     'Madame, Monsieur,',
     '',
     ...wrap(
-      `Je conteste l'avis de contravention n° ${FINE_NUMBER} daté du ${frDate(FINE_DATE)}, relatif à un stationnement gênant relevé le ${frDate(OFFENCE_DATE)} rue des Halles à Valmont-sur-Orbe.`,
+      `Je conteste l'avis de contravention n° ${FINE_NUMBER} daté du ${frDate(FINE_DATE)}, relatif à un stationnement gênant relevé le ${frDate(OFFENCE_DATE)} rue des Halles à Trévolzac-sur-Yvrelle.`,
     ),
     '',
     ...wrap(
-      `Ce jour-là, mon véhicule immatriculé ${CAR.plate} se trouvait au Garage du Belvédère pour le remplacement de son pare-brise, de 8 h 30 à 17 h. Il ne pouvait donc pas être stationné rue des Halles à 10 h 42. Je pense qu'une erreur a été commise lors du relevé de la plaque.`,
+      `Ce jour-là, mon véhicule immatriculé ${CAR.plate} se trouvait au Garage Brumezac pour le remplacement de son pare-brise, de 8 h 30 à 17 h. Il ne pouvait donc pas être stationné rue des Halles à 10 h 42. Je pense qu'une erreur a été commise lors du relevé de la plaque.`,
     ),
     '',
     "Je vous demande en conséquence l'annulation de cet avis.",
@@ -254,12 +265,14 @@ const contestLetter: ScenarioDocument = {
       issuer: required(PARTIES.jane.key, 'Jane Doe'),
       recipient: required(
         PARTIES.finesAgency.key,
-        "Agence de Traitement des Contraventions de l'Orbe",
+        "Agence de Traitement des Contraventions de l'Yvrelle",
       ),
       reference: required(FINE_NUMBER, FINE_NUMBER),
     }),
     fields: [{ ...plateField, expectation: optional(CAR.plate, CAR.plate) }],
     links: [link('replies_to', fine.id)],
+    // A dispute with an authority is a letter a person may well want kept private.
+    private: 'optional',
     subjects: [about(SUBJECTS.car)],
     facts: [
       fact(
@@ -281,7 +294,7 @@ const parkingTicket: ScenarioDocument = {
     kind: 'image',
     encoding: 'png',
     paper: 'screen',
-    lines: ['PARKING DU BELVEDERE', '12/10/2025 14:32', '4,50 EUR'],
+    lines: ['PARKING HALLE YVRELLE', '12/10/2025 14:32', '4,50 EUR'],
   },
   truth: truth({
     type: TYPES.parkingReceipt,
@@ -289,7 +302,7 @@ const parkingTicket: ScenarioDocument = {
     core: {
       ...core('fr', {
         document_date: optional('2025-10-12', '12/10/2025'),
-        issuer: optional(PARTIES.parking.key, 'PARKING DU BELVEDERE'),
+        issuer: optional(PARTIES.parking.key, 'PARKING HALLE YVRELLE'),
         amount: optional(money(4.5), '4,50 EUR'),
       }),
       // Five words are not enough to be sure of a language.
