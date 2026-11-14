@@ -1,5 +1,6 @@
 import { Readable } from 'node:stream';
-import { ApiError, type ApiContext, uploadDocument, uploadResultSchema } from '@liasse/core/api';
+import { ApiError, type ApiContext, uploadDocument } from '@liasse/core/api';
+import { uploadResultSchema } from '@liasse/core/contract';
 import { Hono } from 'hono';
 import { bodyLimit } from 'hono/body-limit';
 import { resolver } from 'hono-openapi';

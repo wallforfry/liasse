@@ -27,6 +27,11 @@
       "types": "./dist/config/index.d.ts",
       "default": "./dist/config/index.js"
     },
+    "./contract": {
+      "@liasse/source": "./src/contract/index.ts",
+      "types": "./dist/contract/index.d.ts",
+      "default": "./dist/contract/index.js"
+    },
     "./db": {
       "@liasse/source": "./src/db/index.ts",
       "types": "./dist/db/index.d.ts",
