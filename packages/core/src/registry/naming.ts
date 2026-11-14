@@ -1,5 +1,5 @@
-import { significantEntityTokens } from '../domain/entity-name.ts';
-import type { SchemaLanguage } from '../domain/enums.ts';
+import { significantEntityTokens, significantWords } from '../domain/entity-name.ts';
+import type { EntityKind, SchemaLanguage } from '../domain/enums.ts';
 import { MAX_FIELD_NAME_LENGTH, MAX_SLUG_LENGTH } from '../domain/limits.ts';
 import { CORE_FIELD_NAMES } from './core-fields.ts';
 
@@ -99,42 +99,58 @@ export const fieldNameViolations = (name: string): readonly NamingViolation[] =>
 export const aliasViolations = (alias: string): readonly NamingViolation[] =>
   shapeViolations('Alias', alias, MAX_SLUG_LENGTH);
 
+export interface KnownEntityName {
+  readonly kind: EntityKind;
+  // A canonical name or an alias, as stored.
+  readonly name: string;
+}
+
 export interface SlugContext {
   readonly schemaLanguage: SchemaLanguage;
-  // Canonical names and aliases of the known entities, as stored.
-  readonly entityNames: readonly string[];
+  readonly entityNames: readonly KnownEntityName[];
   // Slugs of the types the registry already holds.
   readonly typeSlugs: readonly string[];
 }
 
-// A shorter entity word inside a longer word is too often a coincidence: an operator
-// called Free must not hold back `freelance_contract`.
-const MIN_LENGTH_MATCHED_INSIDE_A_WORD = 6;
+// What a slug may not carry of a known entity name. A refusal sends a document to review,
+// while a slug that slipped through is only a poor name that consolidation can merge
+// later, so the rule errs towards accepting:
+// - a person: any significant word of the name, as a whole word;
+// - an organisation named with one significant word: that word, as a whole word;
+// - an organisation named with several: the full name, as a run of the significant words
+//   of the slug, so that "The Bank of the North" is found in `bank_north_statement` too.
+//   One of its words alone is too often generic (Energy, Credit, Services) to refuse.
+// A single word is let through once a type slug uses it: it then belongs to the
+// vocabulary of the registry, and an entity called Contract or Bill does not take it back.
+const offendingParts = (
+  { kind, name }: KnownEntityName,
+  slug: string,
+  isFreeWord: (word: string) => boolean,
+): readonly string[] => {
+  const significant = significantEntityTokens(name);
+  const words = slug.split('_');
+  if (kind === 'person' || significant.length === 1) {
+    return significant.filter((word) => words.includes(word) && !isFreeWord(word));
+  }
+  const fullName = significant.join('_');
+  const carriesFullName = `_${significantWords(words).join('_')}_`.includes(`_${fullName}_`);
+  return significant.length > 1 && carriesFullName ? [fullName] : [];
+};
 
-// A slug may not carry a significant word of a known entity name. One exception keeps
-// generic words usable: a word some type slug already uses belongs to the vocabulary of
-// the registry, and an entity that happens to be called Contract or Energy does not take
-// it back. Nothing else tells such a word from a name without a dictionary.
 const entityViolations = (
   slug: string,
   { entityNames, typeSlugs }: SlugContext,
 ): readonly NamingViolation[] => {
-  const words = slug.split('_');
   const vocabulary = new Set(typeSlugs.flatMap((typeSlug) => typeSlug.split('_')));
-  const carries = (token: string): boolean =>
-    words.some(
-      (word) =>
-        word === token ||
-        (token.length >= MIN_LENGTH_MATCHED_INSIDE_A_WORD && word.includes(token)),
-    );
-  return [...new Set(entityNames.flatMap(significantEntityTokens))]
-    .filter((token) => !vocabulary.has(token) && carries(token))
-    .map((token) =>
-      violation(
-        'entity',
-        `Slug "${slug}" contains "${token}", a word of a known entity name: a type is generic and never names an issuer or a recipient.`,
-      ),
-    );
+  const parts = entityNames.flatMap((entity) =>
+    offendingParts(entity, slug, (word) => vocabulary.has(word)),
+  );
+  return [...new Set(parts)].map((part) =>
+    violation(
+      'entity',
+      `Slug "${slug}" contains "${part}", from a known entity name: a type is generic and never names an issuer or a recipient.`,
+    ),
+  );
 };
 
 export const slugViolations = (slug: string, context: SlugContext): readonly NamingViolation[] => {

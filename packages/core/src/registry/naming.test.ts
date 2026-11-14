@@ -13,18 +13,18 @@ import {
 const KNOWN: SlugContext = {
   schemaLanguage: 'en',
   entityNames: [
-    'EDF',
-    'Synthetic Energy SA',
-    'Jane Doe',
-    'Crédit Agricole',
-    'Contract',
-    'Vela',
-    'Nordwind',
-    'Acme Widgets GmbH',
-    'The Bank of the North',
-    '***',
+    { kind: 'org', name: 'EDF' },
+    { kind: 'org', name: 'Contract' },
+    { kind: 'org', name: 'Free' },
+    { kind: 'org', name: 'Crédit Agricole' },
+    { kind: 'org', name: 'Acme Energy Services SA' },
+    { kind: 'org', name: 'The Bank of the North' },
+    { kind: 'org', name: 'BP' },
+    { kind: 'org', name: '***' },
+    { kind: 'person', name: 'Jane Doe' },
+    { kind: 'person', name: 'Bill Stone' },
   ],
-  typeSlugs: ['energy_bill', 'employment_contract', 'credit_note'],
+  typeSlugs: ['energy_bill', 'employment_contract'],
 };
 
 const slugRules = (slug: string, context: Partial<SlugContext> = {}) =>
@@ -127,62 +127,107 @@ describe('slugViolations', () => {
     expect(slugRules('edf_october')).toEqual(['month', 'entity']);
   });
 
-  describe('entity words', () => {
-    it('rejects a slug that carries a word of a known entity name', () => {
-      expect(slugRules('edf_bill')).toEqual(['entity']);
-      expect(slugRules('bill_edf')).toEqual(['entity']);
-      expect(slugViolations('edf_bill', KNOWN)[0]?.message).toContain('"edf"');
+  describe('entity names', () => {
+    describe('of a person', () => {
+      it('refuses each significant word of the name as a whole word', () => {
+        expect(slugRules('doe_contract')).toEqual(['entity']);
+        expect(slugRules('jane_file')).toEqual(['entity']);
+        expect(slugRules('stone_report')).toEqual(['entity']);
+        expect(slugRules('jane_doe_payslip')).toEqual(['entity', 'entity']);
+        expect(slugViolations('doe_contract', KNOWN)[0]?.message).toContain('"doe"');
+      });
+
+      it('does not match a word inside a longer word', () => {
+        expect(slugRules('janet_file')).toEqual([]);
+        expect(slugRules('doeskin_invoice')).toEqual([]);
+      });
+
+      it('lets a word through once a type slug uses it', () => {
+        expect(slugRules('water_bill')).toEqual([]);
+        expect(slugRules('water_bill', { typeSlugs: [] })).toEqual(['entity']);
+      });
     });
 
-    it('matches each significant word of the name, not only the whole name', () => {
-      expect(slugRules('doe_contract')).toEqual(['entity']);
-      expect(slugRules('jane_file')).toEqual(['entity']);
-      expect(slugRules('agricole_statement')).toEqual(['entity']);
-      expect(slugRules('synthetic_report')).toEqual(['entity']);
-      expect(slugRules('jane_doe_payslip')).toEqual(['entity', 'entity']);
+    describe('of an organisation named with one significant word', () => {
+      it('refuses that word as a whole word', () => {
+        expect(slugRules('edf_bill')).toEqual(['entity']);
+        expect(slugRules('bill_edf')).toEqual(['entity']);
+        expect(slugRules('free_trial')).toEqual(['entity']);
+        expect(slugViolations('edf_bill', KNOWN)[0]?.message).toContain('"edf"');
+      });
+
+      it('does not match a word inside a longer word, whatever its length', () => {
+        expect(slugRules('edfbill')).toEqual([]);
+        expect(slugRules('edfx_bill')).toEqual([]);
+        expect(slugRules('freelance_agreement')).toEqual([]);
+        expect(slugRules('contractor_invoice')).toEqual([]);
+      });
+
+      it('lets the word through once a type slug uses it', () => {
+        expect(slugRules('contract')).toEqual([]);
+        expect(slugRules('rental_contract')).toEqual([]);
+      });
+
+      it('holds the word back while no type slug uses it', () => {
+        expect(slugRules('contract', { typeSlugs: [] })).toEqual(['entity']);
+        expect(slugRules('edf_bill', { typeSlugs: ['edfx_bill', 'bill'] })).toEqual(['entity']);
+      });
     });
 
-    it('ignores the legal form, the function words and the words under three characters', () => {
-      expect(slugRules('gmbh_register')).toEqual([]);
-      expect(slugRules('the_ledger')).toEqual([]);
-      expect(slugRules('of_record')).toEqual([]);
+    describe('of an organisation named with several significant words', () => {
+      it('refuses the full name as a run of whole words', () => {
+        expect(slugRules('credit_agricole_statement')).toEqual(['entity']);
+        expect(slugRules('statement_credit_agricole')).toEqual(['entity']);
+        expect(slugRules('acme_energy_services_invoice')).toEqual(['entity']);
+        expect(slugRules('bank_of_the_north_statement')).toEqual(['entity']);
+        expect(slugRules('the_bank_of_the_north')).toEqual(['entity']);
+        expect(slugRules('bank_north_statement')).toEqual(['entity']);
+        expect(slugViolations('credit_agricole_statement', KNOWN)[0]?.message).toContain(
+          '"credit_agricole"',
+        );
+      });
+
+      it('lets a single word of the name through, even before any type uses it', () => {
+        const unused = {
+          typeSlugs: [],
+          entityNames: KNOWN.entityNames.filter(({ kind }) => kind === 'org'),
+        };
+        expect(slugRules('agricole_statement', unused)).toEqual([]);
+        expect(slugRules('credit_note', unused)).toEqual([]);
+        expect(slugRules('energy_bill', unused)).toEqual([]);
+        expect(slugRules('services_agreement', unused)).toEqual([]);
+      });
+
+      it('lets a partial or reordered name through', () => {
+        expect(slugRules('acme_energy_invoice')).toEqual([]);
+        expect(slugRules('agricole_credit_statement')).toEqual([]);
+        expect(slugRules('north_bank_statement')).toEqual([]);
+        expect(slugRules('bank_loan_north_statement')).toEqual([]);
+        expect(slugRules('credit_agricolex_statement')).toEqual([]);
+      });
+
+      it('refuses the full name even when type slugs use its words', () => {
+        const used = { typeSlugs: ['credit_note', 'agricole_subsidy'] };
+        expect(slugRules('credit_agricole_statement', used)).toEqual(['entity']);
+      });
+    });
+
+    it('ignores a name without any significant word', () => {
+      expect(slugRules('bp_invoice')).toEqual([]);
       expect(slugRules('sa_filing')).toEqual([]);
-    });
-
-    it('matches a short entity word on whole words only', () => {
-      expect(slugRules('edfbill')).toEqual([]);
-      expect(slugRules('edfx_bill')).toEqual([]);
-      expect(slugRules('vela_note')).toEqual(['entity']);
-      expect(slugRules('velar_note')).toEqual([]);
-    });
-
-    it('matches an entity word of six characters or more inside a longer word', () => {
-      expect(slugRules('nordwindbill')).toEqual(['entity']);
-      expect(slugRules('bill_fromnordwind')).toEqual(['entity']);
-      expect(slugRules('agricolestatement')).toEqual(['entity']);
-    });
-
-    it('lets a word through once a type slug already uses it', () => {
-      expect(slugRules('contract')).toEqual([]);
-      expect(slugRules('rental_contract')).toEqual([]);
-      expect(slugRules('energy_report')).toEqual([]);
-      expect(slugRules('credit_agreement')).toEqual([]);
-    });
-
-    it('holds the same word back while no type slug uses it', () => {
-      const unused = { typeSlugs: [] };
-      expect(slugRules('contract', unused)).toEqual(['entity']);
-      expect(slugRules('energy_report', unused)).toEqual(['entity']);
-      expect(slugRules('credit_agreement', unused)).toEqual(['entity']);
-    });
-
-    it('never lets a type slug free a word it only contains', () => {
-      expect(slugRules('edf_bill', { typeSlugs: ['edfx_bill', 'bill'] })).toEqual(['entity']);
     });
 
     it('accepts the same slug once the entity is unknown', () => {
       expect(slugRules('edf_bill', { entityNames: [] })).toEqual([]);
-      expect(slugRules('doe_contract', { entityNames: ['EDF'] })).toEqual([]);
+      expect(slugRules('doe_contract', { entityNames: [{ kind: 'org', name: 'EDF' }] })).toEqual(
+        [],
+      );
+    });
+
+    it('reads the kind: the same name refuses more as a person than as an organisation', () => {
+      const asOrg = { entityNames: [{ kind: 'org', name: 'Jane Doe' }] } as const;
+      expect(slugRules('doe_contract', asOrg)).toEqual([]);
+      expect(slugRules('jane_doe_contract', asOrg)).toEqual(['entity']);
     });
   });
 });

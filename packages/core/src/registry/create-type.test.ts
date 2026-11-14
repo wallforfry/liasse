@@ -125,10 +125,9 @@ describe('createType', () => {
     ['october_bill', ['month']],
     ['edf_october', ['month', 'entity']],
     ['edf_bill', ['entity']],
-    ['electricite_de_synthese_bill', ['entity', 'entity']],
+    ['electricite_de_synthese_bill', ['entity']],
     ['jane_doe_payslip', ['entity', 'entity']],
     ['doe_agreement', ['entity']],
-    ['synthese_report', ['entity']],
   ])('rejects the slug %s', async (slug, rules) => {
     const error = await errorOf(draft(slug));
     expect(error).toMatchObject({ code: 'invalid_slug', slug });
@@ -147,6 +146,10 @@ describe('createType', () => {
     expect(await errorOf(draft('bill_october'), french)).toMatchObject({ code: 'invalid_slug' });
     expect((await createType(draft('gas_bill'), context(french))).ok).toBe(true);
     expect((await createType(draft('bill_octobre'), context())).ok).toBe(true);
+  });
+
+  it('accepts one word of an organisation named with several', async () => {
+    expect((await createType(draft('synthese_report'), context())).ok).toBe(true);
   });
 
   it('lets an entity word through once a type slug uses it', async () => {

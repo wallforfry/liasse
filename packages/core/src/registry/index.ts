@@ -19,6 +19,7 @@ export { addAlias, markMerged, setStatus } from './lifecycle.ts';
 export {
   aliasViolations,
   fieldNameViolations,
+  type KnownEntityName,
   MONTH_WORDS,
   NAMING_RULES,
   type NamingRule,

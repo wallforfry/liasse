@@ -42,12 +42,14 @@ const slugContext = async (
   schemaLanguage: SchemaLanguage,
 ): Promise<SlugContext> => {
   const known = await reader
-    .select({ name: entities.canonicalName, aliases: entities.aliases })
+    .select({ kind: entities.kind, name: entities.canonicalName, aliases: entities.aliases })
     .from(entities);
   const types = await reader.select({ slug: docTypes.slug }).from(docTypes);
   return {
     schemaLanguage,
-    entityNames: known.flatMap(({ name, aliases }) => [name, ...aliases]),
+    entityNames: known.flatMap(({ kind, name, aliases }) =>
+      [name, ...aliases].map((known) => ({ kind, name: known })),
+    ),
     typeSlugs: types.map(({ slug }) => slug),
   };
 };

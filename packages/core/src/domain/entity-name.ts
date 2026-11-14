@@ -39,9 +39,10 @@ const MIN_SIGNIFICANT_LENGTH = 3;
 export const normalizeEntityName = (name: string): readonly string[] =>
   withoutLegalForm(tokenize(name));
 
-// The words of an entity name that say something about the entity: no legal form, no
-// function word, nothing under three characters.
+// The words that say something: no function word, nothing under three characters.
+export const significantWords = (words: readonly string[]): readonly string[] =>
+  words.filter((word) => word.length >= MIN_SIGNIFICANT_LENGTH && !FUNCTION_WORDS.has(word));
+
+// The significant words of an entity name, without its legal form.
 export const significantEntityTokens = (name: string): readonly string[] =>
-  normalizeEntityName(name).filter(
-    (token) => token.length >= MIN_SIGNIFICANT_LENGTH && !FUNCTION_WORDS.has(token),
-  );
+  significantWords(normalizeEntityName(name));
