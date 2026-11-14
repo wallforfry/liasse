@@ -18,6 +18,7 @@ import {
   type PipelineDeps,
 } from '@liasse/core/pipeline';
 import type { Storage } from '@liasse/core/storage';
+import type { Logger } from '../log.ts';
 
 /** What the runtime built before it binds the features to it. */
 export interface RuntimeParts {
@@ -27,6 +28,7 @@ export interface RuntimeParts {
   readonly embedder: Embedder;
   readonly textModel: TextModel;
   readonly visionModel: VisionModel;
+  readonly logger: Logger;
 }
 
 export interface StartupTask {
@@ -95,10 +97,15 @@ const featuresOf = (deps: PipelineDeps, hindsight: HindsightIntegration): ApiFea
  * the one left, and the notice below goes with it.
  */
 export const bindFeatures: Bind = (parts) => {
-  const { config, db, storage } = parts;
+  const { config, db, storage, logger } = parts;
   const hindsight = createHindsightIntegration(config.hindsight, {
     db,
     isSensitive: (text) => findSensitiveIdentifiers(text).length > 0,
+    // A count only: the id of the document would tell which one holds an account or a
+    // card number.
+    onFactsWithheld: ({ count }) => {
+      logger.event('hindsight_facts_withheld', { count });
+    },
   });
   const hindsightNotice = describeHindsight(config);
   const pipeline = pipelineDepsOf(parts, hindsight);

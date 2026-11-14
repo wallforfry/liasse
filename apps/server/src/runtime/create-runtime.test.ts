@@ -4,10 +4,17 @@ import { createServer as createHttpServer } from 'node:http';
 import { createServer } from 'node:net';
 import { join } from 'node:path';
 import { loadConfig } from '@liasse/core/config';
-import { documents, jobs } from '@liasse/core/db';
+import { documents, facts, jobs } from '@liasse/core/db';
 import { StartupError } from '@liasse/core/domain';
+import { enqueueHindsightSync } from '@liasse/core/hindsight';
 import { defineJobKind, enqueue, handle } from '@liasse/core/jobs';
-import { createGate, SYNTHETIC_ENV, syntheticPdf, waitUntil } from '@liasse/core/testing';
+import {
+  createGate,
+  insertSyntheticDocument,
+  SYNTHETIC_ENV,
+  syntheticPdf,
+  waitUntil,
+} from '@liasse/core/testing';
 import { eq } from 'drizzle-orm';
 import { describe, expect, it } from 'vitest';
 import { z } from 'zod';
@@ -129,6 +136,46 @@ describe('createRuntime', () => {
           .from(documents);
         return row?.heldSince === null;
       });
+    } finally {
+      hindsight.close();
+      await once(hindsight, 'close');
+    }
+  });
+
+  it('logs how many facts it kept out of Hindsight, and nothing that names the document', async () => {
+    const retained: string[] = [];
+    const hindsight = createHttpServer((request, response) => {
+      request.setEncoding('utf8');
+      let body = '';
+      request.on('data', (chunk: string) => {
+        body += chunk;
+      });
+      request.on('end', () => {
+        retained.push(body);
+        response.writeHead(200, { 'content-type': 'application/json' });
+        response.end(JSON.stringify({ success: true, items_count: 1 }));
+      });
+    });
+    hindsight.listen(0, '127.0.0.1');
+    await once(hindsight, 'listening');
+    const address = hindsight.address();
+    if (address === null || typeof address === 'string') throw new Error('no port');
+    try {
+      await start({ HINDSIGHT_URL: `http://127.0.0.1:${String(address.port)}` });
+      const { db } = harness.database();
+      const { id } = await insertSyntheticDocument(db, { status: 'indexed' });
+      await db.insert(facts).values([
+        { documentId: id, text: 'A synthetic fact the bank may hold.' },
+        { documentId: id, text: 'Paid from the account DE37999999990123456789.' },
+      ]);
+      await enqueueHindsightSync(db, id);
+      await waitUntil(() => retained.length === 1);
+      expect(retained[0]).not.toContain('DE37');
+      await waitUntil(() => harness.lines().some((line) => line.includes('withheld')));
+      expect(harness.lines().filter((line) => line.includes('withheld'))).toEqual([
+        '{"event":"hindsight_facts_withheld","count":1}',
+      ]);
+      expect(harness.lines().some((line) => line.includes(id))).toBe(false);
     } finally {
       hindsight.close();
       await once(hindsight, 'close');

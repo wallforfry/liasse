@@ -101,7 +101,7 @@ export const createRuntime = async (
       createVisionModel(config.llm),
     );
 
-    const bindings = bind({ config, db, storage, embedder, textModel, visionModel });
+    const bindings = bind({ config, db, storage, embedder, textModel, visionModel, logger });
     bindings.notices.forEach(logger.notice);
     for (const task of bindings.startupTasks) await step(task.name, task.run);
 
