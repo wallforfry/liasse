@@ -8,6 +8,11 @@ import {
 } from './embedding-dimension.ts';
 import { readMigrationFiles } from './migration-files.ts';
 import { type AppliedMigration, pendingMigrations } from './migration-history.ts';
+import {
+  assertSupportedPostgres,
+  installedPostgresMajorVersion,
+  type PostgresVersionReader,
+} from './postgres-version.ts';
 
 export const MIGRATIONS_FOLDER = fileURLToPath(new URL('../../migrations', import.meta.url));
 
@@ -58,16 +63,23 @@ const applyPending = async (
 export interface MigrateOptions {
   readonly embeddingDim: number;
   readonly migrationsFolder?: string;
+  readonly readPostgresVersion?: PostgresVersionReader;
 }
 
 export const migrate = async (
   databaseUrl: string,
-  { embeddingDim, migrationsFolder = MIGRATIONS_FOLDER }: MigrateOptions,
+  {
+    embeddingDim,
+    migrationsFolder = MIGRATIONS_FOLDER,
+    readPostgresVersion = installedPostgresMajorVersion,
+  }: MigrateOptions,
 ): Promise<void> => {
   assertValidEmbeddingDimension(embeddingDim);
   const sql = postgres(databaseUrl, { max: 1, onnotice: () => undefined });
   try {
     await sql.begin(async (transaction) => {
+      // Before anything is written: a server that is too old is left untouched.
+      assertSupportedPostgres(await readPostgresVersion(transaction));
       await transaction`SELECT pg_advisory_xact_lock(${MIGRATION_LOCK_KEY})`;
       await assertInstalledEmbeddingDimension(transaction, embeddingDim);
       await applyPending(transaction, { embeddingDim, migrationsFolder });

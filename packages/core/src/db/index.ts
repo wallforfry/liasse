@@ -6,4 +6,5 @@ export {
 } from './embedding-dimension.ts';
 export { migrate, type MigrateOptions } from './migrate.ts';
 export { MigrationHistoryError } from './migration-history.ts';
+export { PostgresVersionError } from './postgres-version.ts';
 export * from './schema/index.ts';
