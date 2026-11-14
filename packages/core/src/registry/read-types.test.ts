@@ -95,7 +95,14 @@ describe('reading the registry', () => {
   describe('listTypes', () => {
     it('lists every type that is not merged, with its fields and its document count', async () => {
       const listed = await listTypes({}, context);
+      // One energy bill is private: it is counted only when asked for.
       expect(listed.map(({ slug, docCount }) => [slug, docCount])).toEqual([
+        ['energy_bill', 5],
+        ['lease', 0],
+        ['payslip', 1],
+      ]);
+      const withPrivate = await listTypes({ includePrivate: true }, context);
+      expect(withPrivate.map(({ slug, docCount }) => [slug, docCount])).toEqual([
         ['energy_bill', 6],
         ['lease', 0],
         ['payslip', 1],

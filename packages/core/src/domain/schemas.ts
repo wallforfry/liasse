@@ -20,10 +20,13 @@ import {
   SUBJECT_IDENTIFIER_TYPES,
   SUBJECT_KINDS,
   SUPPORTED_MIMES,
+  TOMBSTONE_STATUS,
   TYPE_STATUSES,
 } from './enums.ts';
 
 export const documentStatusSchema = z.enum(DOCUMENT_STATUSES);
+// A tombstone is not a document: nothing that reads or filters documents names its status.
+export const liveDocumentStatusSchema = documentStatusSchema.exclude([TOMBSTONE_STATUS]);
 export const documentSourceSchema = z.enum(DOCUMENT_SOURCES);
 export const documentStateSchema = z.enum(DOCUMENT_STATES);
 export const typeStatusSchema = z.enum(TYPE_STATUSES);

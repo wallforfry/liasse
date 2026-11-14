@@ -10,7 +10,6 @@ import {
 import { buildSyntheticDocx } from '../testing/synthetic-docx.ts';
 import { buildSyntheticZip } from '../testing/synthetic-zip.ts';
 import { detectMimeType } from './mime.ts';
-import { zipEntryNames } from './zip-entries.ts';
 
 const text = (value: string): Uint8Array => new TextEncoder().encode(value);
 
@@ -98,33 +97,5 @@ describe('detectMimeType', () => {
     expect(detectMimeType(paddedDocx.subarray(16))).toBe(
       'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
     );
-  });
-});
-
-describe('zipEntryNames', () => {
-  it('lists the entries of an archive', () => {
-    expect(zipEntryNames(zip({ 'a.txt': 'one', 'dir/b.txt': 'two' }))).toEqual([
-      'a.txt',
-      'dir/b.txt',
-    ]);
-  });
-
-  it('finds the directory of an archive that ends with a comment', () => {
-    const archive = Buffer.from(zip({ 'a.txt': 'one' }));
-    archive.writeUInt16LE(9, archive.length - 2);
-    expect(zipEntryNames(Buffer.concat([archive, Buffer.from('synthetic')]))).toEqual(['a.txt']);
-  });
-
-  it('survives a directory offset that points outside the archive', () => {
-    const archive = Buffer.from(zip({ 'a.txt': 'one' }));
-    archive.writeUInt32LE(0xfffffff0, archive.length - 6);
-    expect(zipEntryNames(archive)).toEqual([]);
-  });
-
-  it('survives an entry name that runs past the end', () => {
-    const archive = Buffer.from(zip({ 'a.txt': 'one' }));
-    const directory = archive.readUInt32LE(archive.length - 6);
-    archive.writeUInt16LE(0xffff, directory + 28);
-    expect(zipEntryNames(archive)).toEqual([]);
   });
 });

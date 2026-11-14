@@ -26,6 +26,9 @@ export interface ListTypesOptions {
   // Without a status, every type that is not merged.
   readonly status?: TypeStatus | undefined;
   readonly includeExamples?: boolean | undefined;
+  // Whether the document count includes private documents; search and queries leave
+  // them out unless asked, and so does this count.
+  readonly includePrivate?: boolean | undefined;
 }
 
 export interface ListedType extends RegisteredType {
@@ -35,13 +38,20 @@ export interface ListedType extends RegisteredType {
 }
 
 export const listTypes = async (
-  { status, includeExamples = false }: ListTypesOptions,
+  { status, includeExamples = false, includePrivate = false }: ListTypesOptions,
   { db }: RegistryReadContext,
 ): Promise<readonly ListedType[]> => {
   const rows = await db
     .select({
       ...TYPE_COLUMNS,
-      docCount: db.$count(documents, and(eq(documents.typeId, docTypes.id), isLiveDocument)),
+      docCount: db.$count(
+        documents,
+        and(
+          eq(documents.typeId, docTypes.id),
+          isLiveDocument,
+          includePrivate ? undefined : eq(documents.private, false),
+        ),
+      ),
     })
     .from(docTypes)
     .where(status === undefined ? ne(docTypes.status, 'merged') : eq(docTypes.status, status))

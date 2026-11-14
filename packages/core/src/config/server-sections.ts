@@ -2,12 +2,47 @@ import { z } from 'zod';
 import { storageDriverSchema } from '../domain/schemas.ts';
 import { type CrossFieldProblem, duration, integer, list, reportProblems, text } from './fields.ts';
 
+// What clients are told to call: the origin signed file URLs start with. It is never read
+// from a request, whose Host header belongs to the caller.
+const isBareOrigin = (value: string): boolean => {
+  if (!URL.canParse(value)) return false;
+  const { protocol, pathname, search, hash, username, password } = new URL(value);
+  return (
+    ['http:', 'https:'].includes(protocol) &&
+    pathname === '/' &&
+    [search, hash, username, password].every((part) => part === '')
+  );
+};
+
+const publicUrl = z
+  .string()
+  .refine(
+    isBareOrigin,
+    'expected an origin such as https://liasse.example.com, without path, query or credentials',
+  )
+  .transform((value) => new URL(value).origin);
+
+const WILDCARD_HOSTS: readonly string[] = ['0.0.0.0', '::'];
+
+// A wildcard address is where the server listens, not where it is reached.
+const defaultPublicUrl = (host: string, port: number): string => {
+  const reachable = WILDCARD_HOSTS.includes(host) ? '127.0.0.1' : host;
+  return `http://${reachable.includes(':') ? `[${reachable}]` : reachable}:${String(port)}`;
+};
+
 export const serverSection = z
   .object({
     HOST: text.default('127.0.0.1'),
     PORT: integer(1, 65_535).default(8080),
+    PUBLIC_URL: publicUrl.optional(),
   })
-  .transform((env) => Object.freeze({ host: env.HOST, port: env.PORT }));
+  .transform((env) =>
+    Object.freeze({
+      host: env.HOST,
+      port: env.PORT,
+      publicUrl: env.PUBLIC_URL ?? defaultPublicUrl(env.HOST, env.PORT),
+    }),
+  );
 
 export const databaseSection = z
   .object({

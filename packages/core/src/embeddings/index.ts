@@ -3,6 +3,7 @@ export {
   EmbeddingCacheDirError,
   EmbeddingModelDimensionError,
   EmbeddingOutputError,
+  LocalModelClosedError,
   LocalModelProcessError,
   LocalModelRequestError,
   LocalModelTimeoutError,

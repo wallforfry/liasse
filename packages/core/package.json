@@ -17,6 +17,11 @@
     "migrations"
   ],
   "exports": {
+    "./api": {
+      "@liasse/source": "./src/api/index.ts",
+      "types": "./dist/api/index.d.ts",
+      "default": "./dist/api/index.js"
+    },
     "./config": {
       "@liasse/source": "./src/config/index.ts",
       "types": "./dist/config/index.d.ts",
@@ -41,6 +46,11 @@
       "@liasse/source": "./src/entities/index.ts",
       "types": "./dist/entities/index.d.ts",
       "default": "./dist/entities/index.js"
+    },
+    "./formats": {
+      "@liasse/source": "./src/formats/index.ts",
+      "types": "./dist/formats/index.d.ts",
+      "default": "./dist/formats/index.js"
     },
     "./ingest": {
       "@liasse/source": "./src/ingest/index.ts",

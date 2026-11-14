@@ -20,8 +20,8 @@ export type TextExtractionErrorCode = (typeof TEXT_EXTRACTION_ERROR_CODES)[numbe
 
 // Whether the same input can succeed on another attempt. A renderer that ran out of time
 // or was killed may have been starved by the machine; a document that is corrupt, too
-// large or refused by a limit fails the same way every time, and a missing binary needs
-// the operator.
+// large or refused by a limit fails the same way every time, and a binary that is missing or
+// not executable needs the operator.
 const RETRYABLE: Readonly<Record<TextExtractionErrorCode, boolean>> = {
   unsupported_mime: false,
   pdf_encrypted: false,

@@ -15,7 +15,7 @@ const problemsOf = (env: Readonly<Record<string, string | undefined>>): readonly
 describe('loadConfig', () => {
   it('applies the spec defaults', () => {
     expect(loadConfig(SYNTHETIC_ENV)).toEqual({
-      server: { host: '127.0.0.1', port: 8080 },
+      server: { host: '127.0.0.1', port: 8080, publicUrl: 'http://127.0.0.1:8080' },
       database: { url: SYNTHETIC_ENV.DATABASE_URL },
       storage: { driver: 'fs', path: '/data/files' },
       llm: {
@@ -86,7 +86,11 @@ describe('loadConfig', () => {
       EMBEDDING_TIMEOUT: '20s',
       HINDSIGHT_URL: 'http://127.0.0.1:8888',
     });
-    expect(config.server).toEqual({ host: '0.0.0.0', port: 9090 });
+    expect(config.server).toEqual({
+      host: '0.0.0.0',
+      port: 9090,
+      publicUrl: 'http://127.0.0.1:9090',
+    });
     expect(config.embedding).toEqual({
       provider: 'ollama',
       model: 'embedding-model',

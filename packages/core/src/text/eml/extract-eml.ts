@@ -1,10 +1,10 @@
 import type { Address, Attachment, Email } from 'postal-mime';
+import { checkEmail } from '../../formats/email.ts';
 import { TextExtractionError } from '../errors.ts';
 import { normalizeText } from '../normalize.ts';
 import { toExtractedText } from '../result.ts';
 import type { ExtractedAttachment, ExtractedText } from '../types.ts';
 import { htmlToText } from './html-to-text.ts';
-import { assertLooksLikeEmail } from './email-check.ts';
 
 const loadParser = () => import('postal-mime');
 
@@ -52,8 +52,17 @@ const bodyOf = ({ text, html }: Email): string => {
   return html === undefined ? '' : htmlToText(html);
 };
 
+// The MIME parser accepts any bytes and returns them as a body, so without this check a
+// PDF, an image or a note declared as an email would become a page of text.
+const assertEmail = (bytes: Uint8Array): void => {
+  const check = checkEmail(bytes);
+  if (!check.email) {
+    throw new TextExtractionError('eml_corrupt', `The file is not an email: ${check.reason}`);
+  }
+};
+
 export const extractEml = async (bytes: Uint8Array): Promise<ExtractedText> => {
-  assertLooksLikeEmail(bytes);
+  assertEmail(bytes);
   const { default: PostalMime } = await loadParser();
   const email = await PostalMime.parse(bytes, { attachmentEncoding: 'arraybuffer' }).catch(
     (error: unknown) => {

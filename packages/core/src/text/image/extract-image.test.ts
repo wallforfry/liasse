@@ -2,6 +2,7 @@ import { readFile } from 'node:fs/promises';
 import { decode } from 'jpeg-js';
 import { describe, expect, it } from 'vitest';
 import { createFakeVisionModel } from '../../testing/fake-vision-model.ts';
+import { syntheticIsoMedia } from '../../testing/synthetic-files.ts';
 import { buildSyntheticPng } from '../../testing/synthetic-png.ts';
 import { extractText } from '../extract-text.ts';
 import { TRANSCRIPTION_PROMPT } from '../transcription-prompt.ts';
@@ -111,6 +112,15 @@ describe('extractText on an image', () => {
       code: 'image_corrupt',
     });
     expect(vision.calls).toHaveLength(0);
+  });
+
+  it('refuses ISO media without a HEIC brand for its format, before decoding it', async () => {
+    const vision = createFakeVisionModel(() => '');
+    const bytes = syntheticIsoMedia('avif', ['mif1', 'miaf']);
+    await expect(extractText({ bytes, mime: 'image/heic' }, { vision })).rejects.toMatchObject({
+      code: 'image_corrupt',
+      message: 'The file is not a valid image/heic image',
+    });
   });
 
   it('reports a truncated HEIC image as corrupt', async () => {

@@ -171,44 +171,22 @@ describe('extractText on an email', () => {
   });
 
   it('returns the body alone when no header of the block is rendered', async () => {
-    const message = eml(['X-Synthetic: 1', 'MIME-Version: 1.0', '', 'Only a body.']);
+    const message = eml([
+      'Return-Path: <jane.doe@example.com>',
+      'MIME-Version: 1.0',
+      '',
+      'Only a body.',
+    ]);
     expect((await extract(message)).pages).toEqual([
       { page: 1, text: 'Only a body.', method: 'native' },
     ]);
   });
 
   it('returns the header block alone when the message has no body', async () => {
-    expect((await extract(eml(['Subject: Reminder']))).pages[0]?.text).toBe('Subject: Reminder');
-  });
-
-  it.each([
-    [
-      'a byte order mark',
-      Uint8Array.from([0xef, 0xbb, 0xbf, ...eml(['Subject: Hi', '', 'Body.'])]),
-    ],
-    ['blank lines', eml(['', '', 'Subject: Hi', '', 'Body.'])],
-    [
-      'a mark then a blank line',
-      Uint8Array.from([0xef, 0xbb, 0xbf, ...eml(['', 'Subject: Hi', '', 'Body.'])]),
-    ],
-  ])('accepts a message that starts with %s', async (_, bytes) => {
-    expect((await extract(bytes)).pages[0]?.text).toBe('Subject: Hi\n\nBody.');
-  });
-
-  it.each([
-    'From',
-    'To',
-    'Date',
-    'Subject',
-    'Message-ID',
-    'Received',
-    'Return-Path',
-    'MIME-Version',
-    'content-type',
-  ])('accepts a message whose only header is %s', async (name) => {
-    const value = name === 'content-type' ? 'text/plain' : 'synthetic@example.com';
-    const result = await extract(eml([`${name}: ${value}`, '', 'Body.']));
-    expect(result.pages[0]?.text).toContain('Body.');
+    const message = eml(['From: jane.doe@example.com', 'Subject: Reminder']);
+    expect((await extract(message)).pages[0]?.text).toBe(
+      'From: jane.doe@example.com\nSubject: Reminder',
+    );
   });
 
   it.each([
@@ -239,16 +217,31 @@ describe('extractText on an email', () => {
       eml(['subject : Hi', '', 'Body.']),
       /does not start with a header field/,
     ],
-    ['a JSON document', eml(['{"a":1}']), /none of the headers of a message/],
+    ['a JSON document', eml(['{"a":1}']), /it names no sender/],
     [
       'a note that starts like a header',
       eml(['Note: call Jane Doe', '', 'Tomorrow.']),
-      /none of the headers of a message/,
+      /it names no sender/,
     ],
     [
       'a known header only in the body',
       eml(['Note: x', '', 'Subject: not a header']),
-      /none of the headers of a message/,
+      /it names no sender/,
+    ],
+    [
+      'a message that names no sender',
+      eml(['Subject: Hi', 'MIME-Version: 1.0', '', 'Body.']),
+      /it names no sender/,
+    ],
+    [
+      'a message after a byte order mark',
+      Uint8Array.from([0xef, 0xbb, 0xbf, ...eml(['From: a@example.com', 'Subject: Hi', '', 'B'])]),
+      /does not start with a header field/,
+    ],
+    [
+      'a message after blank lines',
+      eml(['', '', 'From: a@example.com', 'Subject: Hi', '', 'Body.']),
+      /does not start with a header field/,
     ],
   ])('reports %s as not being an email', async (_, bytes, message) => {
     const failure = extract(bytes);
@@ -263,6 +256,8 @@ describe('extractText on an email', () => {
   it('reports a message nested beyond what the parser accepts', async () => {
     const depth = 300;
     const nested = eml([
+      'From: jane.doe@example.com',
+      'Date: Tue, 03 Nov 2026 09:30:00 +0100',
       ...Array.from({ length: depth }, (_, level) => [
         `Content-Type: multipart/mixed; boundary="b${String(level)}"`,
         '',
@@ -275,6 +270,7 @@ describe('extractText on an email', () => {
     await expect(extract(nested)).rejects.toMatchObject({
       name: 'TextExtractionError',
       code: 'eml_corrupt',
+      message: 'The email could not be parsed',
     });
   });
 });

@@ -45,6 +45,17 @@ export class LocalModelTimeoutError extends LocalModelProcessError {
   override readonly name: string = 'LocalModelTimeoutError';
 }
 
+// The embedder was closed, by the shutdown of the server for instance: the request was
+// not served and the embedder serves no other. Another process can serve it later, which
+// is what `retryable` says; the embedder itself never runs it again.
+export class LocalModelClosedError extends LocalModelProcessError {
+  override readonly name: string = 'LocalModelClosedError';
+
+  constructor() {
+    super('the embedder was closed');
+  }
+}
+
 // The model process answered that it could not serve the request. `retryable` tells whether
 // the same request can succeed later, as after a model download that failed.
 export class LocalModelRequestError extends Error {

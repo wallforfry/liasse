@@ -1,13 +1,16 @@
 import { spawn } from 'node:child_process';
 import { isAbortError, TextExtractionError } from '../errors.ts';
 
-// What is kept of each output stream. The lines read from `pdfinfo` are its last ones,
-// after document information of any length, so the end is enough and memory stays
-// bounded whatever the file makes the command print.
-const OUTPUT_TAIL_BYTES = 16 * 1024;
+// What is kept of stderr, whatever the file makes the command print: its end, where the
+// reason of a failure is.
+const STDERR_TAIL_BYTES = 16 * 1024;
 const MAX_REPORTED_STDERR = 300;
 // poppler refuses a page whose box gives it no usable resolution; it does so every time.
 const INVALID_GEOMETRY = 'hDPI or vDPI values are invalid';
+const UNAVAILABLE_REASONS: Readonly<Record<string, string>> = {
+  ENOENT: 'was not found; install poppler-utils to read scanned PDFs',
+  EACCES: 'is not executable by this user; check its permissions',
+};
 
 export interface PopplerRunOptions {
   readonly timeoutMs: number;
@@ -25,8 +28,8 @@ const createOutputTail = (): OutputTail => {
   return {
     push: (chunk) => {
       const joined = Buffer.concat([tail, chunk]);
-      truncated ||= joined.length > OUTPUT_TAIL_BYTES;
-      tail = joined.subarray(Math.max(0, joined.length - OUTPUT_TAIL_BYTES));
+      truncated ||= joined.length > STDERR_TAIL_BYTES;
+      tail = joined.subarray(Math.max(0, joined.length - STDERR_TAIL_BYTES));
     },
     // The first line of a truncated tail is the end of a longer one: it is dropped, so
     // that the middle of a line is never read as its beginning.
@@ -37,13 +40,6 @@ const createOutputTail = (): OutputTail => {
   };
 };
 
-const missing = (command: string, cause: unknown): TextExtractionError =>
-  new TextExtractionError(
-    'pdf_renderer_missing',
-    `The command ${command} was not found; install poppler-utils to read scanned PDFs`,
-    { cause },
-  );
-
 const failed = (command: string, stderr: string): TextExtractionError => {
   const reported = stderr.trim();
   return new TextExtractionError(
@@ -52,25 +48,33 @@ const failed = (command: string, stderr: string): TextExtractionError => {
   );
 };
 
+// A command that is absent or that this user may not execute stays so on every attempt:
+// both need the operator.
 const toSpawnError = (error: Error, command: string): Error => {
   if (isAbortError(error)) return error;
-  const notFound = 'code' in error && error.code === 'ENOENT';
-  return notFound
-    ? missing(command, error)
-    : new TextExtractionError('pdf_renderer_failed', `The command ${command} could not run`, {
+  const reason =
+    'code' in error && typeof error.code === 'string' ? UNAVAILABLE_REASONS[error.code] : undefined;
+  return reason === undefined
+    ? new TextExtractionError('pdf_renderer_failed', `The command ${command} could not run`, {
+        cause: error,
+      })
+    : new TextExtractionError('pdf_renderer_missing', `The command ${command} ${reason}`, {
         cause: error,
       });
 };
 
-// Runs one poppler command without a shell and returns the end of what it wrote on
-// stdout. Node kills the child itself on a timeout (`killed` is then true); a child
-// killed from outside, by the memory limit of a container for instance, is a failure
-// that another attempt may not meet.
+const ignore = (): void => undefined;
+
+// Runs one poppler command without a shell. What it writes on stdout is handed to
+// `onStdout` chunk by chunk and not kept. Node kills the child itself on a timeout
+// (`killed` is then true); a child killed from outside, by the memory limit of a
+// container for instance, is a failure that another attempt may not meet.
 export const runPoppler = (
   command: string,
   args: readonly string[],
   { timeoutMs, signal }: PopplerRunOptions,
-): Promise<string> =>
+  onStdout: (chunk: Uint8Array) => void = ignore,
+): Promise<void> =>
   new Promise((resolve, reject) => {
     const child = spawn(command, [...args], {
       stdio: ['ignore', 'pipe', 'pipe'],
@@ -78,25 +82,34 @@ export const runPoppler = (
       killSignal: 'SIGKILL',
       ...(signal === undefined ? {} : { signal }),
     });
-    const stdout = createOutputTail();
     const stderr = createOutputTail();
-    child.stdout.on('data', stdout.push);
+    // A process the command started may outlive it and keep the pipes open: letting go of
+    // them is what ends the wait on this side, and what stops that process at its next
+    // write.
+    const releasePipes = (): void => {
+      child.stdout.destroy();
+      child.stderr.destroy();
+    };
+    child.stdout.on('data', onStdout);
     child.stderr.on('data', stderr.push);
     child.on('error', (error) => {
+      releasePipes();
       reject(toSpawnError(error, command));
     });
+    // `close` waits for the pipes, which a surviving grandchild holds for as long as it
+    // lives: a timeout is reported when the killed child exits, not then.
+    child.on('exit', (code) => {
+      if (code !== null || !child.killed) return;
+      releasePipes();
+      reject(
+        new TextExtractionError(
+          'pdf_renderer_timeout',
+          `The command ${command} took longer than ${String(timeoutMs)} ms on a PDF page`,
+        ),
+      );
+    });
     child.on('close', (code) => {
-      if (code === 0) {
-        resolve(stdout.text());
-      } else if (code === null && child.killed) {
-        reject(
-          new TextExtractionError(
-            'pdf_renderer_timeout',
-            `The command ${command} took longer than ${String(timeoutMs)} ms on a PDF page`,
-          ),
-        );
-      } else {
-        reject(failed(command, stderr.text()));
-      }
+      if (code === 0) resolve();
+      else reject(failed(command, stderr.text()));
     });
   });

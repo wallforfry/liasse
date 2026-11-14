@@ -94,6 +94,19 @@ describe('startModelProcess', () => {
     await expect.poll(() => isRunning(pid), { timeout: 5000 }).toBe(false);
   });
 
+  // The deadline of the first request passes first: it alone timed out. The embedder runs
+  // again what was lost with a process, and never what a process did not answer.
+  it('reports as timed out only the request whose deadline passed', async () => {
+    const model = start(2000);
+    await pidOf(model);
+    const stuck = model.embed(['hang']);
+    const bystander = model.countTokens(['hang']);
+    await expect(stuck).rejects.toBeInstanceOf(LocalModelTimeoutError);
+    await expect(bystander).rejects.toMatchObject({ name: 'LocalModelProcessError' });
+    await expect(bystander).rejects.toThrow('it did not answer another request');
+    await expect(model.embed(['a'])).rejects.toMatchObject({ name: 'LocalModelProcessError' });
+  });
+
   it('leaves alone a process that answered before the deadline', async () => {
     const model = start(2000);
     expect(await model.embed(['slow'])).toHaveLength(1);

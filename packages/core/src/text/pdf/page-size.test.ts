@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { parsePageSize } from './page-size.ts';
+import { createPageSizeReader, type PageMeasure } from './page-size.ts';
+
+const parsePageSize = (stdout: string, page: number): PageMeasure => {
+  const reader = createPageSizeReader(page);
+  reader.push(Buffer.from(stdout, 'utf8'));
+  return reader.measure();
+};
 
 const output = (...lines: readonly string[]): string =>
   [
@@ -42,6 +48,26 @@ describe('parsePageSize', () => {
   it('does not trust a size reported twice', () => {
     const stdout = output('Page    1 size:  10 x 10 pts', 'Page    1 size:  9000 x 9000 pts');
     expect(parsePageSize(stdout, 1)).toEqual({ kind: 'ambiguous' });
+  });
+
+  it('counts the size lines of the whole output, however much follows or separates them', () => {
+    const padding = `PDF subtype:     ${'x'.repeat(40_000)}`;
+    const real = 'Page    1 size:  144 x 72 pts';
+    expect(parsePageSize(output(real, padding), 1)).toEqual({ kind: 'sized', longEdgePt: 144 });
+    expect(parsePageSize(output('Page    1 size:  10 x 10 pts', padding, real), 1)).toEqual({
+      kind: 'ambiguous',
+    });
+    expect(parsePageSize(output(real, padding, 'Page    1 size:  10 x 10 pts'), 1)).toEqual({
+      kind: 'ambiguous',
+    });
+  });
+
+  it('reads a size written in several chunks, and one without a final line feed', () => {
+    const reader = createPageSizeReader(1);
+    ['Pages: 1\nPage    1 si', 'ze:  144 x ', '72 pts'].forEach((chunk) => {
+      reader.push(Buffer.from(chunk));
+    });
+    expect(reader.measure()).toEqual({ kind: 'sized', longEdgePt: 144 });
   });
 
   it('requires the whole line to be a size', () => {

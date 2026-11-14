@@ -83,11 +83,18 @@ export const startModelProcess = ({
   };
 
   // A process that does not answer would hold its request, the server and the idle stop for
-  // ever: it is ended instead, which rejects everything it was asked.
-  const giveUp = (): void => {
-    end(
+  // ever: it is ended instead. Only the request whose deadline passed is reported as timed
+  // out, and is not to be asked again; the others were lost with the process, as when it
+  // dies, and can run on a new one.
+  const giveUp = (id: number): void => {
+    settle(id)?.reject(
       new LocalModelTimeoutError(
         `the model process did not answer within ${String(requestTimeoutMs)} ms and was ended`,
+      ),
+    );
+    end(
+      new LocalModelProcessError(
+        'the model process was ended because it did not answer another request',
       ),
     );
     kill();
@@ -119,7 +126,13 @@ export const startModelProcess = ({
       }
       lastId += 1;
       const id = lastId;
-      pending.set(id, { resolve, reject, deadline: setTimeout(giveUp, requestTimeoutMs) });
+      pending.set(id, {
+        resolve,
+        reject,
+        deadline: setTimeout(() => {
+          giveUp(id);
+        }, requestTimeoutMs),
+      });
       holdParent(true);
       child.send({ id, kind, texts: [...texts] } satisfies ModelRequest, (error) => {
         if (error !== null) {
