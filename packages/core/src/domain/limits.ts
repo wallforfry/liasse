@@ -21,6 +21,22 @@ export const MAX_FILENAME_LENGTH = 255;
 // person handing the file back through the API or MCP resets the count.
 export const MAX_WATCH_REQUEUES = 1;
 
+// Entity resolution, as the specification sets it: a mention whose embedding is closer
+// than the first threshold is attached, one at or above the second is arbitrated by the
+// text model among this many candidates, and anything below is a new entity.
+export const ENTITY_ATTACH_SIMILARITY = 0.92;
+export const ENTITY_ARBITRATION_SIMILARITY = 0.8;
+export const ENTITY_ARBITRATION_CANDIDATES = 3;
+
+export const MAX_ENTITY_NAME_LENGTH = 200;
+export const MAX_ENTITY_CONTEXT_LENGTH = 500;
+export const MAX_IDENTIFIERS_PER_MENTION = 20;
+export const MAX_IDENTIFIER_VALUE_LENGTH = 64;
+
+// A customer number is only unique for the entity that issued it. A short one is too
+// likely to be issued twice to say on its own which entity a mention designates.
+export const MIN_ATTACHING_CUSTOMER_NUMBER_LENGTH = 6;
+
 export const DEFAULT_QUERY_LIMIT = 50;
 export const MAX_QUERY_LIMIT = 200;
 export const MAX_QUERY_CONDITIONS = 20;

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { createUlidGenerator, ID_PREFIXES, newId } from './ids.ts';
+import { createUlidGenerator, ID_PREFIXES, isId, newId } from './ids.ts';
 
 describe('newId', () => {
   it('prefixes a 26-character Crockford base32 ULID', () => {
@@ -9,6 +9,22 @@ describe('newId', () => {
   it('never returns the same id twice', () => {
     const ids = Array.from({ length: 1000 }, () => newId(ID_PREFIXES.job));
     expect(new Set(ids).size).toBe(ids.length);
+  });
+});
+
+describe('isId', () => {
+  it('accepts an id minted with the prefix', () => {
+    expect(isId(ID_PREFIXES.entity, newId(ID_PREFIXES.entity))).toBe(true);
+  });
+
+  it.each([
+    ['another prefix', newId(ID_PREFIXES.document)],
+    ['a short ULID', 'ent_01JC'],
+    ['a character outside the alphabet', `ent_${'U'.repeat(26)}`],
+    ['a quote', `ent_${'0'.repeat(25)}"`],
+    ['a trailing character', `${newId(ID_PREFIXES.entity)}0`],
+  ])('refuses %s', (_case, value) => {
+    expect(isId(ID_PREFIXES.entity, value)).toBe(false);
   });
 });
 

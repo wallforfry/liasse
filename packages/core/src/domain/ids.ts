@@ -56,3 +56,10 @@ const defaultUlid = createUlidGenerator();
 
 export const newId = <P extends IdPrefix>(prefix: P): `${P}_${string}` =>
   `${prefix}_${defaultUlid()}`;
+
+const ULID_PATTERN = new RegExp(
+  `^[${CROCKFORD_ALPHABET}]{${String(TIME_LENGTH + RANDOM_LENGTH)}}$`,
+);
+
+export const isId = <P extends IdPrefix>(prefix: P, value: string): value is `${P}_${string}` =>
+  value.startsWith(`${prefix}_`) && ULID_PATTERN.test(value.slice(prefix.length + 1));
