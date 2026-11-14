@@ -24,6 +24,9 @@ export interface SyntheticPdfOptions {
   // What a reader gets when it copies a character: each key is one character of `lines`,
   // each value the text it stands for, as the ToUnicode map of an embedded font declares.
   readonly toUnicode?: Readonly<Record<string, string>>;
+  // The document information dictionary (`Title`, `Subject`, `Author`...), written as
+  // UTF-16 strings. Not encrypted: do not combine with `userPassword`.
+  readonly info?: Readonly<Record<string, string>>;
 }
 
 interface PdfObject {
@@ -77,6 +80,11 @@ const toUnicodeMap = (mapping: Readonly<Record<string, string>>): string =>
     'end',
     'end',
   ].join('\n');
+
+const infoDictionary = (info: Readonly<Record<string, string>>): string =>
+  Object.entries(info)
+    .map(([key, value]) => `/${key} <FEFF${utf16Hex(value)}>`)
+    .join(' ');
 
 const scanContent = (widthPt: number, heightPt: number): string =>
   `q ${String(widthPt)} 0 0 ${String(heightPt)} 0 0 cm /Im0 Do Q`;
@@ -164,7 +172,9 @@ export const buildSyntheticPdf = (
     ...(options.toUnicode === undefined
       ? []
       : [{ dictionary: '', stream: latin1(toUnicodeMap(options.toUnicode)) }]),
+    ...(options.info === undefined ? [] : [{ dictionary: infoDictionary(options.info) }]),
   ];
+  const info = options.info === undefined ? '' : ` /Info ${String(objects.length)} 0 R`;
   const header = latin1('%PDF-1.4\n');
   const bodies = objects.map((object, index) => serializeObject(object, index + 1, options));
   const offsets = offsetsOf(header, bodies);
@@ -177,7 +187,7 @@ export const buildSyntheticPdf = (
     '0000000000 65535 f ',
     ...offsets.map((offset) => `${String(offset).padStart(10, '0')} 00000 n `),
     'trailer',
-    `<< /Size ${String(objects.length + 1)} /Root ${String(CATALOG_ID)} 0 R${encryption} >>`,
+    `<< /Size ${String(objects.length + 1)} /Root ${String(CATALOG_ID)} 0 R${info}${encryption} >>`,
     'startxref',
     String(xrefOffset),
     '%%EOF',
