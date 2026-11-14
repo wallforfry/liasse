@@ -1,16 +1,13 @@
 import { z } from 'zod';
-import { MAX_HINT_LENGTH } from '../domain/limits.ts';
 import { defineJobKind } from '../jobs/kinds.ts';
 
 /**
- * Queued once per new document. The pipeline registers its handler with `handle`.
- * `hint` is what the caller said about the file: untrusted text, to be delimited like
- * the document content wherever it reaches a prompt.
+ * Queued once per document to process, new or handed back. The pipeline registers its
+ * handler with `handle`. The handler reads the document itself, `documents.hint`
+ * included, and has nothing to do when the row is gone or is a tombstone
+ * (`isLiveStatus`): a document can be deleted while its job is running.
  */
 export const processDocumentJob = defineJobKind({
   name: 'process_document',
-  schema: z.object({
-    documentId: z.string().min(1),
-    hint: z.string().min(1).max(MAX_HINT_LENGTH).optional(),
-  }),
+  schema: z.object({ documentId: z.string().min(1) }),
 });

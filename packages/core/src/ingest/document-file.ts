@@ -1,9 +1,10 @@
 import type { Readable } from 'node:stream';
-import { eq } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import type { Database } from '../db/client.ts';
 import { documents } from '../db/schema/documents.ts';
 import { parseStorageKey } from '../storage/key.ts';
 import type { Storage } from '../storage/port.ts';
+import { isLiveDocument } from './live-document.ts';
 
 export interface DocumentFileDeps {
   readonly db: Database;
@@ -32,7 +33,7 @@ export const getDocumentFile = async (
       storageKey: documents.storageKey,
     })
     .from(documents)
-    .where(eq(documents.id, id));
+    .where(and(eq(documents.id, id), isLiveDocument));
   if (document === undefined) return undefined;
   const { storageKey, ...described } = document;
   const key = parseStorageKey(storageKey);

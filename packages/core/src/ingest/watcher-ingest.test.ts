@@ -1,13 +1,17 @@
 import { mkdtemp, readdir, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { eq } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { documents } from '../db/schema/documents.ts';
 import { jobs } from '../db/schema/jobs.ts';
 import { waitUntil } from '../testing/async.ts';
 import { syntheticPdf, syntheticPng } from '../testing/synthetic-files.ts';
+import { deleteDocument } from './delete-document.ts';
 import { FileTooLargeError, UnsupportedFormatError } from './errors.ts';
-import { ingestFile, type IngestResult } from './ingest-file.ts';
+import type { IngestResult } from './existing-document.ts';
+import { ingestFile } from './ingest-file.ts';
+import { isLiveDocument } from './live-document.ts';
 import {
   createIngestHarness,
   type IngestHarness,
@@ -81,5 +85,23 @@ describe('a watched folder feeding ingestFile', () => {
       'oversized.pdf',
       'scan.png',
     ]);
+  });
+
+  it('does not bring a deleted document back after a restart', async () => {
+    const db = harness.database.db;
+    const [scan] = await db.select().from(documents).where(eq(documents.mime, 'image/png'));
+    expect(await deleteDocument(harness.deps, scan?.id ?? '')).toBe(true);
+    await db.delete(jobs);
+
+    const restarted = await watchOnce(5);
+    expect(restarted.results.map(({ status }) => status).sort()).toEqual([
+      'deleted',
+      'received',
+      'received',
+    ]);
+    expect(restarted.results.every(({ duplicate }) => duplicate)).toBe(true);
+    expect(await db.select().from(documents).where(isLiveDocument)).toHaveLength(1);
+    expect(await db.select().from(jobs)).toEqual([]);
+    expect((await readdir(dir)).includes('scan.png')).toBe(true);
   });
 });

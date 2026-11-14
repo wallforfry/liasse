@@ -12,6 +12,7 @@ import {
   syntheticJpeg,
   syntheticPdf,
 } from '../testing/synthetic-files.ts';
+import { deleteDocument } from './delete-document.ts';
 import { EmptyFileError, FileTooLargeError, UnsupportedFormatError } from './errors.ts';
 import { ingestFile } from './ingest-file.ts';
 import {
@@ -99,11 +100,108 @@ describe('ingestFile', () => {
       .set({ status: 'indexed' })
       .where(eq(documents.id, first.id));
     const second = await ingestFile(harness.deps, { bytes, filename: 'b.jpg', source: 'watch' });
-    expect(second).toEqual({ id: first.id, status: 'indexed', duplicate: true });
+    expect(second).toEqual({
+      id: first.id,
+      status: 'indexed',
+      duplicate: true,
+      fileRestored: false,
+    });
     expect(await documentRows()).toMatchObject([{ originalName: 'a.jpg', source: 'api' }]);
     expect(await jobRows()).toHaveLength(1);
     expect(harness.puts()).toBe(1);
   });
+
+  it('restores the file of an existing document when the storage lost it', async () => {
+    const bytes = syntheticPdf('file lost');
+    const first = await ingestFile(harness.deps, { bytes, filename: 'a.pdf', source: 'api' });
+    await harness.storage.delete(storageKeyOf(sha256Of(bytes)));
+    const again = await ingestFile(harness.deps, { bytes, filename: 'a.pdf', source: 'watch' });
+    expect(again).toEqual({
+      id: first.id,
+      status: 'received',
+      duplicate: true,
+      fileRestored: true,
+    });
+    const restored = await harness.storage.get(storageKeyOf(sha256Of(bytes)));
+    expect(Buffer.from(restored).equals(Buffer.from(bytes))).toBe(true);
+    expect(await jobRows()).toHaveLength(1);
+  });
+
+  it('queues a failed document again when its bytes are handed back', async () => {
+    const bytes = syntheticPdf('failed before');
+    const first = await ingestFile(harness.deps, { bytes, filename: 'a.pdf', source: 'api' });
+    await harness.database.db
+      .update(documents)
+      .set({ status: 'failed', error: 'synthetic failure' })
+      .where(eq(documents.id, first.id));
+    await harness.database.db.delete(jobs);
+    const again = await ingestFile(harness.deps, { bytes, filename: 'a.pdf', source: 'watch' });
+    expect(again).toEqual({
+      id: first.id,
+      status: 'received',
+      duplicate: true,
+      fileRestored: false,
+    });
+    expect(await documentRows()).toMatchObject([{ status: 'received', error: null }]);
+    expect(await jobRows()).toMatchObject([
+      { kind: 'process_document', payload: { documentId: first.id }, status: 'queued' },
+    ]);
+  });
+
+  it('does not bring a deleted document back from the watched folder', async () => {
+    const bytes = syntheticPdf('deleted, still in the folder');
+    const first = await ingestFile(harness.deps, { bytes, filename: 'a.pdf', source: 'watch' });
+    await deleteDocument(harness.deps, first.id);
+    await harness.database.db.delete(jobs);
+    const putsBefore = harness.puts();
+    const again = await ingestFile(harness.deps, { bytes, filename: 'a.pdf', source: 'watch' });
+    expect(again).toEqual({
+      id: first.id,
+      status: 'deleted',
+      duplicate: true,
+      fileRestored: false,
+    });
+    expect(await documentRows()).toMatchObject([{ status: 'deleted', originalName: '' }]);
+    expect(await jobRows()).toEqual([]);
+    expect(harness.puts()).toBe(putsBefore);
+  });
+
+  it.each(['api', 'mcp'] as const)(
+    'revives a deleted document handed back through %s, under the same id',
+    async (source) => {
+      const bytes = syntheticPdf(`deleted, uploaded again through ${source}`);
+      const first = await ingestFile(harness.deps, { bytes, filename: 'a.pdf', source: 'watch' });
+      await deleteDocument(harness.deps, first.id);
+      await harness.storage.delete(storageKeyOf(sha256Of(bytes)));
+      await harness.database.db.delete(jobs);
+      const again = await ingestFile(harness.deps, {
+        bytes,
+        filename: 'again.pdf',
+        source,
+        hint: 'synthetic second hint',
+      });
+      expect(again).toEqual({
+        id: first.id,
+        status: 'received',
+        duplicate: false,
+        fileRestored: false,
+      });
+      expect(await documentRows()).toMatchObject([
+        {
+          id: first.id,
+          status: 'received',
+          originalName: 'again.pdf',
+          source,
+          mime: 'application/pdf',
+          hint: 'synthetic second hint',
+        },
+      ]);
+      expect(await harness.storage.exists(storageKeyOf(sha256Of(bytes)))).toBe(true);
+      expect(await jobRows()).toMatchObject([
+        { kind: 'process_document', payload: { documentId: first.id } },
+      ]);
+    },
+  );
 
   it('makes one document and one file of the same bytes ingested concurrently', async () => {
     const bytes = syntheticPdf('concurrent');
@@ -196,11 +294,20 @@ describe('ingestFile', () => {
       source: 'mcp',
       hint: `  electricity bill ${'x'.repeat(MAX_HINT_LENGTH)}`,
     });
-    const [job] = await jobRows();
-    expect(job?.payload).toEqual({
-      documentId: hinted.id,
-      hint: `electricity bill ${'x'.repeat(MAX_HINT_LENGTH - 19)}`,
+    expect(await documentRows()).toMatchObject([
+      { id: hinted.id, hint: `electricity bill ${'x'.repeat(MAX_HINT_LENGTH - 19)}` },
+    ]);
+    expect((await jobRows())[0]?.payload).toEqual({ documentId: hinted.id });
+  });
+
+  it('stores no hint when none is given', async () => {
+    await ingestFile(harness.deps, {
+      bytes: syntheticPdf('no hint'),
+      filename: 'a.pdf',
+      source: 'api',
+      hint: '   ',
     });
+    expect(await documentRows()).toMatchObject([{ hint: null }]);
   });
 
   it('stores a hint and a name that hold characters Postgres refuses', async () => {
@@ -210,11 +317,9 @@ describe('ingestFile', () => {
       source: 'api',
       hint: 'half a pair \ud83d and a NUL \0',
     });
-    expect(await documentRows()).toMatchObject([{ id: result.id, originalName: 'invoice.pdf' }]);
-    expect((await jobRows())[0]?.payload).toEqual({
-      documentId: result.id,
-      hint: 'half a pair  and a NUL',
-    });
+    expect(await documentRows()).toMatchObject([
+      { id: result.id, originalName: 'invoice.pdf', hint: 'half a pair  and a NUL' },
+    ]);
   });
 
   it('keeps only the last segment of a client path as the name', async () => {
