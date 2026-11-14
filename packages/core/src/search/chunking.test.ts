@@ -96,13 +96,14 @@ describe('chunkPages', () => {
     expect(rebuilt).toBe(page);
   });
 
-  it('cuts between paragraphs when paragraphs fit', async () => {
-    const paragraphs = [sentences(20, 0), sentences(20, 100), sentences(20, 200)].map((text) =>
-      text.trim(),
-    );
-    expect(await chunkTexts(paragraphs.join('\n\n'), { maxTokens: 250, overlapTokens: 0 })).toEqual(
-      [`${paragraphs[0] ?? ''}\n\n${paragraphs[1] ?? ''}`, paragraphs[2]],
-    );
+  it('cuts between paragraphs before it cuts between the lines of one', async () => {
+    const paragraph = (name: string): string =>
+      `${name} line one of five\n${name} line two of five`;
+    const paragraphs = ['First', 'Second', 'Third'].map(paragraph);
+    expect(await chunkTexts(paragraphs.join('\n\n'), { maxTokens: 25, overlapTokens: 0 })).toEqual([
+      `${paragraphs[0] ?? ''}\n\n${paragraphs[1] ?? ''}`,
+      paragraphs[2],
+    ]);
   });
 
   it('cuts between lines before it cuts inside one', async () => {
@@ -119,7 +120,7 @@ describe('chunkPages', () => {
   });
 
   it('cuts between sentences inside a paragraph that does not fit', async () => {
-    const chunks = await chunkTexts(sentences(200), { maxTokens: 100, overlapTokens: 10 });
+    const chunks = await chunkTexts(sentences(200), { maxTokens: 103, overlapTokens: 11 });
     expect(chunks.length).toBeGreaterThan(3);
     expect(chunks.every((chunk) => /^Fact number \d+ is/.test(chunk) && chunk.endsWith('.'))).toBe(
       true,
@@ -127,12 +128,12 @@ describe('chunkPages', () => {
   });
 
   it('cuts after a CJK full stop, which no space follows', async () => {
-    const chunks = await chunkPages([{ page: 1, text: '甲乙丙丁。'.repeat(40) }], {
+    const chunks = await chunkPages([{ page: 1, text: '甲乙丙丁戊己。'.repeat(30) }], {
       maxTokens: 52,
       overlapTokens: 0,
       countTokens: countCharacters,
     });
-    expect(chunks.length).toBe(4);
+    expect(chunks.map((chunk) => chunk.text.length)).toEqual([49, 49, 49, 49, 14]);
     expect(chunks.every((chunk) => chunk.text.endsWith('。'))).toBe(true);
   });
 
