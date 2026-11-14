@@ -2,6 +2,7 @@ import type { Database } from '../db/client.ts';
 import { documentPages } from '../db/schema/documents.ts';
 import { docTypes } from '../db/schema/registry.ts';
 import type { DocumentStatus } from '../domain/enums.ts';
+import type { EntityProvenance } from '../domain/provenance.ts';
 import type { Embedder } from '../models/ports.ts';
 import { insertSyntheticDocument } from '../testing/fixtures.ts';
 import { indexDocument } from './indexing.ts';
@@ -25,7 +26,7 @@ export const ENTITY_NAMES: Readonly<Record<EntityId, string>> = {
   [ENTITIES.resident]: 'Camille Tisserand',
 };
 
-const resolvedTo = (entityId: EntityId) => ({
+const resolvedTo = (entityId: EntityId): EntityProvenance => ({
   entity_id: entityId,
   match: 'alias',
   confidence: 0.99,

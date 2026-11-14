@@ -2,12 +2,12 @@ import { type SQL, sql } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/pg-core';
 import { documents } from '../db/schema/documents.ts';
 import { docTypes } from '../db/schema/registry.ts';
+import { entityIdProvenancePath } from '../domain/provenance.ts';
 import type { SearchFilters } from './input.ts';
 
 // `core` holds the name of an entity as it was extracted; the entity it resolved to is recorded
 // in the provenance of the field (spec, Data model).
 const ENTITY_FIELDS = ['issuer', 'recipient'] as const;
-const ENTITY_ID_KEY = 'entity_id';
 const DOCUMENT_DATE_KEY = 'document_date';
 
 const MERGED_TYPES = 'merged_types';
@@ -33,7 +33,7 @@ const ofEntity = (entity: string): SQL =>
   sql`(${sql.join(
     ENTITY_FIELDS.map(
       (field) =>
-        sql`${documents.provenance} -> ${sql.raw(`'${field}'`)} ->> ${sql.raw(`'${ENTITY_ID_KEY}'`)} = ${entity}`,
+        sql`${documents.provenance} #>> ${sql.raw(`'{${entityIdProvenancePath(field).join(',')}}'`)} = ${entity}`,
     ),
     sql` OR `,
   )})`;
