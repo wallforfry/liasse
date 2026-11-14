@@ -7,7 +7,7 @@ import { addAlias, markMerged } from '../registry/lifecycle.ts';
 import { createFakeEmbedder } from '../testing/fake-embedder.ts';
 import { insertSyntheticDocument } from '../testing/fixtures.ts';
 import { createTestDatabase, type TestDatabase } from '../testing/test-database.ts';
-import { executeStatement } from './execute.ts';
+import { executeStatement, QueryExecutionError } from './execute.ts';
 import { runQuery } from './run.ts';
 
 const BILL_FIELDS = {
@@ -424,5 +424,85 @@ describe('runQuery', () => {
       ok: true,
       value: [{ one: 1 }],
     });
+  });
+
+  it('reports at most twenty problems and counts the ones it leaves out', async () => {
+    const notDates = Array.from({ length: 100 }, () => 'not a date');
+    const literals = await errorsOf({
+      where: Array.from({ length: 20 }, () => ['core.document_date', 'in', notDates]),
+    });
+    expect(literals).toHaveLength(21);
+    expect(literals.slice(0, 20).map(({ code }) => code)).toEqual(
+      Array.from({ length: 20 }, () => 'invalid_literal'),
+    );
+    expect(literals.at(-1)).toEqual({
+      code: 'more_errors',
+      path: [],
+      omitted: 1980,
+      message: '1980 more errors were left out.',
+    });
+    expect(JSON.stringify(literals).length).toBeLessThan(6000);
+    const fields = await errorsOf({
+      where: Array.from({ length: 20 }, (_, index) => [`nope_${String(index)}`, '=', 1]),
+      select: Array.from({ length: 40 }, () => 'nope'),
+      order_by: ['nope', 'asc'],
+    });
+    expect(fields).toHaveLength(21);
+    expect(fields.at(-1)).toMatchObject({ code: 'more_errors', omitted: 41 });
+    const shapes = await errorsOf({
+      where: Array.from({ length: 20 }, () => ['', 'like', 1]),
+    });
+    expect(shapes).toHaveLength(21);
+    expect(shapes.at(-1)).toMatchObject({ code: 'more_errors', omitted: 20 });
+    expect(
+      await errorsOf({ where: Array.from({ length: 5000 }, () => ['', 'like', 1]) }),
+    ).toMatchObject([{ code: 'invalid_query', path: ['where'] }]);
+    expect((await errorsOf({ limit: 0, offset: -1 })).map(({ code }) => code)).toEqual([
+      'invalid_query',
+      'invalid_query',
+    ]);
+  });
+
+  it('echoes a few of the unknown keys of a query and counts the others', async () => {
+    const keys = Object.fromEntries(
+      Array.from({ length: 5000 }, (_, index) => [`key_${String(index)}`, 1]),
+    );
+    expect(await errorsOf(keys)).toEqual([
+      {
+        code: 'invalid_query',
+        path: [],
+        message:
+          'Unknown keys "key_0", "key_1", "key_2", "key_3", "key_4" and 4995 more. Expected: type, where, select, order_by, aggregate, group_by, limit, offset, include_private.',
+      },
+    ]);
+  });
+
+  it.each([
+    ['the documents', sql`ALTER TABLE documents RENAME COLUMN title TO renamed`, {}],
+    ['the registry', sql`ALTER TABLE doc_types RENAME COLUMN slug TO renamed`, { type: 'payslip' }],
+    [
+      'the entities',
+      sql`ALTER TABLE entities RENAME COLUMN aliases TO renamed`,
+      { where: [['core.issuer', '=', 'EDF']] },
+    ],
+  ])('throws a failure of %s without the statement', async (_, breakage, query) => {
+    const broken = await createTestDatabase();
+    try {
+      await broken.db.execute(breakage);
+      const failure: unknown = await runQuery(query, { db: broken.db }).catch(
+        (error: unknown) => error,
+      );
+      expect(failure).toBeInstanceOf(QueryExecutionError);
+      expect(failure).toMatchObject({
+        sqlState: '42703',
+        message: 'The query could not be run (SQLSTATE 42703).',
+      });
+      expect(failure instanceof Error ? failure.cause : 'not an error').toBeUndefined();
+      expect(
+        failure instanceof Error ? `${String(failure.stack)}${JSON.stringify(failure)}` : '',
+      ).not.toMatch(/SELECT |renamed|"documents"|jsonb_/i);
+    } finally {
+      await broken.dispose();
+    }
   });
 });

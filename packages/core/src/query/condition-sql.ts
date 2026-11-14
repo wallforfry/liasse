@@ -1,5 +1,12 @@
 import { type SQL, sql } from 'drizzle-orm';
-import { fieldIdentity, fieldParameter, fieldValue } from './access.ts';
+import { PROVENANCE_ENTITY_ID_KEY } from '../domain/provenance.ts';
+import {
+  fieldIdentity,
+  fieldParameter,
+  fieldValue,
+  itemProvenance,
+  textParameters,
+} from './access.ts';
 import type { CheckedCondition, OrderingOperator } from './check-conditions.ts';
 import type { QueryField } from './fields.ts';
 
@@ -30,6 +37,21 @@ const equality = (field: QueryField, values: readonly unknown[], negated: boolea
     : sql`${value} IN (${list})`;
 };
 
+// A text that folds to nothing, such as a lone combining accent, is found in no value:
+// `strpos` would find the empty text at the start of every one.
+const substring = (field: QueryField, text: string): SQL => {
+  const needle = sql`unaccent(lower(${text}::text))`;
+  return sql`(${needle} <> '' AND strpos(unaccent(lower(${fieldValue(field)})), ${needle}) > 0)`;
+};
+
+// An item of a list of entities is found through the provenance of the list, which holds
+// the entity each item was resolved to; the items themselves are names as extracted.
+const resolvedMember = (provenanceKey: string, ids: readonly string[]): SQL =>
+  ids.length === 0
+    ? sql`FALSE`
+    : sql`EXISTS (SELECT 1 FROM jsonb_array_elements(${itemProvenance(provenanceKey)}) AS "item"
+        WHERE "item" ->> ${PROVENANCE_ENTITY_ID_KEY}::text IN (${textParameters(ids)}))`;
+
 export const conditionSql = (condition: CheckedCondition, entityIds: EntityIds): SQL => {
   const { field } = condition;
   switch (condition.kind) {
@@ -42,9 +64,11 @@ export const conditionSql = (condition: CheckedCondition, entityIds: EntityIds):
     case 'ordering':
       return sql`${fieldValue(field)} ${ORDERING[condition.operator]} ${fieldParameter(field, condition.value)}`;
     case 'substring':
-      return sql`strpos(unaccent(lower(${fieldValue(field)})), unaccent(lower(${condition.text}::text))) > 0`;
+      return substring(field, condition.text);
     case 'member':
-      return sql`${fieldValue(field)} @> ${JSON.stringify([condition.item])}::jsonb`;
+      return field.itemIdentities === undefined
+        ? sql`${fieldValue(field)} @> ${JSON.stringify([condition.item])}::jsonb`
+        : resolvedMember(field.itemIdentities, idsOf([condition.item], entityIds));
     case 'exists':
       return condition.expected
         ? sql`${fieldValue(field)} IS NOT NULL`

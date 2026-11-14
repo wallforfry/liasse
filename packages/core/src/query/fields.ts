@@ -35,6 +35,9 @@ export interface QueryField {
   // field itself holds the name as extracted: it says whether the document names an
   // entity, and the id says which one.
   readonly identity?: readonly string[];
+  // For a list of entities, the key of `documents.provenance` that holds one entry per
+  // item, in the order of the value: each carries the id its item was resolved to.
+  readonly itemIdentities?: string;
 }
 
 interface Part {
@@ -76,11 +79,15 @@ const partsOf = (whole: QueryField, column: JsonColumn, name: string): readonly 
 const typing = (
   entry: FieldPath,
   name: string,
-): Pick<QueryField, 'check' | 'items' | 'identity'> => {
+): Pick<QueryField, 'check' | 'items' | 'identity' | 'itemIdentities'> => {
   if (!('definition' in entry)) return { check: nothingCompares };
   const { definition } = entry;
   if (definition.type === 'list') {
-    return { check: checkByDefinition(definition.items), items: definition.items.type };
+    return {
+      check: checkByDefinition(definition.items),
+      items: definition.items.type,
+      ...(definition.items.type === 'entity' ? { itemIdentities: name } : {}),
+    };
   }
   return {
     check: checkByDefinition(definition),

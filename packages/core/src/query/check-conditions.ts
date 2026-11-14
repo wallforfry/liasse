@@ -26,9 +26,13 @@ export type CheckedCondition =
       readonly value: unknown;
     }
   | { readonly kind: 'substring'; readonly field: QueryField; readonly text: string }
-  // An item of a list of entities is the name as extracted, compared as it is stored:
-  // the provenance of a list records no entity per item.
-  | { readonly kind: 'member'; readonly field: QueryField; readonly item: unknown }
+  // The item looked for in a list of entities is a name or an id of entity, like above.
+  | {
+      readonly kind: 'member';
+      readonly field: QueryField;
+      readonly item: unknown;
+      readonly at: QueryLocation;
+    }
   | { readonly kind: 'exists'; readonly field: QueryField; readonly expected: boolean };
 
 type Checked<Value> = Result<Value, readonly QueryError[]>;
@@ -47,10 +51,17 @@ const literal = (field: QueryField, raw: unknown, at: QueryLocation): Checked<un
   const checked = field.check(raw);
   if (checked.ok) return checked;
   const kind = field.items === undefined ? field.primitive : `list of ${field.items}`;
-  return invalidLiteral(
-    at,
-    `${quoted(raw)} does not compare with ${field.path} (${kind}): ${checked.error}.`,
-  );
+  const { reason, allowed } = checked.error;
+  return err([
+    {
+      ...failure(
+        'invalid_literal',
+        at,
+        `${quoted(raw)} does not compare with ${field.path} (${kind}): ${reason}.`,
+      ),
+      ...(allowed === undefined ? {} : { allowed }),
+    },
+  ]);
 };
 
 const equals =
@@ -84,7 +95,7 @@ const contains = (
 ): Checked<CheckedCondition> => {
   if (field.primitive === 'list') {
     const item = literal(field, raw, at);
-    return item.ok ? ok({ kind: 'member', field, item: item.value }) : item;
+    return item.ok ? ok({ kind: 'member', field, item: item.value, at }) : item;
   }
   if (isTooLong(raw)) return tooLong(at);
   return typeof raw === 'string' && raw !== ''

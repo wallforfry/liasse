@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import type { JsonObject } from '../db/columns.ts';
 import { isPlainRecord } from '../registry/own.ts';
+import type { QueryPrimitive } from './capabilities.ts';
 import type { CheckedQuery } from './check.ts';
 import type { AggregateShape, RowsShape } from './check-shape.ts';
 import { AGGREGATE_COLUMN, GROUP_COLUMN } from './compile.ts';
@@ -29,6 +30,7 @@ export interface QueryRow {
 export interface QueryGroup {
   // The value of each `group_by` path, by path. Text values are untrusted content.
   readonly key: Readonly<Record<string, unknown>>;
+  // A number, or the text of its exact decimal value when no double can hold it.
   readonly values: Readonly<Partial<Record<AggregateFunction, unknown>>>;
 }
 
@@ -97,17 +99,31 @@ const toRow =
     };
   };
 
+// A number comes back as the text of its `numeric`. It is a number when a double can
+// hold it, with the precision of a double, and stays the text of its exact decimal value
+// when it cannot: JSON has no way to write a number beyond that range.
+const numberOrText = (stored: unknown): unknown => {
+  if (typeof stored !== 'string') return stored;
+  const number = Number(stored);
+  return Number.isFinite(number) ? number : stored;
+};
+
+const NUMBER: QueryPrimitive = 'number';
+
 const toGroup =
   ({ aggregates, groupBy }: AggregateShape) =>
   (stored: StoredRow): QueryGroup => ({
     key: Object.fromEntries(
-      groupBy.map(({ path }, index) => [path, stored[`${GROUP_COLUMN}${String(index)}`] ?? null]),
+      groupBy.map(({ path, primitive }, index) => {
+        const key = stored[`${GROUP_COLUMN}${String(index)}`] ?? null;
+        return [path, primitive === NUMBER ? numberOrText(key) : key];
+      }),
     ),
     values: Object.fromEntries(
-      aggregates.map(({ fn }, index) => [
-        fn,
-        stored[`${AGGREGATE_COLUMN}${String(index)}`] ?? null,
-      ]),
+      aggregates.map(({ fn, field }, index) => {
+        const value = stored[`${AGGREGATE_COLUMN}${String(index)}`] ?? null;
+        return [fn, fn !== 'count' && field?.primitive === NUMBER ? numberOrText(value) : value];
+      }),
     ),
   });
 

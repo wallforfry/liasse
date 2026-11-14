@@ -60,8 +60,8 @@ const VALUE = 'v';
 
 const AGGREGATE: Readonly<Record<AggregateFunction, (value: SQL, field: QueryField) => SQL>> = {
   count: (value) => sql`COUNT(${value})::int`,
-  sum: (value) => sql`SUM(${value})::float8`,
-  avg: (value) => sql`AVG(${value})::float8`,
+  sum: (value, field) => outputValue(field, sql`SUM(${value})`),
+  avg: (value, field) => outputValue(field, sql`AVG(${value})`),
   min: (value, field) => outputValue(field, sql`MIN(${value})`),
   max: (value, field) => outputValue(field, sql`MAX(${value})`),
 };

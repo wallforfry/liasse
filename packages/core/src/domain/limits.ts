@@ -30,4 +30,14 @@ export const MAX_QUERY_SELECT = 40;
 export const MAX_QUERY_STRING_LENGTH = 200;
 export const MAX_QUERY_LISTED_FIELDS = 40;
 export const MAX_QUERY_SUGGESTED_ENTITIES = 5;
+// Errors, and warnings, a query answers with before it counts the rest.
+export const MAX_QUERY_REPORTED_PROBLEMS = 20;
+export const MAX_QUERY_ECHOED_KEYS = 5;
+export const MAX_QUERY_ECHOED_LENGTH = 60;
+// Entity names are matched in memory, by the one normaliser of entity names: a query
+// reads at most this many entities to do it, and refuses names beyond.
+export const MAX_QUERY_ENTITIES = 10_000;
+// Unknown entity names that get suggestions, and entities compared with each of them.
+export const MAX_QUERY_SUGGESTED_NAMES = 5;
+export const MAX_QUERY_SUGGESTION_CANDIDATES = 200;
 export const DEFAULT_QUERY_TIMEOUT_MILLISECONDS = 5000;

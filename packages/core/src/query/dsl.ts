@@ -2,6 +2,7 @@ import { z } from 'zod';
 import {
   DEFAULT_QUERY_LIMIT,
   MAX_QUERY_CONDITIONS,
+  MAX_QUERY_ECHOED_KEYS,
   MAX_QUERY_GROUP_BY,
   MAX_QUERY_LIMIT,
   MAX_QUERY_SELECT,
@@ -71,33 +72,42 @@ export type QueryDsl = z.output<typeof queryDslSchema>;
 // What an agent is shown: the defaults are optional on the way in.
 export const queryDslJsonSchema = () => z.toJSONSchema(queryDslSchema, { io: 'input' });
 
-const MAX_REPORTED_ISSUES = 20;
-
 const allowedKeys = (path: readonly PropertyKey[]): readonly string[] =>
   path[0] === 'aggregate' ? AGGREGATE_FUNCTIONS : Object.keys(queryDslSchema.shape);
 
+const unknownKeys = (keys: readonly string[], path: readonly PropertyKey[]): string => {
+  const echoed = keys.slice(0, MAX_QUERY_ECHOED_KEYS).map(quoted).join(', ');
+  const hidden = keys.length - MAX_QUERY_ECHOED_KEYS;
+  return `Unknown ${keys.length === 1 ? 'key' : 'keys'} ${echoed}${hidden > 0 ? ` and ${String(hidden)} more` : ''}. Expected: ${allowedKeys(path).join(', ')}.`;
+};
+
 const describeIssue = (issue: z.core.$ZodIssue): string =>
-  issue.code === 'unrecognized_keys'
-    ? `Unknown ${issue.keys.length === 1 ? 'key' : 'keys'} ${issue.keys.map(quoted).join(', ')}. Expected: ${allowedKeys(issue.path).join(', ')}.`
-    : issue.message;
+  issue.code === 'unrecognized_keys' ? unknownKeys(issue.keys, issue.path) : issue.message;
 
 const location = (path: readonly PropertyKey[]): readonly (string | number)[] =>
   path.map((key) => (typeof key === 'number' ? key : String(key)));
 
 // Zod goes on checking a value whose type is already wrong, and then reports the length
 // of a text against the bound of a list. The first issue of a place is the one that helps.
+// The places seen are kept in a set: a query may carry thousands of broken conditions.
 const firstByPlace = (issues: readonly z.core.$ZodIssue[]): readonly z.core.$ZodIssue[] => {
-  const places = issues.map(({ path }) => JSON.stringify(location(path)));
-  return issues.filter((_, index) => places.indexOf(places[index] ?? '') === index);
+  const seen = new Set<string>();
+  return issues.filter(({ path }) => {
+    const place = JSON.stringify(location(path));
+    const isFirst = !seen.has(place);
+    seen.add(place);
+    return isFirst;
+  });
 };
 
+// Every problem, one per place. `runQuery` is what bounds how many of them it answers.
 export const parseQueryDsl = (input: unknown): Result<QueryDsl, readonly QueryError[]> => {
   const parsed = queryDslSchema.safeParse(input);
   return parsed.success
     ? ok(parsed.data)
     : err(
-        firstByPlace(parsed.error.issues)
-          .slice(0, MAX_REPORTED_ISSUES)
-          .map((issue) => failure('invalid_query', location(issue.path), describeIssue(issue))),
+        firstByPlace(parsed.error.issues).map((issue) =>
+          failure('invalid_query', location(issue.path), describeIssue(issue)),
+        ),
       );
 };

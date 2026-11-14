@@ -137,12 +137,21 @@ describe('the query DSL', () => {
     ).toBe(true);
   });
 
-  it('reports every problem at once, up to twenty', () => {
+  it('reports every problem at once, one per place', () => {
     expect(errorsOf({ limit: 0, offset: -1 }).map(({ path }) => path)).toEqual([
       ['limit'],
       ['offset'],
     ]);
-    expect(errorsOf({ where: repeat(MAX_QUERY_CONDITIONS, ['', 'like', 1]) })).toHaveLength(20);
+    expect(errorsOf({ where: repeat(MAX_QUERY_CONDITIONS, ['', 'like', 1]) })).toHaveLength(40);
+  });
+
+  it('echoes at most five unknown keys', () => {
+    expect(errorsOf({ a: 1, b: 1, c: 1, d: 1, e: 1 })[0]?.message).toMatch(
+      /^Unknown keys "a", "b", "c", "d", "e"\. Expected: /,
+    );
+    expect(errorsOf({ a: 1, b: 1, c: 1, d: 1, e: 1, f: 1 })[0]?.message).toMatch(
+      /^Unknown keys "a", "b", "c", "d", "e" and 1 more\. Expected: /,
+    );
   });
 
   it('cuts the user text it echoes', () => {

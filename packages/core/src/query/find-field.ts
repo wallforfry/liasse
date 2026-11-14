@@ -1,7 +1,7 @@
 import { MAX_QUERY_LISTED_FIELDS } from '../domain/limits.ts';
 import { err, ok, type Result } from '../registry/result.ts';
 import { editDistance, isClose, rankByDistance } from './closest.ts';
-import { type QueryError, type QueryLocation, quoted, type UnknownField } from './errors.ts';
+import { cut, type QueryError, type QueryLocation, quoted, type UnknownField } from './errors.ts';
 import type { QueryField } from './fields.ts';
 
 const TYPE_FIELDS_PREFIX = 'fields.';
@@ -33,12 +33,12 @@ const unknownField = (
     .slice(0, MAX_QUERY_LISTED_FIELDS)
     .map(({ item }) => ({ path: item.path, primitive: item.primitive }));
   const hidden = ranked.length - available.length;
-  const listing = available.map(({ path, primitive }) => `${path} (${primitive})`).join(', ');
+  // The listing and the suggestion are data: the message points at them and stays short.
   return {
     code: 'unknown_field',
-    message: `Unknown field ${quoted(target)}.${suggestion === undefined ? '' : ` Did you mean "${suggestion}"?`}${typeHint(target, fields)} Available fields, closest first: ${listing}${hidden > 0 ? `, and ${String(hidden)} more` : ''}.`,
+    message: `Unknown field ${quoted(target)}.${suggestion === undefined ? '' : ' The closest one is in "suggestion".'}${typeHint(target, fields)} The fields that exist are in "available", closest first${hidden > 0 ? `; ${String(hidden)} more are left out` : ''}.`,
     path: at,
-    field: target,
+    field: cut(target),
     ...(suggestion === undefined ? {} : { suggestion }),
     available,
     truncated: hidden > 0,

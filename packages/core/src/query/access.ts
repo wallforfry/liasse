@@ -69,7 +69,15 @@ export const fieldIdentity = (field: QueryField): SQL =>
     ? fieldValue(field)
     : text(jsonValue(sql`${documents.provenance}`, field.identity));
 
+// The provenance entries of the items of a list, one object per item, or NULL when the
+// provenance of the field is not an array.
+export const itemProvenance = (provenanceKey: string): SQL =>
+  array(jsonValue(sql`${documents.provenance}`, [provenanceKey]));
+
 const textParameter = (value: unknown): SQL => sql`${value}::text`;
+
+export const textParameters = (values: readonly string[]): SQL =>
+  sql.join(values.map(textParameter), sql`, `);
 
 const TYPED_PARAMETER: Readonly<Partial<Record<QueryPrimitive, (value: unknown) => SQL>>> = {
   number: (value) => sql`${value}::numeric`,
@@ -90,10 +98,12 @@ const TEXTUAL: ReadonlySet<QueryPrimitive> = new Set(['text', 'identifier', 'enu
 export const sortKey = ({ primitive }: QueryField, value: SQL): SQL =>
   TEXTUAL.has(primitive) ? sql`(${value}) COLLATE "C"` : value;
 
-// The driver returns a `numeric` as text and a `date` in the date style of the session:
-// both leave the statement in the form the result gives them in.
+// A number leaves the statement as the text of its `numeric`: a `jsonb` holds numbers no
+// double can, two of the largest doubles add up to one, and a cast to `float8` would then
+// fail the whole statement. The result turns the text into a number when it fits one. A
+// date is written here because the driver returns it in the date style of the session.
 const OUTPUT: Readonly<Partial<Record<QueryPrimitive, Shaping>>> = {
-  number: (value) => sql`(${value})::float8`,
+  number: (value) => sql`(${value})::text`,
   date: (value) => sql`to_char(${value}, 'YYYY-MM-DD')`,
 };
 

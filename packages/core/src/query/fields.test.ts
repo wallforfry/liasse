@@ -95,8 +95,8 @@ describe('the fields a query may address', () => {
       { path: 'core.amount.currency', primitive: 'text' },
       { path: 'core.amount.value', primitive: 'number' },
     ]);
-    expect(error.message).toMatch(
-      /^Unknown field "core\.amount\.curency"\. Did you mean "core\.amount\.currency"\? Available fields, closest first: core\.amount\.currency \(text\), core\.amount\.value \(number\), .* \([a-z_]+\)\.$/,
+    expect(error.message).toBe(
+      'Unknown field "core.amount.curency". The closest one is in "suggestion". The fields that exist are in "available", closest first.',
     );
   });
 
@@ -106,7 +106,7 @@ describe('the fields a query may address', () => {
     expect(unknown('core.documnt_date').suggestion).toBe('core.document_date');
     const far = unknown('zzzzzzzzzzzzzzzzzzzzzzzz');
     expect(far.suggestion).toBeUndefined();
-    expect(far.message).not.toContain('Did you mean');
+    expect(far.message).not.toContain('"suggestion"');
   });
 
   it('says that type fields need a type, only when none is in reach', () => {
@@ -129,16 +129,18 @@ describe('the fields a query may address', () => {
     const error = unknown('fields.field_x', wide);
     expect(error.available).toHaveLength(MAX_QUERY_LISTED_FIELDS);
     expect(error.truncated).toBe(true);
-    expect(error.message).toMatch(/, and 11 more\.$/);
+    expect(error.message).toMatch(/closest first; 11 more are left out\.$/);
     expect(error.available[0]?.path).toMatch(/^fields\.field_\d$/);
     const exact = unknown('nope', wide.slice(0, MAX_QUERY_LISTED_FIELDS));
     expect(exact.truncated).toBe(false);
-    expect(exact.message).not.toContain('more.');
+    expect(exact.message).not.toContain('left out');
   });
 
-  it('cuts an unknown path it echoes', () => {
+  it('cuts an unknown path wherever it echoes it', () => {
     const error = unknown('x'.repeat(200));
     expect(error.message).toContain(`"${'x'.repeat(60)}..."`);
+    expect(error.field).toBe(`${'x'.repeat(60)}...`);
+    expect(unknown('x'.repeat(60)).field).toBe('x'.repeat(60));
   });
 
   it.each([

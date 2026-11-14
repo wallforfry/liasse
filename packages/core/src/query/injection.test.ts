@@ -116,6 +116,7 @@ describe('what reaches the statement', () => {
       'quantity',
       'quantity',
       300,
+      'needle',
       'note',
       'note',
       'needle',
