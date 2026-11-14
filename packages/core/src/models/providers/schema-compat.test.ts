@@ -1,5 +1,7 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { z } from 'zod';
+import { classificationSchema } from '../../pipeline/classify/classification-schema.ts';
+import { extractionOutputSchema } from '../../pipeline/extract/extraction-schema.ts';
 import { anthropicJsonText, NATIVE_GENERATION } from './native-fixtures.ts';
 import { type StubServer, startStubServer } from './stub-server.ts';
 import { createTextModel } from './text-model.ts';
@@ -125,4 +127,92 @@ describe('a closed schema on a current Anthropic model', () => {
     expect(body).not.toHaveProperty('tools');
     expect(body).not.toHaveProperty('output_config.format.schema.properties.confidence.minimum');
   });
+});
+
+const EXTRACTION_OUTPUT = {
+  title: 'Synthetic energy bill',
+  core: { reference: { value: 'SYN-1', page: 1, quote: 'Invoice SYN-1', confidence: 0.9 } },
+  fields: {},
+  extra: {},
+};
+
+const EVIDENCE_KEYS = ['value', 'page', 'quote', 'confidence'];
+
+const chatBody = (output: unknown): unknown => chatCompletion(JSON.stringify(output)).body;
+
+// Where each provider carries the schema, in the body it receives.
+const PIPELINE_SCHEMA_CASES = [
+  ['openai', { LLM_PROVIDER: 'openai' }, NATIVE_GENERATION.openai.respond, 'text.format.schema'],
+  [
+    'openai-compatible',
+    { LLM_PROVIDER: 'openai-compatible' },
+    chatBody,
+    'response_format.json_schema.schema',
+  ],
+  [
+    'ollama',
+    { LLM_PROVIDER: 'ollama', LLM_API_KEY: '' },
+    chatBody,
+    'response_format.json_schema.schema',
+  ],
+  [
+    'mistral',
+    { LLM_PROVIDER: 'mistral' },
+    NATIVE_GENERATION.mistral.respond,
+    'response_format.json_schema.schema',
+  ],
+  [
+    'gemini',
+    { LLM_PROVIDER: 'gemini' },
+    NATIVE_GENERATION.gemini.respond,
+    'generationConfig.responseJsonSchema',
+  ],
+  [
+    'anthropic',
+    { LLM_PROVIDER: 'anthropic', TEXT_MODEL: 'claude-sonnet-4-5' },
+    NATIVE_GENERATION.anthropic.respond,
+    'tools.0.input_schema',
+  ],
+] as const;
+
+describe('the extraction schema of the pipeline', () => {
+  const schema = extractionOutputSchema({
+    meter_id: { type: 'identifier', format: 'PDL' },
+    parties: { type: 'list', items: { type: 'entity' } },
+  });
+
+  it.each(PIPELINE_SCHEMA_CASES)(
+    'reaches %s whole, without the defaults of its lenient elements',
+    async (_provider, env, respond, path) => {
+      const body = await bodyOf(respond(EXTRACTION_OUTPUT), env, schema);
+      expect(body).toHaveProperty(
+        `${path}.properties.core.properties.issuer.required`,
+        EVIDENCE_KEYS,
+      );
+      expect(body).toHaveProperty(
+        `${path}.properties.fields.properties.parties.items.required`,
+        EVIDENCE_KEYS,
+      );
+      expect(body).toHaveProperty(
+        `${path}.properties.extra.additionalProperties.required`,
+        EVIDENCE_KEYS,
+      );
+      expect(body).not.toHaveProperty(`${path}.properties.core.required`);
+      expect(JSON.stringify(body)).not.toContain('"default"');
+    },
+  );
+});
+
+describe('the classification schema of the pipeline', () => {
+  it.each(PIPELINE_SCHEMA_CASES)(
+    'reaches %s with the offered slugs as an enumeration',
+    async (_provider, env, respond) => {
+      const body = await bodyOf(
+        respond({ decision: 'existing', slug: 'energy_bill', confidence: 0.9 }),
+        env,
+        classificationSchema(['energy_bill', 'payslip']),
+      );
+      expect(JSON.stringify(body)).toContain('"enum":["energy_bill","payslip"]');
+    },
+  );
 });
