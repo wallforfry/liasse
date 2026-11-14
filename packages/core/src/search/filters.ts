@@ -17,7 +17,7 @@ const mergedTypes = alias(docTypes, MERGED_TYPES);
 // extracted again, while its slug becomes an alias of its target: those documents belong to the
 // named type as well. `resolveType` of the registry answers with the target alone, and would
 // cost a query per search; this subquery finds the target and the types merged into it at once.
-const ofType = (type: string): SQL => {
+export const ofType = (type: string): SQL => {
   const named = sql`(${docTypes.slug} = ${type} OR ${type} = ANY(${docTypes.aliases}))`;
   return sql`${documents.typeId} IN (
     SELECT ${docTypes.id} FROM ${docTypes} WHERE ${named}
