@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { type ApiContext, type ApiFeatures, createFileUrls } from '@liasse/core/api';
 import { documentPages } from '@liasse/core/db';
-import { indexDocument } from '@liasse/core/search';
+import { indexDocument, rankByFullText } from '@liasse/core/search';
 import { createFsStorage } from '@liasse/core/storage';
 import {
   createFakeEmbedder,
@@ -54,6 +54,7 @@ export const createMcpHarness = async (): Promise<McpHarness> => {
     db: database.db,
     storage: createFsStorage(root),
     embedder,
+    fullText: rankByFullText,
     maxFileSize: TEST_MAX_FILE_SIZE,
     fileUrls: createFileUrls({
       secret: 'synthetic-file-url-secret-0123456789',

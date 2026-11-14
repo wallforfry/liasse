@@ -37,6 +37,24 @@ services:
       timeout: 3s
       retries: 30
 
+  # Postgres with ParadeDB pg_search, for the BM25 tests of `pnpm test:paradedb`. Not started by
+  # `pnpm db:up`: BM25 is optional, and the tests of `pnpm test` run on the plain server above.
+  # Started alone by `pnpm db:up:paradedb`; its databases have pg_search through template1.
+  paradedb:
+    image: paradedb/paradedb:0.26.6-pg16
+    profiles: ['paradedb']
+    environment:
+      POSTGRES_USER: liasse
+      POSTGRES_PASSWORD: liasse
+      POSTGRES_DB: liasse_test
+    ports:
+      - '127.0.0.1:54331:5432'
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -h 127.0.0.1 -U liasse -d liasse_test']
+      interval: 2s
+      timeout: 3s
+      retries: 60
+
 volumes:
   postgres-data:
   s3-data:

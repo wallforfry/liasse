@@ -1,6 +1,7 @@
 import type postgres from 'postgres';
 import { z } from 'zod';
 import { StartupError } from '../domain/errors.ts';
+import { isVersionAtLeast } from './extension-version.ts';
 
 // Hybrid search relies on iterative HNSW scans, which pgvector has from 0.8.0.
 export const MIN_PGVECTOR_VERSION = [0, 8, 0] as const;
@@ -38,15 +39,7 @@ export const availablePgvectorVersion: PgvectorVersionReader = async (sql) => {
   return version ?? undefined;
 };
 
-const isSupported = (version: string): boolean => {
-  const parts = version.split('.').map(Number);
-  if (parts.some((part) => !Number.isInteger(part))) return false;
-  const difference = MIN_PGVECTOR_VERSION.map(
-    (minimum, index) => (parts[index] ?? 0) - minimum,
-  ).find((delta) => delta !== 0);
-  return difference === undefined || difference > 0;
-};
-
 export const assertSupportedPgvector = (installed: string | undefined): void => {
-  if (installed === undefined || !isSupported(installed)) throw new PgvectorVersionError(installed);
+  if (installed === undefined || !isVersionAtLeast(installed, MIN_PGVECTOR_VERSION))
+    throw new PgvectorVersionError(installed);
 };

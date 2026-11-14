@@ -28,7 +28,8 @@ export {
   type SearchInput,
   searchInputSchema,
 } from './input.ts';
-export type { ChunkRanker, RankedChunk, RankRequest } from './rankers.ts';
+export { type FullTextRanking, prepareFullTextRanking } from './full-text-ranking.ts';
+export { type ChunkRanker, rankByFullText, type RankedChunk, type RankRequest } from './rankers.ts';
 export { CANDIDATES_PER_RANKER, search, type SearchDeps, type SearchHit } from './search.ts';
 export { type Highlight, MAX_SNIPPET_LENGTH, type Snippet } from './snippets.ts';
 export { estimateTokens } from './token-estimate.ts';

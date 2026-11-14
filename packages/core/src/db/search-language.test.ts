@@ -120,4 +120,16 @@ describe('language-aware full text', () => {
       .where(eq(documentPages.documentId, id));
     expect(await tsv()).toBe("'factur':2 'impaye':3 'le':1");
   });
+
+  it('writes the lexemes of a text for BM25, once per occurrence and in order', async () => {
+    expect(
+      await value(
+        sql`SELECT liasse_bm25_document('fr', 'Électricité : les factures, la facture') AS value`,
+      ),
+    ).toBe('electricit le factur factur');
+    expect(await value(sql`SELECT liasse_bm25_document(NULL, 'Août the Bills') AS value`)).toBe(
+      'aout the bills',
+    );
+    expect(await value(sql`SELECT liasse_bm25_document('en', 'the of and') AS value`)).toBeNull();
+  });
 });

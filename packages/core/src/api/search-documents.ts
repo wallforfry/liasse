@@ -4,13 +4,13 @@ import type { ApiContext } from './context.ts';
 
 /** Hybrid search. Titles, core values and snippets are untrusted document content. */
 export const searchDocuments = async (
-  { db, embedder }: Pick<ApiContext, 'db' | 'embedder'>,
+  { db, embedder, fullText }: Pick<ApiContext, 'db' | 'embedder' | 'fullText'>,
   request: SearchRequest,
 ): Promise<SearchResults> => {
   const { filters, include_private, ...rest } = searchRequestSchema.parse(request);
   const { date_from, date_to, ...others } = filters;
   const hits = await search(
-    { db, embedder },
+    { db, embedder, fullText },
     {
       ...rest,
       includePrivate: include_private,
