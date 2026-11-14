@@ -1,5 +1,5 @@
 import type { Config } from '../../config/schema.ts';
-import { endpointHost, isLocalEndpoint } from './locality.ts';
+import { endpointHost, type HostResolver, isLocalEndpoint } from './locality.ts';
 import type { ModelProvider } from './registry.ts';
 
 export interface ModelPrivacy {
@@ -18,15 +18,17 @@ const destination = (provider: ModelProvider, baseUrl: string | undefined): stri
   return host === undefined ? provider : `${provider} at ${host}`;
 };
 
-export const describeModelPrivacy = ({
-  llm,
-  embedding,
-}: Pick<Config, 'llm' | 'embedding'>): ModelPrivacy => {
-  const llmDestination = isLocalEndpoint(llm.provider, llm.baseUrl)
+// Resolves the hosts of the endpoints, so the verdict is the one the embedder reaches.
+export const describeModelPrivacy = async (
+  { llm, embedding }: Pick<Config, 'llm' | 'embedding'>,
+  resolveHost?: HostResolver,
+): Promise<ModelPrivacy> => {
+  const llmDestination = (await isLocalEndpoint(llm.provider, llm.baseUrl, resolveHost))
     ? undefined
     : destination(llm.provider, llm.baseUrl);
   const embeddingDestination =
-    embedding.provider === 'local' || isLocalEndpoint(embedding.provider, embedding.baseUrl)
+    embedding.provider === 'local' ||
+    (await isLocalEndpoint(embedding.provider, embedding.baseUrl, resolveHost))
       ? undefined
       : destination(embedding.provider, embedding.baseUrl);
   const flows = [

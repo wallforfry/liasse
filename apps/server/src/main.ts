@@ -8,7 +8,7 @@ import { installShutdown } from './shutdown.ts';
 
 const start = async (): Promise<void> => {
   const config = loadConfig();
-  const { warning } = describeModelPrivacy(config);
+  const { warning } = await describeModelPrivacy(config);
   if (warning !== undefined) process.stderr.write(`${warning}\n`);
   await migrate(config.database.url, { embeddingDim: config.embedding.dimension });
   const database = createDb(config.database.url);

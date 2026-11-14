@@ -47,7 +47,7 @@ const start = async (handler: StubHandler) => {
     LLM_BASE_URL: `${server.url}/v1`,
     LLM_API_KEY: SYNTHETIC_API_KEY,
   });
-  const embedder = createProviderEmbedder(
+  const embedder = await createProviderEmbedder(
     embeddingConfig({
       EMBEDDING_PROVIDER: 'openai-compatible',
       EMBEDDING_BASE_URL: `${server.url}/v1`,

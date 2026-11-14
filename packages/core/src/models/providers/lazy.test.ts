@@ -38,7 +38,7 @@ describe('lazy loading', () => {
     const llm = llmConfig({ LLM_PROVIDER: 'ollama', LLM_BASE_URL: server.url });
     const text = createTextModel(llm);
     const vision = createVisionModel(llm);
-    const embedder = createProviderEmbedder(
+    const embedder = await createProviderEmbedder(
       embeddingConfig({
         EMBEDDING_PROVIDER: 'ollama',
         EMBEDDING_BASE_URL: server.url,

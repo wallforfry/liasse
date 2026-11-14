@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { EmbeddingDimensionError, ModelProviderError } from '../errors.ts';
 import type { Embedder } from '../ports.ts';
 import { createProviderEmbedder, MAX_TEXTS_PER_REQUEST } from './embedder.ts';
+import type { HostResolver } from './locality.ts';
 import { type StubHandler, type StubServer, startStubServer } from './stub-server.ts';
 import {
   embeddingConfig,
@@ -10,6 +11,14 @@ import {
   failure,
   SYNTHETIC_API_KEY,
 } from './wire-fixtures.ts';
+
+// The DNS of the test: a Compose service on a private address, a public name.
+const resolveHost: HostResolver = (hostname) =>
+  hostname === 'ollama'
+    ? Promise.resolve(['172.18.0.5'])
+    : hostname.endsWith('.example.com')
+      ? Promise.resolve(['203.0.113.7'])
+      : Promise.reject(new Error(`ENOTFOUND ${hostname}`));
 
 const servers: StubServer[] = [];
 
@@ -27,7 +36,7 @@ const start = async (
 ): Promise<{ readonly server: StubServer; readonly embedder: Embedder }> => {
   const server = await startStubServer(handler);
   servers.push(server);
-  const embedder = createProviderEmbedder(
+  const embedder = await createProviderEmbedder(
     embeddingConfig({
       EMBEDDING_PROVIDER: 'openai-compatible',
       EMBEDDING_BASE_URL: `${server.url}/v1`,
@@ -131,7 +140,7 @@ describe('createProviderEmbedder', () => {
       EMBEDDING_API_KEY: '',
       EMBEDDING_BASE_URL: '',
     });
-    const atServer = createProviderEmbedder(
+    const atServer = await createProviderEmbedder(
       embeddingConfig({
         EMBEDDING_PROVIDER: 'ollama',
         EMBEDDING_BASE_URL: server.url,
@@ -159,10 +168,22 @@ describe('createProviderEmbedder', () => {
     ],
     ['mistral', { EMBEDDING_API_KEY: SYNTHETIC_API_KEY }, false],
     ['gemini', { EMBEDDING_API_KEY: SYNTHETIC_API_KEY }, false],
-  ])('%s with %j is local: %j', (provider, env, isLocal) => {
-    const embedder = createProviderEmbedder(
+  ])('%s with %j is local: %j', async (provider, env, isLocal) => {
+    const embedder = await createProviderEmbedder(
       embeddingConfig({ EMBEDDING_PROVIDER: provider, ...env }),
+      { resolveHost },
     );
     expect(embedder.isLocal).toBe(isLocal);
+  });
+
+  it('is not local when the host of its endpoint does not resolve', async () => {
+    const embedder = await createProviderEmbedder(
+      embeddingConfig({
+        EMBEDDING_PROVIDER: 'ollama',
+        EMBEDDING_BASE_URL: 'http://unknown.example:11434',
+      }),
+      { resolveHost },
+    );
+    expect(embedder.isLocal).toBe(false);
   });
 });

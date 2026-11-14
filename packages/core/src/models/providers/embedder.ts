@@ -4,7 +4,7 @@ import type { Embedder, Embedding, EmbeddingKind } from '../ports.ts';
 import { toModelError } from './failure.ts';
 import { MAX_RETRIES } from './language-call.ts';
 import { loadSdk, once } from './lazy.ts';
-import { isLocalEndpoint } from './locality.ts';
+import { type HostResolver, isLocalEndpoint } from './locality.ts';
 import { PROVIDERS } from './registry.ts';
 
 export type RemoteEmbeddingConfig = Exclude<Config['embedding'], { readonly provider: 'local' }>;
@@ -20,7 +20,16 @@ const batchesOf = (texts: readonly string[]): readonly (readonly string[])[] =>
     texts.slice(index * MAX_TEXTS_PER_REQUEST, (index + 1) * MAX_TEXTS_PER_REQUEST),
   );
 
-export const createProviderEmbedder = (config: RemoteEmbeddingConfig): Embedder => {
+export interface ProviderEmbedderOptions {
+  // Resolves the host of the endpoint to decide `isLocal`; the system resolver by default.
+  readonly resolveHost?: HostResolver;
+}
+
+// Asynchronous because `isLocal` is settled here, once, by resolving the endpoint's host.
+export const createProviderEmbedder = async (
+  config: RemoteEmbeddingConfig,
+  { resolveHost }: ProviderEmbedderOptions = {},
+): Promise<Embedder> => {
   const { provider, model, dimension, timeoutMs } = config;
   const adapter = PROVIDERS[provider];
   const context = { provider, model };
@@ -56,7 +65,7 @@ export const createProviderEmbedder = (config: RemoteEmbeddingConfig): Embedder 
   return {
     dimension,
     model,
-    isLocal: isLocalEndpoint(provider, config.baseUrl),
+    isLocal: await isLocalEndpoint(provider, config.baseUrl, resolveHost),
     embed: async (texts, kind) => {
       const embeddings: Embedding[] = [];
       for (const batch of batchesOf(texts)) embeddings.push(...(await embedBatch(batch, kind)));

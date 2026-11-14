@@ -1,22 +1,27 @@
 import { describe, expect, it } from 'vitest';
 import { loadConfig } from '../../config/load.ts';
 import { SYNTHETIC_ENV } from '../../testing/synthetic-env.ts';
+import type { HostResolver } from './locality.ts';
 import { describeModelPrivacy } from './privacy.ts';
 import { SYNTHETIC_API_KEY } from './wire-fixtures.ts';
 
+// The DNS of the test: a Compose service on a private address; any other name is public.
+const resolveHost: HostResolver = (hostname) =>
+  Promise.resolve([hostname === 'ollama' ? '172.18.0.5' : '203.0.113.7']);
+
 const privacyOf = (env: Readonly<Record<string, string>>) =>
-  describeModelPrivacy(loadConfig({ ...SYNTHETIC_ENV, ...env }));
+  describeModelPrivacy(loadConfig({ ...SYNTHETIC_ENV, ...env }), resolveHost);
 
 describe('describeModelPrivacy', () => {
-  it('reports nothing external for Ollama and local embeddings', () => {
-    expect(privacyOf({})).toEqual({
+  it('reports nothing external for Ollama and local embeddings', async () => {
+    expect(await privacyOf({})).toEqual({
       external: { text: false, vision: false, embeddings: false },
       warning: undefined,
     });
   });
 
-  it('warns that text and page images go to a cloud LLM provider', () => {
-    expect(privacyOf({ LLM_PROVIDER: 'anthropic', LLM_API_KEY: SYNTHETIC_API_KEY })).toEqual({
+  it('warns that text and page images go to a cloud LLM provider', async () => {
+    expect(await privacyOf({ LLM_PROVIDER: 'anthropic', LLM_API_KEY: SYNTHETIC_API_KEY })).toEqual({
       external: { text: true, vision: true, embeddings: false },
       warning:
         'Warning: document content leaves this machine: document text and page images are sent to anthropic. ' +
@@ -24,9 +29,9 @@ describe('describeModelPrivacy', () => {
     });
   });
 
-  it('warns that text to embed goes to a cloud embedding provider', () => {
+  it('warns that text to embed goes to a cloud embedding provider', async () => {
     expect(
-      privacyOf({
+      await privacyOf({
         EMBEDDING_PROVIDER: 'mistral',
         EMBEDDING_MODEL: 'embedding-model',
         EMBEDDING_API_KEY: SYNTHETIC_API_KEY,
@@ -39,8 +44,8 @@ describe('describeModelPrivacy', () => {
     });
   });
 
-  it('names both destinations on one line, without credentials', () => {
-    const { external, warning } = privacyOf({
+  it('names both destinations on one line, without credentials', async () => {
+    const { external, warning } = await privacyOf({
       LLM_PROVIDER: 'openai-compatible',
       LLM_BASE_URL: `https://operator:${SYNTHETIC_API_KEY}@llm.example.com/v1?token=${SYNTHETIC_API_KEY}`,
       LLM_API_KEY: SYNTHETIC_API_KEY,
@@ -56,8 +61,8 @@ describe('describeModelPrivacy', () => {
     );
   });
 
-  it('names the host a cloud provider is reached through, and still counts it as external', () => {
-    const { external, warning } = privacyOf({
+  it('names the host a cloud provider is reached through, and still counts it as external', async () => {
+    const { external, warning } = await privacyOf({
       LLM_PROVIDER: 'openai',
       LLM_API_KEY: SYNTHETIC_API_KEY,
       LLM_BASE_URL: 'http://127.0.0.1:4000/v1',
@@ -66,9 +71,9 @@ describe('describeModelPrivacy', () => {
     expect(warning).toContain('document text and page images are sent to openai at 127.0.0.1.');
   });
 
-  it('treats self-hosted endpoints of the private network as local', () => {
+  it('treats self-hosted endpoints of the private network as local', async () => {
     expect(
-      privacyOf({
+      await privacyOf({
         LLM_PROVIDER: 'openai-compatible',
         LLM_BASE_URL: 'http://192.168.1.20:8000/v1',
         EMBEDDING_PROVIDER: 'ollama',

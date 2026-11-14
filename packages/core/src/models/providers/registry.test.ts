@@ -89,7 +89,7 @@ describe('provider registry', () => {
     async (provider) => {
       const { path, response, body, withoutKey } = EMBEDDING[provider];
       const server = await start(response);
-      const embedder = createProviderEmbedder(
+      const embedder = await createProviderEmbedder(
         embeddingConfig({
           EMBEDDING_PROVIDER: provider,
           EMBEDDING_API_KEY: SYNTHETIC_API_KEY,
@@ -105,7 +105,7 @@ describe('provider registry', () => {
 
   it('asks Gemini for query embeddings when the texts are queries', async () => {
     const server = await start(EMBEDDING.gemini.response);
-    const embedder = createProviderEmbedder(
+    const embedder = await createProviderEmbedder(
       embeddingConfig({
         EMBEDDING_PROVIDER: 'gemini',
         EMBEDDING_API_KEY: SYNTHETIC_API_KEY,

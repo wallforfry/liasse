@@ -1,3 +1,4 @@
+import { lookup } from 'node:dns/promises';
 import { BlockList, isIP } from 'node:net';
 import { type ModelProvider, PROVIDERS } from './registry.ts';
 
@@ -15,29 +16,34 @@ const PRIVATE_SUBNETS = [
   ['fe80::', 10, 'ipv6'],
 ] as const;
 
-const PRIVATE_SUFFIXES = ['.localhost', '.local', '.internal', '.home.arpa'] as const;
-
 const privateAddresses = PRIVATE_SUBNETS.reduce((list, [address, prefix, family]) => {
   list.addSubnet(address, prefix, family);
   return list;
 }, new BlockList());
 
-// Decided on the name alone, without a DNS lookup: an answer that depends on the resolver
-// could change after startup. A name without a dot (a Compose service, a host of the local
-// network) only resolves through the local resolver, so it counts as private.
-export const isPrivateHost = (hostname: string): boolean => {
-  const host = hostname
-    .toLowerCase()
-    .replace(/^\[|\]$/g, '')
-    .replace(/\.$/, '');
-  const family = isIP(host);
-  if (family !== 0) return privateAddresses.check(host, family === 4 ? 'ipv4' : 'ipv6');
-  if (host === '') return false;
-  return (
-    host === 'localhost' ||
-    !host.includes('.') ||
-    PRIVATE_SUFFIXES.some((suffix) => host.endsWith(suffix))
-  );
+// Loopback, private, link-local or unique-local. `BlockList` also matches an IPv4-mapped
+// IPv6 address against the IPv4 ranges.
+export const isPrivateAddress = (address: string): boolean => {
+  const family = isIP(address);
+  return family !== 0 && privateAddresses.check(address, family === 4 ? 'ipv4' : 'ipv6');
+};
+
+export type HostResolver = (hostname: string) => Promise<readonly string[]>;
+
+const systemResolver: HostResolver = async (hostname) =>
+  (await lookup(hostname, { all: true })).map(({ address }) => address);
+
+// An IP literal is judged as written. A name is local only when it resolves and every
+// address it resolves to is private: a name that looks private (`ai`, `evil.internal`)
+// proves nothing, and neither does one address out of several.
+export const isLocalHost = async (
+  hostname: string,
+  resolve: HostResolver = systemResolver,
+): Promise<boolean> => {
+  const host = hostname.replace(/^\[|\]$/g, '');
+  if (isIP(host) !== 0) return isPrivateAddress(host);
+  const addresses = await resolve(host).catch(() => []);
+  return addresses.length > 0 && addresses.every(isPrivateAddress);
 };
 
 export const endpointHost = (
@@ -49,9 +55,14 @@ export const endpointHost = (
 };
 
 // Local means the content stays on this machine or its private network. It decides whether
-// documents flagged `private` may be sent to the endpoint.
-export const isLocalEndpoint = (provider: ModelProvider, baseUrl: string | undefined): boolean => {
+// documents flagged `private` may be sent to the endpoint. The answer is the one of the
+// moment it is asked: a later change of the DNS is not seen.
+export const isLocalEndpoint = async (
+  provider: ModelProvider,
+  baseUrl: string | undefined,
+  resolve?: HostResolver,
+): Promise<boolean> => {
   if (!PROVIDERS[provider].selfHosted) return false;
   const host = endpointHost(provider, baseUrl);
-  return host !== undefined && isPrivateHost(host);
+  return host !== undefined && (await isLocalHost(host, resolve));
 };
