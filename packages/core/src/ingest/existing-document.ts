@@ -1,4 +1,4 @@
-import { eq, sql } from 'drizzle-orm';
+import { and, eq, sql } from 'drizzle-orm';
 import type { Database } from '../db/client.ts';
 import { documents } from '../db/schema/documents.ts';
 import {
@@ -45,17 +45,37 @@ export interface ExistingDocument {
 const queueProcessing = (tx: Transaction, documentId: string): Promise<string> =>
   enqueue(tx, { kind: processDocumentJob, payload: { documentId } });
 
+/** Undefined when the document is no longer in the status the decision was made on. */
+type Attempt = IngestResult | undefined;
+
+/**
+ * Locks the row and tells whether it still has the status that was read. Everything
+ * written after a true answer rests on a status that can no longer change before the
+ * commit. `deleteDocument` takes the lock of the hash, which already keeps it out of an
+ * ingestion; this holds even for a writer that does not.
+ */
+const stillIn = async (tx: Transaction, { id, status }: ExistingDocument): Promise<boolean> => {
+  const [locked] = await tx
+    .select({ status: documents.status })
+    .from(documents)
+    .where(eq(documents.id, id))
+    .for('update');
+  return locked?.status === status;
+};
+
 // A file still lying in the watched folder is seen again at every restart: that is no
 // request to undo a deletion. An upload or an MCP call is one.
 const reviveTombstone = async (
   tx: Transaction,
   storage: Storage,
-  { id }: ExistingDocument,
+  tombstone: ExistingDocument,
   file: IncomingFile,
-): Promise<IngestResult> => {
+): Promise<Attempt> => {
+  const { id } = tombstone;
   if (file.source === 'watch') {
     return { id, status: 'deleted', duplicate: true, fileRestored: false };
   }
+  if (!(await stillIn(tx, tombstone))) return undefined;
   await storage.put(file.storageKey, file.bytes);
   await tx
     .update(documents)
@@ -67,7 +87,7 @@ const reviveTombstone = async (
       hint: file.hint ?? null,
       ingestedAt: sql`now()`,
     })
-    .where(eq(documents.id, id));
+    .where(and(eq(documents.id, id), eq(documents.status, tombstone.status)));
   await queueProcessing(tx, id);
   return { id, status: 'received', duplicate: false, fileRestored: false };
 };
@@ -77,26 +97,48 @@ const reviveTombstone = async (
 const repairLiveDocument = async (
   tx: Transaction,
   storage: Storage,
-  { id, status }: ExistingDocument,
+  existing: ExistingDocument,
   file: IncomingFile,
-): Promise<IngestResult> => {
-  const fileRestored = !(await storage.exists(file.storageKey));
-  if (fileRestored) await storage.put(file.storageKey, file.bytes);
-  if (status !== 'failed') return { id, status, duplicate: true, fileRestored };
-  await tx.update(documents).set({ status: 'received', error: null }).where(eq(documents.id, id));
+): Promise<Attempt> => {
+  const { id, status } = existing;
+  const fileMissing = !(await storage.exists(file.storageKey));
+  if (!fileMissing && status !== 'failed') {
+    return { id, status, duplicate: true, fileRestored: false };
+  }
+  // The storage was asked without any lock on the row: a deletion may have committed
+  // meanwhile, and its tombstone must neither get its file back nor be queued again.
+  if (!(await stillIn(tx, existing))) return undefined;
+  if (fileMissing) await storage.put(file.storageKey, file.bytes);
+  if (status !== 'failed') return { id, status, duplicate: true, fileRestored: fileMissing };
+  await tx
+    .update(documents)
+    .set({ status: 'received', error: null })
+    .where(and(eq(documents.id, id), eq(documents.status, status)));
   await queueProcessing(tx, id);
-  return { id, status: 'received', duplicate: true, fileRestored };
+  return { id, status: 'received', duplicate: true, fileRestored: fileMissing };
 };
 
-export const ingestExisting = (
+const ATTEMPTS = 3;
+
+export const ingestExisting = async (
   tx: Transaction,
   storage: Storage,
   existing: ExistingDocument,
   file: IncomingFile,
-): Promise<IngestResult> =>
-  isLiveStatus(existing.status)
-    ? repairLiveDocument(tx, storage, existing, file)
-    : reviveTombstone(tx, storage, existing, file);
+): Promise<IngestResult> => {
+  let current: ExistingDocument | undefined = existing;
+  for (let attempt = 0; attempt < ATTEMPTS && current !== undefined; attempt += 1) {
+    const result = isLiveStatus(current.status)
+      ? await repairLiveDocument(tx, storage, current, file)
+      : await reviveTombstone(tx, storage, current, file);
+    if (result !== undefined) return result;
+    [current] = await tx
+      .select({ id: documents.id, status: documents.status })
+      .from(documents)
+      .where(eq(documents.id, existing.id));
+  }
+  throw new Error('The document kept changing while its bytes were ingested again');
+};
 
 export const ingestNew = async (
   tx: Transaction,

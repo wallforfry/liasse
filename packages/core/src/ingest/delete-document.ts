@@ -6,6 +6,7 @@ import { documentDates, documentLinks, facts } from '../db/schema/knowledge.ts';
 import { enqueue } from '../jobs/enqueue.ts';
 import { deleteFileJob } from './delete-file-job.ts';
 import type { Transaction } from './existing-document.ts';
+import { lockFile } from './file-lock.ts';
 import { processDocumentJob } from './process-document-job.ts';
 
 export interface DeleteDocumentDeps {
@@ -65,9 +66,19 @@ const cancelQueuedProcessing = async (tx: Transaction, id: string): Promise<void
  * and a `delete_file` job is queued, so the stored file is removed with the retries
  * of the queue and a storage outage cannot leave it behind. The tombstone is what
  * keeps a file still lying in the watched folder from being ingested again.
+ *
+ * It takes the lock of the file's hash first, as ingestion does. An ingestion of the
+ * same bytes in progress, which may be about to queue the document again, therefore
+ * commits before the deletion looks at the document, and the deletion undoes it.
  */
 export const deleteDocument = ({ db }: DeleteDocumentDeps, id: string): Promise<boolean> =>
   db.transaction(async (tx) => {
+    const [live] = await tx
+      .select({ sha256: documents.sha256 })
+      .from(documents)
+      .where(and(eq(documents.id, id), isLiveDocument));
+    if (live === undefined) return false;
+    await lockFile(tx, live.sha256);
     const [tombstone] = await tx
       .update(documents)
       .set(BLANK_CONTENT)
