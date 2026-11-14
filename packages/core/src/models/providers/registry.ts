@@ -17,18 +17,19 @@ interface EndpointTraits {
   readonly defaultBaseUrl?: string;
 }
 
+export type ProviderOptions = Readonly<Record<string, Readonly<Record<string, string | boolean>>>>;
+
 interface LanguageAdapter {
   readonly languageModel: (endpoint: ProviderEndpoint, modelId: string) => Promise<LanguageModel>;
+  readonly generationOptions?: ProviderOptions;
 }
-
-type EmbeddingTaskOptions = Readonly<Record<string, Readonly<Record<string, string>>>>;
 
 interface EmbeddingAdapter {
   readonly embeddingModel: (endpoint: ProviderEndpoint, modelId: string) => Promise<EmbeddingModel>;
   // Whether EMBEDDING_DIM is sent as the requested output size. Only for providers whose
   // current models accept it; the others reject or ignore the parameter.
   readonly requestsDimension: boolean;
-  readonly taskOptions?: (kind: EmbeddingKind) => EmbeddingTaskOptions;
+  readonly taskOptions?: (kind: EmbeddingKind) => ProviderOptions;
 }
 
 type Adapter<P extends ModelProvider> = EndpointTraits &
@@ -44,6 +45,12 @@ const GEMINI_TASK_TYPES = {
   query: 'RETRIEVAL_QUERY',
   passage: 'RETRIEVAL_DOCUMENT',
 } as const satisfies Record<EmbeddingKind, string>;
+
+// OpenAI's strict mode refuses a schema with an optional property, a free-key object or a
+// format such as `uri`, all of which extraction schemas have. The schema is still sent, as a
+// guide; the Zod schema decides what is accepted.
+const LENIENT_OPENAI = { openai: { strictJsonSchema: false } } as const;
+const LENIENT_OPENAI_COMPATIBLE = { openaiCompatible: { strictJsonSchema: false } } as const;
 
 const settings = ({ apiKey, baseUrl }: ProviderEndpoint) => ({
   ...(apiKey === undefined ? {} : { apiKey }),
@@ -91,6 +98,7 @@ export const PROVIDERS: ProviderRegistry = {
   openai: {
     selfHosted: false,
     languageModel: async (endpoint, modelId) => (await openai(endpoint)).languageModel(modelId),
+    generationOptions: LENIENT_OPENAI,
     embeddingModel: async (endpoint, modelId) => (await openai(endpoint)).embeddingModel(modelId),
     requestsDimension: true,
   },
@@ -111,6 +119,7 @@ export const PROVIDERS: ProviderRegistry = {
     selfHosted: true,
     defaultBaseUrl: OLLAMA_DEFAULT_BASE_URL,
     languageModel: async (endpoint, modelId) => (await ollama(endpoint)).languageModel(modelId),
+    generationOptions: LENIENT_OPENAI_COMPATIBLE,
     embeddingModel: async (endpoint, modelId) => (await ollama(endpoint)).embeddingModel(modelId),
     requestsDimension: false,
   },
@@ -118,6 +127,7 @@ export const PROVIDERS: ProviderRegistry = {
     selfHosted: true,
     languageModel: async (endpoint, modelId) =>
       (await openAiCompatibleEndpoint(endpoint)).languageModel(modelId),
+    generationOptions: LENIENT_OPENAI_COMPATIBLE,
     embeddingModel: async (endpoint, modelId) =>
       (await openAiCompatibleEndpoint(endpoint)).embeddingModel(modelId),
     requestsDimension: false,

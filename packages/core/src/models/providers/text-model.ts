@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { ModelOutputError } from '../errors.ts';
 import type { TextModel } from '../ports.ts';
 import { languageCall, type LlmConfig, runLanguageCall } from './language-call.ts';
+import { wireSchema } from './wire-schema.ts';
 
 export const createTextModel = (config: LlmConfig): TextModel => {
   const call = languageCall(config, config.textModel);
@@ -12,11 +13,7 @@ export const createTextModel = (config: LlmConfig): TextModel => {
           ...options,
           instructions: system,
           prompt,
-          // The SDK gets the JSON Schema only, to constrain the provider: validation is
-          // done once, below, by the Zod schema itself.
-          output: sdk.Output.object({
-            schema: sdk.jsonSchema(() => sdk.zodSchema(schema).jsonSchema),
-          }),
+          output: sdk.Output.object({ schema: await wireSchema(sdk, schema) }),
         });
         return {
           finishReason: result.finishReason,

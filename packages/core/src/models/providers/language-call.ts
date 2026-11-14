@@ -4,7 +4,7 @@ import { ModelOutputError } from '../errors.ts';
 import { type CallContext, incompleteReason, toModelError } from './failure.ts';
 import { loadSdk, once, type Sdk } from './lazy.ts';
 import { endpointSecrets } from './redact.ts';
-import { PROVIDERS } from './registry.ts';
+import { type ProviderOptions, PROVIDERS } from './registry.ts';
 
 export type LlmConfig = Config['llm'];
 
@@ -13,6 +13,7 @@ export type LlmConfig = Config['llm'];
 export const MAX_RETRIES = 2;
 
 export interface LanguageCall extends CallContext {
+  readonly providerOptions: ProviderOptions;
   readonly loadModel: () => Promise<LanguageModel>;
 }
 
@@ -21,6 +22,7 @@ export const languageCall = (config: LlmConfig, modelId: string): LanguageCall =
   model: modelId,
   timeoutMs: config.timeoutMs,
   secrets: endpointSecrets(config),
+  providerOptions: PROVIDERS[config.provider].generationOptions ?? {},
   loadModel: once(() => PROVIDERS[config.provider].languageModel(config, modelId)),
 });
 
@@ -29,6 +31,7 @@ export interface RequestOptions {
   readonly temperature: 0;
   readonly maxRetries: number;
   readonly timeout: number;
+  readonly providerOptions: ProviderOptions;
   readonly abortSignal?: AbortSignal;
 }
 
@@ -53,6 +56,7 @@ export const runLanguageCall = async <T>(
     temperature: 0,
     maxRetries: MAX_RETRIES,
     timeout: call.timeoutMs,
+    providerOptions: call.providerOptions,
     ...(signal === undefined ? {} : { abortSignal: signal }),
   }).catch((error: unknown) => {
     signal?.throwIfAborted();

@@ -5,89 +5,10 @@ import { createProviderEmbedder } from './embedder.ts';
 import { PROVIDERS } from './registry.ts';
 import { type StubResponse, type StubServer, startStubServer } from './stub-server.ts';
 import { createTextModel } from './text-model.ts';
+import { NATIVE_GENERATION } from './native-fixtures.ts';
 import { embeddingConfig, embeddings, llmConfig, SYNTHETIC_API_KEY } from './wire-fixtures.ts';
 
-// Minimal successful responses in the native wire format of each cloud provider, enough for
-// the provider package to accept them. The local server stands in for the provider's API.
-
 const OUTPUT = { decision: 'existing' };
-const usage = { input_tokens: 1, output_tokens: 1, total_tokens: 2 };
-
-const GENERATION = {
-  anthropic: {
-    path: '/v1/messages',
-    credential: { 'x-api-key': SYNTHETIC_API_KEY },
-    resolvedModel: 'claude-resolved-2026',
-    response: {
-      id: 'msg_synthetic',
-      type: 'message',
-      role: 'assistant',
-      model: 'claude-resolved-2026',
-      content: [{ type: 'tool_use', id: 'toolu_synthetic', name: 'json', input: OUTPUT }],
-      stop_reason: 'tool_use',
-      stop_sequence: null,
-      usage,
-    },
-  },
-  openai: {
-    path: '/v1/responses',
-    credential: { authorization: `Bearer ${SYNTHETIC_API_KEY}` },
-    resolvedModel: 'gpt-resolved-2026',
-    response: {
-      id: 'resp_synthetic',
-      object: 'response',
-      created_at: 1,
-      status: 'completed',
-      model: 'gpt-resolved-2026',
-      output: [
-        {
-          type: 'message',
-          id: 'msg_synthetic',
-          role: 'assistant',
-          status: 'completed',
-          content: [{ type: 'output_text', text: JSON.stringify(OUTPUT), annotations: [] }],
-        },
-      ],
-      usage,
-    },
-  },
-  mistral: {
-    path: '/v1/chat/completions',
-    credential: { authorization: `Bearer ${SYNTHETIC_API_KEY}` },
-    resolvedModel: 'mistral-resolved-2026',
-    response: {
-      id: 'cmpl-synthetic',
-      object: 'chat.completion',
-      created: 1,
-      model: 'mistral-resolved-2026',
-      choices: [
-        {
-          index: 0,
-          message: { role: 'assistant', content: JSON.stringify(OUTPUT) },
-          finish_reason: 'stop',
-        },
-      ],
-      usage: { prompt_tokens: 1, completion_tokens: 1, total_tokens: 2 },
-    },
-  },
-  gemini: {
-    path: '/v1/models/text-model:generateContent',
-    credential: { 'x-goog-api-key': SYNTHETIC_API_KEY },
-    // The Google provider package does not report `modelVersion` as the model id.
-    resolvedModel: 'text-model',
-    response: {
-      candidates: [
-        {
-          index: 0,
-          content: { role: 'model', parts: [{ text: JSON.stringify(OUTPUT) }] },
-          finishReason: 'STOP',
-        },
-      ],
-      usageMetadata: { promptTokenCount: 1, candidatesTokenCount: 1, totalTokenCount: 2 },
-      modelVersion: 'gemini-resolved-2026',
-    },
-  },
-} as const;
 
 const TEXTS = ['energy bill', 'payslip'];
 const VECTORS = [
@@ -141,8 +62,8 @@ describe('provider registry', () => {
   it.each(['anthropic', 'openai', 'mistral', 'gemini'] as const)(
     'generates an object through the %s wire format',
     async (provider) => {
-      const { path, credential, resolvedModel, response } = GENERATION[provider];
-      const server = await start({ body: response });
+      const { path, credential, resolvedModel, respond } = NATIVE_GENERATION[provider];
+      const server = await start({ body: respond(OUTPUT) });
       const model = createTextModel(
         llmConfig({
           LLM_PROVIDER: provider,
