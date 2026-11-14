@@ -85,25 +85,55 @@ describe('extractText with a pdfinfo that reports an odd size', () => {
     expect(sizesSeenBy(vision)).toEqual([{ width: 300, height: 150 }]);
   });
 
-  // Only the end of the output is kept. A long line of document information can be cut
-  // right where it holds a forged size, which must not then pass for the start of a line.
-  it('does not read a size from the cut end of a longer line', async () => {
-    const vision = createFakeVisionModel(() => '');
-    const keptBytes = 16 * 1024;
-    const forged = 'Page    1 size:  10 x 10 pts\n';
-    const kept = `${forged}File size:       ${'7'.repeat(keptBytes - forged.length - 18)}\n`;
-    expect(kept).toHaveLength(keptBytes);
+  const infoCommandPrinting = async (output: string): Promise<string> => {
     const outputFile = join(tempRoot, 'pdfinfo-output');
-    await writeFile(outputFile, `Title:          ${'x'.repeat(5000)}${kept}`);
-    const infoCommand = join(tempRoot, 'cut-pdfinfo');
-    await writeFile(infoCommand, `#!/bin/sh\ncat "${outputFile}"\n`);
+    await writeFile(outputFile, output);
+    const infoCommand = join(tempRoot, 'printing-pdfinfo');
+    await writeFile(infoCommand, `#!/bin/sh\ncat '${outputFile}'\n`);
     await chmod(infoCommand, 0o755);
+    return infoCommand;
+  };
+
+  const smallPage = buildSyntheticPdf([{ scanned: true, widthPt: 144, heightPt: 72 }]);
+  // More than the 16 KiB once kept of the output: `pdfinfo` prints this string, which
+  // comes from the file, after the page sizes.
+  const longSubtype = `PDF subtype:    ${'x'.repeat(40_000)}\n`;
+
+  // The output is read line by line and a line longer than a size line can be is dropped
+  // whole. Such a line can end with a forged size, which must not then pass for a line.
+  it('does not read a size from the end of a longer line', async () => {
+    const vision = createFakeVisionModel(() => '');
+    const infoCommand = await infoCommandPrinting(
+      `Title:          ${'x'.repeat(5000)}Page    1 size:  10 x 10 pts\nFile size:       700 bytes\n`,
+    );
     const failure = extractText(
-      { bytes: buildSyntheticPdf([{ scanned: true, widthPt: 144, heightPt: 72 }]), mime: PDF },
+      { bytes: smallPage, mime: PDF },
       { vision, pdfRenderer: { tempRoot, infoCommand } },
     );
     await expect(failure).rejects.toThrow(/did not report the size of page 1/);
     expect(vision.calls).toHaveLength(0);
+  });
+
+  it('reads a size followed by more output than was ever kept', async () => {
+    const vision = createFakeVisionModel(() => '');
+    const infoCommand = await infoCommandPrinting(`Page    1 size:  144 x 72 pts\n${longSubtype}`);
+    await extractText(
+      { bytes: smallPage, mime: PDF },
+      { vision, pdfRenderer: { tempRoot, infoCommand } },
+    );
+    expect(sizesSeenBy(vision)).toEqual([{ width: 400, height: 200 }]);
+  });
+
+  it('does not trust a size reported twice, however far apart', async () => {
+    const vision = createFakeVisionModel(() => '');
+    const infoCommand = await infoCommandPrinting(
+      `Page    1 size:  10 x 10 pts\n${longSubtype}Page    1 size:  20 x 20 pts\n`,
+    );
+    await extractText(
+      { bytes: smallPage, mime: PDF },
+      { vision, pdfRenderer: { tempRoot, infoCommand }, limits: { maxRenderEdgePx: 300 } },
+    );
+    expect(sizesSeenBy(vision)).toEqual([{ width: 300, height: 150 }]);
   });
 
   it('keeps a page without area as it is, without a vision call', async () => {
