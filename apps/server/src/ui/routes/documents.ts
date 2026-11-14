@@ -13,6 +13,7 @@ import { z } from 'zod';
 import { idParam, integerParam } from '../../http/query-params.ts';
 import { documentFileResponse } from '../../http/routes/file.ts';
 import { readCorrection } from '../correction.ts';
+import { filledFields } from '../form-fields.ts';
 import type { UiEnv } from '../guards.ts';
 import { documentPath, type Markup, notice, page, UI_ROOT } from '../markup.ts';
 import { documentListView } from '../views/document-list.ts';
@@ -25,11 +26,9 @@ export interface DocumentPageDeps {
   readonly signedIn: MiddlewareHandler<UiEnv>;
   /** A session, a bounded form and its CSRF token. */
   readonly form: MiddlewareHandler<UiEnv>;
+  /** A session, without a deadline: a file may be long, as on the API. */
+  readonly fileAccess: MiddlewareHandler<UiEnv>;
 }
-
-// A select left on "Any" sends an empty value: it means the filter is not set.
-const withoutBlanks = (query: Readonly<Record<string, string>>): Record<string, string> =>
-  Object.fromEntries(Object.entries(query).filter(([, value]) => value !== ''));
 
 const listQuery = z.strictObject({
   status: liveDocumentStatusSchema.optional(),
@@ -48,7 +47,7 @@ const listPage = async (
   context: Context<UiEnv>,
   { title, path, status }: { title: string; path: string; status?: 'needs_review' },
 ): Promise<Response> => {
-  const query = listQuery.parse(withoutBlanks(context.req.query()));
+  const query = listQuery.parse(filledFields(context.req.query()));
   const filters = {
     ...query,
     ...(status === undefined ? {} : { status }),
@@ -73,7 +72,12 @@ const problemsOf = (error: ApiError): readonly Markup[] => {
   ];
 };
 
-export const documentPages = ({ api, signedIn, form }: DocumentPageDeps): Hono<UiEnv> => {
+export const documentPages = ({
+  api,
+  signedIn,
+  form,
+  fileAccess,
+}: DocumentPageDeps): Hono<UiEnv> => {
   const showDocument = async (
     context: Context<UiEnv>,
     id: string,
@@ -129,7 +133,7 @@ export const documentPages = ({ api, signedIn, form }: DocumentPageDeps): Hono<U
       }
       return context.redirect(`${documentPath(id)}?corrected=1`, 303);
     })
-    .get('/documents/:id/file', signedIn, (context) =>
+    .get('/documents/:id/file', fileAccess, (context) =>
       documentFileResponse(api, idParam.parse(context.req.param()).id),
     );
 };

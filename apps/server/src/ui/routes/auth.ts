@@ -32,6 +32,8 @@ export interface AuthRouteDeps {
   /** True when `PUBLIC_URL` is https. */
   readonly secureCookies: boolean;
   readonly signedIn: MiddlewareHandler<UiEnv>;
+  /** The request deadline of the API. */
+  readonly timed: MiddlewareHandler<UiEnv>;
 }
 
 const cookieOptions = (secure: boolean, path: string, maxAgeSeconds: number): CookieOptions => ({
@@ -58,6 +60,7 @@ export const authRoutes = ({
   sessionTtlMs,
   secureCookies,
   signedIn,
+  timed,
 }: AuthRouteDeps): Hono<UiEnv> => {
   const loginCookie = cookieOptions(secureCookies, LOGIN_PATH, LOGIN_FORM_TTL_SECONDS);
   const freshLoginForm = (context: Context<UiEnv>): string => {
@@ -67,12 +70,12 @@ export const authRoutes = ({
   };
 
   return new Hono<UiEnv>()
-    .get('/login', (context) =>
+    .get('/login', timed, (context) =>
       sessions.find(sessionTokenOf(context)) === undefined
         ? answerLogin(context, freshLoginForm(context), 200)
         : context.redirect(HOME, 303),
     )
-    .post('/login', formLimit(MAX_LOGIN_FORM_BYTES), async (context) => {
+    .post('/login', timed, formLimit(MAX_LOGIN_FORM_BYTES), async (context) => {
       const admission = loginLimit(clientAddress(context));
       if (!admission.admitted) {
         const seconds = Math.ceil(admission.retryAfterMs / 1000);
@@ -97,6 +100,8 @@ export const authRoutes = ({
       if (typeof password !== 'string' || !(await checkPassword(password))) {
         return answerLogin(context, cookieToken, 401, [notice('Wrong password.', 'error')]);
       }
+      // A browser holds one session: the one it logged in with before ends here.
+      sessions.close(sessionTokenOf(context));
       const { token } = sessions.open();
       deleteCookie(context, LOGIN_COOKIE, { path: LOGIN_PATH });
       setCookie(

@@ -90,7 +90,7 @@ export const createApp = ({
   app.route('/', searchRoutes({ api, authenticated }));
   app.route('/', registryRoutes({ api, authenticated }));
   if (ui !== undefined) {
-    app.route(UI_ROOT, createUi({ ...ui, api, logger }));
+    app.route(UI_ROOT, createUi({ ...ui, api, logger, requestTimeoutMs, uploadTimeoutMs }));
     app.get('/', (context) => context.redirect(UI_ROOT, 302));
   }
 

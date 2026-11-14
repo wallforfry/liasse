@@ -35,7 +35,8 @@ const formSchema = z.object({
   ...textOptions,
 });
 
-const optionsSchema = z.strictObject(textOptions).pipe(uploadOptionsSchema);
+/** The options of an upload as the fields of a form or a query string carry them. */
+export const textUploadOptionsSchema = z.strictObject(textOptions).pipe(uploadOptionsSchema);
 
 const FLAG_PROBLEM = '"private" is "true" or "false".';
 
@@ -63,7 +64,7 @@ const readForm = async (context: AppContext) => {
       throw invalid('The multipart body could not be read.');
     });
   if (!(file instanceof File)) throw invalid('Expected exactly one file, in the field "file".');
-  const fields = optionsSchema.safeParse(others);
+  const fields = textUploadOptionsSchema.safeParse(others);
   if (!fields.success) {
     throw invalid(
       optionsProblem(fields.error, 'Besides "file", a form holds "hint" and "private" only.'),
@@ -88,7 +89,7 @@ const decodedName = (header: string | undefined): string => {
 const readRaw = (context: AppContext, { maxFileSize }: Pick<ApiContext, 'maxFileSize'>) => {
   const declared = Number(context.req.header('Content-Length') ?? 0);
   if (declared > maxFileSize) throw tooLarge(maxFileSize);
-  const fields = optionsSchema.safeParse(context.req.query());
+  const fields = textUploadOptionsSchema.safeParse(context.req.query());
   if (!fields.success) {
     throw invalid(optionsProblem(fields.error, 'The query holds "hint" and "private" only.'));
   }

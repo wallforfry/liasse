@@ -1,17 +1,21 @@
 import { type ApiContext, ApiError, uploadDocument } from '@liasse/core/api';
+import { UPLOAD_FILE_FIELD } from '@liasse/core/contract';
 import { Hono, type MiddlewareHandler } from 'hono';
 import { failureOf } from '../../http/errors.ts';
-import { MULTIPART_OVERHEAD_BYTES } from '../../http/routes/upload.ts';
+import { MULTIPART_OVERHEAD_BYTES, textUploadOptionsSchema } from '../../http/routes/upload.ts';
+import { filledFields } from '../form-fields.ts';
 import { formLimit, requireCsrf, type UiEnv } from '../guards.ts';
-import { documentPath, notice, page } from '../markup.ts';
+import { CSRF_FIELD, documentPath, notice, page } from '../markup.ts';
 import { uploadPage } from '../views/forms.ts';
 
 export interface UploadPageDeps {
   readonly api: ApiContext;
   readonly signedIn: MiddlewareHandler<UiEnv>;
+  /** A session, under the upload deadline of the API. */
+  readonly uploadAccess: MiddlewareHandler<UiEnv>;
 }
 
-export const uploadPages = ({ api, signedIn }: UploadPageDeps): Hono<UiEnv> =>
+export const uploadPages = ({ api, signedIn, uploadAccess }: UploadPageDeps): Hono<UiEnv> =>
   new Hono<UiEnv>()
     .get('/upload', signedIn, (context) =>
       context.html(
@@ -24,12 +28,17 @@ export const uploadPages = ({ api, signedIn }: UploadPageDeps): Hono<UiEnv> =>
     )
     .post(
       '/upload',
-      signedIn,
+      uploadAccess,
       // The form is read whole to find its token: this is what bounds that read.
       formLimit(api.maxFileSize + MULTIPART_OVERHEAD_BYTES),
       requireCsrf,
       async (context) => {
-        const { file, hint, private: isPrivate } = await context.req.parseBody();
+        const {
+          [UPLOAD_FILE_FIELD]: file,
+          [CSRF_FIELD]: _token,
+          ...fields
+        } = await context.req.parseBody();
+        const options = textUploadOptionsSchema.parse(filledFields(fields));
         const { csrfToken } = context.get('session');
         if (!(file instanceof File)) {
           return context.html(
@@ -42,8 +51,7 @@ export const uploadPages = ({ api, signedIn }: UploadPageDeps): Hono<UiEnv> =>
             bytes: new Uint8Array(await file.arrayBuffer()),
             filename: file.name,
             source: 'api',
-            hint: typeof hint === 'string' && hint.trim() !== '' ? hint : undefined,
-            private: isPrivate === 'true',
+            ...options,
           });
           return context.redirect(documentPath(id), 303);
         } catch (error) {

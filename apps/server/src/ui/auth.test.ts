@@ -3,7 +3,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { z } from 'zod';
 import { createHttpHarness, type HttpHarness, TEST_TOKEN } from '../http/harness.test-helper.ts';
 import { loadConfig } from '@liasse/core/config';
-import { SYNTHETIC_ENV } from '@liasse/core/testing';
+import { createGate, SYNTHETIC_ENV } from '@liasse/core/testing';
 import { createLoginLimit } from './login-limit.ts';
 import {
   cookiesOf,
@@ -133,6 +133,43 @@ describe('web UI access', () => {
       expect((await session.get('/ui/documents')).status).toBe(303);
     });
 
+    it('ends the previous session of a browser that logs in again', async () => {
+      const app = uiApp(harness);
+      const first = await signIn(app);
+      const form = await openLoginForm(app);
+      const again = await app.request(
+        '/ui/login',
+        formRequest(
+          { csrf: form.token, password: UI_TEST_PASSWORD },
+          `${first.cookie}; ${form.cookie}`,
+        ),
+      );
+      expect(again.status).toBe(303);
+      const second = cookiesOf(again).liasse_session ?? '';
+      expect(second).not.toBe(first.cookie);
+      expect((await first.get('/ui/documents')).status).toBe(303);
+      const kept = await app.request('/ui/documents', { headers: { Cookie: second } });
+      expect(kept.status).toBe(200);
+    });
+
+    it('answers 504 once the request deadline of the API is over', async () => {
+      const gate = createGate();
+      const app = uiApp(harness, {
+        requestTimeoutMs: 50,
+        features: {
+          listChanges: async () => {
+            await gate.opened;
+            return { changes: [] };
+          },
+        },
+      });
+      const session = await signIn(app);
+      const response = await session.get('/ui/changes');
+      gate.open();
+      expect(response.status).toBe(504);
+      expect(await response.text()).toContain('took too long');
+    });
+
     it('ends the session when its lifetime is over', async () => {
       const clock = { now: 2_000_000 };
       const app = uiApp(harness, { sessionTtlMs: 1000, now: () => clock.now });
@@ -165,6 +202,9 @@ describe('web UI access', () => {
     it('is not mounted when UI_PASSWORD is unset', async () => {
       expect((await harness.app.request('/ui/login')).status).toBe(404);
       expect((await harness.app.request('/ui/documents')).status).toBe(404);
+      const root = await harness.app.request('/');
+      expect(root.status).toBe(404);
+      expect(root.headers.get('Location')).toBeNull();
     });
   });
 

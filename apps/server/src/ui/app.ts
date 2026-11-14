@@ -3,6 +3,7 @@ import type { UiPassword } from '@liasse/core/config';
 import { getConnInfo } from '@hono/node-server/conninfo';
 import { type Context, Hono } from 'hono';
 import { every } from 'hono/combine';
+import { requestTimeout } from '../http/guards.ts';
 import type { Logger } from '../log.ts';
 import { createUiErrorHandler } from './error-page.ts';
 import {
@@ -37,6 +38,9 @@ export interface UiOptions {
 export interface UiDependencies extends UiOptions {
   readonly api: ApiContext;
   readonly logger: Logger;
+  /** The deadlines of the API: one for a request, a longer one for an upload. */
+  readonly requestTimeoutMs: number;
+  readonly uploadTimeoutMs: number;
 }
 
 // The address of the connection, never a forwarded header a client can write. Behind a
@@ -57,13 +61,18 @@ export const createUi = ({
   password,
   sessionTtlMs,
   secureCookies,
+  requestTimeoutMs,
+  uploadTimeoutMs,
   clientAddress = socketAddress,
   now = Date.now,
   loginLimit = createLoginLimit({ now }),
 }: UiDependencies): Hono<UiEnv> => {
   const sessions = createSessionStore({ ttlMs: sessionTtlMs, now });
-  const signedIn = requireSession(sessions);
+  const session = requireSession(sessions);
+  const timed = every(requestTimeout(requestTimeoutMs));
+  const signedIn = every(timed, session);
   const form = every(signedIn, formLimit(MAX_FORM_BYTES), requireCsrf);
+  const uploadAccess = every(requestTimeout(uploadTimeoutMs), session);
 
   const ui = new Hono<UiEnv>();
   ui.use(uiHeaders);
@@ -81,11 +90,12 @@ export const createUi = ({
       sessionTtlMs,
       secureCookies,
       signedIn,
+      timed,
     }),
   );
-  ui.route('/', documentPages({ api, signedIn, form }));
+  ui.route('/', documentPages({ api, signedIn, form, fileAccess: session }));
   ui.route('/', searchPages({ api, signedIn }));
-  ui.route('/', uploadPages({ api, signedIn }));
+  ui.route('/', uploadPages({ api, signedIn, uploadAccess }));
   ui.route('/', changePages({ api, signedIn, form }));
   return ui;
 };

@@ -11,15 +11,17 @@ export const TEST_CLIENT_HEADER = 'X-Test-Client';
 
 export interface UiAppOptions extends Partial<UiOptions> {
   readonly features?: ApiFeatures;
+  readonly requestTimeoutMs?: number;
 }
 
 /** The application with the UI on, counting login attempts by a header the test sets. */
 export const uiApp = (
   harness: HttpHarness,
-  { features = {}, ...options }: UiAppOptions = {},
+  { features = {}, requestTimeoutMs, ...options }: UiAppOptions = {},
 ): Hono<AppEnv> =>
   harness.appWith({
     features,
+    ...(requestTimeoutMs === undefined ? {} : { requestTimeoutMs }),
     ui: {
       password: { kind: 'plain', value: UI_TEST_PASSWORD } satisfies UiPassword,
       sessionTtlMs: 7 * 24 * 60 * 60 * 1000,
@@ -102,7 +104,8 @@ export const signIn = async (app: Hono<AppEnv>): Promise<SignedIn> => {
   expect(response.status).toBe(303);
   const cookie = cookiesOf(response).liasse_session ?? '';
   const get = async (path: string) => app.request(path, { headers: { Cookie: cookie } });
-  const csrf = csrfOf(await (await get('/ui/documents')).text());
+  // A page that reads nothing from the database, so a short deadline never fires here.
+  const csrf = csrfOf(await (await get('/ui/upload')).text());
   return {
     cookie,
     csrf,
