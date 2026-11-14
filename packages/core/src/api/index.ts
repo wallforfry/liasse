@@ -2,11 +2,19 @@
 export type { ApiContext } from './context.ts';
 export { describeTypes } from './describe-types.ts';
 export { openDocumentFile, type OpenedFile, removeDocument } from './document-file.ts';
-export { API_ERROR_KINDS, ApiError, type ApiErrorKind } from './errors.ts';
+export {
+  API_ERROR_KINDS,
+  ApiError,
+  type ApiErrorKind,
+  invalidRequest,
+  notImplemented,
+  toApiError,
+} from './errors.ts';
 export {
   type ApiFeatures,
   applyChange,
   correctDocument,
+  CORRECTED_PARTS,
   type CorrectionOutcome,
   listChanges,
   listSubjects,
@@ -20,6 +28,7 @@ export {
   type FileUrls,
 } from './file-url.ts';
 export { getDocument } from './get-document.ts';
+export { getSubject, type KnowledgeFeatures, recall, timeline } from './knowledge.ts';
 export { listDocuments } from './list-documents.ts';
 export { listEntities } from './list-entities.ts';
 export { queryDocuments } from './query-documents.ts';

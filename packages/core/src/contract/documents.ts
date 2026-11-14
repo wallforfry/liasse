@@ -112,6 +112,19 @@ export const uploadOptionsSchema = z.strictObject({
 export type UploadOptions = z.input<typeof uploadOptionsSchema>;
 export const UPLOAD_OPTION_FIELDS = uploadOptionsSchema.keyof().options;
 
+// The `ingest` tool of MCP: the options of an upload, the file base64-encoded in JSON.
+export const ingestRequestSchema = z
+  .strictObject({
+    file: z.base64().optional().describe('The bytes of the document, base64-encoded.'),
+    url: z.url().optional().describe('Not accepted by this server yet.'),
+    filename: z.string().min(1).describe('The name of the file, with its extension.'),
+    ...uploadOptionsSchema.shape,
+  })
+  .refine(({ file, url }) => (file === undefined) !== (url === undefined), {
+    message: 'expected either a file or a url',
+  });
+export type IngestRequest = z.output<typeof ingestRequestSchema>;
+
 export const uploadResultSchema = z.object({
   id: z.string(),
   status: liveDocumentStatusSchema,

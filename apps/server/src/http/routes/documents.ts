@@ -1,4 +1,10 @@
-import { correctDocument, getDocument, listDocuments, removeDocument } from '@liasse/core/api';
+import {
+  correctDocument,
+  CORRECTED_PARTS,
+  getDocument,
+  listDocuments,
+  removeDocument,
+} from '@liasse/core/api';
 import {
   documentCorrectionSchema,
   documentListSchema,
@@ -35,9 +41,6 @@ const documentQuery = z
     page_limit: integerParam.optional(),
   })
   .pipe(getDocumentOptionsSchema);
-
-// What a correction answers with: the document and the parts a correction changes.
-const CORRECTED_PARTS = ['fields', 'provenance'] as const;
 
 export const documentRoutes = ({ api, authenticated }: RouteDeps): Hono<AppEnv> =>
   new Hono<AppEnv>()
