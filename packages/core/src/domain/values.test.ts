@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { CURRENCY_CODES } from './currencies.ts';
 import { LANGUAGE_CODES } from './languages.ts';
 import {
   currencyCodeSchema,
@@ -62,10 +63,26 @@ describe('moneySchema', () => {
     expect(accepts(moneySchema, { value: -12, currency: 'USD' })).toBe(true);
   });
 
-  it.each(['ZZZ', 'eur', 'EURO', '€', ''])('rejects the currency %s', (currency) => {
-    expect(accepts(currencyCodeSchema, currency)).toBe(false);
-    expect(accepts(moneySchema, { value: 1, currency })).toBe(false);
+  it.each(['FRF', 'DEM', 'ITL', 'ESP', 'BEF', 'NLG', 'LTL', 'SKK', 'HRK', 'BGN'])(
+    'accepts the withdrawn currency %s',
+    (currency) => {
+      expect(accepts(moneySchema, { value: 8500, currency })).toBe(true);
+    },
+  );
+
+  it('lists each ISO 4217 code once, as three capital letters', () => {
+    expect(new Set(CURRENCY_CODES).size).toBe(CURRENCY_CODES.length);
+    expect(CURRENCY_CODES.filter((code) => !/^[A-Z]{3}$/.test(code))).toEqual([]);
+    expect(CURRENCY_CODES).toHaveLength(305);
   });
+
+  it.each(['ZZZ', 'XXX', 'XTS', 'CNH', 'eur', 'EURO', '€', ''])(
+    'rejects the currency %s',
+    (currency) => {
+      expect(accepts(currencyCodeSchema, currency)).toBe(false);
+      expect(accepts(moneySchema, { value: 1, currency })).toBe(false);
+    },
+  );
 
   it('rejects a value that is not a finite number, a missing currency and an unknown key', () => {
     expect(accepts(moneySchema, { value: '84.20', currency: 'EUR' })).toBe(false);

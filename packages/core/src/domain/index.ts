@@ -1,3 +1,4 @@
+export * from './currencies.ts';
 export * from './entity-name.ts';
 export * from './enums.ts';
 export * from './errors.ts';
