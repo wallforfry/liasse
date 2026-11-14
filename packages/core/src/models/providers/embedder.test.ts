@@ -9,6 +9,7 @@ import {
   embeddingInputOf,
   embeddings,
   failure,
+  indexedEmbeddings,
   SYNTHETIC_API_KEY,
 } from './wire-fixtures.ts';
 
@@ -87,6 +88,30 @@ describe('createProviderEmbedder', () => {
       MAX_TEXTS_PER_REQUEST,
       22,
     ]);
+  });
+
+  it('puts the embeddings back in the order of the texts when the reply is shuffled', async () => {
+    const { embedder } = await start((request) => {
+      const vectors = embeddingInputOf(request).map((text) => [Number(text), 0, 0]);
+      return indexedEmbeddings(vectors.map((embedding, index) => ({ index, embedding })).reverse());
+    });
+    expect(await embedder.embed(['7', '8', '9'], 'passage')).toEqual([
+      [7, 0, 0],
+      [8, 0, 0],
+      [9, 0, 0],
+    ]);
+  });
+
+  it('refuses a reply whose indexes do not name each text once', async () => {
+    const { embedder } = await start(() =>
+      indexedEmbeddings([
+        { index: 1, embedding: [7, 0, 0] },
+        { index: 1, embedding: [8, 0, 0] },
+      ]),
+    );
+    const error = await failureOf(embedder.embed(['7', '8'], 'passage'));
+    expect(error).toBeInstanceOf(ModelProviderError);
+    expect(error).toMatchObject({ code: 'embedding_index', retryable: true });
   });
 
   it('makes no request for an empty list', async () => {

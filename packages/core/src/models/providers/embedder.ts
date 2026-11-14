@@ -1,6 +1,7 @@
 import type { Config } from '../../config/schema.ts';
-import { EmbeddingDimensionError } from '../errors.ts';
+import { EmbeddingDimensionError, ModelProviderError } from '../errors.ts';
 import type { Embedder, Embedding, EmbeddingKind } from '../ports.ts';
+import { inRequestOrder } from './embedding-order.ts';
 import { toModelError } from './failure.ts';
 import { MAX_RETRIES } from './language-call.ts';
 import { loadSdk, once } from './lazy.ts';
@@ -40,7 +41,7 @@ export const createProviderEmbedder = async (
     kind: EmbeddingKind,
   ): Promise<readonly Embedding[]> => {
     const sdk = await loadSdk();
-    const { embeddings } = await sdk
+    const { embeddings: received, responses } = await sdk
       .embedMany({
         model: await loadModel(),
         values: [...texts],
@@ -55,6 +56,10 @@ export const createProviderEmbedder = async (
       .catch((error: unknown) => {
         throw toModelError(sdk, error, context);
       });
+    const embeddings = inRequestOrder(received, responses ?? []);
+    if (embeddings === undefined) {
+      throw new ModelProviderError({ provider, model, retryable: true, code: 'embedding_index' });
+    }
     const mismatch = embeddings.find((embedding) => embedding.length !== dimension);
     if (mismatch !== undefined) {
       throw new EmbeddingDimensionError(model, dimension, mismatch.length);

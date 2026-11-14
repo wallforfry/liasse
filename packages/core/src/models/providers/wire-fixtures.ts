@@ -46,14 +46,23 @@ const embeddingInput = z.object({ input: z.array(z.string()) });
 export const embeddingInputOf = (request: StubRequest): readonly string[] =>
   embeddingInput.parse(request.body).input;
 
-export const embeddings = (vectors: readonly (readonly number[])[]): StubResponse => ({
+export interface IndexedEmbedding {
+  readonly index: number;
+  readonly embedding: readonly number[];
+}
+
+// `index` is the position of the text in the request; a server may answer in any order.
+export const indexedEmbeddings = (data: readonly IndexedEmbedding[]): StubResponse => ({
   body: {
     object: 'list',
     model: RESOLVED_MODEL,
-    data: vectors.map((embedding, index) => ({ object: 'embedding', index, embedding })),
+    data: data.map((item) => ({ object: 'embedding', ...item })),
     usage: { prompt_tokens: 1, total_tokens: 1 },
   },
 });
+
+export const embeddings = (vectors: readonly (readonly number[])[]): StubResponse =>
+  indexedEmbeddings(vectors.map((embedding, index) => ({ index, embedding })));
 
 type Env = Readonly<Record<string, string>>;
 
