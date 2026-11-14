@@ -298,7 +298,7 @@ Two modes coexist: hybrid natural-language search over chunks, and structured qu
 - Combinable filters: type (aliases resolved), entity, subject, date range, status.
 - Cross-encoder reranking: out of the MVP, planned behind a flag.
 
-**Chunking**: per page, then split at about 800 tokens with 100 tokens of overlap; document title and type are prefixed to each chunk before embedding.
+**Chunking**: per page, then split at about 800 tokens with 100 tokens of overlap, bounded by the embedding model's input window: a chunk, with the title and type prefixed to it before embedding, always fits in what the model reads (about 480 tokens with the default local model), so that no text is left out of every embedding. Chunks are sized with the model's own tokenizer when it has one, with a conservative estimate otherwise.
 
 **Structured queries (`query`)**: a JSON DSL compiled into parameterized SQL; agents never send SQL.
 
@@ -325,7 +325,7 @@ Fourteen tools, over Streamable HTTP (`/mcp`, Bearer token auth) and stdio. All 
 | Tool | Role | Main inputs | Output |
 | --- | --- | --- | --- |
 | `describe_types` | Discover types and their schemas | `status?`, `include_examples?` | Types with description, fields, document count, aliases |
-| `search` | Hybrid natural-language search | `query`, `filters?`, `limit?` (default 10) | Documents with title, type, core, 1–3 snippets, score |
+| `search` | Hybrid natural-language search | `query`, `filters?`, `limit?` (default 10) | Documents with title, type, core, 1–3 snippets (text and highlight ranges), score |
 | `query` | Structured query (DSL) | DSL object | Rows (ID, core, requested fields) or aggregates |
 | `get_document` | Document details | `id`, `include` (`fields`, `text`, `pages`, `file_url`, `provenance`) | Document; paginated text if long |
 | `list_entities` | List or search entities | `query?`, `kind?` | Entities with aliases and document count |
@@ -387,7 +387,7 @@ A single Node binary, configured through environment variables, shipped as a mul
 
 **Watched folder.** With `WATCH_DIR` set, Liasse ingests every file of that folder and of its subfolders, those present at startup and those dropped later. It only reads the folder: it never moves, renames or deletes a file, so what was ingested stays where the user put it and is recognised by its hash at the next start. A file is read once its size and modification time have held still for two seconds. A writer that pauses longer than that in the middle of a file gets the partial file ingested as it is, and the complete file ingested as a second document when it changes again. A tool that writes under a temporary name (a leading dot, `.part`, `.tmp`, `.crdownload`) and renames at the end is safe: the watcher ignores those names. Hidden files and folders are ignored, symbolic links are not followed, and a subfolder that cannot be read is reported once and skipped. A file refused for what it is (unsupported format, empty, larger than `MAX_FILE_SIZE`) is not read again until it changes. Deleting a document does not delete its file from the folder, and the file is not ingested again. A document whose processing failed is queued again once when the folder hands its file back at a restart, and no more after that: uploading the file through the API or MCP always queues it again.
 
-**Local embeddings by default.** `EMBEDDING_PROVIDER=local` runs a small quantized multilingual model in-process (ONNX Runtime): around 384 dimensions and roughly 100 MB, with candidates to be compared on the evaluation set (for example the multilingual-e5-small family). The model files are downloaded into `EMBEDDING_CACHE_DIR` on first use, unless the directory already holds them (pre-filled image or mounted volume), after which no network access is needed. The model is loaded on first use and unloaded after 10 minutes of inactivity to meet the idle RAM target; embeddings are computed in batches in the job queue, with a single dedicated worker.
+**Local embeddings by default.** `EMBEDDING_PROVIDER=local` runs a small quantized multilingual model on the same host (ONNX Runtime): around 384 dimensions and roughly 100 MB, with candidates to be compared on the evaluation set (for example the multilingual-e5-small family). The model files are downloaded into `EMBEDDING_CACHE_DIR` on first use, unless the directory already holds them (pre-filled image or mounted volume), after which no network access is needed. The model runs in a child process of the server, started on first use and ended after 10 minutes of inactivity: ONNX Runtime does not return its memory to the operating system when a model is released in place, so ending the process is what meets the idle RAM target. While it works, the model process takes about 0.8 GB. Embeddings are computed in batches in the job queue, with a single dedicated worker.
 
 **Web UI.** Enabled only when `UI_PASSWORD` is set. Session cookie `HttpOnly`, `Secure`, `SameSite=Strict`, 7-day lifetime; at most 5 login attempts per minute per IP. The UI calls the same API as MCP.
 

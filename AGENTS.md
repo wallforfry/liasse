@@ -39,22 +39,22 @@ Before pushing, `pnpm lint`, `pnpm typecheck`, `pnpm test` and `pnpm build` must
 
 Inside `packages/core/src`, one directory per concern. A new concern gets its own directory and its own subpath export.
 
-| Directory     | Content                                                                                |
-| ------------- | -------------------------------------------------------------------------------------- |
-| `config/`     | The Zod schema that turns `process.env` into the typed, frozen configuration           |
-| `db/`         | Drizzle schema, `createDb`, the migration runner; SQL migrations are in `migrations/`  |
-| `domain/`     | Enumerations, ids, shared Zod schemas, limits                                          |
-| `embeddings/` | The local embedder: an ONNX model run in process, loaded on demand, unloaded when idle |
-| `ingest/`     | `ingestFile`, deletion with tombstones, format detection, the watched folder           |
-| `jobs/`       | The job queue on the `jobs` table: kinds, `enqueue`, workers                           |
-| `models/`     | Ports for the text model, the vision model and the embedder; `providers/` adapts them  |
-| `prompt/`     | Prompt helpers, starting with the untrusted-content wrapper                            |
-| `query/`      | The structured query DSL: its schema, field typing and compilation to bound SQL        |
-| `registry/`   | Field primitives, naming rules and the operations on the evolving type registry        |
-| `search/`     | Chunking, `indexDocument`, and hybrid `search` (full text + vector, fused by RRF)      |
-| `storage/`    | The file storage port and its `fs` and `s3` drivers                                    |
-| `testing/`    | Test database and bucket helpers, model fakes and synthetic document builders          |
-| `text/`       | `extractText`: native text of PDF, DOCX and email, vision transcription otherwise      |
+| Directory     | Content                                                                                             |
+| ------------- | --------------------------------------------------------------------------------------------------- |
+| `config/`     | The Zod schema that turns `process.env` into the typed, frozen configuration                        |
+| `db/`         | Drizzle schema, `createDb`, the migration runner; SQL migrations are in `migrations/`               |
+| `domain/`     | Enumerations, ids, shared Zod schemas, limits                                                       |
+| `embeddings/` | `createEmbedder`; the local embedder runs an ONNX model in a child process, ended when idle         |
+| `ingest/`     | `ingestFile`, deletion with tombstones, format detection, the watched folder                        |
+| `jobs/`       | The job queue on the `jobs` table: kinds, `enqueue`, workers                                        |
+| `models/`     | Ports for the text model, the vision model and the embedder; `providers/` adapts them               |
+| `prompt/`     | Prompt helpers, starting with the untrusted-content wrapper                                         |
+| `query/`      | The structured query DSL: its schema, field typing and compilation to bound SQL                     |
+| `registry/`   | Field primitives, naming rules and the operations on the evolving type registry                     |
+| `search/`     | Chunking sized to the embedder's window, `indexDocument`, hybrid `search` (full text + vector, RRF) |
+| `storage/`    | The file storage port and its `fs` and `s3` drivers                                                 |
+| `testing/`    | Test database and bucket helpers, model fakes and synthetic document builders                       |
+| `text/`       | `extractText`: native text of PDF, DOCX and email, vision transcription otherwise                   |
 
 Names reserved for the features to come, created only by the change that implements them: `pipeline/`, `entities/`, `knowledge/`, `consolidation/`, `hindsight/`.
 
