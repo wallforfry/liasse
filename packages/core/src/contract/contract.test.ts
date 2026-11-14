@@ -5,15 +5,15 @@ import { describe, expect, it } from 'vitest';
 
 const ENTRY = resolve(dirname(fileURLToPath(import.meta.url)), 'index.ts');
 
-// Every `from '…'` and bare `import '…'`, type-only ones included: a declaration file
-// that names a module needs it installed as much as the code does.
-const SPECIFIER = /\bfrom\s+'([^']+)'|^import\s+'([^']+)'/gm;
+// Every `from '…'`, bare `import '…'` and dynamic `import('…')`, in either quotes and
+// type-only ones included: a declaration file that names a module needs it installed as
+// much as the code does.
+const SPECIFIER = /(?:\bfrom\s+|^import\s+|\bimport\s*\(\s*)(['"])([^'"]+)\1/gm;
 
 const specifiersOf = async (file: string): Promise<readonly string[]> =>
-  [...(await readFile(file, 'utf8')).matchAll(SPECIFIER)].flatMap(([, from, bare]) => {
-    const specifier = from ?? bare;
-    return specifier === undefined ? [] : [specifier];
-  });
+  [...(await readFile(file, 'utf8')).matchAll(SPECIFIER)].flatMap(([, , specifier]) =>
+    specifier === undefined ? [] : [specifier],
+  );
 
 interface Graph {
   readonly files: ReadonlySet<string>;
