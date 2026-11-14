@@ -1,6 +1,10 @@
 import { describe, expect, it, vi } from 'vitest';
 import { StartupError } from '../domain/errors.ts';
-import { EmbeddingModelDimensionError, EmbeddingOutputError } from './errors.ts';
+import {
+  EmbeddingModelDimensionError,
+  EmbeddingOutputError,
+  LocalModelProcessError,
+} from './errors.ts';
 import type { ScheduleTimer } from './idle-resource.ts';
 import {
   createLocalEmbedder,
@@ -41,6 +45,7 @@ const setup = (options: Partial<LocalEmbedderOptions> = {}, vectorise: Vectorise
           batches.push(texts);
           return Promise.resolve(texts.map(vectorise));
         },
+        countTokens: (texts) => Promise.resolve(texts.map((text) => text.split(' ').length)),
         dispose: () => {
           disposed.push(instance);
           return Promise.resolve();
@@ -82,6 +87,46 @@ describe('createLocalEmbedder', () => {
     await embedder.embed(['facture', 'contrat'], 'passage');
     await embedder.embed(['facture'], 'query');
     expect(batches).toEqual([['passage: facture', 'passage: contrat'], ['query: facture']]);
+  });
+
+  it('runs inference in batches of four by default', async () => {
+    const { embedder, batches } = setup();
+    await embedder.embed(['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i'], 'passage');
+    expect(batches.map((batch) => batch.length)).toEqual([4, 4, 1]);
+  });
+
+  it('tells how many tokens of a text the model reads, its own prefix taken off', () => {
+    expect(setup().embedder.maxInputTokens).toBe(504);
+  });
+
+  it('counts tokens with the model tokenizer, without the e5 prefix', async () => {
+    const { embedder, specs, batches } = setup();
+    expect(await embedder.countTokens([])).toEqual([]);
+    expect(specs).toEqual([]);
+    expect(await embedder.countTokens(['un deux trois', 'un'])).toEqual([3, 1]);
+    expect(specs).toHaveLength(1);
+    expect(batches).toEqual([]);
+  });
+
+  it('starts a new model after the model process died', async () => {
+    let loads = 0;
+    const { embedder } = setup({
+      loadModel: () => {
+        loads += 1;
+        const alive = loads > 1;
+        return Promise.resolve({
+          embed: (texts) =>
+            alive
+              ? Promise.resolve(texts.map(byLength))
+              : Promise.reject(new LocalModelProcessError('synthetic death')),
+          countTokens: () => Promise.resolve([]),
+          dispose: () => Promise.resolve(),
+        });
+      },
+    });
+    await expect(embedder.embed(['a'], 'passage')).rejects.toBeInstanceOf(LocalModelProcessError);
+    expect(await embedder.embed(['a'], 'passage')).toHaveLength(1);
+    expect(loads).toBe(2);
   });
 
   it('runs inference in batches and keeps the order of the texts', async () => {
@@ -151,6 +196,7 @@ describe('createLocalEmbedder', () => {
       loadModel: () =>
         Promise.resolve({
           embed: () => Promise.resolve([[3, 4]]),
+          countTokens: () => Promise.resolve([]),
           dispose: () => Promise.resolve(),
         }),
     });

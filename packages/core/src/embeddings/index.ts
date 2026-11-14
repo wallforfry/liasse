@@ -1,4 +1,9 @@
-export { EmbeddingModelDimensionError, EmbeddingOutputError } from './errors.ts';
+export {
+  EmbeddingCacheDirError,
+  EmbeddingModelDimensionError,
+  EmbeddingOutputError,
+  LocalModelProcessError,
+} from './errors.ts';
 export {
   createLocalEmbedder,
   DEFAULT_LOCAL_EMBEDDING_MODEL,

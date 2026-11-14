@@ -1,13 +1,25 @@
 import { batchesOf } from '../models/batching.ts';
 import type { Embedder, Embedding, EmbeddingKind } from '../models/ports.ts';
-import { EmbeddingModelDimensionError, EmbeddingOutputError } from './errors.ts';
+import {
+  EmbeddingModelDimensionError,
+  EmbeddingOutputError,
+  LocalModelProcessError,
+} from './errors.ts';
 import { createIdleResource, type ScheduleTimer } from './idle-resource.ts';
-import { type LocalModel, type LocalModelLoader, loadTransformersModel } from './local-model.ts';
+import type { LocalModel, LocalModelLoader } from './local-model.ts';
+import { loadModelInChildProcess } from './model-process.ts';
 
 export const DEFAULT_LOCAL_EMBEDDING_MODEL = 'Xenova/multilingual-e5-small';
 export const LOCAL_EMBEDDER_IDLE_MS = 10 * 60 * 1000;
 
-const DEFAULT_BATCH_SIZE = 16;
+// Measured on 64 inputs of 512 tokens (Linux arm64, Node 22): the model process peaks at
+// 0.83 GB with batches of 4, 1.05 GB with 8 and 1.5 GB with 16, for 9.0, 8.1 and 6.6 seconds.
+const DEFAULT_BATCH_SIZE = 4;
+
+// What the e5 family reads, and what the embedder itself puts in it: the two special tokens
+// and a prefix of at most four tokens, rounded up.
+const E5_WINDOW_TOKENS = 512;
+const E5_RESERVED_TOKENS = 8;
 
 // Dimensions known without loading the model, so a wrong EMBEDDING_DIM stops the process
 // at startup instead of at the first document.
@@ -33,6 +45,8 @@ export interface LocalEmbedderOptions {
 }
 
 export interface LocalEmbedder extends Embedder {
+  readonly maxInputTokens: number;
+  readonly countTokens: (texts: readonly string[]) => Promise<readonly number[]>;
   readonly close: () => Promise<void>;
 }
 
@@ -78,7 +92,7 @@ export const createLocalEmbedder = ({
   model = DEFAULT_LOCAL_EMBEDDING_MODEL,
   idleMs = LOCAL_EMBEDDER_IDLE_MS,
   batchSize = DEFAULT_BATCH_SIZE,
-  loadModel = loadTransformersModel,
+  loadModel = loadModelInChildProcess,
   schedule,
   onUnloadError = reportUnloadError,
 }: LocalEmbedderOptions): LocalEmbedder => {
@@ -95,14 +109,27 @@ export const createLocalEmbedder = ({
     ...(schedule === undefined ? {} : { schedule }),
   });
 
+  // A model process that died is of no further use: dropping it lets the next call start one.
+  const withModel = async <R>(task: (loaded: LocalModel) => Promise<R>): Promise<R> => {
+    try {
+      return await resource.use(task);
+    } catch (error) {
+      if (error instanceof LocalModelProcessError) await resource.unload().catch(onUnloadError);
+      throw error;
+    }
+  };
+
   return {
     dimension,
     model,
     isLocal: true,
+    maxInputTokens: E5_WINDOW_TOKENS - E5_RESERVED_TOKENS,
+    countTokens: (texts) =>
+      texts.length === 0 ? Promise.resolve([]) : withModel((loaded) => loaded.countTokens(texts)),
     embed: async (texts, kind) => {
       if (texts.length === 0) return [];
       const inputs = texts.map((text) => `${E5_PREFIXES[kind]}${text}`);
-      return resource.use(async (loaded) => {
+      return withModel(async (loaded) => {
         const embeddings: Embedding[] = [];
         for (const batch of batchesOf(inputs, batchSize)) {
           embeddings.push(...(await embedBatch(loaded, batch, contract)));

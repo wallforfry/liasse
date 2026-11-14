@@ -28,3 +28,31 @@ export class EmbeddingOutputError extends Error {
     this.model = model;
   }
 }
+
+// The child process that runs the model ended while a request was in flight, or before it
+// could take one. Nothing was lost but the request: the next one starts a new process.
+export class LocalModelProcessError extends Error {
+  override readonly name = 'LocalModelProcessError';
+  readonly retryable = true;
+
+  constructor(reason: string) {
+    super(`The local embedding model is unavailable, retry: ${reason}`);
+  }
+}
+
+const errorCode = (error: unknown): string =>
+  error instanceof Error && 'code' in error && typeof error.code === 'string'
+    ? error.code
+    : 'unknown error';
+
+export class EmbeddingCacheDirError extends StartupError {
+  override readonly name = 'EmbeddingCacheDirError';
+
+  constructor(cause: unknown) {
+    super(
+      `EMBEDDING_CACHE_DIR cannot be used to store the local embedding model ` +
+        `(${errorCode(cause)}): set it to a directory this process can create and write to.`,
+      { cause },
+    );
+  }
+}
