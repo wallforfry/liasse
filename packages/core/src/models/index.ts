@@ -1,4 +1,9 @@
-export { EmbeddingDimensionError, ModelOutputError, ModelProviderError } from './errors.ts';
+export {
+  EmbeddingDimensionError,
+  ModelOutputError,
+  ModelProviderError,
+  OutputSchemaError,
+} from './errors.ts';
 export type * from './ports.ts';
 export { createProviderEmbedder, type RemoteEmbeddingConfig } from './providers/embedder.ts';
 export type { LlmConfig } from './providers/language-call.ts';

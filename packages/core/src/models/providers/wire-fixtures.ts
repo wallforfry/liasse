@@ -31,10 +31,14 @@ export const chatCompletion = (
 });
 
 // `retry-after-ms` replaces the two-second backoff of the SDK, so retries are immediate.
-export const failure = (status: number, message: string): StubResponse => ({
+export const failure = (
+  status: number,
+  message: string,
+  type = 'synthetic_error',
+): StubResponse => ({
   status,
   headers: { 'retry-after-ms': '0' },
-  body: { error: { message, type: 'synthetic_error' } },
+  body: { error: { message, type } },
 });
 
 const embeddingInput = z.object({ input: z.array(z.string()) });

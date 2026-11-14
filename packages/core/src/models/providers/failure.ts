@@ -1,13 +1,11 @@
 import type { FinishReason } from 'ai';
-import { ModelOutputError, ModelProviderError } from '../errors.ts';
+import { ModelOutputError, ModelProviderError, OutputSchemaError } from '../errors.ts';
 import type { Sdk } from './lazy.ts';
-import { redact } from './redact.ts';
+import { identifier, providerErrorCode } from './safe-text.ts';
 
 export interface CallContext {
   readonly provider: string;
   readonly model: string;
-  readonly timeoutMs: number;
-  readonly secrets: readonly string[];
 }
 
 const INCOMPLETE_REASONS: Partial<Record<FinishReason, string>> = {
@@ -22,18 +20,24 @@ export const incompleteReason = (finishReason: FinishReason): string | undefined
     : (INCOMPLETE_REASONS[finishReason] ??
       `the model stopped with finish reason "${finishReason}"`);
 
+// The model id the provider reports, or the configured one when it reports none or
+// something that is not an identifier.
+export const resolvedModel = (reported: unknown, configured: string): string =>
+  identifier(reported) ?? configured;
+
 const isTimeout = (error: unknown): boolean =>
   error instanceof Error && error.name === 'TimeoutError';
 
-// Replaces what the SDK throws with errors that are safe to log: no request, no response,
-// no header, and a message cleared of the configured credentials.
+// Replaces what the SDK throws with errors that hold identifiers only: SDK errors carry
+// the request body, the response body and the provider's message.
 export const toModelError = (sdk: Sdk, error: unknown, context: CallContext): Error => {
-  const { provider, model, timeoutMs, secrets } = context;
+  const { provider, model } = context;
+  if (error instanceof OutputSchemaError) return error;
   if (sdk.NoObjectGeneratedError.isInstance(error)) {
     const reason =
       error.finishReason === undefined ? undefined : incompleteReason(error.finishReason);
     return new ModelOutputError(
-      error.response?.modelId ?? model,
+      resolvedModel(error.response?.modelId, model),
       reason ?? 'the response is not a JSON value',
     );
   }
@@ -41,12 +45,7 @@ export const toModelError = (sdk: Sdk, error: unknown, context: CallContext): Er
     return new ModelOutputError(model, 'the model returned no output');
   }
   if (isTimeout(error)) {
-    return new ModelProviderError({
-      provider,
-      model,
-      retryable: true,
-      detail: `no response within ${String(timeoutMs)} ms`,
-    });
+    return new ModelProviderError({ provider, model, retryable: true, code: 'timeout' });
   }
   const failure = sdk.RetryError.isInstance(error) ? error.lastError : error;
   if (sdk.APICallError.isInstance(failure)) {
@@ -55,13 +54,13 @@ export const toModelError = (sdk: Sdk, error: unknown, context: CallContext): Er
       model,
       retryable: failure.isRetryable,
       statusCode: failure.statusCode,
-      detail: redact(failure.message, secrets),
+      code: providerErrorCode(failure.data),
     });
   }
   return new ModelProviderError({
     provider,
     model,
     retryable: false,
-    detail: redact(failure instanceof Error ? failure.message : 'unknown failure', secrets),
+    code: failure instanceof Error ? identifier(failure.name) : undefined,
   });
 };

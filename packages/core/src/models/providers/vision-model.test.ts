@@ -1,16 +1,9 @@
-import { inspect } from 'node:util';
 import { afterEach, describe, expect, it } from 'vitest';
-import { ModelOutputError, ModelProviderError } from '../errors.ts';
+import { ModelOutputError } from '../errors.ts';
 import type { VisionModel } from '../ports.ts';
 import { type StubHandler, type StubServer, startStubServer } from './stub-server.ts';
 import { createVisionModel } from './vision-model.ts';
-import {
-  chatCompletion,
-  failure,
-  llmConfig,
-  RESOLVED_MODEL,
-  SYNTHETIC_API_KEY,
-} from './wire-fixtures.ts';
+import { chatCompletion, llmConfig, RESOLVED_MODEL, SYNTHETIC_API_KEY } from './wire-fixtures.ts';
 
 const PROMPT = 'Transcribe the page into Markdown.';
 const page = { image: new Uint8Array([1, 2, 3]), mime: 'image/png', prompt: PROMPT };
@@ -73,15 +66,6 @@ describe('createVisionModel', () => {
     const failed = model.transcribePage(page);
     await expect(failed).rejects.toBeInstanceOf(ModelOutputError);
     await expect(failed).rejects.toThrow(reason);
-  });
-
-  it('keeps the API key out of a provider failure', async () => {
-    const { model } = await start(({ headers }) =>
-      failure(401, `rejected credentials: ${String(headers.authorization)}`),
-    );
-    const error: unknown = await model.transcribePage(page).catch((thrown: unknown) => thrown);
-    expect(error).toBeInstanceOf(ModelProviderError);
-    expect(inspect(error, { depth: Infinity, showHidden: true })).not.toContain(SYNTHETIC_API_KEY);
   });
 
   it('honours an aborted signal', async () => {

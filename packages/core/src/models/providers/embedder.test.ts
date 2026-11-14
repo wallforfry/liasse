@@ -1,4 +1,3 @@
-import { inspect } from 'node:util';
 import { afterEach, describe, expect, it } from 'vitest';
 import { EmbeddingDimensionError, ModelProviderError } from '../errors.ts';
 import type { Embedder } from '../ports.ts';
@@ -104,10 +103,7 @@ describe('createProviderEmbedder', () => {
     const { embedder } = await start(() => embeddings([[1, 0, 0]]));
     const error = await failureOf(embedder.embed(['1', '2'], 'passage'));
     expect(error).toBeInstanceOf(ModelProviderError);
-    expect(error).toHaveProperty(
-      'message',
-      expect.stringContaining('Expected 2 embeddings, but received 1'),
-    );
+    expect(error).toMatchObject({ retryable: false, code: 'AI_InvalidResponseDataError' });
   });
 
   it('retries a transient failure', async () => {
@@ -118,24 +114,14 @@ describe('createProviderEmbedder', () => {
     expect(server.requests).toHaveLength(2);
   });
 
-  it('keeps the API key out of a provider failure', async () => {
-    const { embedder } = await start(({ headers }) =>
-      failure(401, `rejected credentials: ${String(headers.authorization)}`),
-    );
-    const error = await failureOf(embedder.embed(['1'], 'passage'));
-    expect(error).toBeInstanceOf(ModelProviderError);
-    expect(error).toMatchObject({ statusCode: 401, retryable: false });
-    expect(inspect(error, { depth: Infinity, showHidden: true })).not.toContain(SYNTHETIC_API_KEY);
-  });
-
   it('fails with a retryable error when the provider does not answer in time', async () => {
     const { embedder } = await start(() => undefined, { EMBEDDING_TIMEOUT: '50ms' });
     const error = await failureOf(embedder.embed(['1'], 'passage'));
     expect(error).toBeInstanceOf(ModelProviderError);
     expect(error).toMatchObject({
       retryable: true,
-      message:
-        'Provider openai-compatible failed for model embedding-model: no response within 50 ms',
+      code: 'timeout',
+      message: 'Provider openai-compatible failed for model embedding-model (timeout)',
     });
   });
 

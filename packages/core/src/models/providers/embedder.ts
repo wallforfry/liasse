@@ -5,7 +5,6 @@ import { toModelError } from './failure.ts';
 import { MAX_RETRIES } from './language-call.ts';
 import { loadSdk, once } from './lazy.ts';
 import { isLocalEndpoint } from './locality.ts';
-import { endpointSecrets } from './redact.ts';
 import { PROVIDERS } from './registry.ts';
 
 export type RemoteEmbeddingConfig = Exclude<Config['embedding'], { readonly provider: 'local' }>;
@@ -24,7 +23,7 @@ const batchesOf = (texts: readonly string[]): readonly (readonly string[])[] =>
 export const createProviderEmbedder = (config: RemoteEmbeddingConfig): Embedder => {
   const { provider, model, dimension, timeoutMs } = config;
   const adapter = PROVIDERS[provider];
-  const context = { provider, model, timeoutMs, secrets: endpointSecrets(config) };
+  const context = { provider, model };
   const loadModel = once(() => adapter.embeddingModel(config, model));
 
   const embedBatch = async (

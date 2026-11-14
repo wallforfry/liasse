@@ -1,7 +1,7 @@
-import { z } from 'zod';
 import { ModelOutputError } from '../errors.ts';
 import type { TextModel } from '../ports.ts';
 import { languageCall, type LlmConfig, runLanguageCall } from './language-call.ts';
+import { describeIssues } from './safe-text.ts';
 import { wireSchema } from './wire-schema.ts';
 
 export const createTextModel = (config: LlmConfig): TextModel => {
@@ -17,14 +17,12 @@ export const createTextModel = (config: LlmConfig): TextModel => {
         });
         return {
           finishReason: result.finishReason,
-          model: result.finalStep.response.modelId,
+          reportedModel: result.finalStep.response.modelId,
           value: result.output,
         };
       });
       const parsed = await schema.safeParseAsync(value);
-      if (!parsed.success) {
-        throw new ModelOutputError(model, z.prettifyError(parsed.error), { cause: parsed.error });
-      }
+      if (!parsed.success) throw new ModelOutputError(model, describeIssues(parsed.error));
       return { object: parsed.data, model };
     },
   };

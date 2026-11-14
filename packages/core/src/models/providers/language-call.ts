@@ -1,9 +1,8 @@
 import type { FinishReason, LanguageModel } from 'ai';
 import type { Config } from '../../config/schema.ts';
 import { ModelOutputError } from '../errors.ts';
-import { type CallContext, incompleteReason, toModelError } from './failure.ts';
+import { type CallContext, incompleteReason, resolvedModel, toModelError } from './failure.ts';
 import { loadSdk, once, type Sdk } from './lazy.ts';
-import { endpointSecrets } from './redact.ts';
 import { type ProviderOptions, PROVIDERS } from './registry.ts';
 
 export type LlmConfig = Config['llm'];
@@ -13,6 +12,7 @@ export type LlmConfig = Config['llm'];
 export const MAX_RETRIES = 2;
 
 export interface LanguageCall extends CallContext {
+  readonly timeoutMs: number;
   readonly providerOptions: ProviderOptions;
   readonly loadModel: () => Promise<LanguageModel>;
 }
@@ -21,7 +21,6 @@ export const languageCall = (config: LlmConfig, modelId: string): LanguageCall =
   provider: config.provider,
   model: modelId,
   timeoutMs: config.timeoutMs,
-  secrets: endpointSecrets(config),
   providerOptions: PROVIDERS[config.provider].generationOptions ?? {},
   loadModel: once(() => PROVIDERS[config.provider].languageModel(config, modelId)),
 });
@@ -35,8 +34,14 @@ export interface RequestOptions {
   readonly abortSignal?: AbortSignal;
 }
 
-export interface Completion<T> {
+export interface Generation<T> {
   readonly finishReason: FinishReason;
+  // The model id as the provider reports it, if it does.
+  readonly reportedModel: string | undefined;
+  readonly value: T;
+}
+
+export interface Completion<T> {
   readonly model: string;
   readonly value: T;
 }
@@ -46,13 +51,13 @@ export interface Completion<T> {
 export const runLanguageCall = async <T>(
   call: LanguageCall,
   signal: AbortSignal | undefined,
-  generate: (sdk: Sdk, options: RequestOptions) => Promise<Completion<T>>,
+  generate: (sdk: Sdk, options: RequestOptions) => Promise<Generation<T>>,
 ): Promise<Completion<T>> => {
   signal?.throwIfAborted();
   const sdk = await loadSdk();
-  const model = await call.loadModel();
-  const completion = await generate(sdk, {
-    model,
+  const languageModel = await call.loadModel();
+  const generation = await generate(sdk, {
+    model: languageModel,
     temperature: 0,
     maxRetries: MAX_RETRIES,
     timeout: call.timeoutMs,
@@ -62,7 +67,8 @@ export const runLanguageCall = async <T>(
     signal?.throwIfAborted();
     throw toModelError(sdk, error, call);
   });
-  const reason = incompleteReason(completion.finishReason);
-  if (reason !== undefined) throw new ModelOutputError(completion.model, reason);
-  return completion;
+  const model = resolvedModel(generation.reportedModel, call.model);
+  const reason = incompleteReason(generation.finishReason);
+  if (reason !== undefined) throw new ModelOutputError(model, reason);
+  return { model, value: generation.value };
 };

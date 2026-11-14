@@ -15,7 +15,7 @@ export const createVisionModel = (config: LlmConfig): VisionModel => {
         });
         return {
           finishReason: result.finishReason,
-          model: result.finalStep.response.modelId,
+          reportedModel: result.finalStep.response.modelId,
           value: result.text,
         };
       });
