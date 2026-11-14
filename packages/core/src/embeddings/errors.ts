@@ -32,11 +32,28 @@ export class EmbeddingOutputError extends Error {
 // The child process that runs the model ended while a request was in flight, or before it
 // could take one. Nothing was lost but the request: the next one starts a new process.
 export class LocalModelProcessError extends Error {
-  override readonly name = 'LocalModelProcessError';
+  override readonly name: string = 'LocalModelProcessError';
   readonly retryable = true;
 
   constructor(reason: string) {
     super(`The local embedding model is unavailable, retry: ${reason}`);
+  }
+}
+
+// The model process stopped answering: it was ended, and the request with it.
+export class LocalModelTimeoutError extends LocalModelProcessError {
+  override readonly name: string = 'LocalModelTimeoutError';
+}
+
+// The model process answered that it could not serve the request. `retryable` tells whether
+// the same request can succeed later, as after a model download that failed.
+export class LocalModelRequestError extends Error {
+  override readonly name = 'LocalModelRequestError';
+  readonly retryable: boolean;
+
+  constructor(message: string, retryable: boolean) {
+    super(`The local embedding model failed: ${message}`);
+    this.retryable = retryable;
   }
 }
 

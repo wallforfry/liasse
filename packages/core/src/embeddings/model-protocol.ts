@@ -20,6 +20,11 @@ export const modelResponseSchema = z.discriminatedUnion('outcome', [
     outcome: z.literal('counts'),
     counts: z.array(z.number().int()),
   }),
-  z.object({ id: z.number().int(), outcome: z.literal('failure'), message: z.string() }),
+  z.object({
+    id: z.number().int(),
+    outcome: z.literal('failure'),
+    message: z.string(),
+    retryable: z.boolean(),
+  }),
 ]);
 export type ModelResponse = z.infer<typeof modelResponseSchema>;

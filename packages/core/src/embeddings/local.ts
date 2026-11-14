@@ -4,6 +4,7 @@ import {
   EmbeddingModelDimensionError,
   EmbeddingOutputError,
   LocalModelProcessError,
+  LocalModelTimeoutError,
 } from './errors.ts';
 import { createIdleResource, type ScheduleTimer } from './idle-resource.ts';
 import type { LocalModel, LocalModelLoader } from './local-model.ts';
@@ -39,6 +40,7 @@ export interface LocalEmbedderOptions {
   readonly model?: string | undefined;
   readonly idleMs?: number;
   readonly batchSize?: number;
+  readonly requestTimeoutMs?: number;
   readonly loadModel?: LocalModelLoader;
   readonly schedule?: ScheduleTimer;
   readonly onUnloadError?: (error: unknown) => void;
@@ -92,6 +94,7 @@ export const createLocalEmbedder = ({
   model = DEFAULT_LOCAL_EMBEDDING_MODEL,
   idleMs = LOCAL_EMBEDDER_IDLE_MS,
   batchSize = DEFAULT_BATCH_SIZE,
+  requestTimeoutMs,
   loadModel = loadModelInChildProcess,
   schedule,
   onUnloadError = reportUnloadError,
@@ -102,20 +105,32 @@ export const createLocalEmbedder = ({
   }
   const contract: OutputContract = { model, dimension };
   const resource = createIdleResource<LocalModel>({
-    load: () => loadModel({ model, cacheDir }),
+    load: () =>
+      loadModel({
+        model,
+        cacheDir,
+        ...(requestTimeoutMs === undefined ? {} : { requestTimeoutMs }),
+      }),
     dispose: (loaded) => loaded.dispose(),
     idleMs,
     onUnloadError,
     ...(schedule === undefined ? {} : { schedule }),
   });
 
-  // A model process that died is of no further use: dropping it lets the next call start one.
-  const withModel = async <R>(task: (loaded: LocalModel) => Promise<R>): Promise<R> => {
+  // A model process that died is of no further use: it is dropped and the task runs once more
+  // on a new one, so that a process lost while idle costs the caller nothing. A process that
+  // was ended for not answering is not asked the same thing again.
+  const withModel = async <R>(
+    task: (loaded: LocalModel) => Promise<R>,
+    retried = false,
+  ): Promise<R> => {
     try {
       return await resource.use(task);
     } catch (error) {
-      if (error instanceof LocalModelProcessError) await resource.unload().catch(onUnloadError);
-      throw error;
+      if (!(error instanceof LocalModelProcessError)) throw error;
+      await resource.unload().catch(onUnloadError);
+      if (retried || error instanceof LocalModelTimeoutError) throw error;
+      return withModel(task, true);
     }
   };
 

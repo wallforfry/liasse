@@ -1,32 +1,37 @@
-import { modelRequestSchema, type ModelResponse } from './model-protocol.ts';
+import { setTimeout as delay } from 'node:timers/promises';
+import { loadOnceUntilLoaded, serveModelRequests } from './model-channel.ts';
 
-// A stand-in for the model process. A text decides what happens to the request that holds it.
-const COMMANDS = {
-  crash: () => process.exit(3),
-  hang: () => undefined,
-  garbage: () => process.send?.({ unexpected: true }),
-} as const;
-
-const isCommand = (text: string | undefined): text is keyof typeof COMMANDS =>
-  text !== undefined && text in COMMANDS;
+// A stand-in for the model process, served through the real channel. The first text decides
+// what happens to the request that holds it.
 
 // Anything written here must never reach the standard output of the server.
 process.stdout.write('noise on the standard output of the model process\n');
 
-process.on('message', (message) => {
-  const { id, kind, texts } = modelRequestSchema.parse(message);
-  const [first] = texts;
-  if (isCommand(first)) {
-    COMMANDS[first]();
-    return;
-  }
-  const response: ModelResponse =
-    first === 'fail'
-      ? { id, outcome: 'failure', message: 'synthetic model failure' }
-      : kind === 'embed'
-        ? { id, outcome: 'vectors', vectors: texts.map((text) => [text.length, process.pid]) }
-        : { id, outcome: 'counts', counts: texts.map((text) => text.split(' ').length) };
-  process.send?.(response);
+const never = new Promise<never>(() => undefined);
+
+// Fails the first time it is asked, as a download that could not complete would.
+let loads = 0;
+const load = loadOnceUntilLoaded(() => {
+  loads += 1;
+  return loads === 1 ? Promise.reject(new Error('synthetic load failure')) : Promise.resolve(loads);
 });
 
-process.on('disconnect', () => process.exit(0));
+const obey = async (command: string | undefined): Promise<void> => {
+  if (command === 'crash') process.exit(3);
+  if (command === 'garbage') process.send?.({ unexpected: true });
+  if (command === 'hang' || command === 'garbage') await never;
+  if (command === 'slow') await delay(400);
+  if (command === 'fail') throw new Error('synthetic model failure');
+  if (command === 'load') await load();
+};
+
+serveModelRequests({
+  embed: async (texts) => {
+    await obey(texts[0]);
+    return texts.map((text) => [text.length, process.pid]);
+  },
+  countTokens: async (texts) => {
+    await obey(texts[0]);
+    return texts.map((text) => (text === 'pid' ? process.pid : text.split(' ').length));
+  },
+});

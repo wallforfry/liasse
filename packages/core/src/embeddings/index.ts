@@ -4,6 +4,8 @@ export {
   EmbeddingModelDimensionError,
   EmbeddingOutputError,
   LocalModelProcessError,
+  LocalModelRequestError,
+  LocalModelTimeoutError,
 } from './errors.ts';
 export {
   createLocalEmbedder,

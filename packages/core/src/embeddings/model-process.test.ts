@@ -1,9 +1,15 @@
-import { execFile } from 'node:child_process';
+import { execFile, spawn } from 'node:child_process';
+import { once } from 'node:events';
 import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
 import { afterEach, describe, expect, it } from 'vitest';
 import { z } from 'zod';
-import { EmbeddingCacheDirError, LocalModelProcessError } from './errors.ts';
+import {
+  EmbeddingCacheDirError,
+  LocalModelProcessError,
+  LocalModelRequestError,
+  LocalModelTimeoutError,
+} from './errors.ts';
 import type { LocalModel } from './local-model.ts';
 import { loadModelInChildProcess, startModelProcess } from './model-process.ts';
 
@@ -23,8 +29,13 @@ const isRunning = (pid: number): boolean => {
 describe('startModelProcess', () => {
   const started: LocalModel[] = [];
 
-  const start = (): LocalModel => {
-    const model = startModelProcess({ entry: FIXTURE, args: [], execArgv: SOURCE_FLAGS });
+  const start = (requestTimeoutMs?: number): LocalModel => {
+    const model = startModelProcess({
+      entry: FIXTURE,
+      args: [],
+      execArgv: SOURCE_FLAGS,
+      ...(requestTimeoutMs === undefined ? {} : { requestTimeoutMs }),
+    });
     started.push(model);
     return model;
   };
@@ -53,7 +64,40 @@ describe('startModelProcess', () => {
 
   it('rejects with the message of a failure reported by the model', async () => {
     const model = start();
-    await expect(model.embed(['fail'])).rejects.toThrow('synthetic model failure');
+    const failure = model.embed(['fail']);
+    await expect(failure).rejects.toBeInstanceOf(LocalModelRequestError);
+    await expect(failure).rejects.toThrow('synthetic model failure');
+    await expect(failure).rejects.toMatchObject({ retryable: false });
+    expect(await model.countTokens(['still alive'])).toEqual([2]);
+  });
+
+  it('reports a failed load as retryable, and loads at the next request', async () => {
+    const model = start();
+    const failure = model.embed(['load']);
+    await expect(failure).rejects.toBeInstanceOf(LocalModelRequestError);
+    await expect(failure).rejects.toMatchObject({ retryable: true });
+    await expect(failure).rejects.toThrow('synthetic load failure');
+    expect(await model.embed(['load'])).toHaveLength(1);
+    expect(await model.countTokens(['load'])).toEqual([1]);
+  });
+
+  it('ends a process that does not answer in time, and rejects what it was asked', async () => {
+    // Long enough for the process to start and answer a first request on a loaded machine.
+    const model = start(2000);
+    const pid = await pidOf(model);
+    const stuck = model.embed(['hang']);
+    const waiting = model.countTokens(['hang']);
+    await expect(stuck).rejects.toBeInstanceOf(LocalModelTimeoutError);
+    await expect(stuck).rejects.toMatchObject({ retryable: true });
+    await expect(stuck).rejects.toThrow('did not answer within 2000 ms and was ended');
+    await expect(waiting).rejects.toBeInstanceOf(LocalModelProcessError);
+    await expect.poll(() => isRunning(pid), { timeout: 5000 }).toBe(false);
+  });
+
+  it('leaves alone a process that answered before the deadline', async () => {
+    const model = start(2000);
+    expect(await model.embed(['slow'])).toHaveLength(1);
+    await new Promise((resolve) => setTimeout(resolve, 2100));
     expect(await model.countTokens(['still alive'])).toEqual([2]);
   });
 
@@ -143,6 +187,47 @@ describe('a server that stops its model process', () => {
       { timeout: 10_000 },
     );
     expect(stdout).toBe('stopped');
+  });
+});
+
+describe('a model process whose server is killed', () => {
+  // Starts a request the model takes a while to answer, then tells which process serves it.
+  const SCRIPT = `
+    const { startModelProcess } = await import(process.argv[1]);
+    const model = startModelProcess({
+      entry: new URL(process.argv[2]),
+      args: [],
+      execArgv: ['--experimental-strip-types', '--disable-warning=ExperimentalWarning'],
+    });
+    const [vector] = await model.embed(['pid']);
+    void model.embed(['slow']);
+    process.stdout.write(String(vector[1]) + '\\n');
+  `;
+
+  it('ends quietly, without a stack trace on the standard error', async () => {
+    const server = spawn(
+      process.execPath,
+      [
+        '--experimental-strip-types',
+        '--disable-warning=ExperimentalWarning',
+        '--input-type=module',
+        '--eval',
+        SCRIPT,
+        fileURLToPath(new URL('./model-process.ts', import.meta.url)),
+        FIXTURE.href,
+      ],
+      { stdio: ['ignore', 'pipe', 'pipe'] },
+    );
+    const errors: string[] = [];
+    server.stderr.setEncoding('utf8').on('data', (chunk: string) => errors.push(chunk));
+    // The model process inherits this pipe: it closes once both processes are gone.
+    const silence = once(server.stderr, 'close');
+    const output: readonly unknown[] = await once(server.stdout.setEncoding('utf8'), 'data');
+    const child = Number(String(output[0]).trim());
+    server.kill('SIGKILL');
+    await silence;
+    expect(isRunning(child)).toBe(false);
+    expect(errors.join('')).toBe('');
   });
 });
 

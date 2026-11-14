@@ -4,6 +4,7 @@ import {
   EmbeddingModelDimensionError,
   EmbeddingOutputError,
   LocalModelProcessError,
+  LocalModelTimeoutError,
 } from './errors.ts';
 import type { ScheduleTimer } from './idle-resource.ts';
 import {
@@ -108,25 +109,57 @@ describe('createLocalEmbedder', () => {
     expect(batches).toEqual([]);
   });
 
-  it('starts a new model after the model process died', async () => {
+  // A loader whose n-th model fails every request with the n-th of the given errors.
+  const dying = (failures: readonly Error[]) => {
     let loads = 0;
     const { embedder } = setup({
       loadModel: () => {
+        const failure = failures[loads];
         loads += 1;
-        const alive = loads > 1;
         return Promise.resolve({
           embed: (texts) =>
-            alive
-              ? Promise.resolve(texts.map(byLength))
-              : Promise.reject(new LocalModelProcessError('synthetic death')),
-          countTokens: () => Promise.resolve([]),
+            failure === undefined ? Promise.resolve(texts.map(byLength)) : Promise.reject(failure),
+          countTokens: (texts) =>
+            failure === undefined ? Promise.resolve(texts.map(() => 1)) : Promise.reject(failure),
           dispose: () => Promise.resolve(),
         });
       },
     });
-    await expect(embedder.embed(['a'], 'passage')).rejects.toBeInstanceOf(LocalModelProcessError);
+    return { embedder, loadCount: () => loads };
+  };
+  const death = new LocalModelProcessError('synthetic death');
+
+  it('runs the request again on a new model when the model process died', async () => {
+    const { embedder, loadCount } = dying([death]);
     expect(await embedder.embed(['a'], 'passage')).toHaveLength(1);
-    expect(loads).toBe(2);
+    expect(loadCount()).toBe(2);
+    expect(await embedder.countTokens(['a'])).toEqual([1]);
+    expect(loadCount()).toBe(2);
+  });
+
+  it('gives up when the new model process dies as well, and starts again at the next call', async () => {
+    const { embedder, loadCount } = dying([death, death]);
+    await expect(embedder.countTokens(['a'])).rejects.toBe(death);
+    expect(loadCount()).toBe(2);
+    expect(await embedder.countTokens(['a'])).toEqual([1]);
+    expect(loadCount()).toBe(3);
+  });
+
+  it('does not ask again a model process that was ended for not answering', async () => {
+    const timeout = new LocalModelTimeoutError('synthetic timeout');
+    const { embedder, loadCount } = dying([timeout]);
+    await expect(embedder.embed(['a'], 'passage')).rejects.toBe(timeout);
+    expect(loadCount()).toBe(1);
+    expect(await embedder.embed(['a'], 'passage')).toHaveLength(1);
+    expect(loadCount()).toBe(2);
+  });
+
+  it('hands the request deadline to the model loader', async () => {
+    const { embedder, specs } = setup({ requestTimeoutMs: 1234 });
+    await embedder.countTokens(['a']);
+    expect(specs).toEqual([
+      { model: STUB_MODEL, cacheDir: '/synthetic/models', requestTimeoutMs: 1234 },
+    ]);
   });
 
   it('runs inference in batches and keeps the order of the texts', async () => {

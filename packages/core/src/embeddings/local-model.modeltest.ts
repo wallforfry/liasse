@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync } from 'node:fs';
+import { cpSync, mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, describe, expect, it } from 'vitest';
@@ -115,6 +115,24 @@ describe('the local multilingual e5 model', () => {
       ).rejects.toThrow();
     } finally {
       rmSync(emptyCache, { recursive: true, force: true });
+    }
+  });
+
+  it('loads the model at the next call after a load that failed, on the same embedder', async () => {
+    const cacheDir = mkdtempSync(join(tmpdir(), 'liasse-late-model-cache-'));
+    try {
+      const embedder = localEmbedder(cacheDir, loadOffline);
+      const failure = embedder.embed(['trop tôt'], 'passage');
+      await expect(failure).rejects.toMatchObject({ retryable: true });
+      await expect(embedder.countTokens(['trop tôt'])).rejects.toMatchObject({ retryable: true });
+
+      // The cause is repaired while the embedder lives: the files arrive in its directory.
+      cpSync(MODEL_CACHE_DIR, cacheDir, { recursive: true });
+      expect(await embedder.countTokens(['maintenant'])).toHaveLength(1);
+      const [embedding] = await embedder.embed(['maintenant'], 'passage');
+      expect(embedding).toHaveLength(384);
+    } finally {
+      rmSync(cacheDir, { recursive: true, force: true });
     }
   });
 });

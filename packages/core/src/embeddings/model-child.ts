@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { type ModelRequest, modelRequestSchema, type ModelResponse } from './model-protocol.ts';
+import { loadOnceUntilLoaded, serveModelRequests } from './model-channel.ts';
 
 // Entry point of the child process that runs the local embedding model. ONNX Runtime does not
 // give its native memory back to the operating system when a session is released, so the model
@@ -18,14 +18,11 @@ const transformers = async () => {
   library.env.cacheDir = cacheDir;
   return library;
 };
-const memoize = <T>(load: () => Promise<T>): (() => Promise<T>) => {
-  let loaded: Promise<T> | undefined;
-  return () => (loaded ??= load());
-};
-
 // The tokenizer alone serves token counts: counting never loads the ONNX model.
-const tokenizer = memoize(async () => (await transformers()).AutoTokenizer.from_pretrained(model));
-const network = memoize(async () =>
+const tokenizer = loadOnceUntilLoaded(async () =>
+  (await transformers()).AutoTokenizer.from_pretrained(model),
+);
+const network = loadOnceUntilLoaded(async () =>
   (await transformers()).AutoModel.from_pretrained(model, { dtype: 'q8' }),
 );
 
@@ -61,22 +58,4 @@ const countTokens = async (texts: readonly string[]): Promise<number[]> => {
   return tokenIdsSchema.parse(encoded).input_ids.map((ids) => ids.length);
 };
 
-const answer = async ({ id, kind, texts }: ModelRequest): Promise<ModelResponse> =>
-  kind === 'embed'
-    ? { id, outcome: 'vectors', vectors: await embed(texts) }
-    : { id, outcome: 'counts', counts: await countTokens(texts) };
-
-process.on('message', (message) => {
-  const request = modelRequestSchema.parse(message);
-  answer(request)
-    .catch((error: unknown): ModelResponse => ({
-      id: request.id,
-      outcome: 'failure',
-      message: error instanceof Error ? error.message : String(error),
-    }))
-    .then((response) => process.send?.(response))
-    .catch(() => process.exit(1));
-});
-
-// The server process is gone: nothing is left to answer to.
-process.on('disconnect', () => process.exit(0));
+serveModelRequests({ embed, countTokens });

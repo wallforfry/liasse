@@ -1,6 +1,8 @@
 export interface LocalModelSpec {
   readonly model: string;
   readonly cacheDir: string;
+  // How long the model may take to answer one request before it is taken for stuck.
+  readonly requestTimeoutMs?: number;
 }
 
 export interface LocalModel {
