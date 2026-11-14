@@ -1,4 +1,4 @@
-import { eq } from 'drizzle-orm';
+import { and, eq, sql } from 'drizzle-orm';
 import { z } from 'zod';
 import type { Database } from '../db/client.ts';
 import { documents } from '../db/schema/documents.ts';
@@ -48,5 +48,10 @@ export const createDeleteFileHandler = ({ db, storage }: DeleteFileDeps): Regist
         .where(eq(documents.id, payload.documentId));
       if (current === undefined || isLiveStatus(current.status)) return;
       await storage.delete(parseStorageKey(document.storageKey));
+      // What `requeueFileDeletions` reads: without it the removal is still owed.
+      await tx
+        .update(documents)
+        .set({ fileDeletedAt: sql`now()` })
+        .where(and(eq(documents.id, payload.documentId), eq(documents.status, current.status)));
     });
   });
