@@ -15,6 +15,22 @@ export const ENTITIES = {
   resident: 'ent_synthetic_resident',
 } as const;
 
+export type EntityId = (typeof ENTITIES)[keyof typeof ENTITIES];
+
+export const ENTITY_NAMES: Readonly<Record<EntityId, string>> = {
+  [ENTITIES.volta]: 'Volta Énergie',
+  [ENTITIES.northwind]: 'Northwind Robotics',
+  [ENTITIES.mutuelle]: 'Mutuelle des Collines',
+  [ENTITIES.harbor]: 'Harbor Homes',
+  [ENTITIES.resident]: 'Camille Tisserand',
+};
+
+const resolvedTo = (entityId: EntityId) => ({
+  entity_id: entityId,
+  match: 'alias',
+  confidence: 0.99,
+});
+
 export const SUBJECTS = {
   home: 'sub_synthetic_home',
   car: 'sub_synthetic_car',
@@ -27,8 +43,8 @@ export interface CorpusDocument {
   readonly language: string | null;
   readonly pages: readonly string[];
   readonly date?: string;
-  readonly issuer?: string;
-  readonly recipient?: string;
+  readonly issuer?: EntityId;
+  readonly recipient?: EntityId;
   readonly subjects?: readonly string[];
   readonly private?: boolean;
   readonly status?: DocumentStatus;
@@ -224,10 +240,14 @@ export const seedCorpus = async (db: Database, embedder: Embedder): Promise<Seed
       core: {
         ...(document.language === null ? {} : { language: document.language }),
         ...(document.date === undefined ? {} : { document_date: document.date }),
-        ...(document.issuer === undefined ? {} : { issuer: { entity_id: document.issuer } }),
+        ...(document.issuer === undefined ? {} : { issuer: ENTITY_NAMES[document.issuer] }),
         ...(document.recipient === undefined
           ? {}
-          : { recipient: { entity_id: document.recipient } }),
+          : { recipient: ENTITY_NAMES[document.recipient] }),
+      },
+      provenance: {
+        ...(document.issuer === undefined ? {} : { issuer: resolvedTo(document.issuer) }),
+        ...(document.recipient === undefined ? {} : { recipient: resolvedTo(document.recipient) }),
       },
     });
     await db

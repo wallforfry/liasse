@@ -321,8 +321,8 @@ describe('search', () => {
         core: {
           language: 'fr',
           document_date: '2026-09-05',
-          issuer: { entity_id: ENTITIES.volta },
-          recipient: { entity_id: ENTITIES.resident },
+          issuer: 'Volta Énergie',
+          recipient: 'Camille Tisserand',
         },
         snippets: [
           {
