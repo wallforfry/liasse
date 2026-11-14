@@ -128,6 +128,7 @@
   },
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
+    "db:clean-test": "node --experimental-strip-types src/testing/clean-test-databases-cli.ts",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "node --env-file-if-exists=../../.env --experimental-strip-types src/db/cli.ts",
     "typecheck": "tsc --noEmit -p tsconfig.json"

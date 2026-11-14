@@ -17,6 +17,7 @@ Node 22 or later and pnpm (version pinned in `package.json`). Run everything fro
 | `pnpm install`                     | Install the workspace                                            |
 | `pnpm db:up`                       | Start Postgres (`:54329`) and an S3 test server (`:54330`)       |
 | `pnpm db:migrate`                  | Apply migrations to `DATABASE_URL` (reads `.env`)                |
+| `pnpm db:clean-test`               | Drop the test databases and templates left by killed test runs   |
 | `pnpm db:generate`                 | Generate a migration from the Drizzle schema                     |
 | `pnpm lint`                        | ESLint with zero warnings allowed, then Prettier check           |
 | `pnpm format`                      | Format with Prettier                                             |
@@ -71,6 +72,7 @@ Tests sit next to the code they cover, as `*.test.ts`. A helper that only the te
 ## Testing rules
 
 - **Real Postgres.** Database tests run against Postgres with pgvector, never a mock or an in-memory substitute. `createTestDatabase()` from `@liasse/core/testing` creates one migrated, throwaway database per call and drops it on `dispose()`, so test files run in parallel. It connects to `TEST_DATABASE_URL` (default `postgres://liasse:liasse@127.0.0.1:54329/liasse_test`).
+- **Test databases are copies.** A migrated database is a copy (`CREATE DATABASE … TEMPLATE`) of a template, `liasse_template_<migrations digest>_<dimension>`, which the first test that needs it builds and the others wait for under an advisory lock. A changed migration names a new template. Test databases are named `liasse_test_<random>`; a killed run never reaches `dispose()` and leaves its database behind. `pnpm db:clean-test` drops, on `TEST_DATABASE_URL`, every test database without a session that is more than 15 minutes old (so a suite still setting one up keeps it) and every template no test is copying. It never forces a drop: a database someone connected to in the meantime is kept.
 - **Real poppler.** Scanned PDFs are measured and rendered by the real `pdfinfo` and `pdftoppm` (`poppler-utils`), which must be in `PATH`; a missing binary fails the tests.
 - **Real S3.** The `s3` storage driver is tested against the S3-compatible server of `docker-compose.dev.yml` (RustFS, started by `pnpm db:up`), never a mock. `createTestBucket()` creates one throwaway bucket per call. It connects to `TEST_S3_ENDPOINT` (default `http://127.0.0.1:54330`).
 - **An unreachable database or S3 server fails the tests.** Never skip such a test or guard it behind a condition.

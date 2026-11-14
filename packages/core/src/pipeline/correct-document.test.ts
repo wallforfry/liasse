@@ -339,6 +339,41 @@ describe('correctDocument', () => {
     expect(await queued()).toEqual([{ kind: 'reindex_document', payload: { documentId: id } }]);
   });
 
+  it('runs the privacy hook in its transaction only when the flag changes', async () => {
+    const type = await bill();
+    const id = await settled(type.id);
+    const hooked: { readonly id: string; readonly private: boolean | undefined }[] = [];
+    const deps = harness.deps({
+      onPrivacyChanged: async (tx, documentId) => {
+        // Read in the transaction: the flag it follows is already written there.
+        const [row] = await tx
+          .select({ private: documents.private })
+          .from(documents)
+          .where(eq(documents.id, documentId));
+        hooked.push({ id: documentId, private: row?.private });
+      },
+    });
+    await correctDocument(deps, { id, core: { reference: 'SYN-2' } });
+    await correctDocument(deps, { id, private: false });
+    expect(hooked).toEqual([]);
+    await correctDocument(deps, { id, private: true });
+    await correctDocument(deps, { id, private: true });
+    await correctDocument(deps, { id, private: false });
+    expect(hooked).toEqual([
+      { id, private: true },
+      { id, private: false },
+    ]);
+  });
+
+  it('leaves the flag as it was when the privacy hook fails', async () => {
+    const id = await harness.ingest('hook down');
+    const deps = harness.deps({
+      onPrivacyChanged: () => Promise.reject(new Error('the queue is down')),
+    });
+    await expect(correctDocument(deps, { id, private: true })).rejects.toThrow('the queue is down');
+    expect(await harness.document(id)).toMatchObject({ status: 'received', private: false });
+  });
+
   it('queues nothing for a document still on its way, which the pipeline will index', async () => {
     const type = await bill();
     const id = await settled(type.id, { status: 'extracted' });

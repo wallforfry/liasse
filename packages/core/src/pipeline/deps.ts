@@ -105,6 +105,11 @@ export interface PipelineDeps {
   readonly persistKnowledge?: PersistKnowledge;
   /** Called after a document is indexed, at least once: it must be idempotent. */
   readonly afterIndexed?: (documentId: string) => Promise<void>;
+  /**
+   * Runs in the transaction of a correction that flips the `private` flag, so what it
+   * queues commits with the flag, and a failure leaves the flag as it was.
+   */
+  readonly onPrivacyChanged?: (tx: Transaction, documentId: string) => Promise<void>;
   /** `extractTextInChild` by default: text extraction never runs in the server's process. */
   readonly extractText?: ExtractDocumentText;
   readonly now?: () => Date;

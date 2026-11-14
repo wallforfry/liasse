@@ -19,6 +19,14 @@ export {
   type SyntheticDocxOptions,
   syntheticDocumentXml,
 } from './synthetic-docx.ts';
+export { chatCompletion, embeddings } from '../models/providers/wire-fixtures.ts';
+export {
+  startStubServer,
+  type StubHandler,
+  type StubRequest,
+  type StubResponse,
+  type StubServer,
+} from '../models/providers/stub-server.ts';
 export { SYNTHETIC_ENV } from './synthetic-env.ts';
 export {
   buildSyntheticPdf,
@@ -39,8 +47,8 @@ export {
 export { createTestBucket, DEFAULT_TEST_S3_ENDPOINT, type TestBucket } from './test-bucket.ts';
 export {
   createTestDatabase,
-  DEFAULT_TEST_DATABASE_URL,
   TEST_EMBEDDING_DIM,
   type TestDatabase,
   type TestDatabaseOptions,
 } from './test-database.ts';
+export { DEFAULT_TEST_DATABASE_URL } from './test-server.ts';

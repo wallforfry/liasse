@@ -4,7 +4,9 @@ import {
   listChanges,
   listEntities,
   listSubjects,
+  listSubjectsOutputSchema,
   upcoming,
+  upcomingOutputSchema,
 } from '@liasse/core/api';
 import {
   changeDecisionSchema,
@@ -90,7 +92,7 @@ export const registryRoutes = ({ api, authenticated }: RouteDeps): Hono<AppEnv> 
         summary: 'List or search subjects',
         tag: 'Knowledge',
         responses: {
-          200: jsonResponse('The subjects.', featureResultSchema),
+          200: jsonResponse('The subjects.', listSubjectsOutputSchema),
           ...failures(400, 501),
         },
       }),
@@ -104,7 +106,7 @@ export const registryRoutes = ({ api, authenticated }: RouteDeps): Hono<AppEnv> 
         summary: 'Key dates in a window',
         tag: 'Knowledge',
         responses: {
-          200: jsonResponse('The dates, sorted.', featureResultSchema),
+          200: jsonResponse('The dates, sorted.', upcomingOutputSchema),
           ...failures(400, 501),
         },
       }),

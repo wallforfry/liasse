@@ -8,14 +8,19 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { documents, jobs } from '@liasse/core/db';
 import {
+  buildSyntheticPdf,
   createTestDatabase,
   SYNTHETIC_ENV,
+  TEST_EMBEDDING_DIM,
   syntheticPdf,
   type TestDatabase,
   waitUntil,
 } from '@liasse/core/testing';
 import { describe, expect, it } from 'vitest';
+import { eq } from 'drizzle-orm';
 import { z } from 'zod';
+import { startModelStub } from './model-stub.test-helper.ts';
+import { LETTER } from './synthetic-documents.fixture.ts';
 
 const STEP_TIMEOUT_MS = 15_000;
 const TOKEN = 'synthetic-token-0001';
@@ -182,9 +187,49 @@ describe('server process', () => {
         // stdout belongs to MCP over stdio: the server itself never writes there.
         expect(stdout()).toBe('');
         expect(stderr()).toContain('"event":"request"');
-        expect(stderr()).toContain('Notice: document processing is not part of this build.');
+        expect(stderr()).toContain('Notice: consolidation is not part of this build.');
         expect(stderr()).not.toContain(TOKEN);
       });
+    },
+    4 * STEP_TIMEOUT_MS,
+  );
+
+  it(
+    'takes an uploaded document to indexed through the pipeline it binds',
+    async () => {
+      const models = await startModelStub(TEST_EMBEDDING_DIM);
+      const env = {
+        LLM_BASE_URL: models.url,
+        EMBEDDING_PROVIDER: 'ollama',
+        EMBEDDING_MODEL: 'embedding-model',
+        EMBEDDING_BASE_URL: models.url,
+        EMBEDDING_DIM: String(TEST_EMBEDDING_DIM),
+      };
+      try {
+        await withServer(env, async ({ url, database, terminate }) => {
+          const form = new FormData();
+          const pdf = buildSyntheticPdf([{ lines: [...LETTER.lines] }]);
+          form.append('file', new File([pdf], 'letter.pdf'));
+          const response = await call(`${url}/documents`, { method: 'POST', body: form });
+          expect(response.status).toBe(201);
+          const { id } = z.object({ id: z.string() }).parse(await response.json());
+
+          const statusOf = async () =>
+            (
+              await database.db
+                .select({ status: documents.status })
+                .from(documents)
+                .where(eq(documents.id, id))
+            )[0]?.status;
+          await waitUntil(async () => (await statusOf()) === 'indexed');
+          const paths = models.requests.map(({ path }) => path);
+          expect(paths).toContain('/v1/chat/completions');
+          expect(paths).toContain('/v1/embeddings');
+          expect(await terminate()).toBe(0);
+        });
+      } finally {
+        await models.close();
+      }
     },
     4 * STEP_TIMEOUT_MS,
   );
