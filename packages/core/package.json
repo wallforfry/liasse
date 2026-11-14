@@ -42,6 +42,11 @@
       "types": "./dist/entities/index.d.ts",
       "default": "./dist/entities/index.js"
     },
+    "./formats": {
+      "@liasse/source": "./src/formats/index.ts",
+      "types": "./dist/formats/index.d.ts",
+      "default": "./dist/formats/index.js"
+    },
     "./ingest": {
       "@liasse/source": "./src/ingest/index.ts",
       "types": "./dist/ingest/index.d.ts",

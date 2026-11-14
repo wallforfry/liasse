@@ -1,3 +1,5 @@
+import { isHeic } from '../../formats/heic.ts';
+import { isJpeg, isPng } from '../../formats/signatures.ts';
 import { TextExtractionError } from '../errors.ts';
 import { toExtractedText } from '../result.ts';
 import { transcribePageImage, type PageImage } from '../transcribe.ts';
@@ -6,15 +8,12 @@ import { convertHeicToJpeg } from './heic.ts';
 
 export type ImageMime = 'image/jpeg' | 'image/png' | 'image/heic';
 
-const SIGNATURES = {
-  'image/jpeg': [0xff, 0xd8, 0xff],
-  'image/png': [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a],
-} as const;
-
-const assertSignature = (bytes: Uint8Array, mime: keyof typeof SIGNATURES): void => {
-  if (!SIGNATURES[mime].every((byte, index) => bytes[index] === byte)) {
-    throw new TextExtractionError('image_corrupt', `The file is not a valid ${mime} image`);
-  }
+// The predicates ingestion detects each type with: a file is refused here for its format
+// exactly when ingestion would not have taken it for that type.
+const HAS_FORMAT: Readonly<Record<ImageMime, (bytes: Uint8Array) => boolean>> = {
+  'image/jpeg': isJpeg,
+  'image/png': isPng,
+  'image/heic': isHeic,
 };
 
 const toPageImage = async (
@@ -22,11 +21,12 @@ const toPageImage = async (
   mime: ImageMime,
   { limits }: ExtractionContext,
 ): Promise<PageImage> => {
-  if (mime === 'image/heic') {
-    return { image: await convertHeicToJpeg(bytes, limits), mime: 'image/jpeg' };
+  if (!HAS_FORMAT[mime](bytes)) {
+    throw new TextExtractionError('image_corrupt', `The file is not a valid ${mime} image`);
   }
-  assertSignature(bytes, mime);
-  return { image: bytes, mime };
+  return mime === 'image/heic'
+    ? { image: await convertHeicToJpeg(bytes, limits), mime: 'image/jpeg' }
+    : { image: bytes, mime };
 };
 
 export const extractImage = async (

@@ -47,7 +47,8 @@ Inside `packages/core/src`, one directory per concern. A new concern gets its ow
 | `domain/`     | Enumerations, ids, shared Zod schemas, limits                                                       |
 | `embeddings/` | `createEmbedder`; the local embedder runs an ONNX model in a child process, ended when idle         |
 | `entities/`   | Entity resolution, sensitive identifier masking, entity listing and merges                          |
-| `ingest/`     | `ingestFile`, deletion with tombstones, format detection, the watched folder                        |
+| `formats/`    | What a PDF, an image, a DOCX and an email are, from their bytes: one rule for ingestion and text    |
+| `ingest/`     | `ingestFile`, deletion with tombstones, the watched folder                                          |
 | `jobs/`       | The job queue on the `jobs` table: kinds, `enqueue`, workers                                        |
 | `models/`     | Ports for the text model, the vision model and the embedder; `providers/` adapts them               |
 | `prompt/`     | Prompt helpers, starting with the untrusted-content wrapper                                         |
