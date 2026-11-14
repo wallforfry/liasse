@@ -4,6 +4,7 @@ import { chunks, documentPages, documents, isLiveDocument } from '../db/schema/d
 import { jobs } from '../db/schema/jobs.ts';
 import { documentDates, documentLinks, facts } from '../db/schema/knowledge.ts';
 import { enqueue } from '../jobs/enqueue.ts';
+import { lockLinkedDocuments, recomputeDocumentStates } from '../knowledge/document-state.ts';
 import { deleteFileJob } from './delete-file-job.ts';
 import type { Transaction } from './existing-document.ts';
 import { lockFile } from './file-lock.ts';
@@ -81,6 +82,10 @@ const cancelQueuedProcessing = async (tx: Transaction, id: string): Promise<void
  * It takes the lock of the file's hash first, as ingestion does. An ingestion of the
  * same bytes in progress, which may be about to queue the document again, therefore
  * commits before the deletion looks at the document, and the deletion undoes it.
+ *
+ * The links of the document go with it, and the state of a document rests on the links
+ * that point at it: the documents this one superseded or terminated get their state
+ * computed again in the same transaction, so none stays superseded by a tombstone.
  */
 export const deleteDocument = ({ db }: DeleteDocumentDeps, id: string): Promise<boolean> =>
   db.transaction(async (tx) => {
@@ -90,6 +95,7 @@ export const deleteDocument = ({ db }: DeleteDocumentDeps, id: string): Promise<
       .where(and(eq(documents.id, id), isLiveDocument));
     if (live === undefined) return false;
     await lockFile(tx, live.sha256);
+    const linked = await lockLinkedDocuments(tx, id);
     const [tombstone] = await tx
       .update(documents)
       .set(BLANK_CONTENT)
@@ -97,6 +103,7 @@ export const deleteDocument = ({ db }: DeleteDocumentDeps, id: string): Promise<
       .returning({ id: documents.id });
     if (tombstone === undefined) return false;
     await deleteDerivedRows(tx, id);
+    await recomputeDocumentStates(tx, linked);
     await cancelQueuedProcessing(tx, id);
     await enqueue(tx, { kind: deleteFileJob, payload: { documentId: id } });
     return true;

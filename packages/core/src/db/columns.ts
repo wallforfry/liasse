@@ -1,5 +1,19 @@
-import { sql } from 'drizzle-orm';
-import { customType, integer, jsonb, real, text, timestamp } from 'drizzle-orm/pg-core';
+import { getTableName, type SQL, sql } from 'drizzle-orm';
+import {
+  customType,
+  integer,
+  jsonb,
+  type PgColumn,
+  real,
+  text,
+  timestamp,
+} from 'drizzle-orm/pg-core';
+
+// A column written with the name of its table, or with the alias given. Drizzle leaves
+// the table out of a column in a query over one table: inside a correlated subquery over
+// another table the bare name would then designate a column of that other table.
+export const qualified = (column: PgColumn, tableAlias?: string): SQL =>
+  sql`${sql.identifier(tableAlias ?? getTableName(column.table))}.${sql.identifier(column.name)}`;
 
 // The migration runner replaces this token with EMBEDDING_DIM, so generated SQL
 // never hard-codes a dimension.
