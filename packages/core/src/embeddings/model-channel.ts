@@ -30,9 +30,9 @@ export const loadOnceUntilLoaded = <T>(load: () => Promise<T>): (() => Promise<T
 // The server process is gone, or going: nothing is left to answer to, and nothing to say.
 const leave = (): never => process.exit(0);
 
+// Node reports a message that could not be sent to the callback when there is one, and as an
+// `error` event on the process otherwise, which nothing handles: a stack trace, then exit 1.
 const reply = (response: ModelResponse): void => {
-  if (!process.connected) leave();
-  // Without the callback a broken channel surfaces as an unhandled EPIPE and a stack trace.
   process.send?.(response, (error) => {
     if (error !== null) leave();
   });
@@ -60,5 +60,6 @@ export const serveModelRequests = (handlers: ModelHandlers): void => {
   process.on('message', (message) => {
     void answer(modelRequestSchema.parse(message), handlers).then(reply);
   });
+  // Whatever the model is busy with, there is nobody left to hear the answer.
   process.on('disconnect', leave);
 };

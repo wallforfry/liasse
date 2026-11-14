@@ -21,6 +21,8 @@ const obey = async (command: string | undefined): Promise<void> => {
   if (command === 'garbage') process.send?.({ unexpected: true });
   if (command === 'hang' || command === 'garbage') await never;
   if (command === 'slow') await delay(400);
+  if (command === 'busy') setInterval(() => undefined, 1000);
+  if (command === 'busy') await never;
   if (command === 'fail') throw new Error('synthetic model failure');
   if (command === 'load') await load();
 };

@@ -200,11 +200,12 @@ describe('a model process whose server is killed', () => {
       execArgv: ['--experimental-strip-types', '--disable-warning=ExperimentalWarning'],
     });
     const [vector] = await model.embed(['pid']);
-    void model.embed(['slow']);
+    void model.embed([process.argv[3]]);
     process.stdout.write(String(vector[1]) + '\\n');
   `;
 
-  it('ends quietly, without a stack trace on the standard error', async () => {
+  // `slow` answers after the server is gone; `busy` would keep working for ever.
+  it.each(['slow', 'busy'])('ends quietly while it serves a %s request', async (command) => {
     const server = spawn(
       process.execPath,
       [
@@ -215,6 +216,7 @@ describe('a model process whose server is killed', () => {
         SCRIPT,
         fileURLToPath(new URL('./model-process.ts', import.meta.url)),
         FIXTURE.href,
+        command,
       ],
       { stdio: ['ignore', 'pipe', 'pipe'] },
     );
