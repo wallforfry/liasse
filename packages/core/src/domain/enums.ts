@@ -13,17 +13,6 @@ export type DocumentStatus = (typeof DOCUMENT_STATUSES)[number];
 export const DOCUMENT_SOURCES = ['watch', 'api', 'mcp'] as const;
 export type DocumentSource = (typeof DOCUMENT_SOURCES)[number];
 
-// The formats ingestion accepts, as recognised from the content of a file.
-export const DOCUMENT_MIME_TYPES = [
-  'application/pdf',
-  'image/jpeg',
-  'image/png',
-  'image/heic',
-  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-  'message/rfc822',
-] as const;
-export type DocumentMimeType = (typeof DOCUMENT_MIME_TYPES)[number];
-
 export const DOCUMENT_STATES = ['current', 'superseded', 'terminated'] as const;
 export type DocumentState = (typeof DOCUMENT_STATES)[number];
 

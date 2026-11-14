@@ -1,4 +1,4 @@
-import type { DocumentMimeType } from '../domain/enums.ts';
+import { SUPPORTED_MIMES, type SupportedMime } from '../domain/enums.ts';
 import { looksLikeEmail } from './email-heuristics.ts';
 import { zipEntryNames } from './zip-entries.ts';
 
@@ -41,15 +41,20 @@ const isDocx = (bytes: Uint8Array): boolean => {
   return DOCX_ENTRIES.every((entry) => names.includes(entry));
 };
 
-const DETECTORS: readonly (readonly [DocumentMimeType, (bytes: Uint8Array) => boolean])[] = [
-  ['application/pdf', (bytes) => startsWith(bytes, PDF_SIGNATURE)],
-  ['image/jpeg', (bytes) => startsWith(bytes, JPEG_SIGNATURE)],
-  ['image/png', (bytes) => startsWith(bytes, PNG_SIGNATURE)],
-  ['image/heic', isHeic],
-  ['application/vnd.openxmlformats-officedocument.wordprocessingml.document', isDocx],
-  ['message/rfc822', looksLikeEmail],
-];
+// One detector per type of `SUPPORTED_MIMES`, the list text extraction reads too: a
+// type added there does not compile until ingestion knows how to recognise it.
+const DETECTORS: Readonly<Record<SupportedMime, (bytes: Uint8Array) => boolean>> = {
+  'application/pdf': (bytes) => startsWith(bytes, PDF_SIGNATURE),
+  'image/jpeg': (bytes) => startsWith(bytes, JPEG_SIGNATURE),
+  'image/png': (bytes) => startsWith(bytes, PNG_SIGNATURE),
+  'image/heic': isHeic,
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document': isDocx,
+  'message/rfc822': looksLikeEmail,
+};
 
-/** The format of a file according to its content; its name plays no part. */
-export const detectMimeType = (bytes: Uint8Array): DocumentMimeType | undefined =>
-  DETECTORS.find(([, matches]) => matches(bytes))?.[0];
+/**
+ * The format of a file according to its content; its name plays no part. Types are
+ * tried in the order of `SUPPORTED_MIMES`, where the email heuristic comes last.
+ */
+export const detectMimeType = (bytes: Uint8Array): SupportedMime | undefined =>
+  SUPPORTED_MIMES.find((mime) => DETECTORS[mime](bytes));

@@ -23,14 +23,12 @@ export {
 export { buildSyntheticPng } from './synthetic-png.ts';
 export { buildSyntheticZip, type SyntheticZipEntry } from './synthetic-zip.ts';
 export {
-  syntheticDocx,
   syntheticEml,
   syntheticHeic,
   syntheticIsoMedia,
   syntheticJpeg,
   syntheticPdf,
   syntheticPng,
-  syntheticZip,
 } from './synthetic-files.ts';
 export { createTestBucket, DEFAULT_TEST_S3_ENDPOINT, type TestBucket } from './test-bucket.ts';
 export {

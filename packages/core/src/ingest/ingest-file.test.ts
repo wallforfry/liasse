@@ -6,12 +6,8 @@ import { documents } from '../db/schema/documents.ts';
 import { jobs } from '../db/schema/jobs.ts';
 import { MAX_HINT_LENGTH } from '../domain/limits.ts';
 import { storageKeyOf } from '../storage/key.ts';
-import {
-  syntheticDocx,
-  syntheticEml,
-  syntheticJpeg,
-  syntheticPdf,
-} from '../testing/synthetic-files.ts';
+import { syntheticEml, syntheticJpeg, syntheticPdf } from '../testing/synthetic-files.ts';
+import { buildSyntheticDocx } from '../testing/synthetic-docx.ts';
 import { deleteDocument } from './delete-document.ts';
 import { EmptyFileError, FileTooLargeError, UnsupportedFormatError } from './errors.ts';
 import { ingestFile } from './ingest-file.ts';
@@ -75,7 +71,7 @@ describe('ingestFile', () => {
   });
 
   it('reads a stream as it reads bytes', async () => {
-    const bytes = syntheticDocx('streamed');
+    const bytes = buildSyntheticDocx('<w:p><w:r><w:t>streamed</w:t></w:r></w:p>');
     const chunks = [bytes.subarray(0, 10), bytes.subarray(10, 50), bytes.subarray(50)];
     const result = await ingestFile(harness.deps, {
       stream: Readable.from(chunks),

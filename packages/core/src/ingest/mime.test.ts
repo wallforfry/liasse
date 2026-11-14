@@ -1,18 +1,25 @@
 import { describe, expect, it } from 'vitest';
 import {
-  syntheticDocx,
   syntheticEml,
   syntheticHeic,
   syntheticIsoMedia,
   syntheticJpeg,
   syntheticPdf,
   syntheticPng,
-  syntheticZip,
 } from '../testing/synthetic-files.ts';
+import { buildSyntheticDocx } from '../testing/synthetic-docx.ts';
+import { buildSyntheticZip } from '../testing/synthetic-zip.ts';
 import { detectMimeType } from './mime.ts';
 import { zipEntryNames } from './zip-entries.ts';
 
 const text = (value: string): Uint8Array => new TextEncoder().encode(value);
+
+const docx = (): Uint8Array => buildSyntheticDocx('<w:p/>');
+
+const zip = (entries: Readonly<Record<string, string>>): Uint8Array =>
+  buildSyntheticZip(
+    Object.entries(entries).map(([name, content]) => ({ name, data: text(content), stored: true })),
+  );
 
 describe('detectMimeType', () => {
   it.each([
@@ -20,7 +27,7 @@ describe('detectMimeType', () => {
     ['image/jpeg', syntheticJpeg()],
     ['image/png', syntheticPng()],
     ['image/heic', syntheticHeic()],
-    ['application/vnd.openxmlformats-officedocument.wordprocessingml.document', syntheticDocx()],
+    ['application/vnd.openxmlformats-officedocument.wordprocessingml.document', docx()],
     ['message/rfc822', syntheticEml()],
   ])('recognises %s from its content', (mime, bytes) => {
     expect(detectMimeType(bytes)).toBe(mime);
@@ -40,13 +47,10 @@ describe('detectMimeType', () => {
   });
 
   it.each([
-    ['a ZIP archive that is no DOCX', syntheticZip({ 'notes.txt': 'synthetic' })],
-    [
-      'a spreadsheet',
-      syntheticZip({ '[Content_Types].xml': '<Types/>', 'xl/workbook.xml': '<workbook/>' }),
-    ],
+    ['a ZIP archive that is no DOCX', zip({ 'notes.txt': 'synthetic' })],
+    ['a spreadsheet', zip({ '[Content_Types].xml': '<Types/>', 'xl/workbook.xml': '<workbook/>' })],
     ['a ZIP signature without archive', Uint8Array.from([0x50, 0x4b, 0x03, 0x04, 0, 0, 0, 0])],
-    ['a truncated DOCX', syntheticDocx().subarray(0, 60)],
+    ['a truncated DOCX', docx().subarray(0, 60)],
   ])('rejects %s', (_label, bytes) => {
     expect(detectMimeType(bytes)).toBeUndefined();
   });
@@ -88,9 +92,9 @@ describe('detectMimeType', () => {
     const paddedHeic = new Uint8Array(heic.length + 16);
     paddedHeic.set(heic, 16);
     expect(detectMimeType(paddedHeic.subarray(16))).toBe('image/heic');
-    const docx = syntheticDocx();
-    const paddedDocx = new Uint8Array(docx.length + 16);
-    paddedDocx.set(docx, 16);
+    const archive = docx();
+    const paddedDocx = new Uint8Array(archive.length + 16);
+    paddedDocx.set(archive, 16);
     expect(detectMimeType(paddedDocx.subarray(16))).toBe(
       'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
     );
@@ -99,26 +103,26 @@ describe('detectMimeType', () => {
 
 describe('zipEntryNames', () => {
   it('lists the entries of an archive', () => {
-    expect(zipEntryNames(syntheticZip({ 'a.txt': 'one', 'dir/b.txt': 'two' }))).toEqual([
+    expect(zipEntryNames(zip({ 'a.txt': 'one', 'dir/b.txt': 'two' }))).toEqual([
       'a.txt',
       'dir/b.txt',
     ]);
   });
 
   it('finds the directory of an archive that ends with a comment', () => {
-    const archive = Buffer.from(syntheticZip({ 'a.txt': 'one' }));
+    const archive = Buffer.from(zip({ 'a.txt': 'one' }));
     archive.writeUInt16LE(9, archive.length - 2);
     expect(zipEntryNames(Buffer.concat([archive, Buffer.from('synthetic')]))).toEqual(['a.txt']);
   });
 
   it('survives a directory offset that points outside the archive', () => {
-    const archive = Buffer.from(syntheticZip({ 'a.txt': 'one' }));
+    const archive = Buffer.from(zip({ 'a.txt': 'one' }));
     archive.writeUInt32LE(0xfffffff0, archive.length - 6);
     expect(zipEntryNames(archive)).toEqual([]);
   });
 
   it('survives an entry name that runs past the end', () => {
-    const archive = Buffer.from(syntheticZip({ 'a.txt': 'one' }));
+    const archive = Buffer.from(zip({ 'a.txt': 'one' }));
     const directory = archive.readUInt32LE(archive.length - 6);
     archive.writeUInt16LE(0xffff, directory + 28);
     expect(zipEntryNames(archive)).toEqual([]);
