@@ -1,4 +1,12 @@
 export {
+  type ChangeDecisionResult,
+  changeDecisionResultSchema,
+  type ChangeList,
+  changeListSchema,
+  type ChangeView,
+  changeViewSchema,
+} from './consolidation.ts';
+export {
   DEFAULT_DOCUMENT_LIST_LIMIT,
   DEFAULT_PAGE_COUNT,
   DEFAULT_TEXT_LENGTH,
@@ -36,8 +44,6 @@ export {
   describeTypesOptionsSchema,
   entityListSchema,
   type EntityListView,
-  type FeatureResult,
-  featureResultSchema,
   type ListChangesOptions,
   listChangesOptionsSchema,
   type ListEntitiesRequest,

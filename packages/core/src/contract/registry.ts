@@ -98,8 +98,3 @@ export const changeDecisionSchema = z.strictObject({
   note: z.string().trim().min(1).max(2000).optional(),
 });
 export type ChangeDecision = z.output<typeof changeDecisionSchema>;
-
-// Consolidation is not part of this build: until it is, the contract of its routes only
-// says an object comes back.
-export const featureResultSchema = z.looseObject({});
-export type FeatureResult = z.output<typeof featureResultSchema>;

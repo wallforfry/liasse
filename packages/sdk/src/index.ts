@@ -16,6 +16,9 @@ export { LiasseApiError, LiasseResponseError } from './errors.ts';
 export type { DownloadedFile, UploadInput } from './files.ts';
 export { type ClientOptions, DEFAULT_TIMEOUT_MS } from './transport.ts';
 export type {
+  ChangeDecisionResult,
+  ChangeList,
+  ChangeView,
   DescribeTypesOptions,
   DocumentCorrection,
   DocumentList,
@@ -23,7 +26,6 @@ export type {
   DocumentSummary,
   DocumentView,
   EntityListView,
-  FeatureResult,
   GetDocumentOptions,
   Health,
   ListDocumentsOptions,

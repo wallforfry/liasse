@@ -28,11 +28,3 @@ export {
   queueBatchRunIfDue,
   scheduleNightlyRun,
 } from './schedule.ts';
-export {
-  type ChangeDecisionResult,
-  changeDecisionResultSchema,
-  type ChangeList,
-  changeListSchema,
-  type ChangeView,
-  changeViewSchema,
-} from './views.ts';
