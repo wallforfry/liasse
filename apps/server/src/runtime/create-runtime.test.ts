@@ -9,6 +9,10 @@ import { documents, jobs } from '@liasse/core/db';
 import { StartupError } from '@liasse/core/domain';
 import { defineJobKind, enqueue, handle } from '@liasse/core/jobs';
 import {
+  buildSyntheticPdf,
+  createFakeEmbedder,
+  createFakeTextModel,
+  createFakeVisionModel,
   createGate,
   createTestDatabase,
   SYNTHETIC_ENV,
@@ -20,7 +24,12 @@ import { eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { z } from 'zod';
 import { createLogger } from '../log.ts';
-import { type Bind, bindFeatures } from './bindings.ts';
+import {
+  LETTER_CLASSIFICATION,
+  LETTER_EXTRACTION,
+  LETTER_LINES,
+} from '../synthetic-letter.fixture.ts';
+import { type Bind, bindFeatures, type RuntimeParts } from './bindings.ts';
 import { createRuntime, type Runtime, type RuntimeOptions } from './create-runtime.ts';
 
 const TOKEN = 'synthetic-token-0001';
@@ -34,6 +43,31 @@ const fastJob = defineJobKind({
   name: 'synthetic_fast',
   schema: z.object({ label: z.string() }),
 });
+
+// The models are fakes: no test of the runtime calls a provider. The classification
+// schema refuses an extraction; the extraction schema would take either.
+const withFakeModels = (parts: RuntimeParts): RuntimeParts => ({
+  ...parts,
+  embedder: createFakeEmbedder(),
+  visionModel: createFakeVisionModel(),
+  textModel: createFakeTextModel(({ schema }) =>
+    schema.safeParse(LETTER_EXTRACTION).success ? LETTER_EXTRACTION : LETTER_CLASSIFICATION,
+  ),
+});
+
+const bindWithFakes: Bind = (parts) => bindFeatures(withFakeModels(parts));
+
+const withoutHandlers =
+  (...kinds: readonly string[]): Bind =>
+  (parts) => {
+    const bindings = bindWithFakes(parts);
+    return {
+      ...bindings,
+      handlers: bindings.handlers.filter(({ kind }) => !kinds.includes(kind)),
+    };
+  };
+
+const idSchema = z.object({ id: z.string() });
 
 describe('createRuntime', () => {
   let database: TestDatabase;
@@ -71,6 +105,7 @@ describe('createRuntime', () => {
   ): Promise<Runtime> => {
     const runtime = await createRuntime(configOf(env), {
       logger: createLogger((line) => lines.push(line)),
+      bind: bindWithFakes,
       ...options,
     });
     started.push(runtime);
@@ -105,9 +140,11 @@ describe('createRuntime', () => {
         `Liasse is listening on http://127.0.0.1:${String(runtime.port)}`,
       ]),
     );
-    expect(lines.some((line) => line.startsWith('Notice: document processing is not part'))).toBe(
-      true,
+    expect(lines).toContain(
+      'Notice: consolidation is not part of this build. Listing and applying consolidation ' +
+        'changes answer 501.',
     );
+    expect(lines.some((line) => line.includes('document processing'))).toBe(false);
   });
 
   it('queues again at startup the file removals a past run gave up on', async () => {
@@ -194,12 +231,86 @@ describe('createRuntime', () => {
     expect(kinds.map(({ kind }) => kind)).not.toContain('hindsight_sync');
   });
 
+  const upload = async (runtime: Runtime, label: string): Promise<string> => {
+    const form = new FormData();
+    const pdf = buildSyntheticPdf([{ lines: [label, ...LETTER_LINES] }]);
+    form.append('file', new File([pdf], `${label}.pdf`));
+    const uploaded = await call(runtime, '/documents', { method: 'POST', body: form });
+    return idSchema.parse(await uploaded.json()).id;
+  };
+
+  const documentOf = async (id: string) => {
+    const [row] = await database.db
+      .select({ status: documents.status, private: documents.private })
+      .from(documents)
+      .where(eq(documents.id, id));
+    return row;
+  };
+
+  const correct = (runtime: Runtime, id: string, correction: Readonly<Record<string, unknown>>) =>
+    call(runtime, `/documents/${id}`, {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(correction),
+    });
+
+  const syncsOf = async (id: string): Promise<number> =>
+    (await database.db.select({ kind: jobs.kind, payload: jobs.payload }).from(jobs)).filter(
+      ({ kind, payload }) => kind === 'hindsight_sync' && payload.documentId === id,
+    ).length;
+
+  it('takes an uploaded document to indexed and answers corrections, subjects and dates', async () => {
+    const runtime = await start();
+    const id = await upload(runtime, 'processed by the pipeline');
+    await waitUntil(async () => (await documentOf(id))?.status === 'indexed');
+
+    const corrected = await correct(runtime, id, { private: true });
+    expect(corrected.status).toBe(200);
+    expect(await corrected.json()).toMatchObject({ id, private: true, status: 'indexed' });
+    expect(await documentOf(id)).toEqual({ status: 'indexed', private: true });
+
+    const subjects = await call(runtime, '/subjects?kind=vehicle');
+    expect(subjects.status).toBe(200);
+    expect(await subjects.json()).toEqual({ subjects: [], truncated: false });
+    const dates = await call(runtime, '/upcoming?from=2026-01-01&to=2026-12-31');
+    expect(dates.status).toBe(200);
+    expect(await dates.json()).toEqual({ dates: [], truncated: false });
+    expect((await call(runtime, '/changes')).status).toBe(501);
+  });
+
+  it('fails at startup a document on its way that no job will process', async () => {
+    const first = await start({}, { bind: withoutHandlers('process_document') });
+    const id = await upload(first, 'abandoned');
+    await first.stop();
+    await database.db.delete(jobs);
+
+    await start({}, { bind: withoutHandlers('process_document') });
+    expect(await documentOf(id)).toEqual({ status: 'failed', private: false });
+  });
+
+  it('queues a Hindsight sync once a document is indexed, and with a flip of its private flag', async () => {
+    // Without these handlers the syncs stay queued to be counted, and only the
+    // correction itself can queue one after the indexing.
+    const runtime = await start(
+      { HINDSIGHT_URL: 'http://127.0.0.1:9' },
+      { bind: withoutHandlers('hindsight_sync', 'reindex_document') },
+    );
+    const id = await upload(runtime, 'followed by Hindsight');
+    await waitUntil(async () => (await syncsOf(id)) === 1);
+    expect(await documentOf(id)).toEqual({ status: 'indexed', private: false });
+
+    expect((await correct(runtime, id, { private: true })).status).toBe(200);
+    expect(await syncsOf(id)).toBe(2);
+    expect((await correct(runtime, id, { private: true })).status).toBe(200);
+    expect(await syncsOf(id)).toBe(2);
+  });
+
   it('binds handlers, their concurrency, features and notices through one seam', async () => {
     const gate = createGate();
     const running: string[] = [];
     let peak = 0;
     const bind: Bind = (parts) => {
-      const defaults = bindFeatures(parts);
+      const defaults = bindWithFakes(parts);
       return {
         ...defaults,
         handlers: [
@@ -246,7 +357,7 @@ describe('createRuntime', () => {
     const gate = createGate();
     let aborted = false;
     const bind: Bind = (parts) => ({
-      ...bindFeatures(parts),
+      ...bindWithFakes(parts),
       handlers: [
         handle(
           slowJob,

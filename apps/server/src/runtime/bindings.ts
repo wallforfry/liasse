@@ -1,11 +1,23 @@
 import type { ApiFeatures } from '@liasse/core/api';
 import type { Config } from '@liasse/core/config';
 import type { Database } from '@liasse/core/db';
-import { findSensitiveIdentifiers } from '@liasse/core/entities';
-import { createHindsightIntegration, describeHindsight } from '@liasse/core/hindsight';
+import { deriveIdentifierKey, findSensitiveIdentifiers } from '@liasse/core/entities';
+import {
+  createHindsightIntegration,
+  describeHindsight,
+  type HindsightIntegration,
+} from '@liasse/core/hindsight';
 import { createDeleteFileHandler, requeueFileDeletions } from '@liasse/core/ingest';
 import type { RegisteredHandler } from '@liasse/core/jobs';
+import { createPersistKnowledge, listSubjects, upcoming } from '@liasse/core/knowledge';
 import type { Embedder, TextModel, VisionModel } from '@liasse/core/models';
+import {
+  correctDocument,
+  createPipelineHandlers,
+  failAbandonedDocuments,
+  type PipelineDeps,
+  reindexDocumentJob,
+} from '@liasse/core/pipeline';
 import type { Storage } from '@liasse/core/storage';
 
 /** What the runtime built before it binds the features to it. */
@@ -37,40 +49,80 @@ export interface Bindings {
 
 export type Bind = (parts: RuntimeParts) => Bindings;
 
+const pipelineDepsOf = (
+  { config, db, storage, embedder, textModel, visionModel }: RuntimeParts,
+  hindsight: HindsightIntegration,
+): PipelineDeps => {
+  const identifierKey = deriveIdentifierKey(config.auth.fileUrlSecret);
+  const { confidenceThreshold, maxNewTypesPerDay, schemaLanguage, maxFileSize, maxVisionPages } =
+    config.pipeline;
+  return {
+    db,
+    storage,
+    embedder,
+    textModel,
+    visionModel,
+    identifierKey,
+    settings: {
+      confidenceThreshold,
+      maxNewTypesPerDay,
+      schemaLanguage,
+      maxFileSize,
+      maxVisionPages,
+    },
+    persistKnowledge: createPersistKnowledge({ identifierKey }),
+    ...(hindsight.enabled
+      ? {
+          afterIndexed: (id: string) => hindsight.enqueueSync(db, id),
+          onPrivacyChanged: (tx, id) => hindsight.enqueueSync(tx, id),
+        }
+      : {}),
+  };
+};
+
+const featuresOf = (deps: PipelineDeps, hindsight: HindsightIntegration): ApiFeatures => ({
+  correctDocument: (input) => correctDocument(deps, input),
+  listSubjects: (options) => listSubjects({ db: deps.db }, options),
+  upcoming: ({ current_only: currentOnly, ...window }) =>
+    upcoming({ db: deps.db }, { ...window, currentOnly }),
+  ...(hindsight.enabled
+    ? { onDocumentDeleted: (tx, { id }) => hindsight.enqueueSync(tx, id) }
+    : {}),
+});
+
 /**
  * The one module that binds the features to the runtime. A feature that merges adds
- * its lines here and nowhere else:
- *
- * - the pipeline (`@liasse/core/pipeline`): `createPipelineHandlers(deps)` in
- *   `handlers`, `failAbandonedDocuments(db)` in `startupTasks`, `correctDocument` in
- *   `features`, a concurrency of 1 for its indexing kind (the embedder is one model
- *   process), `afterIndexed: (id) => hindsight.enqueueSync(db, id)` in its deps (a
- *   correction that changes `private` queues the same sync), and the notice below goes;
- * - the knowledge layer and consolidation: `listSubjects`, `upcoming`, `listChanges`
- *   and `applyChange` in `features`.
+ * its lines here and nowhere else: consolidation (`listChanges` and `applyChange` in
+ * `features`) is the one left, and the notice below goes with it.
  */
-export const bindFeatures: Bind = ({ config, db, storage }) => {
+export const bindFeatures: Bind = (parts) => {
+  const { config, db, storage } = parts;
   const hindsight = createHindsightIntegration(config.hindsight, {
     db,
     isSensitive: (text) => findSensitiveIdentifiers(text).length > 0,
   });
   const hindsightNotice = describeHindsight(config);
+  const pipeline = pipelineDepsOf(parts, hindsight);
   return {
-    handlers: [createDeleteFileHandler({ db, storage }), ...hindsight.handlers],
-    perKindConcurrency: { ...hindsight.perKindConcurrency },
-    features: hindsight.enabled
-      ? { onDocumentDeleted: (tx, { id }) => hindsight.enqueueSync(tx, id) }
-      : {},
+    handlers: [
+      createDeleteFileHandler({ db, storage }),
+      ...createPipelineHandlers(pipeline),
+      ...hindsight.handlers,
+    ],
+    // A re-indexing is embedding alone, and the local embedder is one model process:
+    // a second one at a time would only wait inside it, holding a worker.
+    perKindConcurrency: { [reindexDocumentJob.name]: 1, ...hindsight.perKindConcurrency },
+    features: featuresOf(pipeline, hindsight),
     startupTasks: [
       { name: 'queueing the file removals still owed', run: () => requeueFileDeletions({ db }) },
+      { name: 'failing the documents no job will process', run: () => failAbandonedDocuments(db) },
       ...(hindsight.enabled
         ? [{ name: 'queueing the Hindsight forgets still owed', run: hindsight.requeueForgets }]
         : []),
     ],
     notices: [
-      'Notice: document processing is not part of this build. Uploaded documents are stored ' +
-        'and stay "received"; correcting a document, subjects, upcoming dates and ' +
-        'consolidation changes answer 501.',
+      'Notice: consolidation is not part of this build. Listing and applying consolidation ' +
+        'changes answer 501.',
       ...(hindsightNotice === undefined ? [] : [hindsightNotice]),
     ],
   };
