@@ -5,6 +5,7 @@ import { PROVENANCE_ENTITY_ID_KEY } from '../domain/provenance.ts';
 import { languageCodeSchema } from '../domain/values.ts';
 import { missingEntityIds } from '../entities/entity-store.ts';
 import type { IdentifierKey } from '../entities/sensitive.ts';
+import { ENTITY_SIMILARITY, type SimilarityThresholds } from '../entities/similarity.ts';
 import { type FactRow, replaceFacts } from './facts.ts';
 import type { KnowledgeDocument, KnowledgeInput } from './input.ts';
 import { replaceKeyDates } from './key-dates.ts';
@@ -167,6 +168,8 @@ export interface PersistedKnowledge {
 
 export interface PersistKnowledgeDeps {
   readonly identifierKey: IdentifierKey;
+  // The thresholds of entities, which subjects are resolved on.
+  readonly similarity?: SimilarityThresholds;
 }
 
 const isPrepared = (
@@ -179,7 +182,7 @@ const isPrepared = (
  * prepares it without any model first (see `prepareWithoutModels`).
  */
 export const createPersistKnowledge =
-  ({ identifierKey }: PersistKnowledgeDeps) =>
+  ({ identifierKey, similarity = ENTITY_SIMILARITY }: PersistKnowledgeDeps) =>
   (
     tx: SubjectTransaction,
     document: KnowledgeDocument,
@@ -188,5 +191,7 @@ export const createPersistKnowledge =
     persistKnowledge(
       tx,
       document,
-      isPrepared(knowledge) ? knowledge : prepareWithoutModels(identifierKey, knowledge),
+      isPrepared(knowledge)
+        ? knowledge
+        : prepareWithoutModels(identifierKey, knowledge, similarity),
     );

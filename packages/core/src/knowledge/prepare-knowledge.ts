@@ -37,6 +37,7 @@ export interface PreparedKnowledge {
 export const prepareWithoutModels = (
   identifierKey: IdentifierKey,
   input: KnowledgeInput,
+  similarity: SimilarityThresholds,
 ): PreparedKnowledge => {
   const knowledge = parseKnowledge(input);
   return {
@@ -49,7 +50,7 @@ export const prepareWithoutModels = (
       embedding: undefined,
       verdict: undefined,
     })),
-    similarity: ENTITY_SIMILARITY,
+    similarity,
     embeddedExternally: false,
     rejectedValues: knowledge.rejectedValues,
   };
@@ -85,7 +86,7 @@ export const prepareKnowledge = async (
   document: KnowledgeDocument,
   input: KnowledgeInput,
 ): Promise<PreparedKnowledge> => {
-  const offline = prepareWithoutModels(identifierKey, input);
+  const offline = prepareWithoutModels(identifierKey, input, similarity);
   if (document.private && !embedder.isLocal) return offline;
   const mentions = offline.subjects.map(({ mention }) => mention);
   const embeddings = await embedAll(embedder, [
