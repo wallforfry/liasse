@@ -26,6 +26,7 @@ services:
         condition: service_healthy
     environment:
       SERVICE_URL_LIASSE_8080:
+      # Not SERVICE_URL_LIASSE_8080, which ends in :8080: signed file URLs need the public origin.
       PUBLIC_URL: ${SERVICE_URL_LIASSE}
       DATABASE_URL: postgres://liasse:${SERVICE_PASSWORD_64_POSTGRES}@postgres:5432/liasse
       HOST: 0.0.0.0
