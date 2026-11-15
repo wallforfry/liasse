@@ -93,6 +93,7 @@ describe('the session of the web UI', () => {
 
     it.each([
       ['POST', '/search', jsonRequest('POST', { query: 'synthetic' })],
+      ['POST', '/types', jsonRequest('POST', { slug: 'synthetic_note', description: 'A note' })],
       ['PATCH', MISSING_DOCUMENT, jsonRequest('PATCH', { private: true })],
       ['DELETE', MISSING_DOCUMENT, { method: 'DELETE' }],
     ])('refuses %s without the Origin of PUBLIC_URL', async (_, path, init) => {

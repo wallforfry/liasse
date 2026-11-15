@@ -43,6 +43,10 @@ export {
   MAX_CHANGE_NOTE_LENGTH,
   type ChangeDecision,
   changeDecisionSchema,
+  type CreatedType,
+  createdTypeSchema,
+  type CreateTypeRequest,
+  createTypeRequestSchema,
   type DescribeTypesOptions,
   describeTypesOptionsSchema,
   entityListSchema,
@@ -55,6 +59,7 @@ export {
   listSubjectsOptionsSchema,
   type TypeList,
   typeListSchema,
+  type TypeView,
   type UpcomingOptions,
   upcomingOptionsSchema,
 } from './registry.ts';

@@ -37,6 +37,7 @@ export const createApiHarness = async (): Promise<ApiHarness> => {
     storage: createFsStorage(root),
     embedder,
     fullText: rankByFullText,
+    schemaLanguage: 'en',
     maxFileSize: TEST_MAX_FILE_SIZE,
     fileUrls: createFileUrls({ secret: TEST_FILE_URL_SECRET, publicUrl: TEST_PUBLIC_URL }),
     features: {},

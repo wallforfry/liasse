@@ -55,6 +55,7 @@ export const createMcpHarness = async (): Promise<McpHarness> => {
     storage: createFsStorage(root),
     embedder,
     fullText: rankByFullText,
+    schemaLanguage: 'en',
     maxFileSize: TEST_MAX_FILE_SIZE,
     fileUrls: createFileUrls({
       secret: 'synthetic-file-url-secret-0123456789',
