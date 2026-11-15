@@ -1,13 +1,35 @@
 import type { ApiFeatures } from '@liasse/core/api';
 import type { UiPassword } from '@liasse/core/config';
+import { CSRF_HEADER, uiSessionSchema } from '@liasse/core/contract';
 import type { Hono } from 'hono';
 import { expect } from 'vitest';
-import type { HttpHarness } from '../http/harness.test-helper.ts';
-import type { AppEnv } from '../http/env.ts';
-import type { UiOptions } from './app.ts';
+import type { AppEnv } from '../env.ts';
+import { type HttpHarness, jsonRequest } from '../harness.test-helper.ts';
+import type { UiOptions } from './ui.ts';
+import type { WebAssets } from './web-assets.ts';
 
 export const UI_TEST_PASSWORD = 'synthetic-ui-password';
 export const TEST_CLIENT_HEADER = 'X-Test-Client';
+export const TEST_SCRIPT = 'assets/index-synthetic.js';
+
+export const TEST_INDEX =
+  '<!doctype html><html lang="en"><head><title>Liasse</title>' +
+  `<script type="module" crossorigin src="/ui/${TEST_SCRIPT}"></script></head>` +
+  '<body><div id="root"></div></body></html>';
+
+const encoded = (text: string): Uint8Array<ArrayBuffer> => new TextEncoder().encode(text);
+
+/** A build of the web UI with one hashed script and one file of `public/`. */
+export const testAssets = (): WebAssets => ({
+  index: TEST_INDEX,
+  files: new Map([
+    [
+      TEST_SCRIPT,
+      { body: encoded('export {};'), type: 'text/javascript; charset=utf-8', immutable: true },
+    ],
+    ['favicon.svg', { body: encoded('<svg/>'), type: 'image/svg+xml', immutable: false }],
+  ]),
+});
 
 export interface UiAppOptions extends Partial<UiOptions> {
   readonly features?: ApiFeatures;
@@ -26,6 +48,7 @@ export const uiApp = (
       password: { kind: 'plain', value: UI_TEST_PASSWORD } satisfies UiPassword,
       sessionTtlMs: 7 * 24 * 60 * 60 * 1000,
       secureCookies: true,
+      assets: testAssets(),
       clientAddress: (context) => context.req.header(TEST_CLIENT_HEADER) ?? 'client-a',
       ...options,
     },
@@ -44,72 +67,41 @@ export const cookiesOf = (response: Response): Readonly<Record<string, string>> 
 export const setCookieLine = (response: Response, name: string): string | undefined =>
   response.headers.getSetCookie().find((line) => line.startsWith(`${name}=`));
 
-/** The value of the hidden CSRF field of the first form of a page. */
-export const csrfOf = (page: string): string => {
-  const token = /name="csrf" value="([^"]+)"/.exec(page)?.[1];
-  expect(token).toBeDefined();
-  return token ?? '';
-};
-
-export const formRequest = (
-  fields: Readonly<Record<string, string>>,
-  cookie: string,
-  headers: Readonly<Record<string, string>> = {},
+export const withHeaders = (
+  init: RequestInit,
+  headers: Readonly<Record<string, string>>,
 ): RequestInit => ({
-  method: 'POST',
-  headers: {
-    'Content-Type': 'application/x-www-form-urlencoded',
-    Cookie: cookie,
-    ...headers,
-  },
-  body: new URLSearchParams(fields).toString(),
+  ...init,
+  headers: { ...Object.fromEntries(new Headers(init.headers)), ...headers },
 });
 
-export interface LoginForm {
-  readonly cookie: string;
-  readonly token: string;
-}
-
-export const openLoginForm = async (app: Hono<AppEnv>): Promise<LoginForm> => {
-  const response = await app.request('/ui/login');
-  expect(response.status).toBe(200);
-  return {
-    cookie: cookiesOf(response).liasse_login ?? '',
-    token: csrfOf(await response.text()),
-  };
-};
-
-export const submitLogin = async (
+export const logIn = async (
   app: Hono<AppEnv>,
   password: string,
   headers: Readonly<Record<string, string>> = {},
-): Promise<Response> => {
-  const form = await openLoginForm(app);
-  return app.request(
-    '/ui/login',
-    formRequest({ csrf: form.token, password }, form.cookie, headers),
-  );
-};
+): Promise<Response> =>
+  app.request('/ui/session', withHeaders(jsonRequest('POST', { password }), headers));
 
 export interface SignedIn {
   /** The `Cookie` header of the session. */
   readonly cookie: string;
   readonly csrf: string;
-  readonly get: (path: string) => Promise<Response>;
-  readonly post: (path: string, fields: Readonly<Record<string, string>>) => Promise<Response>;
+  /** A request with the cookie, and the CSRF header unless `csrf` is false. */
+  readonly request: (path: string, init?: RequestInit, csrf?: boolean) => Promise<Response>;
 }
 
 export const signIn = async (app: Hono<AppEnv>): Promise<SignedIn> => {
-  const response = await submitLogin(app, UI_TEST_PASSWORD);
-  expect(response.status).toBe(303);
+  const response = await logIn(app, UI_TEST_PASSWORD);
+  expect(response.status).toBe(200);
   const cookie = cookiesOf(response).liasse_session ?? '';
-  const get = async (path: string) => app.request(path, { headers: { Cookie: cookie } });
-  // A page that reads nothing from the database, so a short deadline never fires here.
-  const csrf = csrfOf(await (await get('/ui/upload')).text());
+  const csrf = uiSessionSchema.parse(await response.json()).csrf_token;
   return {
     cookie,
     csrf,
-    get,
-    post: async (path, fields) => app.request(path, formRequest({ csrf, ...fields }, cookie)),
+    request: async (path, init = {}, sendCsrf = true) =>
+      app.request(
+        path,
+        withHeaders(init, { Cookie: cookie, ...(sendCsrf ? { [CSRF_HEADER]: csrf } : {}) }),
+      ),
   };
 };

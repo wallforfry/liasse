@@ -1,7 +1,7 @@
 import { createHash, randomBytes } from 'node:crypto';
 
 export interface Session {
-  /** What every form of this session carries back. */
+  /** What every request of this session that changes something carries back. */
   readonly csrfToken: string;
   readonly expiresAt: number;
 }

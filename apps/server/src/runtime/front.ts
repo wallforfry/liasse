@@ -2,6 +2,7 @@ import type { ApiContext } from '@liasse/core/api';
 import type { Config } from '@liasse/core/config';
 import { serveStdio } from '@liasse/mcp';
 import { createApp } from '../http/app.ts';
+import { loadWebAssets, resolveWebAssetsDirectory } from '../http/ui/web-assets.ts';
 import type { Logger } from '../log.ts';
 import { reportMcpFailure } from '../mcp-failures.ts';
 import type { ShutdownStep } from '../shutdown.ts';
@@ -60,6 +61,7 @@ export const startFront = async ({
             password: ui.password,
             sessionTtlMs: ui.sessionTtlMs,
             secureCookies: config.server.publicUrl.startsWith('https:'),
+            assets: await loadWebAssets(resolveWebAssetsDirectory()),
           },
   });
   const listener = await listen({
