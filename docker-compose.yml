@@ -1,0 +1,48 @@
+# Production stack: Liasse and Postgres with pgvector. Settings come from `.env` next to this
+# file (start from `.env.example`), which also needs POSTGRES_PASSWORD. See the README.
+name: liasse
+
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: liasse
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+      POSTGRES_DB: liasse
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U liasse -d liasse']
+      interval: 5s
+      timeout: 3s
+      retries: 30
+
+  liasse:
+    image: ghcr.io/wallforfry/liasse:${LIASSE_VERSION:-latest}
+    build: .
+    restart: unless-stopped
+    # Longer than the server's 30 s shutdown grace period, so a running job ends or is requeued
+    # before Docker sends SIGKILL (10 s by default).
+    stop_grace_period: 40s
+    depends_on:
+      postgres:
+        condition: service_healthy
+    env_file: .env
+    # These override `.env`, whose DATABASE_URL and HOST suit a server run from source.
+    # POSTGRES_PASSWORD goes into a URL: keep it to characters that need no escaping.
+    environment:
+      DATABASE_URL: postgres://liasse:${POSTGRES_PASSWORD}@postgres:5432/liasse
+      HOST: 0.0.0.0
+      PORT: 8080
+      PUBLIC_URL: ${PUBLIC_URL:-http://localhost:8080}
+      STORAGE_PATH: /data/files
+      EMBEDDING_CACHE_DIR: /data/models
+    ports:
+      - ${LIASSE_LISTEN:-127.0.0.1:8080}:8080
+    volumes:
+      - liasse-data:/data
+
+volumes:
+  postgres-data:
+  liasse-data:
