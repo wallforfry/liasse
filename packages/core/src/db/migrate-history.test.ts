@@ -254,7 +254,7 @@ describe('migrate against the recorded history', () => {
       Array.from({ length: 8 }, () => 'fulfilled'),
     );
     expect(await recordedMigrationCount(database)).toBe(SHIPPED);
-    expect(await publicTableCount(database)).toBe(11);
+    expect(await publicTableCount(database)).toBe(25);
   });
 
   it('leaves nothing behind when a migration fails', async () => {

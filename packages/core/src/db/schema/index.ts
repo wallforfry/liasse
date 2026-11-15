@@ -1,5 +1,7 @@
+export * from './auth.ts';
 export * from './documents.ts';
 export * from './enums.ts';
 export * from './jobs.ts';
 export * from './knowledge.ts';
+export * from './oauth.ts';
 export * from './registry.ts';
