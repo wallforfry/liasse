@@ -33,5 +33,6 @@ export { listDocuments } from './list-documents.ts';
 export { listEntities } from './list-entities.ts';
 export { queryDocuments } from './query-documents.ts';
 export { searchDocuments } from './search-documents.ts';
+export { retryDocument } from './retry-document.ts';
 export { readStats, type Stats } from './stats.ts';
 export { uploadDocument, type UploadInput } from './upload-document.ts';

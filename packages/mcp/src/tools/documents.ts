@@ -5,7 +5,13 @@ import {
   ingestRequestSchema,
 } from '@liasse/contract';
 import { liveDocumentStatusSchema } from '@liasse/contract/domain';
-import { correctDocument, CORRECTED_PARTS, getDocument, uploadDocument } from '@liasse/core/api';
+import {
+  correctDocument,
+  CORRECTED_PARTS,
+  getDocument,
+  retryDocument,
+  uploadDocument,
+} from '@liasse/core/api';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import { type McpDeps, UNTRUSTED } from '../deps.ts';
@@ -41,6 +47,10 @@ const UPDATE_DESCRIPTION =
   'correction takes precedence: consolidation never overwrites it. Returns the corrected ' +
   `document with its fields and provenance. ${UNTRUSTED}`;
 
+const RETRY_DESCRIPTION =
+  'Processes a `failed` document again from its stored file, for instance after a provider ' +
+  'outage. Refused for any other status. Returns its id and new status; then call `get_status`.';
+
 export const registerDocumentTools = (server: McpServer, { api, report }: McpDeps): void => {
   server.registerTool(
     'get_document',
@@ -69,6 +79,20 @@ export const registerDocumentTools = (server: McpServer, { api, report }: McpDep
       annotations: { readOnlyHint: false, idempotentHint: true, openWorldHint: false },
     },
     async (input) => toolAnswer('ingest', report, async () => uploadDocument(api, toUpload(input))),
+  );
+  server.registerTool(
+    'retry_document',
+    {
+      description: RETRY_DESCRIPTION,
+      inputSchema: statusInputSchema,
+      annotations: { readOnlyHint: false, idempotentHint: false, openWorldHint: false },
+    },
+    async ({ id }) =>
+      toolAnswer('retry_document', report, async () => {
+        await retryDocument(api, id);
+        const { status, state, error } = await getDocument(api, id);
+        return { id, status, state, error };
+      }),
   );
   server.registerTool(
     'update_document',

@@ -20,6 +20,7 @@ const TOOLS = [
   'list_pending_changes',
   'query',
   'recall',
+  'retry_document',
   'search',
   'timeline',
   'upcoming',
@@ -28,7 +29,7 @@ const TOOLS = [
 
 // The tools whose answer is read from documents.
 const UNTRUSTED_TOOLS = TOOLS.filter(
-  (name) => !['apply_change', 'get_status', 'ingest'].includes(name),
+  (name) => !['apply_change', 'get_status', 'ingest', 'retry_document'].includes(name),
 );
 
 const hits = z.object({ results: z.array(z.object({ id: z.string() })) });
@@ -65,7 +66,7 @@ describe('the tools', () => {
     return failure.parse(body).error;
   };
 
-  it('lists the fourteen tools, flagging document content as untrusted', async () => {
+  it('lists the fifteen tools, flagging document content as untrusted', async () => {
     const { tools } = await client.listTools();
     expect(tools.map(({ name }) => name).toSorted()).toEqual(TOOLS);
     const flagged = tools
@@ -190,6 +191,22 @@ describe('the tools', () => {
     it('gives the status of a document', async () => {
       const { body } = await callTool(client, 'get_status', { id: publicId });
       expect(body).toEqual({ id: publicId, status: 'indexed', state: 'current', error: null });
+    });
+
+    it('queues a failed document again and answers its new status', async () => {
+      const id = await harness.addDocument([], {
+        status: 'failed',
+        error: 'model_provider_failed',
+      });
+      const { isError, body } = await callTool(client, 'retry_document', { id });
+      expect(isError).toBe(false);
+      expect(body).toEqual({ id, status: 'received', state: 'current', error: null });
+    });
+
+    it('refuses to retry a document whose processing did not fail', async () => {
+      expect((await failureOf('retry_document', { id: publicId })).code).toBe(
+        'document_not_failed',
+      );
     });
   });
 

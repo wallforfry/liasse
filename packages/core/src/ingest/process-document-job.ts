@@ -1,7 +1,11 @@
 import { DOCUMENT_JOB_FAILURE_CODES } from '@liasse/contract/domain';
+import { and, eq, inArray, sql, type SQLWrapper } from 'drizzle-orm';
 import { z } from 'zod';
+import type { Database } from '../db/client.ts';
+import { jobs } from '../db/schema/jobs.ts';
 import { defineJobKind } from '../jobs/kinds.ts';
 import { documentOfPayload, failDocumentInProgress } from './document-failure.ts';
+import type { Transaction } from './existing-document.ts';
 
 // One model call already makes up to three provider attempts, with a backoff, inside
 // its own time limit: three executions of the job are at most nine attempts per call,
@@ -34,3 +38,19 @@ export const processDocumentJob = defineJobKind({
     await failDocumentInProgress(tx, documentId, DOCUMENT_JOB_FAILURE_CODES[cause]);
   },
 });
+
+/** The `process_document` jobs, queued or running, of a document: an id or a column. */
+export const pendingProcessingOf = (
+  executor: Database | Transaction,
+  documentId: SQLWrapper | string,
+): SQLWrapper =>
+  executor
+    .select({ id: jobs.id })
+    .from(jobs)
+    .where(
+      and(
+        eq(jobs.kind, processDocumentJob.name),
+        inArray(jobs.status, ['queued', 'running']),
+        sql`${jobs.payload}->>'documentId' = ${documentId}`,
+      ),
+    );
