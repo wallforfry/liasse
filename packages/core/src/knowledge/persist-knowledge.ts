@@ -9,7 +9,7 @@ import { type FactRow, replaceFacts } from './facts.ts';
 import type { KnowledgeDocument, KnowledgeInput } from './input.ts';
 import { replaceKeyDates } from './key-dates.ts';
 import { type PreparedKnowledge, prepareWithoutModels } from './prepare-knowledge.ts';
-import { type ResolvableSubject, resolveSubjectUnderLock } from './resolve-subject.ts';
+import { resolveSubjectUnderLock } from './resolve-subject.ts';
 import type { SubjectOrigin } from './subject-enrichment.ts';
 import { subjectLabelKey } from './subject-label.ts';
 import { blankOrphanSubjects } from './subject-orphans.ts';
@@ -84,12 +84,12 @@ interface ResolvedSubjects {
 // there for the next.
 const resolveSubjects = async (
   tx: SubjectTransaction,
-  subjects: readonly ResolvableSubject[],
+  { subjects, similarity }: Pick<PreparedKnowledge, 'subjects' | 'similarity'>,
   origin: SubjectOrigin,
 ): Promise<ResolvedSubjects> => {
   const labelled: (readonly [labelKey: string, subjectId: string])[] = [];
   for (const resolvable of subjects) {
-    const { subjectId } = await resolveSubjectUnderLock(tx, resolvable, origin);
+    const { subjectId } = await resolveSubjectUnderLock(tx, resolvable, origin, similarity);
     labelled.push([resolvable.mention.labelKey, subjectId]);
   }
   const ids = [...new Set(labelled.map(([, subjectId]) => subjectId))];
@@ -146,7 +146,7 @@ export const persistKnowledge = (
     const document = await lockDocument(locked, id);
     if (document === undefined) return { rejectedValues: knowledge.rejectedValues };
     const usable = withoutExternalEmbeddings(knowledge, document);
-    const { ids, byLabelKey } = await resolveSubjects(locked, usable.subjects, {
+    const { ids, byLabelKey } = await resolveSubjects(locked, usable, {
       issuerId: document.issuerId,
       private: document.private,
     });

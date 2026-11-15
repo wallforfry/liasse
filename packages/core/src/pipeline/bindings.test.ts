@@ -66,7 +66,6 @@ describe('the bindings of the pipeline', () => {
     expect(resolved?.droppedIdentifiers).toBe(1);
   });
 
-  // The thresholds of the specification were never calibrated on a real embedder.
   it('applies the similarity thresholds of the settings in place of the defaults', async () => {
     const seed = { name: 'Synthetic Energy Group', kind: 'org' } as const;
     const near = { name: 'Synthetic Energy Holding', kind: 'org' } as const;

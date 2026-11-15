@@ -1,6 +1,7 @@
 import type { Database } from '../db/client.ts';
 import type { EntityExecutor } from '../entities/entity-lock.ts';
 import type { IdentifierKey } from '../entities/sensitive.ts';
+import type { SimilarityThresholds } from '../entities/similarity.ts';
 import type { Embedder, TextModel } from '../models/ports.ts';
 
 export interface KnowledgeReadContext {
@@ -18,4 +19,6 @@ export interface KnowledgeContext extends KnowledgeReadContext {
   // `deriveIdentifierKey(config.auth.fileUrlSecret)`, the key of the entities: an IBAN
   // given as the identifier of an account is hashed as it is on an entity.
   readonly identifierKey: IdentifierKey;
+  // Subjects are resolved by similarity on the thresholds of entities.
+  readonly similarity?: SimilarityThresholds;
 }

@@ -6,6 +6,7 @@ import { createFakeTextModel, type FakeTextScript } from '../testing/fake-text-m
 import { createTestDatabase, type TestDatabase } from '../testing/test-database.ts';
 import type { EntitiesContext } from './context.ts';
 import { resolveEntity } from './resolve.ts';
+import { RULE_SIMILARITY } from './similarity.fixture.ts';
 import {
   atSimilarity,
   recordingEmbedder,
@@ -24,6 +25,7 @@ describe('resolveEntity by similarity', () => {
     embedder: recordingEmbedder(),
     textModel: createFakeTextModel([]),
     identifierKey: TEST_IDENTIFIER_KEY,
+    similarity: RULE_SIMILARITY,
     ...overrides,
   });
 
@@ -50,7 +52,7 @@ describe('resolveEntity by similarity', () => {
   });
 
   describe('rule 3: similarity', () => {
-    it('attaches above 0.92 and adds the name as an alias, without the text model', async () => {
+    it('attaches above the attach threshold and adds the name as an alias, without the text model', async () => {
       const id = await seedEntity(database.db, {
         name: 'Synthetic Energy',
         aliases: ['SE'],
