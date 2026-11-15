@@ -3,7 +3,7 @@ import {
   mcpConnectionListSchema,
   revokeMcpConnectionResultSchema,
 } from '@liasse/contract';
-import { oauthClientResources, oauthClients } from '@liasse/core/db';
+import { authVerifications, oauthClientResources, oauthClients } from '@liasse/core/db';
 import { eq } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createHttpHarness, type HttpHarness, jsonRequest } from '../harness.test-helper.ts';
@@ -158,6 +158,21 @@ describe('the MCP connections of the account', () => {
     await harness.database.db.insert(oauthClientResources).values([...links]);
     expect((await redeemCode(harness, client, code)).status).toBe(400);
     expect((await redeemCode(harness, other, otherCode)).status).toBe(200);
+  });
+
+  it('revokes beside verification values that are not JSON, and keeps them', async () => {
+    const { clientId } = await connect();
+    const plain = { id: 'ver_synthetic_plain', identifier: 'synthetic-plain', value: 'not json' };
+    await harness.database.db
+      .insert(authVerifications)
+      .values({ ...plain, expiresAt: new Date(Date.now() + 60_000) });
+    const connection = await connectionOf(clientId);
+    expect((await revoke(connection?.id ?? '')).status).toBe(200);
+    const kept = await harness.database.db
+      .select({ id: authVerifications.id })
+      .from(authVerifications)
+      .where(eq(authVerifications.id, plain.id));
+    expect(kept).toEqual([{ id: plain.id }]);
   });
 
   it('refuses a revocation without the Origin of the web UI, and keeps the client', async () => {
