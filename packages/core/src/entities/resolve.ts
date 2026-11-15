@@ -23,7 +23,12 @@ import {
   updateEntityNames,
 } from './entity-store.ts';
 import { identifiersFor, matchExact, mayDesignate } from './exact-match.ts';
-import { type EntityMention, type PreparedMention, prepareMention } from './mention.ts';
+import {
+  type EntityMention,
+  mentionEmbeddingText,
+  type PreparedMention,
+  prepareMention,
+} from './mention.ts';
 import {
   decideBySimilarity,
   ENTITY_SIMILARITY,
@@ -60,14 +65,8 @@ const ofKind = (entities: readonly Entity[], kind: EntityKind | undefined): read
 
 // The mention and the entity are embedded as the same kind of text: asymmetric models
 // place queries and passages apart, and the thresholds compare like with like.
-const embedMention = async (
-  embedder: Embedder,
-  { name, context }: PreparedMention,
-): Promise<Embedding> => {
-  const [embedding] = await embedder.embed(
-    [context === undefined ? name : `${name}\n${context}`],
-    'passage',
-  );
+const embedMention = async (embedder: Embedder, mention: PreparedMention): Promise<Embedding> => {
+  const [embedding] = await embedder.embed([mentionEmbeddingText(mention)], 'passage');
   if (embedding === undefined) throw new Error('The embedder returned no embedding');
   return embedding;
 };
