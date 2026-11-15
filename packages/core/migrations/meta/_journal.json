@@ -92,6 +92,13 @@
       "when": 1794745955829,
       "tag": "0012_better_auth",
       "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1794750227201,
+      "tag": "0013_oauth_client_revocations",
+      "breakpoints": true
     }
   ]
 }
