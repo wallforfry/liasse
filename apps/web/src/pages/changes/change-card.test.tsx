@@ -1,7 +1,7 @@
 import { screen, waitFor, within } from '@testing-library/react';
 import { userEvent } from '@testing-library/user-event';
 import { describe, expect, it } from 'vitest';
-import { fakeServer, json, renderApp, TEST_CSRF } from '../../test/render.test-helper.tsx';
+import { fakeServer, json, renderApp } from '../../test/render.test-helper.tsx';
 
 const CHANGE = {
   id: 'chg_01KCHANGE0000000000000001',
@@ -50,13 +50,13 @@ describe('a consolidation change', () => {
   it('is rejected with its note, after the confirmation', async () => {
     const post = await decide('Reject', '  Not the same type. ');
     expect(post?.path).toBe(`/changes/${CHANGE.id}`);
-    expect(post?.headers.get('X-CSRF-Token')).toBe(TEST_CSRF);
+    expect(post?.credentials).toBe('same-origin');
     expect(post?.body).toBe(JSON.stringify({ decision: 'reject', note: 'Not the same type.' }));
   });
 
   it('is applied without a note when none is written', async () => {
     const post = await decide('Apply', undefined);
-    expect(post?.headers.get('X-CSRF-Token')).toBe(TEST_CSRF);
+    expect(post?.credentials).toBe('same-origin');
     expect(post?.body).toBe(JSON.stringify({ decision: 'apply' }));
   });
 

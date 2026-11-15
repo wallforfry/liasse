@@ -1,7 +1,7 @@
-import { screen, waitFor } from '@testing-library/react';
+import { screen } from '@testing-library/react';
 import { userEvent } from '@testing-library/user-event';
 import { describe, expect, it } from 'vitest';
-import { errorBody, fakeServer, json, renderApp, TEST_CSRF } from '../test/render.test-helper.tsx';
+import { authPath, errorBody, fakeServer, json, renderApp } from '../test/render.test-helper.tsx';
 
 const DOCUMENT = {
   id: 'doc_01SYNTHETIC',
@@ -25,8 +25,16 @@ const DOCUMENT = {
   text: { content: '', offset: 0, total_length: 0, has_more: false },
 };
 
+const emptyLibrary = (request: { readonly path: string }) => {
+  if (request.path.startsWith('/types')) return json({ types: [] });
+  if (request.path.startsWith('/documents')) {
+    return json({ documents: [], total: 0, has_more: false });
+  }
+  return undefined;
+};
+
 describe('the API client of the web UI', () => {
-  it('sends the session cookie, and the CSRF token on what changes something', async () => {
+  it('sends the session cookie and no other credential', async () => {
     const server = fakeServer((request) => {
       if (request.path.startsWith('/documents/doc_01SYNTHETIC') && request.method === 'GET') {
         return json(DOCUMENT);
@@ -34,10 +42,7 @@ describe('the API client of the web UI', () => {
       if (request.method === 'DELETE' && request.path.startsWith('/documents/')) {
         return new Response(null, { status: 204 });
       }
-      if (request.path.startsWith('/documents'))
-        return json({ documents: [], total: 0, has_more: false });
-      if (request.path.startsWith('/types')) return json({ types: [] });
-      return undefined;
+      return emptyLibrary(request);
     });
     renderApp('/documents/doc_01SYNTHETIC', server.fetch);
     const user = userEvent.setup();
@@ -46,48 +51,42 @@ describe('the API client of the web UI', () => {
     await screen.findByText('Most recent first.');
 
     const read = server.requests.find(({ path }) => path.startsWith('/documents/doc_01'));
-    expect(read?.headers.get('X-CSRF-Token')).toBeNull();
     expect(read?.headers.get('Authorization')).toBeNull();
     expect(read?.credentials).toBe('same-origin');
     const deletion = server.requests.find(({ method }) => method === 'DELETE');
     expect(deletion?.path).toBe('/documents/doc_01SYNTHETIC');
-    expect(deletion?.headers.get('X-CSRF-Token')).toBe(TEST_CSRF);
+    expect(deletion?.headers.get('Authorization')).toBeNull();
     expect(deletion?.credentials).toBe('same-origin');
   });
 
-  it('sends the person to the login page when the API answers 401', async () => {
+  it('sends the person to the login page when the REST API answers 401', async () => {
     const server = fakeServer((request) =>
       request.path.startsWith('/documents') || request.path.startsWith('/types')
-        ? errorBody(401, 'unauthorized', 'A valid Bearer token is required.')
+        ? errorBody(401, 'unauthorized', 'A valid session or API key is required.')
         : undefined,
     );
     renderApp('/documents', server.fetch);
     expect(await screen.findByRole('button', { name: 'Log in' })).toBeInTheDocument();
   });
 
-  it('shows the login page without a session, and opens one with the password', async () => {
-    let live = false;
+  it('logs out on the auth server and shows the login page', async () => {
+    let live = true;
     const server = fakeServer((request) => {
-      if (request.path !== '/ui/session') {
-        return request.path.startsWith('/types')
-          ? json({ types: [] })
-          : json({ documents: [], total: 0, has_more: false });
+      if (request.path === authPath('/sign-out')) {
+        live = false;
+        return json({ success: true });
       }
-      if (request.method === 'POST') {
-        live = true;
-        return json({ csrf_token: TEST_CSRF });
-      }
-      return live ? undefined : errorBody(401, 'no_session', 'Log in to open a session.');
+      if (request.path === authPath('/get-session') && !live) return json(null);
+      return emptyLibrary(request);
     });
-    renderApp('/review', server.fetch);
+    renderApp('/documents', server.fetch);
     const user = userEvent.setup();
-    await user.type(await screen.findByLabelText('Password'), 'synthetic-password');
-    await user.click(screen.getByRole('button', { name: 'Log in' }));
-    expect(await screen.findByText('Review queue')).toBeInTheDocument();
-    const login = server.requests.find(({ method }) => method === 'POST');
-    expect(login?.headers.get('Content-Type')).toBe('application/json');
-    await waitFor(() => {
-      expect(server.requests.some(({ path }) => path.includes('status=needs_review'))).toBe(true);
-    });
+    await screen.findByText('Most recent first.');
+    await user.click(screen.getByRole('button', { name: 'Log out' }));
+
+    expect(await screen.findByRole('button', { name: 'Log in' })).toBeInTheDocument();
+    const signOut = server.requests.find(({ path }) => path === authPath('/sign-out'));
+    expect(signOut?.method).toBe('POST');
+    expect(signOut?.credentials).toBe('include');
   });
 });
