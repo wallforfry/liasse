@@ -1,10 +1,12 @@
 import {
   autoApplyModeSchema,
   DEFAULT_MAX_VISION_PAGES,
+  ENTITY_ARBITRATION_SIMILARITY,
+  ENTITY_ATTACH_SIMILARITY,
   schemaLanguageSchema,
 } from '@liasse/contract/domain';
 import { z } from 'zod';
-import { baseUrl, decimal, integer, text } from './fields.ts';
+import { baseUrl, decimal, integer, reportProblems, text } from './fields.ts';
 
 const MEBIBYTE = 1024 * 1024;
 const DEFAULT_MAX_FILE_SIZE = 50 * MEBIBYTE;
@@ -21,9 +23,20 @@ export const pipelineSection = z
     SCHEMA_LANGUAGE: schemaLanguageSchema.default('en'),
     WORKERS: integer(1, 64).default(2),
     MAX_VISION_PAGES: integer(1, 10_000).default(DEFAULT_MAX_VISION_PAGES),
+    ENTITY_ATTACH_SIMILARITY: decimal(0, 1).default(ENTITY_ATTACH_SIMILARITY),
+    ENTITY_ARBITRATION_SIMILARITY: decimal(0, 1).default(ENTITY_ARBITRATION_SIMILARITY),
   })
-  .transform((env) =>
-    Object.freeze({
+  .transform((env, ctx) => {
+    if (env.ENTITY_ARBITRATION_SIMILARITY > env.ENTITY_ATTACH_SIMILARITY) {
+      reportProblems(ctx, [
+        {
+          key: 'ENTITY_ARBITRATION_SIMILARITY',
+          message: 'must not be above ENTITY_ATTACH_SIMILARITY',
+        },
+      ]);
+      return z.NEVER;
+    }
+    return Object.freeze({
       watchDir: env.WATCH_DIR,
       maxFileSize: env.MAX_FILE_SIZE,
       autoApply: env.AUTO_APPLY,
@@ -32,8 +45,12 @@ export const pipelineSection = z
       schemaLanguage: env.SCHEMA_LANGUAGE,
       workers: env.WORKERS,
       maxVisionPages: env.MAX_VISION_PAGES,
-    }),
-  );
+      entitySimilarity: Object.freeze({
+        attach: env.ENTITY_ATTACH_SIMILARITY,
+        arbitrate: env.ENTITY_ARBITRATION_SIMILARITY,
+      }),
+    });
+  });
 
 export const hindsightSection = z
   .object({

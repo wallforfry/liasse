@@ -9,13 +9,13 @@ import { decideBySimilarity, ENTITY_SIMILARITY } from './similarity.ts';
 const candidate = (id: string, similarity: number) => ({ id, similarity });
 
 describe('ENTITY_SIMILARITY', () => {
-  it('carries the thresholds of the specification', () => {
-    expect(ENTITY_SIMILARITY).toEqual({ attach: 0.92, arbitrate: 0.8, candidates: 3 });
+  it('carries the thresholds measured with the default local embedder', () => {
+    expect(ENTITY_SIMILARITY).toEqual({ attach: 1, arbitrate: 0.8, candidates: 3 });
     expect([
       ENTITY_ATTACH_SIMILARITY,
       ENTITY_ARBITRATION_SIMILARITY,
       ENTITY_ARBITRATION_CANDIDATES,
-    ]).toEqual([0.92, 0.8, 3]);
+    ]).toEqual([1, 0.8, 3]);
   });
 });
 

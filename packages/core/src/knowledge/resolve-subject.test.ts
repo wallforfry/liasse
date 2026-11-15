@@ -7,6 +7,7 @@ import {
   SYNTHETIC_IBAN,
   TEST_IDENTIFIER_KEY,
 } from '../entities/support.test-helper.ts';
+import { RULE_SIMILARITY } from '../entities/similarity.fixture.ts';
 import type { Embedding } from '../models/ports.ts';
 import { createFakeTextModel } from '../testing/fake-text-model.ts';
 import { createTestDatabase, type TestDatabase } from '../testing/test-database.ts';
@@ -51,6 +52,7 @@ describe('subject resolution', () => {
         tx,
         { mention: mentionOf(kind, name, identifier), embedding, verdict },
         { issuerId: undefined, private: false, ...origin },
+        RULE_SIMILARITY,
       ),
     );
 
@@ -425,7 +427,7 @@ describe('subject resolution', () => {
   describe('the arbitration, before the lock', () => {
     const deps = (script: Parameters<typeof createFakeTextModel>[0]) => {
       const textModel = createFakeTextModel(script);
-      return { textModel, deps: { db: database.db, textModel } };
+      return { textModel, deps: { db: database.db, textModel, similarity: RULE_SIMILARITY } };
     };
 
     it('asks about the closest three, inside an untrusted block, and answers with the choice', async () => {

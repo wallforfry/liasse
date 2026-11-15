@@ -13,7 +13,12 @@ export {
   mentionIdentifierSchema,
 } from './identifiers.ts';
 export { type EntityList, getEntity, type ListedEntity, listEntities } from './list.ts';
-export { type EntityMention, entityMentionSchema, InvalidEntityMentionError } from './mention.ts';
+export {
+  type EntityMention,
+  entityMentionSchema,
+  InvalidEntityMentionError,
+  mentionEmbeddingText,
+} from './mention.ts';
 export {
   findMergeCandidates,
   MERGE_REASONS,

@@ -1,8 +1,8 @@
 import type { EntityMatchRule } from '@liasse/contract/domain';
 import {
   decideBySimilarity,
-  ENTITY_SIMILARITY,
   type SimilarityDecision,
+  type SimilarityThresholds,
 } from '../entities/similarity.ts';
 import type { Embedding, TextModel } from '../models/ports.ts';
 import { arbitrateSubject } from './subject-arbitrate.ts';
@@ -46,24 +46,20 @@ export interface SubjectResolution {
   readonly confidence: number;
 }
 
-// Subjects are resolved like entities, on the thresholds of the specification.
+// Subjects are resolved like entities, on the thresholds of entities.
 const decideSimilarity = async (
   reader: SubjectReader,
   mention: SubjectMention,
   embedding: Embedding,
+  thresholds: SimilarityThresholds,
 ): Promise<SimilarityDecision<SimilarSubject>> => {
   if (!isDistinctiveLabel(mention.name)) return { outcome: 'none' };
-  const similar = await similarSubjects(
-    reader,
-    embedding,
-    mention.kind,
-    ENTITY_SIMILARITY.arbitrate,
-  );
+  const similar = await similarSubjects(reader, embedding, mention.kind, thresholds.arbitrate);
   // A subject the mention cannot designate is left out before the closest are kept, so
   // that a namesake with another plate does not hide the one it may be.
   return decideBySimilarity(
     similar.filter(({ subject }) => mayDesignateSubject(mention)(subject)),
-    ENTITY_SIMILARITY,
+    thresholds,
   );
 };
 
@@ -73,6 +69,7 @@ const idsOf = (candidates: readonly SimilarSubject[]): readonly string[] =>
 interface ArbitrationDeps {
   readonly db: SubjectReader;
   readonly textModel: TextModel;
+  readonly similarity: SimilarityThresholds;
 }
 
 /**
@@ -81,7 +78,7 @@ interface ArbitrationDeps {
  * are now. `resolveSubjectUnderLock` uses it only if they are still the candidates.
  */
 export const arbitrateOutsideLock = async (
-  { db, textModel }: ArbitrationDeps,
+  { db, textModel, similarity }: ArbitrationDeps,
   mention: SubjectMention,
   embedding: Embedding | undefined,
 ): Promise<SubjectVerdict | undefined> => {
@@ -89,7 +86,7 @@ export const arbitrateOutsideLock = async (
   if (matchSubjectExactly(await loadSubjects(db, mention.kind), mention) !== undefined) {
     return undefined;
   }
-  const decision = await decideSimilarity(db, mention, embedding);
+  const decision = await decideSimilarity(db, mention, embedding, similarity);
   if (decision.outcome !== 'arbitrate') return undefined;
   const chosen = await arbitrateSubject(textModel, mention, decision.candidates);
   return { offered: idsOf(decision.candidates), chosen: chosen?.subject.id };
@@ -105,9 +102,10 @@ const EXACT_CONFIDENCE = { identifier: 1, name: 0.99, alias: 0.99 } as const;
 const bySimilarity = async (
   tx: SubjectTransaction,
   { mention, embedding, verdict }: ResolvableSubject,
+  thresholds: SimilarityThresholds,
 ): Promise<Attachment | undefined> => {
   if (embedding === undefined) return undefined;
-  const decision = await decideSimilarity(tx, mention, embedding);
+  const decision = await decideSimilarity(tx, mention, embedding, thresholds);
   if (decision.outcome === 'none') return undefined;
   if (decision.outcome === 'attach') {
     const { subject, similarity } = decision.candidate;
@@ -141,6 +139,8 @@ export const resolveSubjectUnderLock = async (
   tx: SubjectTransaction,
   resolvable: ResolvableSubject,
   origin: SubjectOrigin,
+  // Those the verdict of the resolvable was given under.
+  thresholds: SimilarityThresholds,
 ): Promise<SubjectResolution> => {
   const { embedding } = resolvable;
   const mention = {
@@ -154,7 +154,7 @@ export const resolveSubjectUnderLock = async (
   );
   const attachment: Attachment | undefined =
     exact === undefined
-      ? await bySimilarity(tx, { ...resolvable, mention })
+      ? await bySimilarity(tx, { ...resolvable, mention }, thresholds)
       : { ...exact, confidence: EXACT_CONFIDENCE[exact.match], aliases: [] };
   if (attachment === undefined) {
     const created = await insertSubject(tx, {

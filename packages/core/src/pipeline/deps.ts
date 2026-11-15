@@ -80,8 +80,9 @@ export interface PipelineSettings {
   /** Memory and CPU the process that reads a file may use; `DEFAULT_TEXT_PROCESS_LIMITS` by default. */
   readonly textProcessLimits?: Partial<TextProcessLimits>;
   /**
-   * Thresholds of the similarity rule of entity resolution; those of the specification
-   * by default. They were never calibrated on a real embedder.
+   * Thresholds of the similarity rule of entity resolution, `ENTITY_ATTACH_SIMILARITY`
+   * and `ENTITY_ARBITRATION_SIMILARITY`; those measured with the default local embedder
+   * by default.
    */
   readonly entitySimilarity?: SimilarityThresholds;
 }

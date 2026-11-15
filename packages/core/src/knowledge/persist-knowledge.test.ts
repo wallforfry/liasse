@@ -3,6 +3,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { documentDates, facts, subjects } from '../db/schema/knowledge.ts';
 import { ID_PREFIXES, newId } from '../domain/ids.ts';
 import { mergeEntities } from '../entities/merge.ts';
+import { RULE_SIMILARITY } from '../entities/similarity.fixture.ts';
 import {
   atSimilarity,
   recordingEmbedder,
@@ -302,6 +303,24 @@ describe('persistKnowledge', () => {
     expect((await documentRow(database.db, document.id)).subjectIds).toEqual([scooter]);
   });
 
+  it('resolves the subjects under the lock on the thresholds they were prepared with', async () => {
+    const van = await seedSubject(database.db, {
+      kind: 'vehicle',
+      name: 'Synthetic delivery van',
+      embedding: atSimilarity(0.95),
+    });
+    const document = await insertSyntheticDocument(database.db);
+    const textModel = createFakeTextModel([]);
+    await store(knowledge({ subjects: [candidate('vehicle', 'Van of the household')] }), document, {
+      embedder: recordingEmbedder(),
+      textModel,
+      similarity: RULE_SIMILARITY,
+    });
+    expect(textModel.calls).toHaveLength(0);
+    expect((await documentRow(database.db, document.id)).subjectIds).toEqual([van]);
+    expect((await subjectRow(database.db, van))?.aliases).toEqual(['Van of the household']);
+  });
+
   it('keeps apart two candidates of one label with two plates, and gives a fact both', async () => {
     const document = await insertSyntheticDocument(database.db);
     await store(
@@ -341,6 +360,7 @@ describe('persistKnowledge', () => {
       knowledge({
         facts: [fact('A fact about three entities.', { entityIds: [kept, merged, kept] })],
       }),
+      RULE_SIMILARITY,
     );
     await mergeEntities({ db: database.db }, { sourceId: merged, targetId: target });
     await database.db.transaction((tx) =>
@@ -452,6 +472,7 @@ describe('persistKnowledge', () => {
         facts: [fact('The van was serviced.', { subjects: ['Race source van'] })],
         subjects: [candidate('vehicle', 'Race source van')],
       }),
+      RULE_SIMILARITY,
     );
     // Wrapped: a promise returned as it is would be awaited before the commit it waits for.
     const written = await database.db.transaction((tx) =>

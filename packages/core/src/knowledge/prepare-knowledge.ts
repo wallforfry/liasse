@@ -1,4 +1,5 @@
 import type { IdentifierKey } from '../entities/sensitive.ts';
+import { ENTITY_SIMILARITY, type SimilarityThresholds } from '../entities/similarity.ts';
 import type { Embedder, Embedding } from '../models/ports.ts';
 import type { KnowledgeContext } from './context.ts';
 import { type PreparedFact, prepareFact } from './facts.ts';
@@ -17,6 +18,9 @@ export interface PreparedKnowledge {
   // One embedding per fact, in order. Undefined when none was computed.
   readonly factEmbeddings: readonly Embedding[] | undefined;
   readonly subjects: readonly ResolvableSubject[];
+  // The thresholds the verdicts of the subjects were given under; resolution under the
+  // lock decides on the same ones.
+  readonly similarity: SimilarityThresholds;
   // True when the embeddings come from a provider outside the installation: they are not
   // stored if the document turns out to be private once its row is locked.
   readonly embeddedExternally: boolean;
@@ -33,6 +37,7 @@ export interface PreparedKnowledge {
 export const prepareWithoutModels = (
   identifierKey: IdentifierKey,
   input: KnowledgeInput,
+  similarity: SimilarityThresholds,
 ): PreparedKnowledge => {
   const knowledge = parseKnowledge(input);
   return {
@@ -45,6 +50,7 @@ export const prepareWithoutModels = (
       embedding: undefined,
       verdict: undefined,
     })),
+    similarity,
     embeddedExternally: false,
     rejectedValues: knowledge.rejectedValues,
   };
@@ -76,11 +82,11 @@ const embedAll = async (
  * given it the whole text already.
  */
 export const prepareKnowledge = async (
-  { db, embedder, textModel, identifierKey }: KnowledgeContext,
+  { db, embedder, textModel, identifierKey, similarity = ENTITY_SIMILARITY }: KnowledgeContext,
   document: KnowledgeDocument,
   input: KnowledgeInput,
 ): Promise<PreparedKnowledge> => {
-  const offline = prepareWithoutModels(identifierKey, input);
+  const offline = prepareWithoutModels(identifierKey, input, similarity);
   if (document.private && !embedder.isLocal) return offline;
   const mentions = offline.subjects.map(({ mention }) => mention);
   const embeddings = await embedAll(embedder, [
@@ -93,13 +99,14 @@ export const prepareKnowledge = async (
     subjects.push({
       mention,
       embedding,
-      verdict: await arbitrateOutsideLock({ db, textModel }, mention, embedding),
+      verdict: await arbitrateOutsideLock({ db, textModel, similarity }, mention, embedding),
     });
   }
   return {
     ...offline,
     factEmbeddings: embeddings.slice(mentions.length),
     subjects,
+    similarity,
     embeddedExternally: !embedder.isLocal,
   };
 };

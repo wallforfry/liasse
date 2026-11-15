@@ -25,10 +25,14 @@ export const MAX_FILENAME_LENGTH = 255;
 // person handing the file back through the API or MCP resets the count.
 export const MAX_WATCH_REQUEUES = 1;
 
-// Entity resolution, as the specification sets it: a mention whose embedding is closer
-// than the first threshold is attached, one at or above the second is arbitrated by the
-// text model among this many candidates, and anything below is a new entity.
-export const ENTITY_ATTACH_SIMILARITY = 0.92;
+// Entity resolution: a mention whose embedding is closer than the first threshold is
+// attached, one at or above the second is arbitrated by the text model among this many
+// candidates, and anything below is a new entity. The two thresholds are the defaults of
+// `ENTITY_ATTACH_SIMILARITY` and `ENTITY_ARBITRATION_SIMILARITY`, measured with the default
+// local embedder by `pnpm eval:calibrate` (eval/README.md): with it, two distinct entities
+// mentioned with their context reach 0.995 and no alias goes above 0.976, so similarity
+// alone attaches nothing, and every alias measured is at or above 0.819.
+export const ENTITY_ATTACH_SIMILARITY = 1;
 export const ENTITY_ARBITRATION_SIMILARITY = 0.8;
 export const ENTITY_ARBITRATION_CANDIDATES = 3;
 
