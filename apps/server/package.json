@@ -29,6 +29,7 @@
     "@liasse/contract": "workspace:*",
     "@liasse/core": "workspace:*",
     "@liasse/mcp": "workspace:*",
+    "@liasse/web": "workspace:*",
     "hash-wasm": "4.12.0",
     "hono": "^4.13.18",
     "hono-openapi": "^1.5.0",

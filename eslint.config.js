@@ -1,5 +1,7 @@
 import eslint from '@eslint/js';
 import { defineConfig, globalIgnores } from 'eslint/config';
+import reactHooks from 'eslint-plugin-react-hooks';
+import reactRefresh from 'eslint-plugin-react-refresh';
 import tseslint from 'typescript-eslint';
 
 export default defineConfig(
@@ -38,6 +40,17 @@ export default defineConfig(
     files: ['**/*.config.{js,ts}'],
     rules: {
       'no-restricted-syntax': 'off',
+    },
+  },
+  {
+    files: ['apps/web/**/*.{ts,tsx}'],
+    extends: [reactHooks.configs.flat['recommended-latest'], reactRefresh.configs.vite],
+  },
+  {
+    // The shadcn components export their variants beside the component, as shadcn writes them.
+    files: ['apps/web/src/components/ui/**/*.tsx'],
+    rules: {
+      'react-refresh/only-export-components': 'off',
     },
   },
 );

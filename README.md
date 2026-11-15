@@ -33,7 +33,7 @@ TypeScript · Node 22 · Hono · Drizzle · Zod · Postgres + pgvector · MCP Ty
 docker compose up -d
 ```
 
-The compose file sets `DATABASE_URL`, `HOST`, `PORT`, `STORAGE_PATH` and `EMBEDDING_CACHE_DIR` itself. Files and the local embedding model live in the `liasse-data` volume, the database in `postgres-data`. Liasse speaks plain HTTP: put a TLS reverse proxy in front of it before publishing it beyond `127.0.0.1`.
+The compose file sets `DATABASE_URL`, `HOST`, `PORT`, `STORAGE_PATH` and `EMBEDDING_CACHE_DIR` itself. Files and the local embedding model live in the `liasse-data` volume, the database in `postgres-data`. Liasse speaks plain HTTP: put a TLS reverse proxy in front of it before publishing it beyond `127.0.0.1`. The image carries the build of the web UI: with `UI_PASSWORD` set, it is served at `PUBLIC_URL/ui/`, and `/` redirects there.
 
 Inside the container, `127.0.0.1` is the container itself: an Ollama server on the host is `LLM_BASE_URL=http://host.docker.internal:11434` (on Linux, add `extra_hosts: ['host.docker.internal:host-gateway']` to the `liasse` service), and a `WATCH_DIR` needs a volume that mounts the host folder at that path.
 

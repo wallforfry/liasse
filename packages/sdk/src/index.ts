@@ -40,4 +40,4 @@ export {
 } from './client.ts';
 export { LiasseApiError, LiasseResponseError } from './errors.ts';
 export type { DownloadedFile, UploadInput } from './files.ts';
-export { type ClientOptions, DEFAULT_TIMEOUT_MS } from './transport.ts';
+export { type ClientOptions, DEFAULT_TIMEOUT_MS, type SessionCredentials } from './transport.ts';
