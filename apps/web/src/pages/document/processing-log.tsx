@@ -54,12 +54,14 @@ const attemptOf = ({ attempt, max_attempts }: DocumentEvent): string =>
       ? String(attempt)
       : `${String(attempt)} of ${String(max_attempts)}`;
 
-const providerDetailOf = ({ http_status, provider_code }: DocumentEvent): string | undefined => {
+const ProviderDetail = ({ event }: { readonly event: DocumentEvent }) => {
   const parts = [
-    ...(http_status === null ? [] : [`HTTP ${String(http_status)}`]),
-    ...(provider_code === null ? [] : [provider_code]),
+    ...(event.http_status === null ? [] : [`HTTP ${String(event.http_status)}`]),
+    ...(event.provider_code === null ? [] : [event.provider_code]),
   ];
-  return parts.length === 0 ? undefined : parts.join(', ');
+  return parts.length === 0 ? null : (
+    <code className="text-xs text-muted-foreground">{parts.join(', ')}</code>
+  );
 };
 
 const ErrorCell = ({ event }: { readonly event: DocumentEvent }) =>
@@ -69,9 +71,7 @@ const ErrorCell = ({ event }: { readonly event: DocumentEvent }) =>
       {event.error_name === null ? null : (
         <span className="text-xs text-muted-foreground">{event.error_name}</span>
       )}
-      {providerDetailOf(event) === undefined ? null : (
-        <code className="text-xs text-muted-foreground">{providerDetailOf(event)}</code>
-      )}
+      <ProviderDetail event={event} />
       {event.retryable === false ? (
         <span className="text-xs text-muted-foreground">not retryable</span>
       ) : null}

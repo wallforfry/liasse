@@ -264,6 +264,32 @@ describe('documents of the API', () => {
       ]);
     });
 
+    it('answers the model, HTTP status and code of a provider failure', async () => {
+      const { id } = await upload('refused by the provider');
+      await log(id, {
+        stage: 'classification',
+        outcome: 'failed',
+        status: 'failed',
+        attempt: 1,
+        maxAttempts: 3,
+        errorCode: 'model_provider_failed',
+        errorName: 'ModelProviderError',
+        httpStatus: 400,
+        providerCode: 'invalid_request_error:invalid_json_schema',
+        retryable: false,
+        model: 'synthetic-model',
+      });
+      const { events } = await listDocumentEvents(harness.context, id);
+      expect(events).toMatchObject([
+        {
+          error_code: 'model_provider_failed',
+          http_status: 400,
+          provider_code: 'invalid_request_error:invalid_json_schema',
+          model: 'synthetic-model',
+        },
+      ]);
+    });
+
     it('does not find an unknown or a deleted document, whose log is gone with it', async () => {
       const { id } = await upload('log after deletion');
       await log(id, { stage: 'text', outcome: 'succeeded' });
