@@ -1,8 +1,8 @@
+import { languageCodeSchema } from '@liasse/contract/domain';
 import { and, eq } from 'drizzle-orm';
 import { z } from 'zod';
 import { documents, isLiveDocument } from '../db/schema/documents.ts';
 import { PROVENANCE_ENTITY_ID_KEY } from '../domain/provenance.ts';
-import { languageCodeSchema } from '../domain/values.ts';
 import { missingEntityIds } from '../entities/entity-store.ts';
 import type { IdentifierKey } from '../entities/sensitive.ts';
 import { ENTITY_SIMILARITY, type SimilarityThresholds } from '../entities/similarity.ts';

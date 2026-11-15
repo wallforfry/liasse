@@ -1,5 +1,5 @@
+import { storageDriverSchema } from '@liasse/contract/domain';
 import { z } from 'zod';
-import { storageDriverSchema } from '../domain/schemas.ts';
 import { type CrossFieldProblem, duration, integer, list, reportProblems, text } from './fields.ts';
 import { uiPassword } from './ui-password.ts';
 

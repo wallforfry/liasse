@@ -1,9 +1,4 @@
-import { MAX_QUERY_SUGGESTED_NAMES } from '../domain/limits.ts';
-import { err, ok, type Result } from '../registry/result.ts';
-import type { CheckedCondition } from './check-conditions.ts';
-import type { EntityIds } from './condition-sql.ts';
-import { existingEntityIds, idsByKey, queryNameKey, readEntities } from './entity-index.ts';
-import { suggestEntities, type SuggestionScope } from './entity-suggestions.ts';
+import { MAX_QUERY_SUGGESTED_NAMES } from '@liasse/contract/domain';
 import {
   cut,
   failure,
@@ -11,7 +6,12 @@ import {
   type QueryLocation,
   quoted,
   type UnknownEntity,
-} from './errors.ts';
+} from '@liasse/contract/query';
+import { err, ok, type Result } from '@liasse/contract/registry';
+import type { CheckedCondition } from './check-conditions.ts';
+import type { EntityIds } from './condition-sql.ts';
+import { existingEntityIds, idsByKey, queryNameKey, readEntities } from './entity-index.ts';
+import { suggestEntities, type SuggestionScope } from './entity-suggestions.ts';
 
 interface EntityReference {
   readonly name: string;

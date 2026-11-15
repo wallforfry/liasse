@@ -1,6 +1,6 @@
 import { Readable } from 'node:stream';
+import { supportedMimeSchema } from '@liasse/contract/domain';
 import { type ApiContext, openDocumentFile } from '@liasse/core/api';
-import { supportedMimeSchema } from '@liasse/core/domain';
 import { Hono, type MiddlewareHandler } from 'hono';
 import { z } from 'zod';
 import { BEARER_SCHEME, failures, operation, SIGNED_URL_SCHEME, valid } from '../describe.ts';

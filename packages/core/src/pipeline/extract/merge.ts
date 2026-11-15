@@ -1,11 +1,11 @@
 import { isDeepStrictEqual } from 'node:util';
+import { ownValue } from '@liasse/contract/registry';
 import {
   MANUAL_TYPE_FIELD,
   PIPELINE_PROVENANCE_KEY,
   readPipelineProvenance,
 } from '../../domain/provenance.ts';
 import { CORE_FIELD_NAMES } from '../../registry/core-fields.ts';
-import { ownValue } from '../../registry/own.ts';
 import type { RegisteredType } from '../../registry/type-store.ts';
 import { documentConfidence, typeConfidence } from '../confidence.ts';
 import type { PipelineDocument } from '../document.ts';

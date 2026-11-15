@@ -1,8 +1,8 @@
+import { type ListEntitiesOptions, listEntitiesOptionsSchema } from '@liasse/contract/entities';
 import { entityNameKey, normalizeEntityName } from '../domain/entity-name.ts';
 import type { EntitiesReadContext } from './context.ts';
 import { type Entity, findEntityById, loadEntities } from './entity-store.ts';
 import { type IdentifierView, viewIdentifier } from './identifiers.ts';
-import { type ListEntitiesOptions, listEntitiesOptionsSchema } from './list-options.ts';
 import { countDocumentsByEntity, type DocumentCountOptions } from './references.ts';
 
 export interface ListedEntity extends Omit<Entity, 'identifiers'> {

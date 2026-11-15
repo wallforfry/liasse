@@ -1,4 +1,4 @@
-import { isPlainRecord } from '../../registry/own.ts';
+import { isPlainRecord } from '@liasse/contract/registry';
 import type { MaskSensitive } from '../deps.ts';
 
 /** Masks every string at any depth; keys and other values are left as they are. */

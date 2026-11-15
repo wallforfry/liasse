@@ -1,10 +1,10 @@
+import type { Result } from '@liasse/contract/registry';
 import type { Database } from '../db/client.ts';
 import { findMergeCandidates } from '../entities/merge-candidates.ts';
 import { proposeEntityMerge } from '../entities/merge-proposals.ts';
 import type { RecordedProposal } from '../entities/proposal-store.ts';
 import { findSubjectMergeCandidates } from '../knowledge/subject-merge-candidates.ts';
 import { proposeSubjectMerge } from '../knowledge/subject-merge-proposals.ts';
-import type { Result } from '../registry/result.ts';
 
 const isNew = (result: Result<RecordedProposal, unknown>): boolean =>
   result.ok && result.value.created;

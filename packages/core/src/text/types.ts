@@ -1,4 +1,4 @@
-import type { SupportedMime } from '../domain/enums.ts';
+import type { SupportedMime } from '@liasse/contract/domain';
 import type { VisionModel } from '../models/ports.ts';
 import type { TextLimits } from './limits.ts';
 

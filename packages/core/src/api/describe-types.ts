@@ -2,7 +2,7 @@ import {
   type DescribeTypesOptions,
   describeTypesOptionsSchema,
   type TypeList,
-} from '../contract/registry.ts';
+} from '@liasse/contract';
 import { listTypes } from '../registry/read-types.ts';
 import type { ApiContext } from './context.ts';
 

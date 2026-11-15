@@ -1,10 +1,10 @@
+import type { ChangeKind, TypeStatus } from '@liasse/contract/domain';
 import { asc, eq } from 'drizzle-orm';
 import type { Database } from '../db/client.ts';
 import type { JsonObject } from '../db/columns.ts';
 import { documents } from '../db/schema/documents.ts';
 import { jobs } from '../db/schema/jobs.ts';
 import { docTypes, typeChanges } from '../db/schema/registry.ts';
-import type { ChangeKind, TypeStatus } from '../domain/enums.ts';
 import { createType } from '../registry/create-type.ts';
 import { findTypeById, type RegisteredType } from '../registry/type-store.ts';
 import { createFakeEmbedder } from '../testing/fake-embedder.ts';

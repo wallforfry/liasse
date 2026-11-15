@@ -20,14 +20,6 @@ export {
   type IndexingDeps,
   type IndexingResult,
 } from './indexing.ts';
-export {
-  DEFAULT_SEARCH_LIMIT,
-  MAX_SEARCH_LIMIT,
-  type SearchFilters,
-  searchFiltersSchema,
-  type SearchInput,
-  searchInputSchema,
-} from './input.ts';
 export { type FullTextRanking, prepareFullTextRanking } from './full-text-ranking.ts';
 export { type ChunkRanker, rankByFullText, type RankedChunk, type RankRequest } from './rankers.ts';
 export { CANDIDATES_PER_RANKER, search, type SearchDeps, type SearchHit } from './search.ts';

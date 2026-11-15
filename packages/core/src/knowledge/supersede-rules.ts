@@ -1,8 +1,8 @@
+import type { LinkKind } from '@liasse/contract/domain';
 import { and, eq, inArray, ne, sql } from 'drizzle-orm';
 import { z } from 'zod';
 import { documents } from '../db/schema/documents.ts';
 import { documentLinks } from '../db/schema/knowledge.ts';
-import type { LinkKind } from '../domain/enums.ts';
 import type { Transaction } from '../ingest/existing-document.ts';
 import { documentDay } from './document-day.ts';
 import type { ValidLink } from './link-rules.ts';

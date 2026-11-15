@@ -1,7 +1,7 @@
+import { EMBEDDING_PROVIDERS } from '@liasse/contract/domain';
 import { describe, expect, it } from 'vitest';
 import { loadConfig } from '../config/load.ts';
 import { StartupError } from '../domain/errors.ts';
-import { EMBEDDING_PROVIDERS } from '../domain/enums.ts';
 import { SYNTHETIC_ENV } from '../testing/synthetic-env.ts';
 import { createEmbedder } from './create.ts';
 import { DEFAULT_LOCAL_EMBEDDING_MODEL } from './local.ts';

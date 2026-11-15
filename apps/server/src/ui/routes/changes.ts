@@ -1,5 +1,5 @@
+import { changeDecisionResultSchema, changeDecisionSchema } from '@liasse/contract';
 import { type ApiContext, ApiError, applyChange, listChanges } from '@liasse/core/api';
-import { changeDecisionResultSchema, changeDecisionSchema } from '@liasse/core/contract';
 import { Hono, type MiddlewareHandler } from 'hono';
 import { idParam } from '../../http/query-params.ts';
 import type { UiEnv } from '../guards.ts';

@@ -2,7 +2,7 @@ import {
   type DocumentCorrection,
   documentCorrectionSchema,
   type DocumentView,
-} from '@liasse/core/contract';
+} from '@liasse/contract';
 import { z } from 'zod';
 
 export type FormBody = Readonly<Record<string, string | File | (string | File)[]>>;

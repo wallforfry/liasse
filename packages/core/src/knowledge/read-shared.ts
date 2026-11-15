@@ -1,11 +1,11 @@
+import type { SubjectRef } from '@liasse/contract';
+import type { DocumentState } from '@liasse/contract/domain';
 import { and, inArray, type SQL, sql } from 'drizzle-orm';
 import type { PgColumn } from 'drizzle-orm/pg-core';
-import type { SubjectRef } from '../contract/knowledge.ts';
 import type { Database } from '../db/client.ts';
 import { qualified } from '../db/columns.ts';
 import { documents, isLiveDocument } from '../db/schema/documents.ts';
 import { documentLinks, subjects } from '../db/schema/knowledge.ts';
-import type { DocumentState } from '../domain/enums.ts';
 
 // A tombstone is not a document for any reader, and a document flagged `private` is left
 // out unless the caller asks for it, as search and queries do.

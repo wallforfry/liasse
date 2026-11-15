@@ -1,5 +1,5 @@
 import { loadConfig } from '@liasse/core/config';
-import { ENTITY_ARBITRATION_CANDIDATES } from '@liasse/core/domain';
+import { ENTITY_ARBITRATION_CANDIDATES } from '@liasse/contract/domain';
 import { SYNTHETIC_ENV } from '@liasse/core/testing';
 import { describe, expect, it } from 'vitest';
 import { pipelineSettingsOf } from './bindings.ts';

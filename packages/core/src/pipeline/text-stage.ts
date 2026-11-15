@@ -1,6 +1,6 @@
+import { supportedMimeSchema } from '@liasse/contract/domain';
 import { eq } from 'drizzle-orm';
 import { documentPages, documents } from '../db/schema/documents.ts';
-import { supportedMimeSchema } from '../domain/schemas.ts';
 import { getDocumentFile } from '../ingest/document-file.ts';
 import type { ExtractedText } from '../text/types.ts';
 import { type AttachmentCounts, ingestAttachments } from './attachments.ts';

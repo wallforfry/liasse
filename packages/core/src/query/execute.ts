@@ -1,8 +1,8 @@
+import { failure, type QueryError } from '@liasse/contract/query';
+import { err, ok, type Result } from '@liasse/contract/registry';
 import { DrizzleQueryError, type SQL, sql } from 'drizzle-orm';
 import type { Database } from '../db/client.ts';
 import { sqlStateOf } from '../db/sql-state.ts';
-import { err, ok, type Result } from '../registry/result.ts';
-import { failure, type QueryError } from './errors.ts';
 
 export type StoredRow = Readonly<Record<string, unknown>>;
 

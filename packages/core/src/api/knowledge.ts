@@ -5,7 +5,7 @@ import type {
   RecallOptions,
   TimelineInput,
   TimelineOptions,
-} from '../contract/knowledge-reads.ts';
+} from '@liasse/contract';
 import type { JsonObject } from '../db/columns.ts';
 import type { ApiContext } from './context.ts';
 import { notImplemented } from './errors.ts';

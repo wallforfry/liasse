@@ -1,8 +1,8 @@
+import { listSubjectsOutputSchema } from '@liasse/contract';
 import { eq } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { documents } from '../db/schema/documents.ts';
 import { createTestDatabase, type TestDatabase } from '../testing/test-database.ts';
-import { listSubjectsOutputSchema } from '../contract/knowledge.ts';
 import { listSubjects } from './list-subjects.ts';
 import { buildScenario, type Scenario } from './scenario.test-helper.ts';
 

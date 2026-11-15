@@ -1,8 +1,8 @@
+import { TOMBSTONE_STATUS } from '@liasse/contract/domain';
 import { and, eq, inArray, isNull, notExists, sql } from 'drizzle-orm';
 import type { Database } from '../db/client.ts';
 import { documents } from '../db/schema/documents.ts';
 import { jobs } from '../db/schema/jobs.ts';
-import { TOMBSTONE_STATUS } from '../domain/enums.ts';
 import { enqueue } from '../jobs/enqueue.ts';
 import { deleteFileJob } from './delete-file-job.ts';
 

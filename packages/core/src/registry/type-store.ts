@@ -1,9 +1,9 @@
+import type { TypeStatus } from '@liasse/contract/domain';
 import { and, arrayContains, eq, ne, or, sql } from 'drizzle-orm';
 import { PgTransaction } from 'drizzle-orm/pg-core';
 import type { Database } from '../db/client.ts';
 import { assertReadCommitted, READ_COMMITTED } from '../db/isolation.ts';
 import { docTypes } from '../db/schema/registry.ts';
-import type { TypeStatus } from '../domain/enums.ts';
 import type { Embedding } from '../models/ports.ts';
 import type { TypeFields } from './fields.ts';
 import { parseTypeSchema, renderTypeSchema } from './stored-schema.ts';

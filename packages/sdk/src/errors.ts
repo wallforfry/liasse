@@ -1,4 +1,4 @@
-import type { ErrorBody } from '@liasse/core/contract';
+import type { ErrorBody } from '@liasse/contract';
 import type { z } from 'zod';
 
 /** The server refused the request, with one of the stable codes of the API. */

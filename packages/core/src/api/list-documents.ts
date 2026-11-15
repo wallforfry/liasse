@@ -1,9 +1,9 @@
-import { and, desc, eq } from 'drizzle-orm';
 import {
   type DocumentList,
   type ListDocumentsOptions,
   listDocumentsOptionsSchema,
-} from '../contract/documents.ts';
+} from '@liasse/contract';
+import { and, desc, eq } from 'drizzle-orm';
 import { documents, isLiveDocument } from '../db/schema/documents.ts';
 import { docTypes } from '../db/schema/registry.ts';
 import { documentFilter } from '../search/filters.ts';

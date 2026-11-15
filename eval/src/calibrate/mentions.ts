@@ -1,4 +1,4 @@
-import { MAX_ENTITY_CONTEXT_LENGTH } from '@liasse/core/domain';
+import { MAX_ENTITY_CONTEXT_LENGTH } from '@liasse/contract/domain';
 import { mentionEmbeddingText } from '@liasse/core/entities';
 import type { Corpus, GroundTruth } from '../schema/index.ts';
 import { type EntityName, entityNamesOf } from './thresholds.ts';

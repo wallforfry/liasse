@@ -1,8 +1,8 @@
 import { isDeepStrictEqual } from 'node:util';
+import { ownValue } from '@liasse/contract/registry';
 import type { TypeFields } from '../registry/fields.ts';
 import { addField, removeField, retypeField } from '../registry/field-operations.ts';
 import { markMerged, setStatus } from '../registry/lifecycle.ts';
-import { ownValue } from '../registry/own.ts';
 import {
   findTypeById,
   type RegisteredType,

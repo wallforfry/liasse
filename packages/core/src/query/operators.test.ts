@@ -1,13 +1,16 @@
+import {
+  LANGUAGE_CODES,
+  MAX_QUERY_IN_VALUES,
+  MAX_QUERY_STRING_LENGTH,
+} from '@liasse/contract/domain';
+import { type Operator, OPERATORS } from '@liasse/contract/query';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { entities } from '../db/schema/registry.ts';
-import { LANGUAGE_CODES } from '../domain/languages.ts';
-import { MAX_QUERY_IN_VALUES, MAX_QUERY_STRING_LENGTH } from '../domain/limits.ts';
 import { createType } from '../registry/create-type.ts';
 import { createFakeEmbedder } from '../testing/fake-embedder.ts';
 import { insertSyntheticDocument } from '../testing/fixtures.ts';
 import { createTestDatabase, type TestDatabase } from '../testing/test-database.ts';
 import type { QueryPrimitive } from './capabilities.ts';
-import { type Operator, OPERATORS } from './dsl.ts';
 import { runQuery } from './run.ts';
 
 // A type schema is proposed by a model from the text of documents: its enum values are

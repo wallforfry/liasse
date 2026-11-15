@@ -2,7 +2,7 @@ import {
   ENTITY_ARBITRATION_CANDIDATES,
   ENTITY_ARBITRATION_SIMILARITY,
   ENTITY_ATTACH_SIMILARITY,
-} from '../domain/limits.ts';
+} from '@liasse/contract/domain';
 
 export interface SimilarityThresholds {
   // Above it, the closest candidate is attached without asking.

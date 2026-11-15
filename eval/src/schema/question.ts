@@ -5,8 +5,8 @@ import {
   languageCodeSchema,
   moneySchema,
   typeStatusSchema,
-} from '@liasse/core/domain';
-import { queryDslSchema } from '@liasse/core/query';
+} from '@liasse/contract/domain';
+import { queryDslSchema } from '@liasse/contract/query';
 import { z } from 'zod';
 import { keySchema } from './expectation.ts';
 

@@ -9,7 +9,7 @@ import {
   scheduleNightlyRun,
 } from '@liasse/core/consolidation';
 import type { Database } from '@liasse/core/db';
-import { ENTITY_ARBITRATION_CANDIDATES } from '@liasse/core/domain';
+import { ENTITY_ARBITRATION_CANDIDATES } from '@liasse/contract/domain';
 import { deriveIdentifierKey, findSensitiveIdentifiers } from '@liasse/core/entities';
 import {
   createHindsightIntegration,

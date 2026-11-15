@@ -1,6 +1,6 @@
 import { z } from 'zod';
-import { documentStateSchema, keyDateKindSchema, subjectKindSchema } from '../domain/schemas.ts';
-import { isoDateSchema } from '../domain/values.ts';
+import { documentStateSchema, keyDateKindSchema, subjectKindSchema } from './domain/schemas.ts';
+import { isoDateSchema } from './domain/values.ts';
 
 // What the knowledge tools and routes answer with is compact JSON about documents, which
 // are referenced by id. Every text in it that was read in a document, or written by a

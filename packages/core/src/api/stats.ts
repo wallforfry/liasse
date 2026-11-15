@@ -1,7 +1,7 @@
+import type { DocumentStatus, JobStatus } from '@liasse/contract/domain';
 import { count, min, sql } from 'drizzle-orm';
 import { documents, isLiveDocument } from '../db/schema/documents.ts';
 import { jobs } from '../db/schema/jobs.ts';
-import type { DocumentStatus, JobStatus } from '../domain/enums.ts';
 import type { ApiContext } from './context.ts';
 
 export interface Stats {

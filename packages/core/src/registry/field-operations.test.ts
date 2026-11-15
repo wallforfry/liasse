@@ -1,9 +1,9 @@
+import { MAX_FIELDS_PER_TYPE } from '@liasse/contract/domain';
 import { eq } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { documents } from '../db/schema/documents.ts';
 import { jobs } from '../db/schema/jobs.ts';
 import { docTypes, typeChanges } from '../db/schema/registry.ts';
-import { MAX_FIELDS_PER_TYPE } from '../domain/limits.ts';
 import { createFakeEmbedder } from '../testing/fake-embedder.ts';
 import { insertSyntheticDocument } from '../testing/fixtures.ts';
 import { createTestDatabase, type TestDatabase } from '../testing/test-database.ts';

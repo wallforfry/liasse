@@ -1,7 +1,7 @@
+import type { ChangeKind } from '@liasse/contract/domain';
+import { fieldDefinitionSchema } from '@liasse/contract/registry';
 import { z } from 'zod';
-import type { ChangeKind } from '../domain/enums.ts';
 import { mergeEntityPayloadSchema } from '../entities/proposal-store.ts';
-import { fieldDefinitionSchema } from '../registry/primitives.ts';
 
 const id = z.string().min(1);
 const name = z.string().min(1);

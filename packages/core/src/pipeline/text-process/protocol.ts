@@ -1,5 +1,5 @@
+import { supportedMimeSchema } from '@liasse/contract/domain';
 import { z } from 'zod';
-import { supportedMimeSchema } from '../../domain/schemas.ts';
 import { TEXT_EXTRACTION_ERROR_CODES } from '../../text/errors.ts';
 import type { TextLimits } from '../../text/limits.ts';
 import { PAGE_TEXT_METHODS, TEXT_EXTRACTION_METHODS } from '../../text/types.ts';

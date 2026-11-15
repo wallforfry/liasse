@@ -1,10 +1,11 @@
-import { z } from 'zod';
 import {
+  autoApplyModeSchema,
   DEFAULT_MAX_VISION_PAGES,
   ENTITY_ARBITRATION_SIMILARITY,
   ENTITY_ATTACH_SIMILARITY,
-} from '../domain/limits.ts';
-import { autoApplyModeSchema, schemaLanguageSchema } from '../domain/schemas.ts';
+  schemaLanguageSchema,
+} from '@liasse/contract/domain';
+import { z } from 'zod';
 import { baseUrl, decimal, integer, reportProblems, text } from './fields.ts';
 
 const MEBIBYTE = 1024 * 1024;

@@ -3,7 +3,7 @@ import {
   keyDateSchema,
   linkKindSchema,
   subjectKindSchema,
-} from '@liasse/core/domain';
+} from '@liasse/contract/domain';
 import { PAGE_TEXT_METHODS } from '@liasse/core/text';
 import { z } from 'zod';
 import { keySchema } from './expectation.ts';

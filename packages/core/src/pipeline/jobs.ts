@@ -1,5 +1,5 @@
+import { DOCUMENT_JOB_FAILURE_CODES } from '@liasse/contract/domain';
 import { z } from 'zod';
-import { DOCUMENT_JOB_FAILURE_CODES } from '../domain/enums.ts';
 import { documentOfPayload, flagDocument } from '../ingest/document-failure.ts';
 import { PROCESS_DOCUMENT_MAX_ATTEMPTS } from '../ingest/process-document-job.ts';
 import { defineJobKind } from '../jobs/kinds.ts';

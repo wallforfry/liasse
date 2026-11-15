@@ -1,8 +1,8 @@
+import { type DocumentStatus, IN_PROGRESS_STATUSES } from '@liasse/contract/domain';
 import { and, eq, inArray } from 'drizzle-orm';
 import { z } from 'zod';
 import type { Database } from '../db/client.ts';
 import { documents } from '../db/schema/documents.ts';
-import { type DocumentStatus, IN_PROGRESS_STATUSES } from '../domain/enums.ts';
 import type { Transaction } from './existing-document.ts';
 import { writeIfLive } from './live-write.ts';
 

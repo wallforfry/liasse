@@ -1,3 +1,4 @@
+import type { SearchFilters } from '@liasse/contract/search';
 import { eq, sql } from 'drizzle-orm';
 import { drizzle } from 'drizzle-orm/postgres-js';
 import postgres from 'postgres';
@@ -12,7 +13,6 @@ import { BM25_INDEX } from './bm25-index.ts';
 import { CORPUS, type CorpusDocument, seedCorpus, type SeededCorpus } from './corpus.fixture.ts';
 import { documentFilter } from './filters.ts';
 import { prepareFullTextRanking } from './full-text-ranking.ts';
-import type { SearchFilters } from './input.ts';
 import { installedPgSearchVersion } from './pg-search.ts';
 import { type ChunkRanker, rankByFullText, type RankRequest } from './rankers.ts';
 import { search } from './search.ts';

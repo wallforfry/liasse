@@ -1,5 +1,5 @@
+import { MAX_FILENAME_LENGTH, MAX_HINT_LENGTH } from '@liasse/contract/domain';
 import { describe, expect, it } from 'vitest';
-import { MAX_FILENAME_LENGTH, MAX_HINT_LENGTH } from '../domain/limits.ts';
 import { cleanFilename, cleanHint } from './untrusted-text.ts';
 
 describe('cleanFilename', () => {

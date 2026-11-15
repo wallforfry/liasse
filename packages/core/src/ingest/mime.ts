@@ -1,4 +1,4 @@
-import { SUPPORTED_MIMES, type SupportedMime } from '../domain/enums.ts';
+import { SUPPORTED_MIMES, type SupportedMime } from '@liasse/contract/domain';
 import { isDocx } from '../formats/docx.ts';
 import { checkEmail } from '../formats/email.ts';
 import { isHeic } from '../formats/heic.ts';

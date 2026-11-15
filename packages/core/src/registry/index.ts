@@ -28,15 +28,6 @@ export {
   slugViolations,
 } from './naming.ts';
 export {
-  FIELD_PRIMITIVES,
-  type FieldDefinition,
-  fieldDefinitionSchema,
-  type FieldPrimitive,
-  fieldValueSchema,
-  type ScalarFieldDefinition,
-  type ValueWrapper,
-} from './primitives.ts';
-export {
   type ClosestType,
   closestTypes,
   DEFAULT_CLOSEST_TYPES,
@@ -46,7 +37,6 @@ export {
   type ListTypesOptions,
   resolveType,
 } from './read-types.ts';
-export type { Result } from './result.ts';
 export {
   FIELD_ANNOTATION,
   InvalidTypeSchemaError,

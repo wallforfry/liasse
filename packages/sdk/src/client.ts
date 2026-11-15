@@ -15,9 +15,9 @@ import {
   type GetDocumentOptions,
   type Health,
   healthSchema,
+  type listChangesOptionsSchema,
   type ListDocumentsOptions,
   type ListEntitiesRequest,
-  type listChangesOptionsSchema,
   type listSubjectsOptionsSchema,
   listSubjectsOutputSchema,
   type queryDslSchema,
@@ -25,8 +25,8 @@ import {
   queryResultSchema,
   type SearchRequest,
   type SearchResults,
-  type SubjectList,
   searchResultsSchema,
+  type SubjectList,
   type TypeList,
   typeListSchema,
   type Upcoming,
@@ -34,7 +34,7 @@ import {
   upcomingOutputSchema,
   type UploadResult,
   uploadResultSchema,
-} from '@liasse/core/contract';
+} from '@liasse/contract';
 import { z } from 'zod';
 import { type DownloadedFile, downloadedFile, type UploadInput, uploadForm } from './files.ts';
 import { type ClientOptions, createSend, parseJson, type QueryParams } from './transport.ts';
