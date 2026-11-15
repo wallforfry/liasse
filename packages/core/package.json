@@ -87,6 +87,11 @@
       "types": "./dist/models/index.d.ts",
       "default": "./dist/models/index.js"
     },
+    "./network": {
+      "@liasse/source": "./src/network/index.ts",
+      "types": "./dist/network/index.d.ts",
+      "default": "./dist/network/index.js"
+    },
     "./pipeline": {
       "@liasse/source": "./src/pipeline/index.ts",
       "types": "./dist/pipeline/index.d.ts",

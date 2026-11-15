@@ -31,6 +31,13 @@ services:
       DATABASE_URL: postgres://liasse:${SERVICE_PASSWORD_64_POSTGRES}@postgres:5432/liasse
       HOST: 0.0.0.0
       PORT: 8080
+      # Coolify's proxy reaches the container over a Docker bridge network, in 172.16.0.0/12
+      # unless Docker's address pools were changed (`docker network inspect coolify`). Its
+      # forwarded headers are believed, so this holds only while no untrusted container shares
+      # a network with `liasse` and the proxy rewrites X-Forwarded-For from untrusted peers
+      # (Traefik's default). Add `cloudflare` when Cloudflare proxies the domain; set it empty
+      # to trust no proxy. See TRUSTED_PROXIES in .env.example.
+      TRUSTED_PROXIES: ${TRUSTED_PROXIES-172.16.0.0/12}
       STORAGE_PATH: /data/files
       EMBEDDING_CACHE_DIR: /data/models
       AUTH_SECRET: ${SERVICE_BASE64_64_AUTHSECRET}
