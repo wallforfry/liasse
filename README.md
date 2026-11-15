@@ -18,6 +18,25 @@ Self-hosted document managers rely on classic OCR, manual tags and a UI built fo
 
 TypeScript · Node 22 · Hono · Drizzle · Zod · Postgres + pgvector · MCP TypeScript SDK · Vercel AI SDK
 
+## Run with Docker
+
+`docker-compose.yml` runs Liasse and Postgres (with pgvector); the server applies its migrations at startup. Next to it, write a `.env` from [`.env.example`](.env.example) (models, `API_TOKENS`, `FILE_URL_SECRET`, optionally `UI_PASSWORD`) and add the variables of the compose file:
+
+| Variable            | Default                 | Role                                                                             |
+| ------------------- | ----------------------- | -------------------------------------------------------------------------------- |
+| `POSTGRES_PASSWORD` | required                | Database password, put in a URL: use letters and digits (`openssl rand -hex 24`) |
+| `PUBLIC_URL`        | `http://localhost:8080` | Origin clients reach Liasse at                                                   |
+| `LIASSE_LISTEN`     | `127.0.0.1:8080`        | Host address and port the container is published on                              |
+| `LIASSE_VERSION`    | `latest`                | Tag of `ghcr.io/wallforfry/liasse`                                               |
+
+```bash
+docker compose up -d
+```
+
+The compose file sets `DATABASE_URL`, `HOST`, `PORT`, `STORAGE_PATH` and `EMBEDDING_CACHE_DIR` itself. Files and the local embedding model live in the `liasse-data` volume, the database in `postgres-data`. Liasse speaks plain HTTP: put a TLS reverse proxy in front of it before publishing it beyond `127.0.0.1`. `docker compose up -d --build` builds the image from the checkout instead of pulling it.
+
+The image (`linux/amd64`, `linux/arm64`) is published to GHCR by the `Image` workflow: `edge` and `sha-<commit>` for every push to `main`, `<version>`, `<major>.<minor>` and `latest` for every `v*` tag.
+
 ## Contributing
 
 Contributions are welcome once the first milestone lands. Please read [`CONTRIBUTING.md`](CONTRIBUTING.md). Everything in this repository is written in English.
