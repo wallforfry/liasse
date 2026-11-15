@@ -16,7 +16,8 @@ import { insertSyntheticDocument } from '../testing/fixtures.ts';
 import { syntheticPdf } from '../testing/synthetic-files.ts';
 import { TextExtractionError } from '../text/errors.ts';
 import type { PipelineDeps } from './deps.ts';
-import { createPipelineHandlers, failAbandonedDocuments } from './handlers.ts';
+import { failAbandonedDocuments } from './abandoned.ts';
+import { createPipelineHandlers } from './handlers.ts';
 import {
   createPipelineHarness,
   live,

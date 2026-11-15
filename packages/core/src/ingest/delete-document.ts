@@ -1,5 +1,6 @@
 import { and, eq, sql } from 'drizzle-orm';
 import type { Database } from '../db/client.ts';
+import { documentEvents } from '../db/schema/document-events.ts';
 import { chunks, documentPages, documents, isLiveDocument } from '../db/schema/documents.ts';
 import { jobs } from '../db/schema/jobs.ts';
 import { documentDates, documentLinks, facts } from '../db/schema/knowledge.ts';
@@ -67,6 +68,7 @@ export const DOCUMENT_REFERENCES = [
   facts.documentId,
   documentLinks.fromDocumentId,
   documentLinks.toDocumentId,
+  documentEvents.documentId,
 ] as const;
 
 const deleteDerivedRows = async (tx: Transaction, id: string): Promise<void> => {

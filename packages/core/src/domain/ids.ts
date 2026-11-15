@@ -11,6 +11,7 @@ export const ID_PREFIXES = {
   documentLink: 'lnk',
   subject: 'sub',
   fact: 'fct',
+  documentEvent: 'evt',
   user: 'usr',
   session: 'ses',
   account: 'acc',

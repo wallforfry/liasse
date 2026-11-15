@@ -55,7 +55,9 @@ describe('the terminal failure of a job', () => {
       handlers: [handle(watchedJob, () => Promise.reject(new Error('always')))],
     });
     await waitUntil(async () => (await jobById(harness.database.db, id)).status === 'failed');
-    expect(seen).toEqual([{ jobId: id, payload: { label: 'failing' }, cause: 'error' }]);
+    expect(seen).toEqual([
+      { jobId: id, payload: { label: 'failing' }, cause: 'error', attempt: 2 },
+    ]);
     expect(await markers()).toBe(1);
   });
 
@@ -65,7 +67,9 @@ describe('the terminal failure of a job', () => {
       handlers: [handle(watchedJob, () => Promise.reject(new PermanentJobError('no')))],
     });
     await waitUntil(async () => (await jobById(harness.database.db, id)).status === 'failed');
-    expect(seen).toEqual([{ jobId: id, payload: { label: 'permanent' }, cause: 'error' }]);
+    expect(seen).toEqual([
+      { jobId: id, payload: { label: 'permanent' }, cause: 'error', attempt: 1 },
+    ]);
     expect((await jobById(harness.database.db, id)).attempts).toBe(1);
   });
 
@@ -78,7 +82,7 @@ describe('the terminal failure of a job', () => {
     await waitUntil(
       async () => (await jobById(harness.database.db, row?.id ?? '')).status === 'failed',
     );
-    expect(seen).toEqual([{ jobId: row?.id, payload: { label: 42 }, cause: 'error' }]);
+    expect(seen).toEqual([{ jobId: row?.id, payload: { label: 42 }, cause: 'error', attempt: 1 }]);
   });
 
   const runningOnLastAttempt = async (label: string, attempts: number): Promise<string> => {
@@ -99,7 +103,7 @@ describe('the terminal failure of a job', () => {
     expect(await recoverStaleJobs(harness.database.db, 60_000, hooks())).toBe(2);
     expect((await jobById(harness.database.db, last)).status).toBe('failed');
     expect((await jobById(harness.database.db, early)).status).toBe('queued');
-    expect(seen).toEqual([{ jobId: last, payload: { label: 'last' }, cause: 'stale' }]);
+    expect(seen).toEqual([{ jobId: last, payload: { label: 'last' }, cause: 'stale', attempt: 2 }]);
     expect(await markers()).toBe(1);
   });
 
@@ -121,7 +125,7 @@ describe('the terminal failure of a job', () => {
     });
     await waitUntil(async () => (await jobById(harness.database.db, id)).status === 'failed');
     expect(seen).toEqual([
-      { jobId: id, payload: { label: 'recovered by the workers' }, cause: 'stale' },
+      { jobId: id, payload: { label: 'recovered by the workers' }, cause: 'stale', attempt: 2 },
     ]);
   });
 

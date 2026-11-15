@@ -28,9 +28,12 @@ export const processDocumentJob = defineJobKind({
   name: 'process_document',
   schema: z.object({ documentId: z.string().min(1) }),
   maxAttempts: PROCESS_DOCUMENT_MAX_ATTEMPTS,
-  onTerminalFailure: async (tx, { payload, cause }) => {
+  onTerminalFailure: async (tx, { payload, cause, attempt }) => {
     const documentId = documentOfPayload(payload);
     if (documentId === undefined) return;
-    await failDocumentInProgress(tx, documentId, DOCUMENT_JOB_FAILURE_CODES[cause]);
+    await failDocumentInProgress(tx, documentId, DOCUMENT_JOB_FAILURE_CODES[cause], {
+      attempt,
+      maxAttempts: PROCESS_DOCUMENT_MAX_ATTEMPTS,
+    });
   },
 });

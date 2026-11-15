@@ -95,7 +95,7 @@ export const failJob = (
       .where(heldBy(job))
       .returning({ id: jobs.id });
     if (settled.length === 0) return false;
-    await hook?.(tx, { jobId: job.id, payload: job.payload, cause: 'error' });
+    await hook?.(tx, { jobId: job.id, payload: job.payload, cause: 'error', attempt: job.attempt });
     return true;
   });
 
@@ -158,9 +158,17 @@ export const recoverStaleJobs = (
           lt(jobs.lockedAt, sql`now() - ${elapsed(visibilityTimeoutMs)}`),
         ),
       )
-      .returning({ id: jobs.id, kind: jobs.kind, payload: jobs.payload, status: jobs.status });
-    for (const { id, kind, payload, status } of recovered) {
-      if (status === 'failed') await hooks.get(kind)?.(tx, { jobId: id, payload, cause: 'stale' });
+      .returning({
+        id: jobs.id,
+        kind: jobs.kind,
+        payload: jobs.payload,
+        status: jobs.status,
+        attempt: jobs.attempts,
+      });
+    for (const { id, kind, payload, status, attempt } of recovered) {
+      if (status === 'failed') {
+        await hooks.get(kind)?.(tx, { jobId: id, payload, cause: 'stale', attempt });
+      }
     }
     return recovered.length;
   });

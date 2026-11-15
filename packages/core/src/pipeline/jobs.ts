@@ -21,8 +21,9 @@ export const reextractDocumentJob = defineJobKind({
   name: 'reextract_document',
   schema: payload,
   maxAttempts: PROCESS_DOCUMENT_MAX_ATTEMPTS,
-  onTerminalFailure: async (tx, failure) => {
-    const documentId = documentOfPayload(failure.payload);
+  // The handler logs the attempt that failed with its code; this logs a worker that died.
+  onTerminalFailure: async (tx, { payload, cause, attempt }) => {
+    const documentId = documentOfPayload(payload);
     if (documentId === undefined) return;
     await flagDocument(
       tx,
@@ -30,6 +31,9 @@ export const reextractDocumentJob = defineJobKind({
       SETTLED_STATUSES,
       'needs_review',
       DOCUMENT_JOB_FAILURE_CODES.reextraction,
+      cause === 'stale'
+        ? { stage: 'reextraction', attempt, maxAttempts: PROCESS_DOCUMENT_MAX_ATTEMPTS }
+        : undefined,
     );
   },
 });
