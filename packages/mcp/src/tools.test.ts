@@ -193,6 +193,16 @@ describe('the tools', () => {
       expect(body).toEqual({ id: publicId, status: 'indexed', state: 'current', error: null });
     });
 
+    it('queues a failed document again and answers its new status', async () => {
+      const id = await harness.addDocument([], {
+        status: 'failed',
+        error: 'model_provider_failed',
+      });
+      const { isError, body } = await callTool(client, 'retry_document', { id });
+      expect(isError).toBe(false);
+      expect(body).toEqual({ id, status: 'received', state: 'current', error: null });
+    });
+
     it('refuses to retry a document whose processing did not fail', async () => {
       expect((await failureOf('retry_document', { id: publicId })).code).toBe(
         'document_not_failed',

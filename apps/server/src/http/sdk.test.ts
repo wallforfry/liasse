@@ -1,4 +1,4 @@
-import { documents, entities } from '@liasse/core/db';
+import { documents, entities, jobs } from '@liasse/core/db';
 import { syntheticPdf } from '@liasse/core/testing';
 import { createLiasseClient, LiasseApiError, type LiasseClient } from '@liasse/sdk';
 import { eq } from 'drizzle-orm';
@@ -166,6 +166,10 @@ describe('the TypeScript SDK', () => {
       .update(documents)
       .set({ status: 'failed', error: 'model_provider_failed' })
       .where(eq(documents.id, id));
+    await harness.database.db
+      .update(jobs)
+      .set({ status: 'failed' })
+      .where(eq(jobs.kind, 'process_document'));
     expect(await client.retryDocument(id)).toMatchObject({ id, status: 'received', error: null });
   });
 

@@ -3,10 +3,12 @@ import { eq } from 'drizzle-orm';
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 import { documents } from '../db/schema/documents.ts';
 import { jobs } from '../db/schema/jobs.ts';
+import { enqueue } from '../jobs/enqueue.ts';
 import { syntheticPdf } from '../testing/synthetic-files.ts';
 import { deleteDocument } from './delete-document.ts';
 import { createIngestHarness, type IngestHarness } from './harness.test-helper.ts';
 import { ingestFile } from './ingest-file.ts';
+import { processDocumentJob } from './process-document-job.ts';
 import { retryFailedDocument } from './requeue-failed.ts';
 
 describe('retryFailedDocument', () => {
@@ -56,6 +58,16 @@ describe('retryFailedDocument', () => {
     expect(await retryFailedDocument(db(), id)).toBe('not_failed');
     expect(await documentRows()).toMatchObject([{ id, status: 'received' }]);
     expect(await jobRows()).toHaveLength(1);
+  });
+
+  it('waits for the job that failed the document to finish failing', async () => {
+    const { id } = await ingest('failed, job not failed yet');
+    await fail(id);
+    await enqueue(db(), { kind: processDocumentJob, payload: { documentId: id } });
+    expect(await retryFailedDocument(db(), id)).toBe('not_failed');
+    expect(await documentRows()).toMatchObject([{ id, status: 'failed' }]);
+    await db().update(jobs).set({ status: 'failed' });
+    expect(await retryFailedDocument(db(), id)).toBe('queued');
   });
 
   it('finds no document for an unknown id or a deleted one', async () => {
