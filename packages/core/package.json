@@ -22,6 +22,11 @@
       "types": "./dist/api/index.d.ts",
       "default": "./dist/api/index.js"
     },
+    "./auth": {
+      "@liasse/source": "./src/auth/index.ts",
+      "types": "./dist/auth/index.d.ts",
+      "default": "./dist/auth/index.js"
+    },
     "./config": {
       "@liasse/source": "./src/config/index.ts",
       "types": "./dist/config/index.d.ts",
@@ -139,12 +144,21 @@
     "@ai-sdk/mistral": "^4.0.87",
     "@ai-sdk/openai": "^4.0.118",
     "@ai-sdk/openai-compatible": "^3.0.92",
+    "@better-auth/api-key": "1.7.18",
+    "@better-auth/cimd": "1.7.18",
+    "@better-auth/core": "1.7.18",
+    "@better-auth/drizzle-adapter": "1.7.18",
+    "@better-auth/mcp": "1.7.18",
+    "@better-auth/oauth-provider": "1.7.18",
     "@huggingface/transformers": "^4.3.2",
     "@liasse/contract": "workspace:*",
     "ai": "^7.0.173",
     "aws4fetch": "^1.0.20",
+    "better-auth": "1.7.18",
+    "better-call": "1.4.5",
     "drizzle-orm": "^0.45.4",
     "heic-decode": "^2.1.0",
+    "jose": "6.2.17",
     "jpeg-js": "^0.4.4",
     "pdfjs-dist": "^6.5.438",
     "postal-mime": "^4.2.1",

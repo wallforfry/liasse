@@ -45,9 +45,10 @@ describe('loadConfig', () => {
       },
       hindsight: undefined,
       auth: {
-        apiTokens: ['synthetic-token-0001', 'synthetic-token-0002'],
+        secret: SYNTHETIC_ENV.AUTH_SECRET,
+        sessionTtlMs: 604_800_000,
+        bootstrap: undefined,
         fileUrlSecret: SYNTHETIC_ENV.FILE_URL_SECRET,
-        ui: undefined,
       },
     });
   });
@@ -81,8 +82,9 @@ describe('loadConfig', () => {
       WORKERS: '4',
       MAX_VISION_PAGES: '25',
       WATCH_DIR: '/inbox',
-      UI_PASSWORD: 'synthetic-ui-password',
-      UI_SESSION_TTL: '12h',
+      AUTH_SESSION_TTL: '12h',
+      AUTH_BOOTSTRAP_EMAIL: 'owner@example.com',
+      AUTH_BOOTSTRAP_PASSWORD: 'synthetic-owner-password',
       LLM_TIMEOUT: '90s',
       EMBEDDING_TIMEOUT: '20s',
       HINDSIGHT_URL: 'http://127.0.0.1:8888',
@@ -105,9 +107,10 @@ describe('loadConfig', () => {
     expect(config.pipeline.workers).toBe(4);
     expect(config.pipeline.maxVisionPages).toBe(25);
     expect(config.pipeline.watchDir).toBe('/inbox');
-    expect(config.auth.ui).toEqual({
-      password: { kind: 'plain', value: 'synthetic-ui-password' },
-      sessionTtlMs: 43_200_000,
+    expect(config.auth.sessionTtlMs).toBe(43_200_000);
+    expect(config.auth.bootstrap).toEqual({
+      email: 'owner@example.com',
+      password: 'synthetic-owner-password',
     });
     expect(config.hindsight).toEqual({
       url: 'http://127.0.0.1:8888',
@@ -154,9 +157,26 @@ describe('loadConfig', () => {
     ]);
   });
 
-  it('defaults the UI session lifetime to seven days', () => {
-    const config = loadConfig({ ...SYNTHETIC_ENV, UI_PASSWORD: 'synthetic-ui-password' });
-    expect(config.auth.ui?.sessionTtlMs).toBe(604_800_000);
+  it('needs both bootstrap variables or neither', () => {
+    expect(problemsOf({ ...SYNTHETIC_ENV, AUTH_BOOTSTRAP_EMAIL: 'owner@example.com' })).toEqual([
+      'AUTH_BOOTSTRAP_PASSWORD: required when AUTH_BOOTSTRAP_EMAIL is set',
+    ]);
+    expect(
+      problemsOf({ ...SYNTHETIC_ENV, AUTH_BOOTSTRAP_PASSWORD: 'synthetic-owner-password' }),
+    ).toEqual(['AUTH_BOOTSTRAP_EMAIL: required when AUTH_BOOTSTRAP_PASSWORD is set']);
+  });
+
+  it('refuses a bootstrap password shorter than 12 characters and a malformed email', () => {
+    expect(
+      problemsOf({
+        ...SYNTHETIC_ENV,
+        AUTH_BOOTSTRAP_EMAIL: 'not-an-email',
+        AUTH_BOOTSTRAP_PASSWORD: 'short-pass',
+      }),
+    ).toEqual([
+      'AUTH_BOOTSTRAP_EMAIL: expected an email address',
+      'AUTH_BOOTSTRAP_PASSWORD: expected at least 12 characters',
+    ]);
   });
 
   it('reads the input window of a remote embedding model, which has no default', () => {
@@ -200,7 +220,7 @@ describe('loadConfig', () => {
     const config = loadConfig(SYNTHETIC_ENV);
     expect(Object.isFrozen(config)).toBe(true);
     expect(Object.isFrozen(config.server)).toBe(true);
-    expect(Object.isFrozen(config.auth.apiTokens)).toBe(true);
+    expect(Object.isFrozen(config.auth)).toBe(true);
   });
 
   it('accepts the s3 driver with a bucket and a key pair', () => {
@@ -332,8 +352,7 @@ describe('loadConfig', () => {
       LLM_PROVIDER: 'ollama',
       EMBEDDING_DIM: '4096',
       CONFIDENCE_THRESHOLD: '1.5',
-      UI_SESSION_TTL: 'soon',
-      API_TOKENS: ' , ',
+      AUTH_SESSION_TTL: 'soon',
     });
     expect(problems.map((problem) => problem.split(':')[0])).toEqual([
       'PORT',
@@ -343,8 +362,8 @@ describe('loadConfig', () => {
       'TEXT_MODEL',
       'EMBEDDING_DIM',
       'CONFIDENCE_THRESHOLD',
-      'API_TOKENS',
-      'UI_SESSION_TTL',
+      'AUTH_SECRET',
+      'AUTH_SESSION_TTL',
       'FILE_URL_SECRET',
     ]);
   });
@@ -358,12 +377,13 @@ describe('loadConfig', () => {
   it('never echoes a rejected value', () => {
     const secrets = {
       DATABASE_URL: 'mysql://user:database-password-9f3a@db/liasse',
-      API_TOKENS: 'short-9f3a',
+      AUTH_SECRET: 'short-9f3a',
+      AUTH_BOOTSTRAP_PASSWORD: 'pw-9f3a',
       FILE_URL_SECRET: 'weak-secret-9f3a',
       LLM_API_KEY: 'llm-key-9f3a',
       LLM_BASE_URL: 'not a url 9f3a',
       S3_ENDPOINT: 'endpoint 9f3a',
-      UI_SESSION_TTL: 'ttl-9f3a',
+      AUTH_SESSION_TTL: 'ttl-9f3a',
       WORKERS: 'workers-9f3a',
       STORAGE_DRIVER: 'driver-9f3a',
     };
@@ -376,7 +396,8 @@ describe('loadConfig', () => {
       return '';
     })();
     expect(message).toContain('DATABASE_URL');
-    expect(message).toContain('API_TOKENS');
+    expect(message).toContain('AUTH_SECRET');
+    expect(message).toContain('AUTH_BOOTSTRAP_PASSWORD');
     expect(message).toContain('FILE_URL_SECRET');
     expect(message).not.toContain('9f3a');
   });

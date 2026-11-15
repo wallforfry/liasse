@@ -62,15 +62,25 @@ describe('loadConfig value parsing', () => {
     );
   });
 
-  it('keeps the UI password exactly as given', () => {
-    const config = loadConfig({ ...SYNTHETIC_ENV, UI_PASSWORD: '  padded password ' });
-    expect(config.auth.ui?.password).toEqual({ kind: 'plain', value: '  padded password ' });
+  it('keeps the bootstrap password exactly as given', () => {
+    const config = loadConfig({
+      ...SYNTHETIC_ENV,
+      AUTH_BOOTSTRAP_EMAIL: 'owner@example.com',
+      AUTH_BOOTSTRAP_PASSWORD: '  padded password ',
+    });
+    expect(config.auth.bootstrap?.password).toBe('  padded password ');
   });
 
   it('treats empty variables as unset', () => {
-    const config = loadConfig({ ...SYNTHETIC_ENV, PORT: '', WATCH_DIR: '', UI_PASSWORD: '' });
+    const config = loadConfig({
+      ...SYNTHETIC_ENV,
+      PORT: '',
+      WATCH_DIR: '',
+      AUTH_BOOTSTRAP_EMAIL: '',
+      AUTH_BOOTSTRAP_PASSWORD: '',
+    });
     expect(config.server.port).toBe(8080);
     expect(config.pipeline.watchDir).toBeUndefined();
-    expect(config.auth.ui).toBeUndefined();
+    expect(config.auth.bootstrap).toBeUndefined();
   });
 });
