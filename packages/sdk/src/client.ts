@@ -4,6 +4,9 @@ import {
   type changeDecisionSchema,
   type ChangeList,
   changeListSchema,
+  type CreatedType,
+  createdTypeSchema,
+  type CreateTypeRequest,
   type DescribeTypesOptions,
   type DocumentCorrection,
   type DocumentList,
@@ -77,6 +80,8 @@ export interface LiasseClient {
   readonly search: (request: SearchRequest) => Promise<SearchResults>;
   readonly query: (request: QueryRequest) => Promise<QueryResultEnvelope>;
   readonly listTypes: (options?: DescribeTypesOptions) => Promise<TypeList>;
+  /** A provisional type, judged by the naming rules and primitives of the registry. */
+  readonly createType: (request: CreateTypeRequest) => Promise<CreatedType>;
   readonly listEntities: (options?: ListEntitiesRequest) => Promise<EntityListView>;
   readonly listSubjects: (options?: ListSubjectsRequest) => Promise<SubjectList>;
   /** Key dates of a window, both days included, sorted by date. */
@@ -131,6 +136,7 @@ export const createLiasseClient = (options: ClientOptions): LiasseClient => {
     search: async (request) => post(searchResultsSchema, '/search', request),
     query: async (request) => post(queryResultSchema, '/query', request),
     listTypes: async (query = {}) => get(typeListSchema, '/types', query),
+    createType: async (request) => post(createdTypeSchema, '/types', request),
     listEntities: async (query = {}) => get(entityListSchema, '/entities', query),
     listSubjects: async (query = {}) => get(listSubjectsOutputSchema, '/subjects', query),
     upcoming: async (query) => get(upcomingOutputSchema, '/upcoming', query),

@@ -2,6 +2,8 @@ import {
   changeDecisionResultSchema,
   changeDecisionSchema,
   changeListSchema,
+  createdTypeSchema,
+  createTypeRequestSchema,
   describeTypesOptionsSchema,
   entityListSchema,
   listChangesOptionsSchema,
@@ -14,6 +16,7 @@ import {
 } from '@liasse/contract';
 import {
   applyChange,
+  createType,
   describeTypes,
   listChanges,
   listEntities,
@@ -75,6 +78,21 @@ export const registryRoutes = ({ api, authenticated }: RouteDeps): Hono<AppEnv> 
       authenticated,
       valid('query', typesQuery),
       async (context) => context.json(await describeTypes(api, context.req.valid('query'))),
+    )
+    .post(
+      '/types',
+      operation({
+        summary: 'Create a type by hand',
+        tag: 'Registry',
+        responses: {
+          201: jsonResponse('The type, provisional.', createdTypeSchema),
+          ...failures(400, 413, 415),
+        },
+      }),
+      authenticated,
+      jsonBody,
+      valid('json', createTypeRequestSchema),
+      async (context) => context.json(await createType(api, context.req.valid('json')), 201),
     )
     .get(
       '/entities',
