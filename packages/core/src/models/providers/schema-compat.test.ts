@@ -138,6 +138,13 @@ const EXTRACTION_OUTPUT = {
 
 const EVIDENCE_KEYS = ['value', 'page', 'quote', 'confidence'];
 
+const NEW_TYPE_OUTPUT = {
+  decision: 'new',
+  new_type: { slug: 'energy_bill', description: 'An energy bill.', fields: {} },
+  confidence: 0.8,
+  justification: 'No type is offered.',
+};
+
 const chatBody = (output: unknown): unknown => chatCompletion(JSON.stringify(output)).body;
 
 // Where each provider carries the schema, in the body it receives.
@@ -213,6 +220,25 @@ describe('the classification schema of the pipeline', () => {
         classificationSchema(['energy_bill', 'payslip']),
       );
       expect(JSON.stringify(body)).toContain('"enum":["energy_bill","payslip"]');
+    },
+  );
+
+  // OpenAI answers 400 `invalid_json_schema` to a schema whose root is not an object,
+  // such as the `oneOf` of a union, even outside its strict mode.
+  it.each(PIPELINE_SCHEMA_CASES)(
+    'reaches %s as one object at the root, whether types are offered or not',
+    async (_provider, env, respond, path) => {
+      const offered = await bodyOf(
+        respond({ decision: 'existing', slug: 'energy_bill', confidence: 0.9 }),
+        env,
+        classificationSchema(['energy_bill', 'payslip']),
+      );
+      const none = await bodyOf(respond(NEW_TYPE_OUTPUT), env, classificationSchema([]));
+      for (const body of [offered, none]) {
+        expect(body).toHaveProperty(`${path}.type`, 'object');
+        expect(body).not.toHaveProperty(`${path}.oneOf`);
+        expect(body).not.toHaveProperty(`${path}.anyOf`);
+      }
     },
   );
 });
