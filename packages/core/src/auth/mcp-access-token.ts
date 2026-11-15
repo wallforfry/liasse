@@ -5,7 +5,7 @@ import {
   parseAccessTokenAuthorization,
   verifyJwsAccessToken,
 } from 'better-auth/oauth2';
-import { errors } from 'jose';
+import { errors, type JSONWebKeySet } from 'jose';
 import type { Auth } from './create-auth.ts';
 
 /** What of an HTTP request proves an OAuth access token. */
@@ -36,7 +36,12 @@ const ACCESS_TOKEN_TYPE = 'at+jwt';
  * DPoP binding. `requireMcpAuth` of `@better-auth/mcp` does the same but fetches the key
  * set over HTTP from `PUBLIC_URL`, which a server behind a proxy may not reach.
  */
-export const createAccessTokenCheck = (auth: Auth, resource: string): AccessTokenCheck => {
+export const createAccessTokenCheck = (
+  auth: Auth,
+  resource: string,
+  /** The public keys of this server by default; a test signs with keys of its own. */
+  signingKeys: () => Promise<JSONWebKeySet> = async () => auth.api.getJwks(),
+): AccessTokenCheck => {
   const jwksCacheKey = {};
   const context = auth.$context;
   return async ({ authorization: header, dpop, method, url }) => {
@@ -45,7 +50,7 @@ export const createAccessTokenCheck = (auth: Auth, resource: string): AccessToke
     const { baseURL, internalAdapter } = await context;
     try {
       const payload = await verifyJwsAccessToken(authorization.token, {
-        jwksFetch: async () => auth.api.getJwks(),
+        jwksFetch: signingKeys,
         jwksCacheKey,
         verifyOptions: {
           issuer: baseURL,
