@@ -38,9 +38,13 @@ const INGEST_DESCRIPTION =
   'The same bytes give back the document they already have (`duplicate`). `url` is not ' +
   'accepted by this server yet.';
 
+// A tool polled until processing ends: the whole log is `GET /documents/:id/events`.
+const STATUS_EVENTS = 10;
+
 const GET_STATUS_DESCRIPTION =
   `Processing status of a document (${liveDocumentStatusSchema.options.join(', ')}), ` +
-  'with its error if any, and `events`, its processing log oldest first: each stage that ' +
+  `with its error if any, and \`events\`, the last ${String(STATUS_EVENTS)} of its processing ` +
+  'log, oldest first: each stage that ' +
   'succeeded and each attempt that failed, with its error code, whether it is retried, ' +
   'the model and counts such as the values the model returned that were rejected.';
 
@@ -66,7 +70,7 @@ export const registerDocumentTools = (server: McpServer, { api, report }: McpDep
     async ({ id }) =>
       toolAnswer('get_status', report, async () => {
         const { status, state, error } = await getDocument(api, id);
-        const { events } = await listDocumentEvents(api, id);
+        const { events } = await listDocumentEvents(api, id, { last: STATUS_EVENTS });
         return { id, status, state, error, events };
       }),
   );

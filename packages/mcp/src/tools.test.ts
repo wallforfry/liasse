@@ -188,7 +188,7 @@ describe('the tools', () => {
       );
     });
 
-    it('gives the status of a document, with its processing log', async () => {
+    it('gives the status of a document, with the end of its processing log', async () => {
       const { body } = await callTool(client, 'get_status', { id: publicId });
       expect(body).toEqual({
         id: publicId,
@@ -198,6 +198,11 @@ describe('the tools', () => {
         events: [],
       });
       const failing = await harness.addDocument([], { status: 'failed', error: 'no_text' });
+      for (let attempt = 1; attempt <= 12; attempt += 1) {
+        await harness.database.db.transaction((tx) =>
+          recordDocumentEvent(tx, failing, { stage: 'text', outcome: 'retrying', attempt }),
+        );
+      }
       await harness.database.db.transaction((tx) =>
         recordDocumentEvent(tx, failing, {
           stage: 'text',
@@ -208,10 +213,16 @@ describe('the tools', () => {
         }),
       );
       const failed = await callTool(client, 'get_status', { id: failing });
-      expect(failed.body).toMatchObject({
-        status: 'failed',
-        error: 'no_text',
-        events: [{ stage: 'text', outcome: 'failed', error_code: 'no_text', retryable: false }],
+      const { events } = z
+        .object({ events: z.array(z.looseObject({ attempt: z.number().nullable() })) })
+        .parse(failed.body);
+      expect(events.map(({ attempt }) => attempt)).toEqual([4, 5, 6, 7, 8, 9, 10, 11, 12, null]);
+      expect(failed.body).toMatchObject({ status: 'failed', error: 'no_text' });
+      expect(events.at(-1)).toMatchObject({
+        stage: 'text',
+        outcome: 'failed',
+        error_code: 'no_text',
+        retryable: false,
       });
     });
   });
