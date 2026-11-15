@@ -1,4 +1,3 @@
-import { createHash, timingSafeEqual } from 'node:crypto';
 import type { FileUrls } from '@liasse/core/api';
 import type { MiddlewareHandler } from 'hono';
 import type { AppContext, AppEnv } from './env.ts';
@@ -10,30 +9,11 @@ import { failure, respondWith } from './errors.ts';
  */
 export type Credential = (context: AppContext) => boolean | Promise<boolean>;
 
-type Compare = (left: Uint8Array, right: Uint8Array) => boolean;
+const BEARER = /^Bearer +(\S+)$/i;
 
-const digest = (value: string): Buffer => createHash('sha256').update(value).digest();
-
-const BEARER = /^Bearer +(.+)$/i;
-
-/**
- * `Authorization: Bearer <token>` against the configured tokens. Both sides are hashed,
- * so every comparison is over 32 bytes whatever was presented, and the presented token
- * is compared with every configured one, match or not: the time taken tells neither how
- * many tokens exist, nor their length, nor which one matched.
- */
-export const bearerToken = (
-  tokens: readonly string[],
-  compare: Compare = timingSafeEqual,
-): Credential => {
-  const expected = tokens.map(digest);
-  return (context) => {
-    const presented = BEARER.exec(context.req.header('Authorization') ?? '')?.[1];
-    const candidate = digest(presented ?? '');
-    const matches = expected.map((token) => compare(token, candidate));
-    return presented !== undefined && matches.includes(true);
-  };
-};
+/** The token of `Authorization: Bearer <token>`, or undefined. */
+export const bearerTokenOf = (context: AppContext): string | undefined =>
+  BEARER.exec(context.req.header('Authorization') ?? '')?.[1];
 
 /** The `expires` and `signature` of a signed file URL, for the document of the path. */
 export const signedFileUrl =
@@ -45,14 +25,19 @@ export const signedFileUrl =
       signature: context.req.query('signature') ?? '',
     });
 
+export const DEFAULT_CHALLENGE = 'Bearer realm="liasse"';
+
 const UNAUTHORIZED = failure(401, 'unauthorized', 'A valid Bearer token is required.');
 
-/** Lets a request through when one of the credentials accepts it. All of them are asked. */
+/**
+ * Lets a request through when one of the credentials accepts it. All of them are asked. A
+ * refused request gets 401 and `challenge` as its `WWW-Authenticate`.
+ */
 export const requireAny =
-  (credentials: readonly Credential[]): MiddlewareHandler<AppEnv> =>
+  (credentials: readonly Credential[], challenge = DEFAULT_CHALLENGE): MiddlewareHandler<AppEnv> =>
   async (context, next) => {
     const verdicts = await Promise.all(credentials.map(async (credential) => credential(context)));
     if (verdicts.includes(true)) return next();
-    context.header('WWW-Authenticate', 'Bearer realm="liasse"');
+    context.header('WWW-Authenticate', challenge);
     return respondWith(context, UNAUTHORIZED);
   };

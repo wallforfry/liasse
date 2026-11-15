@@ -1,3 +1,4 @@
+import { MAX_PASSWORD_LENGTH } from '@liasse/contract/domain';
 import { FolderArchiveIcon } from 'lucide-react';
 import { type SubmitEvent, useState } from 'react';
 import { Navigate, useLocation } from 'react-router';
@@ -26,24 +27,38 @@ const returnPathOf = (state: unknown): string =>
     ? state.from
     : HOME;
 
+// The auth server signs the query it sends to the login page during an OAuth authorization.
+const continuesAuthorization = (search: string): boolean => new URLSearchParams(search).has('sig');
+
 export const LoginPage = () => {
   const { status, logIn } = useSession();
   const location = useLocation();
+  const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState<unknown>(undefined);
   const [pending, setPending] = useState(false);
+  const [submitted, setSubmitted] = useState(false);
 
-  if (status === 'signed_in') return <Navigate to={returnPathOf(location.state)} replace />;
+  // An authorization may ask to log in again over a live session: the form stays until then.
+  if (status === 'signed_in' && (submitted || !continuesAuthorization(location.search))) {
+    return <Navigate to={returnPathOf(location.state)} replace />;
+  }
 
   const submit = (event: SubmitEvent<HTMLFormElement>) => {
     event.preventDefault();
     setPending(true);
     setError(undefined);
-    // Once logged in, the session status changes and the page renders the redirection.
-    logIn(password).catch((caught: unknown) => {
-      setError(caught);
-      setPending(false);
-    });
+    // Once logged in, the session status changes and the page renders the redirection, or
+    // the browser leaves for the OAuth client: either way the form stays pending.
+    logIn(email.trim(), password).then(
+      () => {
+        setSubmitted(true);
+      },
+      (caught: unknown) => {
+        setError(caught);
+        setPending(false);
+      },
+    );
   };
 
   return (
@@ -54,11 +69,25 @@ export const LoginPage = () => {
             <FolderArchiveIcon className="size-5" />
           </div>
           <CardTitle className="text-xl">Log in to Liasse</CardTitle>
-          <CardDescription>Enter the password of this server.</CardDescription>
+          <CardDescription>Enter the email and password of your account.</CardDescription>
         </CardHeader>
         <CardContent>
           <form className="flex flex-col gap-4" onSubmit={submit}>
             {error === undefined ? null : <ErrorAlert error={error} title="Not logged in" />}
+            <div className="grid gap-2">
+              <Label htmlFor="email">Email</Label>
+              <Input
+                id="email"
+                type="email"
+                autoComplete="username"
+                required
+                autoFocus
+                value={email}
+                onChange={(event) => {
+                  setEmail(event.target.value);
+                }}
+              />
+            </div>
             <div className="grid gap-2">
               <Label htmlFor="password">Password</Label>
               <Input
@@ -66,14 +95,14 @@ export const LoginPage = () => {
                 type="password"
                 autoComplete="current-password"
                 required
-                autoFocus
+                maxLength={MAX_PASSWORD_LENGTH}
                 value={password}
                 onChange={(event) => {
                   setPassword(event.target.value);
                 }}
               />
             </div>
-            <Button type="submit" disabled={pending || password === ''}>
+            <Button type="submit" disabled={pending || email.trim() === '' || password === ''}>
               {pending ? 'Logging in...' : 'Log in'}
             </Button>
           </form>

@@ -11,6 +11,20 @@ export const ID_PREFIXES = {
   documentLink: 'lnk',
   subject: 'sub',
   fact: 'fct',
+  user: 'usr',
+  session: 'ses',
+  account: 'acc',
+  verification: 'ver',
+  rateLimit: 'rlm',
+  apiKey: 'key',
+  signingKey: 'jwk',
+  oauthClient: 'ocl',
+  oauthResource: 'ors',
+  oauthClientResource: 'ocr',
+  oauthRefreshToken: 'ort',
+  oauthAccessToken: 'oat',
+  oauthConsent: 'ocn',
+  oauthClientAssertion: 'oca',
 } as const;
 export type IdPrefix = (typeof ID_PREFIXES)[keyof typeof ID_PREFIXES];
 

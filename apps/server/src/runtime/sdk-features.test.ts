@@ -7,18 +7,20 @@ import { LETTER } from '../synthetic-documents.fixture.ts';
 import type { Runtime } from './create-runtime.ts';
 import { useRuntimeHarness } from './runtime.test-helper.ts';
 
-const TOKEN = 'synthetic-token-0001';
 const YEAR_2027 = { from: '2027-01-01', to: '2027-12-31' } as const;
 
 // The SDK against a runtime whose pipeline and knowledge layer are bound, with fake models.
 describe('the TypeScript SDK on the bound features', () => {
-  const { start, database } = useRuntimeHarness();
+  const { start, database, apiKey } = useRuntimeHarness();
 
-  const clientOf = (runtime: Runtime): LiasseClient =>
-    createLiasseClient({ baseUrl: `http://127.0.0.1:${String(runtime.port)}`, token: TOKEN });
+  const clientOf = async (runtime: Runtime): Promise<LiasseClient> =>
+    createLiasseClient({
+      baseUrl: `http://127.0.0.1:${String(runtime.port)}`,
+      token: await apiKey(runtime),
+    });
 
   it('reads subjects and key dates, and corrects a document', async () => {
-    const client = clientOf(await start());
+    const client = await clientOf(await start());
     const file = new File([buildSyntheticPdf([{ lines: [...LETTER.lines] }])], 'letter.pdf');
     const { id } = await client.uploadDocument({ file });
     await waitUntil(async () => (await client.getDocument(id)).status === 'indexed');
@@ -47,7 +49,7 @@ describe('the TypeScript SDK on the bound features', () => {
   });
 
   it('lists the pending consolidation changes and decides one', async () => {
-    const client = clientOf(await start());
+    const client = await clientOf(await start());
     const file = new File([buildSyntheticPdf([{ lines: [...LETTER.lines] }])], 'letter.pdf');
     const { id } = await client.uploadDocument({ file });
     await waitUntil(async () => (await client.getDocument(id)).status === 'indexed');

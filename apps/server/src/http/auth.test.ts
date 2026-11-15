@@ -1,17 +1,20 @@
-import { timingSafeEqual } from 'node:crypto';
 import { Hono } from 'hono';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { bearerToken, requireAny } from './auth.ts';
+import { createTestApiKey, TEST_ACCOUNT } from '@liasse/core/testing';
+import { requireAny } from './auth.ts';
 import type { AppEnv } from './env.ts';
-import {
-  authorized,
-  createHttpHarness,
-  type HttpHarness,
-  OTHER_TEST_TOKEN,
-  TEST_TOKEN,
-} from './harness.test-helper.ts';
+import { createHttpHarness, type HttpHarness } from './harness.test-helper.ts';
 
-const PUBLIC_ROUTES = ['GET /health'];
+// The web UI, the auth server and its discovery documents, which answer for themselves.
+const PUBLIC_ROUTES = [
+  'GET /health',
+  'GET /',
+  'GET /ui/*',
+  'GET /api/auth/*',
+  'POST /api/auth/*',
+  'GET /.well-known/*',
+  'HEAD /.well-known/*',
+];
 
 // A request for each registered route, with ids no document has.
 const exampleOf = (path: string): string => path.replaceAll(/:[A-Za-z]+/g, 'doc_none');
@@ -45,7 +48,11 @@ describe('authentication', () => {
     for (const { method, path } of guarded) {
       const response = await harness.app.request(exampleOf(path), { method });
       expect([method, path, response.status]).toEqual([method, path, 401]);
-      expect(response.headers.get('WWW-Authenticate')).toBe('Bearer realm="liasse"');
+      expect(response.headers.get('WWW-Authenticate')).toBe(
+        path === '/mcp'
+          ? 'Bearer resource_metadata="https://liasse.example.com/.well-known/oauth-protected-resource/mcp"'
+          : 'Bearer realm="liasse"',
+      );
       expect(await response.json()).toEqual({
         error: {
           code: 'unauthorized',
@@ -69,88 +76,64 @@ describe('authentication', () => {
     expect(await response.text()).toBe('{"status":"unavailable"}');
   });
 
-  it.each([TEST_TOKEN, OTHER_TEST_TOKEN])('accepts the configured token %s', async (token) => {
-    const response = await harness.app.request('/types', authorized({}, token));
-    expect(response.status).toBe(200);
+  it('accepts each API key of an account', async () => {
+    for (const token of [harness.token, harness.otherToken]) {
+      expect((await harness.app.request('/types', harness.authorized({}, token))).status).toBe(200);
+    }
   });
 
   it('reads the scheme without regard to case', async () => {
     const response = await harness.app.request('/types', {
-      headers: { Authorization: `bearer ${TEST_TOKEN}` },
+      headers: { Authorization: `bearer ${harness.token}` },
     });
     expect(response.status).toBe(200);
   });
 
+  it('refuses a key once it is disabled', async () => {
+    const key = await createTestApiKey(harness.auth, 'short-lived');
+    expect((await harness.app.request('/types', harness.authorized({}, key))).status).toBe(200);
+    const { key: found } = await harness.auth.api.verifyApiKey({ body: { key } });
+    const { user } = await harness.auth.api.signInEmail({ body: TEST_ACCOUNT });
+    await harness.auth.api.updateApiKey({
+      body: { keyId: found?.id ?? '', userId: user.id, enabled: false },
+    });
+    expect((await harness.app.request('/types', harness.authorized({}, key))).status).toBe(401);
+  });
+
   it.each([
-    ['another token', { Authorization: 'Bearer synthetic-token-9999' }],
-    ['the start of a token', { Authorization: `Bearer ${TEST_TOKEN.slice(0, -1)}` }],
-    ['a token followed by more', { Authorization: `Bearer ${TEST_TOKEN}0` }],
-    ['two tokens at once', { Authorization: `Bearer ${TEST_TOKEN}, ${OTHER_TEST_TOKEN}` }],
-    ['no token', { Authorization: 'Bearer ' }],
-    ['the token without a scheme', { Authorization: TEST_TOKEN }],
-    ['another scheme', { Authorization: `Basic ${TEST_TOKEN}` }],
-    ['the token in another header', { 'X-Api-Key': TEST_TOKEN }],
-    ['the token in a cookie', { Cookie: `token=${TEST_TOKEN}` }],
-  ])('refuses %s', async (_, headers) => {
-    const response = await harness.app.request('/types', { headers });
+    ['another key', (token: string) => ({ Authorization: `Bearer ${token.slice(0, -4)}zzzz` })],
+    ['the start of a key', (token: string) => ({ Authorization: `Bearer ${token.slice(0, -1)}` })],
+    ['a key followed by more', (token: string) => ({ Authorization: `Bearer ${token}0` })],
+    ['two keys at once', (token: string) => ({ Authorization: `Bearer ${token}, ${token}` })],
+    ['no key', () => ({ Authorization: 'Bearer ' })],
+    ['the key without a scheme', (token: string) => ({ Authorization: token })],
+    ['another scheme', (token: string) => ({ Authorization: `Basic ${token}` })],
+    ['the key in another header', (token: string) => ({ 'X-Api-Key': token })],
+    ['the key in a cookie', (token: string) => ({ Cookie: `token=${token}` })],
+  ])('refuses %s', async (_, headersOf) => {
+    const response = await harness.app.request('/types', { headers: headersOf(harness.token) });
     expect(response.status).toBe(401);
   });
 
-  it('refuses a token given in the query string', async () => {
+  it('refuses a key given in the query string', async () => {
     const response = await harness.app.request(
-      `/types?token=${TEST_TOKEN}&access_token=${TEST_TOKEN}`,
+      `/types?token=${harness.token}&access_token=${harness.token}`,
     );
     expect(response.status).toBe(401);
   });
 
   it('never writes a presented token in a log line or a response', async () => {
-    const presented = 'synthetic-wrong-token-7f3a';
-    const response = await harness.app.request('/types', authorized({}, presented));
+    const presented = 'liasse_synthetic-wrong-token-7f3a';
+    const response = await harness.app.request('/types', harness.authorized({}, presented));
     const accepted = await harness.call('/types');
     const written = [await response.text(), await accepted.text(), ...harness.logs()].join('\n');
     expect(written).not.toContain(presented);
-    expect(written).not.toContain(TEST_TOKEN);
+    expect(written).not.toContain(harness.token);
     expect(harness.logs().some((line) => line.includes('"status":401'))).toBe(true);
   });
 });
 
-describe('bearerToken', () => {
-  const comparisons: (readonly [number, number])[] = [];
-  const recording = (left: Uint8Array, right: Uint8Array): boolean => {
-    comparisons.push([left.byteLength, right.byteLength]);
-    return timingSafeEqual(left, right);
-  };
-  const tokens = ['synthetic-token-aaaa', 'synthetic-token-bbbb-longer', 'synthetic-token-cccc'];
-  const app = new Hono<AppEnv>()
-    .use(requireAny([bearerToken(tokens, recording)]))
-    .get('/', (context) => context.text('in'));
-
-  const statusWith = async (authorization: string | undefined): Promise<number> => {
-    comparisons.length = 0;
-    const response = await app.request('/', {
-      headers: authorization === undefined ? {} : { Authorization: authorization },
-    });
-    return response.status;
-  };
-
-  // What the time taken could tell: how many tokens there are, their length, and which
-  // one matched. Every request makes the same comparisons over the same sizes.
-  it.each([
-    ['the first token', `Bearer ${tokens[0] ?? ''}`, 200],
-    ['the last token', `Bearer ${tokens[2] ?? ''}`, 200],
-    ['a wrong token', 'Bearer synthetic-token-zzzz', 401],
-    ['a very long token', `Bearer ${'z'.repeat(10_000)}`, 401],
-    ['an empty token', 'Bearer ', 401],
-    ['no header', undefined, 401],
-  ])('compares %s with every configured token, over 32 bytes each', async (_, header, status) => {
-    expect(await statusWith(header)).toBe(status);
-    expect(comparisons).toEqual([
-      [32, 32],
-      [32, 32],
-      [32, 32],
-    ]);
-  });
-
+describe('requireAny', () => {
   it('asks every credential, whichever accepts', async () => {
     const asked: string[] = [];
     const credential = (name: string, verdict: boolean) => () => {

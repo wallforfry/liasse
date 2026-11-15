@@ -1,7 +1,10 @@
 import { Navigate, type RouteObject } from 'react-router';
 import { AppLayout } from './layout/app-layout.tsx';
 import { RequireSession } from './layout/require-session.tsx';
+import { ApiKeysPage } from './pages/account/api-keys-page.tsx';
+import { ChangePasswordPage } from './pages/account/change-password-page.tsx';
 import { ChangesPage } from './pages/changes/changes-page.tsx';
+import { ConsentPage } from './pages/consent-page.tsx';
 import { DocumentPage } from './pages/document/document-page.tsx';
 import { DocumentListPage } from './pages/documents/document-list-page.tsx';
 import { LoginPage } from './pages/login-page.tsx';
@@ -14,6 +17,10 @@ export const BASENAME = '/ui';
 
 export const ROUTES: RouteObject[] = [
   { path: '/login', element: <LoginPage /> },
+  {
+    element: <RequireSession keepQuery />,
+    children: [{ path: '/consent', element: <ConsentPage /> }],
+  },
   {
     element: <RequireSession />,
     children: [
@@ -46,6 +53,8 @@ export const ROUTES: RouteObject[] = [
           { path: '/search', element: <SearchPage /> },
           { path: '/upload', element: <UploadPage /> },
           { path: '/changes', element: <ChangesPage /> },
+          { path: '/account/api-keys', element: <ApiKeysPage /> },
+          { path: '/account/password', element: <ChangePasswordPage /> },
           { path: '*', element: <NotFoundPage /> },
         ],
       },

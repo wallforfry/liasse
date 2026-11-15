@@ -10,7 +10,7 @@ import {
   CommandList,
 } from '../components/ui/command.tsx';
 import { useTheme } from '../theme/theme.ts';
-import { NAVIGATION, searchPath } from './navigation.ts';
+import { ACCOUNT_NAVIGATION, NAVIGATION, searchPath } from './navigation.ts';
 
 export interface CommandPaletteProps {
   readonly open: boolean;
@@ -51,20 +51,27 @@ export const CommandPalette = ({ open, setOpen }: CommandPaletteProps) => {
       />
       <CommandList>
         <CommandEmpty>Nothing matches.</CommandEmpty>
-        <CommandGroup heading="Pages">
-          {NAVIGATION.map(({ label, path, icon: Icon }) => (
-            <CommandItem
-              key={path}
-              value={label}
-              onSelect={run(() => {
-                void navigate(path);
-              })}
-            >
-              <Icon />
-              <span>{label}</span>
-            </CommandItem>
-          ))}
-        </CommandGroup>
+        {(
+          [
+            ['Pages', NAVIGATION],
+            ['Account', ACCOUNT_NAVIGATION],
+          ] as const
+        ).map(([heading, items]) => (
+          <CommandGroup key={heading} heading={heading}>
+            {items.map(({ label, path, icon: Icon }) => (
+              <CommandItem
+                key={path}
+                value={label}
+                onSelect={run(() => {
+                  void navigate(path);
+                })}
+              >
+                <Icon />
+                <span>{label}</span>
+              </CommandItem>
+            ))}
+          </CommandGroup>
+        ))}
         <CommandGroup heading="Theme">
           <CommandItem
             value="Light theme"

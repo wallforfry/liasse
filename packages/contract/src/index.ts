@@ -118,13 +118,5 @@ export {
   HEALTH_STATUSES,
   healthSchema,
 } from './system.ts';
-export {
-  CSP_NONCE_META_PROPERTY,
-  CSRF_HEADER,
-  MAX_UI_PASSWORD_LENGTH,
-  type UiLogin,
-  uiLoginSchema,
-  type UiSession,
-  uiSessionSchema,
-} from './ui-session.ts';
+export { AUTH_BASE_PATH, CSP_NONCE_META_PROPERTY } from './web-ui.ts';
 export { type QueryDsl, queryDslSchema } from './query/dsl.ts';

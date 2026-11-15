@@ -4,6 +4,6 @@ export const SYNTHETIC_ENV = {
   LLM_PROVIDER: 'ollama',
   VISION_MODEL: 'vision-model',
   TEXT_MODEL: 'text-model',
-  API_TOKENS: 'synthetic-token-0001, synthetic-token-0002',
+  AUTH_SECRET: 'synthetic-auth-secret-0123456789abcdef',
   FILE_URL_SECRET: 'synthetic-file-url-secret-0123456789',
 } as const;

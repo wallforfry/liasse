@@ -9,8 +9,10 @@ import { fileURLToPath } from 'node:url';
 import { documents, jobs } from '@liasse/core/db';
 import {
   buildSyntheticPdf,
+  createApiKeyOverHttp,
   createTestDatabase,
   SYNTHETIC_ENV,
+  TEST_ACCOUNT,
   TEST_EMBEDDING_DIM,
   syntheticPdf,
   type TestDatabase,
@@ -23,7 +25,6 @@ import { startModelStub } from './model-stub.test-helper.ts';
 import { LETTER } from './synthetic-documents.fixture.ts';
 
 const STEP_TIMEOUT_MS = 15_000;
-const TOKEN = 'synthetic-token-0001';
 const LISTENING = 'Liasse is listening on ';
 
 const freePort = async (): Promise<number> => {
@@ -40,9 +41,15 @@ const freePort = async (): Promise<number> => {
 const hasExited = (child: ChildProcess): boolean =>
   child.exitCode !== null || child.signalCode !== null;
 
+type Call = (path: string, init?: RequestInit) => Promise<Response>;
+
 interface RunningServer {
   readonly child: ChildProcess;
   readonly url: string;
+  /** An API key of the bootstrap account, created over HTTP once the server listens. */
+  readonly token: string;
+  /** A request to `path` with the API key. */
+  readonly call: Call;
   readonly database: TestDatabase;
   readonly stdout: () => string;
   readonly stderr: () => string;
@@ -88,6 +95,8 @@ const withServer = async (
   const { child, stdout, stderr } = launch({
     STORAGE_PATH: files,
     EMBEDDING_CACHE_DIR: join(files, 'models'),
+    AUTH_BOOTSTRAP_EMAIL: TEST_ACCOUNT.email,
+    AUTH_BOOTSTRAP_PASSWORD: TEST_ACCOUNT.password,
     ...env,
     DATABASE_URL: database.url,
     HOST: '127.0.0.1',
@@ -98,9 +107,26 @@ const withServer = async (
       if (hasExited(child)) throw new Error(`the server exited before listening: ${stderr()}`);
       return stderr().includes(`${LISTENING}http://127.0.0.1:${String(port)}\n`);
     });
+    const url = `http://127.0.0.1:${String(port)}`;
+    const token = await createApiKeyOverHttp({
+      baseUrl: url,
+      publicUrl: url,
+      account: TEST_ACCOUNT,
+      name: 'process test',
+    });
     await use({
       child,
-      url: `http://127.0.0.1:${String(port)}`,
+      url,
+      token,
+      call: (path, init = {}) =>
+        fetch(`${url}${path}`, {
+          ...init,
+          headers: {
+            ...Object.fromEntries(new Headers(init.headers)),
+            Authorization: `Bearer ${token}`,
+          },
+          signal: AbortSignal.timeout(STEP_TIMEOUT_MS),
+        }),
       database,
       stdout,
       stderr,
@@ -122,17 +148,10 @@ const withServer = async (
   }
 };
 
-const call = (url: string, init: RequestInit = {}): Promise<Response> =>
-  fetch(url, {
-    ...init,
-    headers: { ...Object.fromEntries(new Headers(init.headers)), Authorization: `Bearer ${TOKEN}` },
-    signal: AbortSignal.timeout(STEP_TIMEOUT_MS),
-  });
-
-const upload = async (url: string, label: string): Promise<string> => {
+const upload = async (call: Call, label: string): Promise<string> => {
   const form = new FormData();
   form.append('file', new File([syntheticPdf(label)], `${label}.pdf`));
-  const response = await call(`${url}/documents`, { method: 'POST', body: form });
+  const response = await call('/documents', { method: 'POST', body: form });
   expect(response.status).toBe(201);
   return z.object({ id: z.string() }).parse(await response.json()).id;
 };
@@ -169,15 +188,15 @@ describe('server process', () => {
   it(
     'serves /health and a first PDF, exits with code 0 on SIGTERM, and writes nothing on stdout',
     async () => {
-      await withServer({}, async ({ url, database, stdout, stderr, terminate }) => {
+      await withServer({}, async ({ url, token, call, database, stdout, stderr, terminate }) => {
         const health = await fetch(`${url}/health`, {
           signal: AbortSignal.timeout(STEP_TIMEOUT_MS),
         });
         expect(health.status).toBe(200);
         expect(await health.json()).toEqual({ status: 'ok' });
 
-        const id = await upload(url, 'first document');
-        const stored = await call(`${url}/documents/${id}/file`);
+        const id = await upload(call, 'first document');
+        const stored = await call(`/documents/${id}/file`);
         expect(Buffer.from(await stored.arrayBuffer())).toEqual(
           Buffer.from(syntheticPdf('first document')),
         );
@@ -187,7 +206,8 @@ describe('server process', () => {
         // stdout belongs to MCP over stdio: the server itself never writes there.
         expect(stdout()).toBe('');
         expect(stderr()).toContain('"event":"request"');
-        expect(stderr()).not.toContain(TOKEN);
+        expect(stderr()).not.toContain(token);
+        expect(stderr()).not.toContain(TEST_ACCOUNT.password);
       });
     },
     4 * STEP_TIMEOUT_MS,
@@ -205,11 +225,11 @@ describe('server process', () => {
         EMBEDDING_DIM: String(TEST_EMBEDDING_DIM),
       };
       try {
-        await withServer(env, async ({ url, database, terminate }) => {
+        await withServer(env, async ({ call, database, terminate }) => {
           const form = new FormData();
           const pdf = buildSyntheticPdf([{ lines: [...LETTER.lines] }]);
           form.append('file', new File([pdf], 'letter.pdf'));
-          const response = await call(`${url}/documents`, { method: 'POST', body: form });
+          const response = await call('/documents', { method: 'POST', body: form });
           expect(response.status).toBe(201);
           const { id } = z.object({ id: z.string() }).parse(await response.json());
 
@@ -263,9 +283,9 @@ describe('server process', () => {
         S3_SECRET_ACCESS_KEY: 'synthetic-secret-key',
       };
       try {
-        await withServer(env, async ({ child, url, database, stdout, terminate }) => {
-          const id = await upload(url, 'deleted during shutdown');
-          expect((await call(`${url}/documents/${id}`, { method: 'DELETE' })).status).toBe(204);
+        await withServer(env, async ({ child, url, call, database, stdout, terminate }) => {
+          const id = await upload(call, 'deleted during shutdown');
+          expect((await call(`/documents/${id}`, { method: 'DELETE' })).status).toBe(204);
           await waitUntil(() => s3.holding() === 1);
 
           const exit = terminate();

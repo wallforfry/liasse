@@ -1,11 +1,16 @@
 import type { ApiContext } from '@liasse/core/api';
+import { type Auth, mcpResourceOf } from '@liasse/core/auth';
 import { Hono, type MiddlewareHandler } from 'hono';
 import { every } from 'hono/combine';
 import { generateSpecs } from 'hono-openapi';
 import { createLogger, type Logger } from '../log.ts';
 import { reportMcpFailure } from '../mcp-failures.ts';
 import { accessLog } from './access-log.ts';
-import { bearerToken, type Credential, requireAny, signedFileUrl } from './auth.ts';
+import { type Credential, DEFAULT_CHALLENGE, requireAny, signedFileUrl } from './auth.ts';
+import { apiKeyBearer } from './auth-server/api-key.ts';
+import { authRoutes } from './auth-server/auth-routes.ts';
+import { mcpAccessToken, mcpChallenge } from './auth-server/mcp-access-token.ts';
+import { sessionCookie } from './auth-server/session-cookie.ts';
 import { BEARER_SCHEME, operation, SIGNED_URL_SCHEME } from './describe.ts';
 import type { AppEnv } from './env.ts';
 import { createErrorHandler, notFound } from './errors.ts';
@@ -18,8 +23,8 @@ import { registryRoutes } from './routes/registry.ts';
 import { searchRoutes } from './routes/search.ts';
 import { systemRoutes } from './routes/system.ts';
 import { uploadRoutes } from './routes/upload.ts';
-import { createUi, type UiOptions } from './ui/ui.ts';
-import { UI_ROOT } from './ui/web-routes.ts';
+import type { WebAssets } from './ui/web-assets.ts';
+import { UI_ROOT, webRoutes } from './ui/web-routes.ts';
 
 export const DEFAULT_REQUEST_TIMEOUT_MS = 30_000;
 // An upload is bounded by the size limit, and by this for a client that sends slowly.
@@ -27,14 +32,16 @@ export const DEFAULT_UPLOAD_TIMEOUT_MS = 5 * 60_000;
 
 export interface AppDependencies {
   readonly api: ApiContext;
-  /** `config.auth.apiTokens`. */
-  readonly apiTokens: readonly string[];
+  /** Accounts, sessions, API keys and the OAuth authorization server of MCP. */
+  readonly auth: Auth;
+  /** `config.server.publicUrl`: the origin the web UI and OAuth clients call. */
+  readonly publicUrl: string;
+  /** The build of `@liasse/web`, served under `/ui`. */
+  readonly assets: WebAssets;
   readonly ping: () => Promise<void>;
   readonly logger?: Logger;
   readonly requestTimeoutMs?: number;
   readonly uploadTimeoutMs?: number;
-  /** `config.auth.ui`: the web UI is mounted only when it is given. */
-  readonly ui?: UiOptions | undefined;
 }
 
 const OPENAPI_DOCUMENT = {
@@ -61,25 +68,28 @@ const OPENAPI_DOCUMENT = {
 
 export const createApp = ({
   api,
-  apiTokens,
+  auth,
+  publicUrl,
+  assets,
   ping,
   logger = createLogger(),
   requestTimeoutMs = DEFAULT_REQUEST_TIMEOUT_MS,
   uploadTimeoutMs = DEFAULT_UPLOAD_TIMEOUT_MS,
-  ui: uiOptions,
 }: AppDependencies): Hono<AppEnv> => {
-  const ui = uiOptions === undefined ? undefined : createUi({ ...uiOptions, requestTimeoutMs });
   // The one place that says who may call what. The web UI calls the REST API with its
-  // session cookie, which MCP does not accept: agents present a Bearer token.
-  const bearer = bearerToken(apiTokens);
-  const apiCredentials: readonly Credential[] = [
-    bearer,
-    ...(ui === undefined ? [] : [ui.credential]),
-  ];
+  // session cookie, which MCP does not accept: agents present an API key, or for MCP an
+  // OAuth access token issued for `PUBLIC_URL/mcp`.
+  const apiKey = apiKeyBearer(auth);
+  const apiCredentials: readonly Credential[] = [apiKey, sessionCookie(auth, publicUrl)];
+  const mcpResource = mcpResourceOf(publicUrl);
+  const mcpCredentials: readonly Credential[] =
+    mcpResource === undefined ? [apiKey] : [apiKey, mcpAccessToken(auth, mcpResource, publicUrl)];
   const within = (
     milliseconds: number,
     credentials: readonly Credential[] = apiCredentials,
-  ): MiddlewareHandler<AppEnv> => every(requireAny(credentials), requestTimeout(milliseconds));
+    challenge = DEFAULT_CHALLENGE,
+  ): MiddlewareHandler<AppEnv> =>
+    every(requireAny(credentials, challenge), requestTimeout(milliseconds));
   const authenticated = within(requestTimeoutMs);
   const metrics = createHttpMetrics();
 
@@ -97,16 +107,19 @@ export const createApp = ({
   );
   app.route('/', searchRoutes({ api, authenticated }));
   app.route('/', registryRoutes({ api, authenticated }));
-  if (ui !== undefined) {
-    app.route(UI_ROOT, ui.routes);
-    app.get('/', (context) => context.redirect(`${UI_ROOT}/`, 302));
-  }
+  app.route('/', authRoutes(auth, requestTimeout(requestTimeoutMs)));
+  app.route(UI_ROOT, webRoutes(assets));
+  app.get('/', (context) => context.redirect(`${UI_ROOT}/`, 302));
   // `ingest` carries a file: an MCP call gets the deadline of an upload.
   app.route(
     '/',
     mcpRoutes({
       api,
-      authenticated: within(uploadTimeoutMs, [bearer]),
+      authenticated: within(
+        uploadTimeoutMs,
+        mcpCredentials,
+        mcpResource === undefined ? DEFAULT_CHALLENGE : mcpChallenge(mcpResource),
+      ),
       report: reportMcpFailure(logger),
     }),
   );
