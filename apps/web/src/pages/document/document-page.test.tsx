@@ -1,7 +1,13 @@
 import { screen, waitFor } from '@testing-library/react';
-import { userEvent } from '@testing-library/user-event';
+import { type UserEvent, userEvent } from '@testing-library/user-event';
 import { describe, expect, it } from 'vitest';
-import { fakeServer, json, renderApp } from '../../test/render.test-helper.tsx';
+import {
+  type Answer,
+  errorBody,
+  fakeServer,
+  json,
+  renderApp,
+} from '../../test/render.test-helper.tsx';
 
 const MARKUP = '<img src=x onerror="alert(1)"><b>bold</b>';
 
@@ -28,6 +34,30 @@ const HOSTILE_DOCUMENT = {
   text: { content: `Text ${MARKUP}`, offset: 0, total_length: 60, has_more: false },
 };
 
+// Each type is found by one search term only: `bill` by an alias, `payment` by a description.
+const TYPES = {
+  types: [
+    { slug: 'note', aliases: [], description: 'A note.' },
+    { slug: 'invoice', aliases: ['bill'], description: 'A request for payment.' },
+  ].map((type) => ({
+    ...type,
+    parent_slug: null,
+    version: 1,
+    status: 'stable',
+    fields: {},
+    document_count: 0,
+  })),
+};
+
+const answerDocument: Answer = (request) =>
+  request.path.startsWith('/documents/doc_01HOSTILE') ? json(HOSTILE_DOCUMENT) : undefined;
+
+const openTypePicker = async (user: UserEvent): Promise<HTMLElement> => {
+  await user.click(await screen.findByRole('tab', { name: 'Correct' }));
+  await user.click(screen.getByRole('combobox', { name: 'Type' }));
+  return screen.getByPlaceholderText('Search the types...');
+};
+
 describe('the document page', () => {
   it('renders markup read from a document as text, never as elements', async () => {
     const server = fakeServer((request) =>
@@ -44,30 +74,19 @@ describe('the document page', () => {
     expect(container.querySelector('img[src="x"]')).toBeNull();
   });
 
-  it('corrects the type with one chosen from the registry, found by an alias', async () => {
-    const types = {
-      types: [
-        { slug: 'note', aliases: [], description: 'A note.' },
-        { slug: 'invoice', aliases: ['bill'], description: 'A bill to pay.' },
-      ].map((type) => ({
-        ...type,
-        parent_slug: null,
-        version: 1,
-        status: 'stable',
-        fields: {},
-        document_count: 0,
-      })),
-    };
+  it('corrects the type with one chosen from the registry, found by alias or description', async () => {
     const server = fakeServer(
-      (request) => (request.path.startsWith('/types') ? json(types) : undefined),
-      (request) =>
-        request.path.startsWith('/documents/doc_01HOSTILE') ? json(HOSTILE_DOCUMENT) : undefined,
+      (request) => (request.path.startsWith('/types') ? json(TYPES) : undefined),
+      answerDocument,
     );
     renderApp('/documents/doc_01HOSTILE', server.fetch);
     const user = userEvent.setup();
-    await user.click(await screen.findByRole('tab', { name: 'Correct' }));
-    await user.click(screen.getByRole('combobox', { name: 'Type' }));
-    await user.type(screen.getByPlaceholderText('Search the types...'), 'bill');
+    const search = await openTypePicker(user);
+    await user.type(search, 'payment');
+    expect(await screen.findByRole('option', { name: /^invoice/ })).toBeInTheDocument();
+    expect(screen.queryByRole('option', { name: /^note/ })).toBeNull();
+    await user.clear(search);
+    await user.type(search, 'bill');
     expect(screen.queryByRole('option', { name: /^note/ })).toBeNull();
     await user.click(await screen.findByRole('option', { name: /^invoice/ }));
     expect(screen.getByRole('combobox', { name: 'Type' })).toHaveTextContent('invoice');
@@ -77,6 +96,19 @@ describe('the document page', () => {
         JSON.stringify({ type: 'invoice' }),
       );
     });
+  });
+
+  it('says why the types could not be listed', async () => {
+    const server = fakeServer(
+      (request) =>
+        request.path.startsWith('/types')
+          ? errorBody(503, 'unavailable', 'The registry cannot be read.')
+          : undefined,
+      answerDocument,
+    );
+    renderApp('/documents/doc_01HOSTILE', server.fetch);
+    await openTypePicker(userEvent.setup());
+    expect(await screen.findByText('The registry cannot be read.')).toBeInTheDocument();
   });
 
   it('shows a PNG original inline from the file route', async () => {
