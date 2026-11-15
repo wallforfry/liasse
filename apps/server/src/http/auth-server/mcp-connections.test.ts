@@ -3,7 +3,7 @@ import {
   mcpConnectionListSchema,
   revokeMcpConnectionResultSchema,
 } from '@liasse/contract';
-import { oauthClients } from '@liasse/core/db';
+import { oauthClientResources, oauthClients } from '@liasse/core/db';
 import { eq } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createHttpHarness, type HttpHarness, jsonRequest } from '../harness.test-helper.ts';
@@ -14,6 +14,8 @@ import {
   createClient,
   type IssuedTokens,
   REDIRECT_URI,
+  redeemCode,
+  requestCode,
 } from './oauth-flow.test-helper.ts';
 
 const LIST = '/api/auth/mcp-connections/list';
@@ -130,6 +132,32 @@ describe('the MCP connections of the account', () => {
     expect(
       (await callMcp(harness, { Authorization: `Bearer ${tokens.access_token}` })).status,
     ).toBe(401);
+  });
+
+  it('kills the authorization codes the client got before the revocation, not others', async () => {
+    const { tokens, ...client } = await connect();
+    expect(tokens.access_token).not.toBe('');
+    const code = await requestCode(owner, client, { scope: 'openid offline_access' });
+    const { tokens: otherTokens, ...other } = await connect();
+    expect(otherTokens.access_token).not.toBe('');
+    const otherCode = await requestCode(owner, other, { scope: 'openid offline_access' });
+    const where = eq(oauthClients.clientId, client.clientId);
+    const [row] = await harness.database.db.select().from(oauthClients).where(where);
+    const links = await harness.database.db
+      .select()
+      .from(oauthClientResources)
+      .where(eq(oauthClientResources.clientId, client.clientId));
+    expect((await revoke(row?.id ?? '')).status).toBe(200);
+    // Registered again, as a client of a metadata document is by the token request itself.
+    await harness.database.db.insert(oauthClients).values({
+      ...row,
+      id: `${row?.id ?? ''}_again`,
+      clientId: client.clientId,
+      redirectUris: [REDIRECT_URI],
+    });
+    await harness.database.db.insert(oauthClientResources).values([...links]);
+    expect((await redeemCode(harness, client, code)).status).toBe(400);
+    expect((await redeemCode(harness, other, otherCode)).status).toBe(200);
   });
 
   it('refuses a revocation without the Origin of the web UI, and keeps the client', async () => {

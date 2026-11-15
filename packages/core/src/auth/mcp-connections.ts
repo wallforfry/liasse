@@ -2,6 +2,7 @@ import type { McpConnection, McpConnectionList } from '@liasse/contract';
 import { and, desc, eq, gt, inArray, isNull, lt, max, sql } from 'drizzle-orm';
 import type { Database } from '../db/client.ts';
 import {
+  authVerifications,
   oauthAccessTokens,
   oauthClientRevocations,
   oauthClients,
@@ -9,6 +10,12 @@ import {
   oauthRefreshTokens,
 } from '../db/schema/index.ts';
 import { MCP_ACCESS_TOKEN_TTL_SECONDS } from './mcp-grant.ts';
+
+// The authorization codes not yet redeemed of a client: better-auth keeps them as JSON text
+// in `auth_verifications`, which has no foreign key to the client. Other rows of that table
+// need not be JSON, hence the guard before the cast.
+const pendingCodesOf = (clientId: string) =>
+  sql`(case when pg_input_is_valid(${authVerifications.value}, 'jsonb') then ${authVerifications.value}::jsonb end) @> ${JSON.stringify({ type: 'authorization_code', query: { client_id: clientId } })}::jsonb`;
 
 type TokenTable = typeof oauthRefreshTokens | typeof oauthAccessTokens;
 
@@ -92,7 +99,8 @@ export const listMcpConnections = async (db: Database): Promise<McpConnectionLis
 /**
  * Revokes the client of the row `id`: records when, for `/mcp` to refuse the access tokens
  * issued to it before, then deletes the client, which takes its refresh tokens, recorded
- * access tokens, consents and resource links with it. False when no client has that id.
+ * access tokens, consents and resource links with it, and its authorization codes not yet
+ * redeemed. False when no client has that id.
  */
 export const revokeMcpConnection = async (db: Database, id: string): Promise<boolean> =>
   db.transaction(async (tx) => {
@@ -101,6 +109,7 @@ export const revokeMcpConnection = async (db: Database, id: string): Promise<boo
       .where(eq(oauthClients.id, id))
       .returning({ clientId: oauthClients.clientId });
     if (client === undefined) return false;
+    await tx.delete(authVerifications).where(pendingCodesOf(client.clientId));
     const revokedAt = new Date();
     await tx
       .insert(oauthClientRevocations)

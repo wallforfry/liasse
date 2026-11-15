@@ -69,16 +69,18 @@ const consent = async (session: SignedIn, page: URL): Promise<URL> => {
   return new URL(redirectSchema.parse(await response.json()).url);
 };
 
-/**
- * The authorization code flow with PKCE, as an MCP client runs it, for `resource`; through
- * the consent page when the client asks for consent.
- */
-export const authorize = async (
-  harness: HttpHarness,
+export interface AuthorizationCode {
+  readonly code: string;
+  readonly verifier: string;
+  readonly resource: string;
+}
+
+/** The authorization request of the flow, through the consent page when the client asks. */
+export const requestCode = async (
   session: SignedIn,
-  { clientId, clientSecret }: CreatedClient,
+  { clientId }: CreatedClient,
   { resource = MCP_RESOURCE, scope = 'openid' }: { resource?: string; scope?: string } = {},
-): Promise<IssuedTokens> => {
+): Promise<AuthorizationCode> => {
   const verifier = base64url(randomBytes(32));
   const challenge = base64url(createHash('sha256').update(verifier).digest());
   const query = new URLSearchParams({
@@ -98,7 +100,16 @@ export const authorize = async (
     location.pathname === UI_CONSENT_PATH ? await consent(session, location) : location;
   const code = callback.searchParams.get('code') ?? '';
   expect(code).not.toBe('');
-  const response = await harness.app.request('/api/auth/oauth2/token', {
+  return { code, verifier, resource };
+};
+
+/** The token request that redeems `code`. */
+export const redeemCode = (
+  harness: HttpHarness,
+  { clientId, clientSecret }: CreatedClient,
+  { code, verifier, resource }: AuthorizationCode,
+) =>
+  harness.app.request('/api/auth/oauth2/token', {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     body: new URLSearchParams({
@@ -111,6 +122,15 @@ export const authorize = async (
       resource,
     }).toString(),
   });
+
+/** The authorization code flow with PKCE, as an MCP client runs it. */
+export const authorize = async (
+  harness: HttpHarness,
+  session: SignedIn,
+  client: CreatedClient,
+  options: { resource?: string; scope?: string } = {},
+): Promise<IssuedTokens> => {
+  const response = await redeemCode(harness, client, await requestCode(session, client, options));
   expect(response.status).toBe(200);
   return tokenSchema.parse(await response.json());
 };
