@@ -17,7 +17,7 @@ This package holds the corpus, its generator, the scoring functions and the regr
 | `src/schema/`              | Zod schemas of the ground truth, the questions and a system output    |
 | `src/score/`               | Pure scoring functions                                                |
 | `src/harness/`             | The run: instance, ingestion, answering agent, report, comparison     |
-| `src/calibrate/`           | The measure of the entity similarity thresholds on the corpus names   |
+| `src/calibrate/`           | The measure of the entity similarity thresholds on the corpus         |
 | `src/corpus.ts`            | `loadCorpus`, `loadQuestions`, `readDocumentFile`                     |
 
 The corpus is committed (1.4 MB: 1.1 MB of documents, 0.3 MB of JSON), so it can be used without running anything. The JSON files are validated by the schemas of `src/schema/`, which derive from the schemas of `@liasse/core/domain`, `@liasse/core/registry` and `@liasse/core/query`.
@@ -202,21 +202,35 @@ The scanned pages have been read by no vision model yet: until a run with one re
 pnpm eval:calibrate
 ```
 
-Entity resolution attaches a name to a known entity above a cosine similarity of 0.92 and asks the text model between 0.80 and 0.92. The command embeds every name and alias of the corpus entities with the embedder of the configuration, measures the similarity of the names of one entity and of the names of two entities of one kind, counts what the current thresholds attach and arbitrate, and suggests values: `attach` at or above the closest pair of distinct entities, `arbitrate` at or below the farthest pair of names of one entity. It changes no default: a default changes only on measurements with more names than the 51 of these 27 entities, which are embedded bare, whereas resolution embeds a mention with a line of its context.
+Entity resolution attaches a mention to a known entity above `ENTITY_ATTACH_SIMILARITY` (cosine) and asks the text model from `ENTITY_ARBITRATION_SIMILARITY` up to it. The command measures both with the embedder of the configuration, in two ways:
 
-Measured on 14 November 2026 with the default local embedder (`Xenova/multilingual-e5-small`, 384 dimensions, run offline once downloaded):
+- **Bare names**: every name and alias of the corpus entities (51 names of 27 entities).
+- **Mentions with their line of context**: every name or alias of an entity that a document writes (case aside, not inside a longer word, and not as part of a longer name of the same entity), once per document, duplicates of a document left out. It is embedded as resolution embeds a mention, by `mentionEmbeddingText` of `@liasse/core/entities`: the name as written, a line break, then the line of the page text that holds it, or the next line when that line is the name alone. The line stands in for the context the extraction model writes, which no measure here can know.
 
-| Pairs of names              | Pairs | Min   | Median | Max   |
-| --------------------------- | ----- | ----- | ------ | ----- |
-| Of one entity               | 31    | 0.903 | 0.955  | 0.995 |
-| Of two entities of one kind | 866   | 0.789 | 0.884  | 0.961 |
+For each, it compares every pair of samples of one kind, except two equal names of one entity (after the normalization of the name rule, which attaches them before similarity is looked at), counts what the configured thresholds attach and arbitrate, and suggests values: `attach` at or above the closest pair of distinct entities, `arbitrate` at or below the farthest pair of names of one entity. It changes no setting.
 
-| Thresholds (attach above / arbitrate from) | One entity: attached | One entity: below arbitration | Two entities: attached | Two entities: arbitrated |
-| ------------------------------------------ | -------------------- | ----------------------------- | ---------------------- | ------------------------ |
-| Current, 0.92 / 0.80                       | 26                   | 0                             | 38                     | 862                      |
-| Suggested on this corpus, 0.97 / 0.90      | 10                   | 0                             | 0                      | 210                      |
+Measured on 15 November 2026 with the default local embedder (`Xenova/multilingual-e5-small`, 384 dimensions, run offline once downloaded):
 
-The two bands overlap: names of two distinct entities reach 0.961, above names of one entity (from 0.903). With this embedder the current `attach` of 0.92 merges 38 pairs of distinct entities without asking, and the `arbitrate` of 0.80 sends almost every pair (862 of 866) to the text model. The measure supports raising both thresholds for this embedder, to about 0.97 and 0.90, which attach no distinct pair and still arbitrate every alias. The defaults are not changed here: 51 bare names are too few to set them, and the measure says they depend on the model, so the change belongs with a broader measure and, likely, thresholds made configurable.
+| Pairs                                          | Pairs | Min   | Median | Max   |
+| ---------------------------------------------- | ----- | ----- | ------ | ----- |
+| Bare names, of one entity                      | 30    | 0.903 | 0.955  | 0.995 |
+| Bare names, of two entities of one kind        | 866   | 0.789 | 0.884  | 0.961 |
+| Mentions in context, of one entity             | 640   | 0.819 | 0.900  | 0.976 |
+| Mentions in context, of two entities of a kind | 2140  | 0.776 | 0.874  | 0.995 |
+
+What three pairs of thresholds (attach above / arbitrate from) do with the 640 and 2140 pairs of mentions in context:
+
+| Thresholds                               | One entity: attached | One entity: below arbitration | Two entities: attached | Two entities: arbitrated |
+| ---------------------------------------- | -------------------- | ----------------------------- | ---------------------- | ------------------------ |
+| Former defaults, 0.92 / 0.80             | 171                  | 0                             | 193                    | 1883                     |
+| Suggested by the bare names, 0.97 / 0.90 | 9                    | 316                           | 6                      | 506                      |
+| Defaults, 1 / 0.80                       | 0                    | 0                             | 0                      | 2076                     |
+
+The context weighs more than the name. Two distinct entities named on one line get almost the same text: the two tenants of a lease reach 0.995 within one document and 0.974 across two, while no two names of one entity go above 0.976. No `attach` threshold attaches an alias without also attaching distinct entities, so the default is 1: similarity alone attaches nothing and the text model decides every candidate (the command suggests the same, 1, from the closest distinct pair). The bare-name suggestion of 0.90 for `arbitrate` would leave 316 of the 640 pairs of one entity below arbitration, each a duplicate entity; the lowest pair of one entity is at 0.819, so the default stays at 0.80. The former `attach` of 0.92 merged 193 pairs of distinct entities without asking.
+
+An earlier record of the bare names counted 31 pairs of one entity, two names equal but for their case among them, and counted as arbitrated the pairs above `attach` too.
+
+Limits: the context line is a stand-in, and the corpus is small. Of the 123 mentions, 55 are of the owner, so 630 of the 640 pairs of one entity are pairs of her names; the other entities give 10. Another embedder needs its own measure: run the command with its configuration and set `ENTITY_ATTACH_SIMILARITY` and `ENTITY_ARBITRATION_SIMILARITY` from what it prints.
 
 ## Regenerating
 
