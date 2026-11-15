@@ -1,10 +1,9 @@
-import { and, eq, inArray, notExists, type SQL, sql } from 'drizzle-orm';
+import { and, eq, notExists, type SQL } from 'drizzle-orm';
 import type { Database } from '../db/client.ts';
 import { documents, isLiveDocument } from '../db/schema/documents.ts';
-import { jobs } from '../db/schema/jobs.ts';
 import { enqueue } from '../jobs/enqueue.ts';
 import type { Transaction } from './existing-document.ts';
-import { processDocumentJob } from './process-document-job.ts';
+import { pendingProcessingOf, processDocumentJob } from './process-document-job.ts';
 
 interface Requeue {
   /** The tries the watched folder has used, this one included, as a value or an expression. */
@@ -32,23 +31,6 @@ export const requeueFailed = async (
   return true;
 };
 
-// The job that failed a document writes `failed` before the queue fails the job itself,
-// in another transaction: a retry in between would be failed again by that job's
-// terminal hook, and its new job would find the document failed and stop.
-const noProcessingPending = (tx: Transaction, documentId: string): SQL =>
-  notExists(
-    tx
-      .select({ id: jobs.id })
-      .from(jobs)
-      .where(
-        and(
-          eq(jobs.kind, processDocumentJob.name),
-          inArray(jobs.status, ['queued', 'running']),
-          sql`${jobs.payload}->>'documentId' = ${documentId}`,
-        ),
-      ),
-  );
-
 export type RetryOutcome = 'queued' | 'not_failed' | 'not_found';
 
 /**
@@ -58,9 +40,12 @@ export type RetryOutcome = 'queued' | 'not_failed' | 'not_found';
  */
 export const retryFailedDocument = (db: Database, documentId: string): Promise<RetryOutcome> =>
   db.transaction(async (tx) => {
+    // The job that failed a document writes `failed` before the queue fails the job itself,
+    // in another transaction: a retry in between would be failed again by that job's
+    // terminal hook, and its new job would find the document failed and stop.
     const queued = await requeueFailed(tx, documentId, {
       watchRequeues: 0,
-      condition: noProcessingPending(tx, documentId),
+      condition: notExists(pendingProcessingOf(tx, documentId)),
     });
     if (queued) return 'queued';
     const [live] = await tx

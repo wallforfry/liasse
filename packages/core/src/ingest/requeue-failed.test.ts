@@ -64,9 +64,20 @@ describe('retryFailedDocument', () => {
     const { id } = await ingest('failed, job not failed yet');
     await fail(id);
     await enqueue(db(), { kind: processDocumentJob, payload: { documentId: id } });
-    expect(await retryFailedDocument(db(), id)).toBe('not_failed');
+    for (const status of ['queued', 'running'] as const) {
+      await db().update(jobs).set({ status });
+      expect(await retryFailedDocument(db(), id), status).toBe('not_failed');
+    }
     expect(await documentRows()).toMatchObject([{ id, status: 'failed' }]);
     await db().update(jobs).set({ status: 'failed' });
+    expect(await retryFailedDocument(db(), id)).toBe('queued');
+  });
+
+  it('is not held back by the processing of another document', async () => {
+    const { id } = await ingest('failed while another is processed');
+    await fail(id);
+    await ingest('another, still processing');
+    await db().update(jobs).set({ status: 'running' });
     expect(await retryFailedDocument(db(), id)).toBe('queued');
   });
 
