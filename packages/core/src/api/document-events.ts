@@ -14,6 +14,8 @@ const toDocumentEvent = ({
   maxAttempts,
   errorCode,
   errorName,
+  httpStatus,
+  providerCode,
   ...row
 }: EventRow) =>
   documentEventSchema.parse({
@@ -22,6 +24,8 @@ const toDocumentEvent = ({
     max_attempts: maxAttempts,
     error_code: errorCode,
     error_name: errorName,
+    http_status: httpStatus,
+    provider_code: providerCode,
   });
 
 export interface ListDocumentEventsOptions {

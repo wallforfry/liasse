@@ -249,6 +249,8 @@ describe('documents of the API', () => {
           max_attempts: 3,
           error_code: 'text_process_timeout',
           error_name: 'TextProcessError',
+          http_status: null,
+          provider_code: null,
           retryable: true,
           model: null,
           details: {},
@@ -259,6 +261,32 @@ describe('documents of the API', () => {
           model: 'synthetic-vision',
           details: { text_method: 'vision', pages: 2 },
         }),
+      ]);
+    });
+
+    it('answers the model, HTTP status and code of a provider failure', async () => {
+      const { id } = await upload('refused by the provider');
+      await log(id, {
+        stage: 'classification',
+        outcome: 'failed',
+        status: 'failed',
+        attempt: 1,
+        maxAttempts: 3,
+        errorCode: 'model_provider_failed',
+        errorName: 'ModelProviderError',
+        httpStatus: 400,
+        providerCode: 'invalid_request_error:invalid_json_schema',
+        retryable: false,
+        model: 'synthetic-model',
+      });
+      const { events } = await listDocumentEvents(harness.context, id);
+      expect(events).toMatchObject([
+        {
+          error_code: 'model_provider_failed',
+          http_status: 400,
+          provider_code: 'invalid_request_error:invalid_json_schema',
+          model: 'synthetic-model',
+        },
       ]);
     });
 

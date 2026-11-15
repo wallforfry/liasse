@@ -36,6 +36,16 @@ export const documentEventSchema = z.object({
   max_attempts: z.int().nullable(),
   error_code: z.string().nullable().describe('A short code, never a message.'),
   error_name: z.string().nullable().describe('The class of the error, for `internal_error`.'),
+  http_status: z
+    .int()
+    .nullable()
+    .describe('The HTTP status of the model provider, for `model_provider_failed`.'),
+  provider_code: z
+    .string()
+    .nullable()
+    .describe(
+      'What the model provider reported, for `model_provider_failed`: its error type and code (`type:code`), a network code, or `timeout`.',
+    ),
   retryable: z
     .boolean()
     .nullable()

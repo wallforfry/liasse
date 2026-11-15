@@ -148,7 +148,7 @@ describe('the document page', () => {
     );
   });
 
-  it('shows the processing log oldest first, with the code and attempt of each failure', async () => {
+  it('shows the processing log oldest first, with the code, provider answer and attempt of each failure', async () => {
     const failure = {
       id: 'evt_02',
       occurred_at: '2026-11-15T10:05:00.000Z',
@@ -157,8 +157,10 @@ describe('the document page', () => {
       status: 'failed',
       attempt: 3,
       max_attempts: 3,
-      error_code: 'model_output_invalid',
-      error_name: 'ModelOutputError',
+      error_code: 'model_provider_failed',
+      error_name: 'ModelProviderError',
+      http_status: 400,
+      provider_code: 'invalid_request_error:invalid_json_schema',
       retryable: true,
       model: 'synthetic-model',
       details: {},
@@ -174,6 +176,8 @@ describe('the document page', () => {
       max_attempts: null,
       error_code: null,
       error_name: null,
+      http_status: null,
+      provider_code: null,
       retryable: null,
       model: null,
       details: { text_method: 'native', pages: 2, rejected_values: 1 },
@@ -187,7 +191,10 @@ describe('the document page', () => {
     );
     renderApp('/documents/doc_01HOSTILE', server.fetch);
     await userEvent.setup().click(await screen.findByRole('tab', { name: 'Processing' }));
-    expect(await screen.findByText('model_output_invalid')).toBeInTheDocument();
+    expect(await screen.findByText('model_provider_failed')).toBeInTheDocument();
+    expect(
+      screen.getByText('HTTP 400, invalid_request_error:invalid_json_schema'),
+    ).toBeInTheDocument();
     expect(screen.getByText('3 of 3')).toBeInTheDocument();
     expect(screen.getByText('native text, 2 pages, 1 rejected value')).toBeInTheDocument();
     const rows = screen.getAllByRole('row').map((row) => row.textContent);

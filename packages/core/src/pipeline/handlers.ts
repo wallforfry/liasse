@@ -11,6 +11,7 @@ import {
 } from '../ingest/process-document-job.ts';
 import { PermanentJobError } from '../jobs/errors.ts';
 import { handle, type JobContext, type RegisteredHandler } from '../jobs/handlers.ts';
+import { ModelProviderError } from '../models/errors.ts';
 import type { PipelineDeps } from './deps.ts';
 import { SETTLED_STATUSES } from './document.ts';
 import { DocumentProcessingError, documentErrorCode, isPermanentFailure } from './errors.ts';
@@ -23,6 +24,19 @@ type DocumentJob = JobContext<{ readonly documentId: string }>;
 // since it may quote the document.
 const errorNameOf = (error: unknown): string | undefined =>
   error instanceof Error && /^\w{1,64}$/.test(error.name) ? error.name : undefined;
+
+// A provider failure keeps its identifiers, the model, the HTTP status and the code it
+// reported, so that the log says why the call was refused.
+const providerTraceOf = (
+  error: unknown,
+): Pick<FailureTrace, 'model' | 'httpStatus' | 'providerCode'> =>
+  error instanceof ModelProviderError
+    ? {
+        model: error.model,
+        ...(error.statusCode === undefined ? {} : { httpStatus: error.statusCode }),
+        ...(error.code === undefined ? {} : { providerCode: error.code }),
+      }
+    : {};
 
 interface Flag {
   readonly from: readonly DocumentStatus[];
@@ -51,6 +65,7 @@ const traceOf = (error: unknown, attempt: number, policy: FailurePolicy): Failur
     maxAttempts: policy.maxAttempts,
     errorCode: documentErrorCode(error),
     ...(errorName === undefined ? {} : { errorName }),
+    ...providerTraceOf(error),
     retryable: !isPermanentFailure(error),
   };
 };
@@ -86,7 +101,7 @@ const loggingFailures =
         await logFailedAttempt(deps.db, payload.documentId, final ? 'failed' : 'retrying', trace);
       }
       throw permanent && !(error instanceof PermanentJobError)
-        ? new DocumentProcessingError(code)
+        ? new DocumentProcessingError(code, { cause: error })
         : error;
     }
   };
