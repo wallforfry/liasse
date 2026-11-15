@@ -1,7 +1,7 @@
+import { CONSOLIDATION_BATCH_DOCUMENTS } from '@liasse/contract/domain';
 import { asc, eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { jobs } from '../db/schema/jobs.ts';
-import { CONSOLIDATION_BATCH_DOCUMENTS } from '../domain/limits.ts';
 import { insertSyntheticDocument } from '../testing/fixtures.ts';
 import { createTestDatabase, type TestDatabase } from '../testing/test-database.ts';
 import { nextNightlyRun, queueBatchRunIfDue, scheduleNightlyRun } from './schedule.ts';

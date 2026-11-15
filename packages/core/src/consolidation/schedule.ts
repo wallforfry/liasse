@@ -1,9 +1,12 @@
+import {
+  CONSOLIDATION_BATCH_DOCUMENTS,
+  CONSOLIDATION_NIGHTLY_HOUR_UTC,
+} from '@liasse/contract/domain';
 import { and, desc, eq, gt, inArray, ne, sql } from 'drizzle-orm';
 import { z } from 'zod';
 import type { Database } from '../db/client.ts';
 import { documents, isLiveDocument } from '../db/schema/documents.ts';
 import { jobs } from '../db/schema/jobs.ts';
-import { CONSOLIDATION_BATCH_DOCUMENTS, CONSOLIDATION_NIGHTLY_HOUR_UTC } from '../domain/limits.ts';
 import { enqueue } from '../jobs/enqueue.ts';
 import { defineJobKind } from '../jobs/kinds.ts';
 import { SETTLED_STATUSES } from '../pipeline/document.ts';

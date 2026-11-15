@@ -30,7 +30,7 @@
     "typecheck": "tsc --noEmit -p tsconfig.json"
   },
   "dependencies": {
-    "@liasse/core": "workspace:*",
+    "@liasse/contract": "workspace:*",
     "zod": "^4.6.7"
   }
 }

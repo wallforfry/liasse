@@ -1,7 +1,7 @@
+import { searchRequestSchema } from '@liasse/contract';
+import { MAX_QUERY_ENTITY_NAME_LENGTH, MAX_QUERY_ENTITY_NAMES } from '@liasse/contract/domain';
+import { queryDslJsonSchema } from '@liasse/contract/query';
 import { queryDocuments, searchDocuments } from '@liasse/core/api';
-import { searchRequestSchema } from '@liasse/core/contract';
-import { MAX_QUERY_ENTITY_NAME_LENGTH, MAX_QUERY_ENTITY_NAMES } from '@liasse/core/domain';
-import { queryDslJsonSchema } from '@liasse/core/query';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import { type McpDeps, UNTRUSTED } from '../deps.ts';

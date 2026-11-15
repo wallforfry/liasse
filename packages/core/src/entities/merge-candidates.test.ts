@@ -1,5 +1,5 @@
+import type { EntityKind } from '@liasse/contract/domain';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import type { EntityKind } from '../domain/enums.ts';
 import { createTestDatabase, type TestDatabase } from '../testing/test-database.ts';
 import type { Entity } from './entity-store.ts';
 import type { StoredIdentifier } from './identifiers.ts';

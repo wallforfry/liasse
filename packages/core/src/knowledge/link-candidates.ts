@@ -1,17 +1,18 @@
+import {
+  type KeyDateKind,
+  LINK_CANDIDATE_POOL,
+  LINK_WINDOW_MONTHS,
+  MAX_LINK_CANDIDATES,
+  MAX_LINK_CANDIDATES_PER_TYPE,
+  type Money,
+  moneySchema,
+} from '@liasse/contract/domain';
 import { and, desc, eq, inArray, isNotNull, ne, or, type SQL, sql } from 'drizzle-orm';
 import type { Database } from '../db/client.ts';
 import { documents, isLiveDocument } from '../db/schema/documents.ts';
 import { documentDates } from '../db/schema/knowledge.ts';
 import { docTypes } from '../db/schema/registry.ts';
-import type { KeyDateKind } from '../domain/enums.ts';
-import {
-  LINK_CANDIDATE_POOL,
-  LINK_WINDOW_MONTHS,
-  MAX_LINK_CANDIDATES,
-  MAX_LINK_CANDIDATES_PER_TYPE,
-} from '../domain/limits.ts';
 import { entityIdProvenancePath } from '../domain/provenance.ts';
-import { type Money, moneySchema } from '../domain/values.ts';
 import { documentDay, statedDocumentDate } from './document-day.ts';
 import { shiftMonths } from './notice-deadline.ts';
 

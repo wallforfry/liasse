@@ -6,13 +6,13 @@ import {
   MAX_RECALL_LIMIT,
   MAX_SUBJECT_NAME_LENGTH,
   MAX_TIMELINE_LIMIT,
-} from '../domain/limits.ts';
+} from './domain/limits.ts';
 import {
   documentStateSchema,
   subjectIdentifierTypeSchema,
   subjectKindSchema,
-} from '../domain/schemas.ts';
-import { isoDateSchema } from '../domain/values.ts';
+} from './domain/schemas.ts';
+import { isoDateSchema } from './domain/values.ts';
 import {
   documentRefSchema,
   subjectRefSchema,

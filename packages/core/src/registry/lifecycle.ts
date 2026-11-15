@@ -1,6 +1,7 @@
+import type { TypeStatus } from '@liasse/contract/domain';
+import { err, ok, type Result } from '@liasse/contract/registry';
 import { and, eq, ne } from 'drizzle-orm';
 import { docTypes } from '../db/schema/registry.ts';
-import type { TypeStatus } from '../domain/enums.ts';
 import type { RegistryWriteContext } from './context.ts';
 import {
   failure,
@@ -11,7 +12,6 @@ import {
   typeNotFound,
 } from './errors.ts';
 import { aliasViolations } from './naming.ts';
-import { err, ok, type Result } from './result.ts';
 import {
   findNameHolder,
   findTypeById,

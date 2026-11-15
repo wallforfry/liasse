@@ -1,15 +1,15 @@
-import { z } from 'zod';
-import type { SchemaLanguage } from '../domain/enums.ts';
 import {
   MAX_CHANGE_RATIONALE_LENGTH,
   MAX_FIELD_NAME_LENGTH,
   MAX_FIELD_PROMOTION_KEYS,
-} from '../domain/limits.ts';
+  type SchemaLanguage,
+} from '@liasse/contract/domain';
+import { FIELD_PRIMITIVES } from '@liasse/contract/registry';
+import { z } from 'zod';
 import { redactSensitiveIdentifiers } from '../entities/detect-sensitive.ts';
 import type { TextModel } from '../models/ports.ts';
 import { namingConventions, UNTRUSTED_RULE } from '../pipeline/prompts/classification.ts';
 import { wrapUntrusted } from '../prompt/untrusted.ts';
-import { FIELD_PRIMITIVES } from '../registry/primitives.ts';
 import type { RegisteredType } from '../registry/type-store.ts';
 
 const systemPrompt = (language: SchemaLanguage): string =>

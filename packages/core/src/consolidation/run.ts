@@ -1,6 +1,6 @@
+import type { ChangeKind } from '@liasse/contract/domain';
 import { asc, eq } from 'drizzle-orm';
 import { typeChanges } from '../db/schema/registry.ts';
-import type { ChangeKind } from '../domain/enums.ts';
 import { applyByPolicy } from './apply-change.ts';
 import type { ConsolidationContext } from './context.ts';
 import { proposeIdentityMerges } from './propose-identity-merges.ts';

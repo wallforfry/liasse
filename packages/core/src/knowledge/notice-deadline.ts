@@ -1,4 +1,4 @@
-import type { NoticePeriodUnit } from '../domain/enums.ts';
+import type { NoticePeriodUnit } from '@liasse/contract/domain';
 
 export interface Period {
   readonly amount: number;

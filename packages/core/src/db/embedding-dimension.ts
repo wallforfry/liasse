@@ -1,9 +1,9 @@
+import { MAX_EMBEDDING_DIM } from '@liasse/contract/domain';
 import { is } from 'drizzle-orm';
 import { getTableConfig, PgTable } from 'drizzle-orm/pg-core';
 import type postgres from 'postgres';
 import { z } from 'zod';
 import { StartupError } from '../domain/errors.ts';
-import { MAX_EMBEDDING_DIM } from '../domain/limits.ts';
 import * as schema from './schema/index.ts';
 
 export class EmbeddingDimensionMismatchError extends StartupError {

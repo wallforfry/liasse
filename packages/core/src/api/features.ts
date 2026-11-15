@@ -1,10 +1,11 @@
-import type { DocumentCorrection, DocumentPart } from '../contract/documents.ts';
 import type {
   ChangeDecision,
+  DocumentCorrection,
+  DocumentPart,
   ListChangesOptions,
   ListSubjectsOptions,
   UpcomingOptions,
-} from '../contract/registry.ts';
+} from '@liasse/contract';
 import type { JsonObject } from '../db/columns.ts';
 import type { DeletedDocument } from '../ingest/delete-document.ts';
 import type { Transaction } from '../ingest/existing-document.ts';

@@ -1,4 +1,4 @@
-import { type ChangeView, changeListSchema } from '@liasse/core/contract';
+import { changeListSchema, type ChangeView } from '@liasse/contract';
 import { html } from 'hono/html';
 import { csrfField, type Markup, notice, UI_ROOT } from '../markup.ts';
 

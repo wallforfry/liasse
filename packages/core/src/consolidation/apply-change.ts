@@ -1,6 +1,6 @@
+import type { AutoApplyMode } from '@liasse/contract/domain';
 import type { Database } from '../db/client.ts';
 import { READ_COMMITTED } from '../db/isolation.ts';
-import type { AutoApplyMode } from '../domain/enums.ts';
 import { ID_PREFIXES, isId } from '../domain/ids.ts';
 import { mergeEntities } from '../entities/merge.ts';
 import { mergeSubjects } from '../knowledge/subject-merge.ts';

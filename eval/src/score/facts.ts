@@ -1,4 +1,4 @@
-import type { Money } from '@liasse/core/domain';
+import type { Money } from '@liasse/contract/domain';
 import { dateForms, PRINT_LANGUAGES } from '../format.ts';
 import type { FactTruth, GroundTruth, SystemDocument, SystemFact } from '../schema/index.ts';
 import { compactIdentifier, foldText, nameMatches, sameNumber } from './compare.ts';

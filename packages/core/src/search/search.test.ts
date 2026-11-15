@@ -1,3 +1,4 @@
+import { type SearchFilters, type SearchInput, searchInputSchema } from '@liasse/contract/search';
 import { count, eq } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { ZodError } from 'zod';
@@ -13,7 +14,6 @@ import {
   type SeededCorpus,
   SUBJECTS,
 } from './corpus.fixture.ts';
-import { type SearchFilters, type SearchInput, searchInputSchema } from './input.ts';
 import type { RankRequest } from './rankers.ts';
 import { search, type SearchDeps, type SearchHit } from './search.ts';
 import { MAX_SNIPPET_LENGTH, type Snippet } from './snippets.ts';

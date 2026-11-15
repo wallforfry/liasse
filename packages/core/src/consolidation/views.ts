@@ -1,4 +1,4 @@
-import type { ChangeDecisionResult, ChangeView } from '../contract/consolidation.ts';
+import type { ChangeDecisionResult, ChangeView } from '@liasse/contract';
 import type { DecisionOutcome } from './apply-change.ts';
 import type { StoredChange } from './change-store.ts';
 

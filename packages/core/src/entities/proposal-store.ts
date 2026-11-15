@@ -1,7 +1,7 @@
+import type { ChangeKind, ChangeStatus } from '@liasse/contract/domain';
 import { and, eq, or, sql } from 'drizzle-orm';
 import { z } from 'zod';
 import { typeChanges } from '../db/schema/registry.ts';
-import type { ChangeKind, ChangeStatus } from '../domain/enums.ts';
 import type { EntityReader, EntityTransaction } from './entity-store.ts';
 
 // The kinds of change that merge two rows of one table into one. They have the same

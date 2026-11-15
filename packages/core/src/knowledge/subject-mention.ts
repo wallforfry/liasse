@@ -1,4 +1,4 @@
-import type { SubjectKind } from '../domain/enums.ts';
+import type { SubjectKind } from '@liasse/contract/domain';
 import { redactSensitiveIdentifiers } from '../entities/detect-sensitive.ts';
 import type { IdentifierKey } from '../entities/sensitive.ts';
 import type { KnowledgeSubject } from './input.ts';

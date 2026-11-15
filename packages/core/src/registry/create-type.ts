@@ -1,7 +1,7 @@
+import { MAX_TYPE_DESCRIPTION_LENGTH, type SchemaLanguage } from '@liasse/contract/domain';
+import { err, ok, type Result } from '@liasse/contract/registry';
 import { and, count, gte, lt } from 'drizzle-orm';
 import { docTypes, entities } from '../db/schema/registry.ts';
-import type { SchemaLanguage } from '../domain/enums.ts';
-import { MAX_TYPE_DESCRIPTION_LENGTH } from '../domain/limits.ts';
 import type { RegistryContext } from './context.ts';
 import {
   failure,
@@ -13,7 +13,6 @@ import {
 } from './errors.ts';
 import { checkTypeFields, type TypeFields } from './fields.ts';
 import { type SlugContext, slugViolations } from './naming.ts';
-import { err, ok, type Result } from './result.ts';
 import {
   findLiveTypeByName,
   findNameHolder,

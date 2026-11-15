@@ -3,7 +3,7 @@ import {
   entityKindSchema,
   isoDateSchema,
   subjectKindSchema,
-} from '@liasse/core/domain';
+} from '@liasse/contract/domain';
 import { z } from 'zod';
 import { keySchema } from './expectation.ts';
 import { groundTruthSchema } from './ground-truth.ts';

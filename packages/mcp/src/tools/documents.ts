@@ -1,11 +1,11 @@
-import { correctDocument, CORRECTED_PARTS, getDocument, uploadDocument } from '@liasse/core/api';
 import {
   documentCorrectionSchema,
   getDocumentOptionsSchema,
   idSchema,
   ingestRequestSchema,
-} from '@liasse/core/contract';
-import { liveDocumentStatusSchema } from '@liasse/core/domain';
+} from '@liasse/contract';
+import { liveDocumentStatusSchema } from '@liasse/contract/domain';
+import { correctDocument, CORRECTED_PARTS, getDocument, uploadDocument } from '@liasse/core/api';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import { type McpDeps, UNTRUSTED } from '../deps.ts';

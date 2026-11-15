@@ -1,4 +1,4 @@
-import type { SupportedMime } from '@liasse/core/domain';
+import type { SupportedMime } from '@liasse/contract/domain';
 import { buildSyntheticDocx, buildSyntheticPdf, type SyntheticPdfPage } from '@liasse/core/testing';
 import type { PageTruth } from '../schema/index.ts';
 import type { PageSpec, RenderSpec, ScenarioDocument } from '../scenario/model.ts';

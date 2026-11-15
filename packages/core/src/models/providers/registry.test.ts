@@ -1,6 +1,6 @@
+import { LLM_PROVIDERS } from '@liasse/contract/domain';
 import { afterEach, describe, expect, it } from 'vitest';
 import { z } from 'zod';
-import { LLM_PROVIDERS } from '../../domain/enums.ts';
 import { createProviderEmbedder } from './embedder.ts';
 import { PROVIDERS } from './registry.ts';
 import {

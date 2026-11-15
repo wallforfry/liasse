@@ -1,4 +1,4 @@
-import type { SearchResults } from '@liasse/core/contract';
+import type { SearchResults } from '@liasse/contract';
 import { html } from 'hono/html';
 import { documentPath, type Markup, UI_ROOT } from '../markup.ts';
 

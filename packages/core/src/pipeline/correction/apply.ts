@@ -1,11 +1,11 @@
-import { DOCUMENT_JOB_FAILURE_CODES } from '../../domain/enums.ts';
+import { DOCUMENT_JOB_FAILURE_CODES } from '@liasse/contract/domain';
+import { ownValue } from '@liasse/contract/registry';
 import {
   MANUAL_PROVENANCE,
   MANUAL_TYPE_FIELD,
   PIPELINE_PROVENANCE_KEY,
   readPipelineProvenance,
 } from '../../domain/provenance.ts';
-import { ownValue } from '../../registry/own.ts';
 import type { RegisteredType } from '../../registry/type-store.ts';
 import { validateDocumentFields } from '../../registry/validate-document-fields.ts';
 import type { MaskSensitive } from '../deps.ts';

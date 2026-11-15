@@ -1,9 +1,9 @@
+import { MAX_LINK_CANDIDATES } from '@liasse/contract/domain';
 import { eq, sql } from 'drizzle-orm';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { documents } from '../db/schema/documents.ts';
 import { documentLinks } from '../db/schema/knowledge.ts';
 import { ID_PREFIXES, newId } from '../domain/ids.ts';
-import { MAX_LINK_CANDIDATES } from '../domain/limits.ts';
 import { gatedTextModel, SYNTHETIC_IBAN } from '../entities/support.test-helper.ts';
 import { deleteDocument } from '../ingest/delete-document.ts';
 import { waitUntil } from '../testing/async.ts';

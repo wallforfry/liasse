@@ -6,9 +6,9 @@ import {
   keyDateKindSchema,
   subjectKindSchema,
   typeStatusSchema,
-} from '../domain/schemas.ts';
-import { listEntitiesOptionsSchema } from '../entities/list-options.ts';
-import { fieldDefinitionSchema } from '../registry/primitives.ts';
+} from './domain/schemas.ts';
+import { listEntitiesOptionsSchema } from './entities/list-options.ts';
+import { fieldDefinitionSchema } from './registry/primitives.ts';
 
 export const describeTypesOptionsSchema = z.strictObject({
   status: typeStatusSchema.optional().describe('Without it, every type that is not merged.'),

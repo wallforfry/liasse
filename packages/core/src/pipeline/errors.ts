@@ -1,4 +1,4 @@
-import { DOCUMENT_JOB_FAILURE_CODES } from '../domain/enums.ts';
+import { DOCUMENT_JOB_FAILURE_CODES } from '@liasse/contract/domain';
 import { EntityResolutionContendedError } from '../entities/resolve.ts';
 import { PermanentJobError } from '../jobs/errors.ts';
 import { ModelOutputError, ModelProviderError } from '../models/errors.ts';

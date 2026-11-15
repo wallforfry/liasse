@@ -1,3 +1,4 @@
+import { type SearchInput, searchInputSchema } from '@liasse/contract/search';
 import { and, eq, inArray } from 'drizzle-orm';
 import type { Database } from '../db/client.ts';
 import type { JsonObject } from '../db/columns.ts';
@@ -7,7 +8,6 @@ import type { Embedder } from '../models/ports.ts';
 import { documentFilter } from './filters.ts';
 import { reciprocalRankFusion } from './fusion.ts';
 import { type DocumentGroup, groupByDocument } from './grouping.ts';
-import { type SearchInput, searchInputSchema } from './input.ts';
 import { type ChunkRanker, rankByFullText, rankByVector, type RankedChunk } from './rankers.ts';
 import { readSnippets, type Snippet } from './snippets.ts';
 import { parseSearchQuery } from './tsquery.ts';

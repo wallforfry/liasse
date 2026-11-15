@@ -1,4 +1,5 @@
-import { err, ok, type Result } from '../registry/result.ts';
+import type { QueryDsl, QueryError, QueryWarning } from '@liasse/contract/query';
+import { err, ok, type Result } from '@liasse/contract/registry';
 import { type CheckedCondition, checkConditions } from './check-conditions.ts';
 import {
   type AggregateShape,
@@ -7,8 +8,6 @@ import {
   checkRows,
   type RowsShape,
 } from './check-shape.ts';
-import type { QueryDsl } from './dsl.ts';
-import type { QueryError, QueryWarning } from './errors.ts';
 import type { QueryField } from './fields.ts';
 
 // A query whose every path, operator, aggregate and value was checked against the fields

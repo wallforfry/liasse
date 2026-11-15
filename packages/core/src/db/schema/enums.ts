@@ -1,4 +1,3 @@
-import { pgEnum } from 'drizzle-orm/pg-core';
 import {
   CHANGE_KINDS,
   CHANGE_STATUSES,
@@ -11,7 +10,8 @@ import {
   LINK_KINDS,
   SUBJECT_KINDS,
   TYPE_STATUSES,
-} from '../../domain/enums.ts';
+} from '@liasse/contract/domain';
+import { pgEnum } from 'drizzle-orm/pg-core';
 
 export const documentStatus = pgEnum('document_status', DOCUMENT_STATUSES);
 export const documentSource = pgEnum('document_source', DOCUMENT_SOURCES);

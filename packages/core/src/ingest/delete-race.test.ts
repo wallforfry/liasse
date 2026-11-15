@@ -1,9 +1,9 @@
 import { createHash } from 'node:crypto';
+import type { DocumentSource } from '@liasse/contract/domain';
 import { eq } from 'drizzle-orm';
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 import { documents } from '../db/schema/documents.ts';
 import { jobs } from '../db/schema/jobs.ts';
-import type { DocumentSource } from '../domain/enums.ts';
 import { storageKeyOf } from '../storage/key.ts';
 import type { Storage } from '../storage/port.ts';
 import { createGate, sleep } from '../testing/async.ts';

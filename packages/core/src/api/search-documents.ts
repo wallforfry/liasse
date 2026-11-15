@@ -1,4 +1,4 @@
-import { type SearchRequest, searchRequestSchema, type SearchResults } from '../contract/search.ts';
+import { type SearchRequest, searchRequestSchema, type SearchResults } from '@liasse/contract';
 import { search } from '../search/search.ts';
 import type { ApiContext } from './context.ts';
 

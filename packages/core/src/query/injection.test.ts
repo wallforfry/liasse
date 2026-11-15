@@ -1,3 +1,4 @@
+import { parseQueryDsl } from '@liasse/contract/query';
 import { PgDialect } from 'drizzle-orm/pg-core';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { documents } from '../db/schema/documents.ts';
@@ -8,7 +9,6 @@ import { insertSyntheticDocument } from '../testing/fixtures.ts';
 import { createTestDatabase, type TestDatabase } from '../testing/test-database.ts';
 import { checkQuery } from './check.ts';
 import { compileQuery } from './compile.ts';
-import { parseQueryDsl } from './dsl.ts';
 import { queryFields } from './fields.ts';
 import { runQuery } from './run.ts';
 

@@ -1,9 +1,13 @@
+import type {
+  ChangeDecision,
+  ChangeDecisionResult,
+  ChangeList,
+  ListChangesOptions,
+} from '@liasse/contract';
+import { MAX_LISTED_CHANGES } from '@liasse/contract/domain';
 import { eq } from 'drizzle-orm';
 import { ApiError } from '../api/errors.ts';
-import type { ChangeDecisionResult, ChangeList } from '../contract/consolidation.ts';
-import type { ChangeDecision, ListChangesOptions } from '../contract/registry.ts';
 import { typeChanges } from '../db/schema/registry.ts';
-import { MAX_LISTED_CHANGES } from '../domain/limits.ts';
 import { decideChange } from './apply-change.ts';
 import { pendingChanges } from './change-store.ts';
 import type { ConsolidationReadContext } from './context.ts';

@@ -1,17 +1,17 @@
 import { isDeepStrictEqual } from 'node:util';
-import { and, desc, eq, inArray, sql } from 'drizzle-orm';
-import type { Database } from '../db/client.ts';
-import { documents, isLiveDocument } from '../db/schema/documents.ts';
-import { CHANGE_STATUSES } from '../domain/enums.ts';
 import {
+  CHANGE_STATUSES,
   FIELD_PROMOTION_SAMPLES,
   FIELD_PROMOTION_SHARE,
   MAX_FIELDS_PER_TYPE,
   MIN_FIELD_PROMOTION_DOCUMENTS,
-} from '../domain/limits.ts';
+} from '@liasse/contract/domain';
+import { ownValue } from '@liasse/contract/registry';
+import { and, desc, eq, inArray, sql } from 'drizzle-orm';
+import type { Database } from '../db/client.ts';
+import { documents, isLiveDocument } from '../db/schema/documents.ts';
 import { SETTLED_STATUSES } from '../pipeline/document.ts';
 import { checkField } from '../registry/fields.ts';
-import { ownValue } from '../registry/own.ts';
 import { hasChange, insertChange, type StoredChange } from './change-store.ts';
 import type { ConsolidationContext } from './context.ts';
 import { skippingModelErrors } from './model-errors.ts';

@@ -1,9 +1,9 @@
+import type { ChangeKind, ChangeStatus } from '@liasse/contract/domain';
 import { eq } from 'drizzle-orm';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { documents } from '../db/schema/documents.ts';
 import { facts } from '../db/schema/knowledge.ts';
 import { typeChanges } from '../db/schema/registry.ts';
-import type { ChangeKind, ChangeStatus } from '../domain/enums.ts';
 import { ID_PREFIXES, newId } from '../domain/ids.ts';
 import { insertSyntheticDocument, type NewDocumentRow } from '../testing/fixtures.ts';
 import { createTestDatabase, type TestDatabase } from '../testing/test-database.ts';

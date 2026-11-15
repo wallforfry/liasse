@@ -1,8 +1,8 @@
+import { isLiveStatus } from '@liasse/contract/domain';
 import { and, eq, sql } from 'drizzle-orm';
 import { z } from 'zod';
 import type { Database } from '../db/client.ts';
 import { documents } from '../db/schema/documents.ts';
-import { isLiveStatus } from '../domain/enums.ts';
 import { handle, type RegisteredHandler } from '../jobs/handlers.ts';
 import { defineJobKind } from '../jobs/kinds.ts';
 import { parseStorageKey } from '../storage/key.ts';

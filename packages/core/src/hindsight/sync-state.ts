@@ -1,11 +1,10 @@
+import { isLiveStatus, isoDateSchema } from '@liasse/contract/domain';
 import { and, asc, eq, type SQL, sql } from 'drizzle-orm';
 import { z } from 'zod';
 import type { Database } from '../db/client.ts';
 import { documents, isLiveDocument } from '../db/schema/documents.ts';
 import { facts } from '../db/schema/knowledge.ts';
 import { docTypes } from '../db/schema/registry.ts';
-import { isLiveStatus } from '../domain/enums.ts';
-import { isoDateSchema } from '../domain/values.ts';
 import type { SyncSession } from './document-lock.ts';
 import type { SyncedDocument, SyncedFact } from './memory.ts';
 

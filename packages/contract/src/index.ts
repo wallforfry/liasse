@@ -57,6 +57,7 @@ export {
   type UpcomingOptions,
   upcomingOptionsSchema,
 } from './registry.ts';
+export { notSnakeCase, wireKeyPaths } from './casing.ts';
 export { idSchema } from './id.ts';
 export {
   type GetSubjectInput,
@@ -117,4 +118,4 @@ export {
   HEALTH_STATUSES,
   healthSchema,
 } from './system.ts';
-export { type QueryDsl, queryDslSchema } from '../query/dsl.ts';
+export { type QueryDsl, queryDslSchema } from './query/dsl.ts';

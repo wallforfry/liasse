@@ -1,7 +1,7 @@
+import { MAX_TYPE_DESCRIPTION_LENGTH } from '@liasse/contract/domain';
 import { eq } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { docTypes, entities, typeChanges } from '../db/schema/registry.ts';
-import { MAX_TYPE_DESCRIPTION_LENGTH } from '../domain/limits.ts';
 import type { Embedder } from '../models/ports.ts';
 import { createFakeEmbedder } from '../testing/fake-embedder.ts';
 import { createTestDatabase, type TestDatabase } from '../testing/test-database.ts';

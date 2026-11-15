@@ -1,3 +1,4 @@
+import { TOMBSTONE_STATUS } from '@liasse/contract/domain';
 import { ne, sql } from 'drizzle-orm';
 import {
   boolean,
@@ -9,7 +10,6 @@ import {
   real,
   text,
 } from 'drizzle-orm/pg-core';
-import { TOMBSTONE_STATUS } from '../../domain/enums.ts';
 import { ID_PREFIXES, newId } from '../../domain/ids.ts';
 import {
   embeddingVector,

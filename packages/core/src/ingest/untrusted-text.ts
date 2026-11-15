@@ -1,4 +1,4 @@
-import { MAX_FILENAME_LENGTH, MAX_HINT_LENGTH } from '../domain/limits.ts';
+import { MAX_FILENAME_LENGTH, MAX_HINT_LENGTH } from '@liasse/contract/domain';
 
 // Postgres stores neither a NUL character nor an unpaired surrogate, and cutting a
 // string by UTF-16 units can leave half a pair behind.

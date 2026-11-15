@@ -1,10 +1,10 @@
+import type { AggregateFunction, OrderDirection } from '@liasse/contract/query';
 import { type SQL, sql } from 'drizzle-orm';
 import { documents, isLiveDocument } from '../db/schema/documents.ts';
 import { fieldIdentity, fieldValue, outputValue, sortKey } from './access.ts';
 import type { CheckedQuery } from './check.ts';
 import type { AggregateShape, CheckedAggregate, RowsShape } from './check-shape.ts';
 import { conditionSql, type EntityIds } from './condition-sql.ts';
-import type { AggregateFunction, OrderDirection } from './dsl.ts';
 import type { QueryField } from './fields.ts';
 import { documentSource, liveType } from './source.ts';
 

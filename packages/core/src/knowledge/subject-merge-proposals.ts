@@ -1,5 +1,5 @@
+import { ok, type Result } from '@liasse/contract/registry';
 import { recordMergeProposal, type RecordedProposal } from '../entities/proposal-store.ts';
-import { ok, type Result } from '../registry/result.ts';
 import type { KnowledgeWriteContext } from './context.ts';
 import type { SubjectMergeError } from './subject-errors.ts';
 import { sharedGlobalSubjectIdentifiers } from './subject-identifier-rules.ts';

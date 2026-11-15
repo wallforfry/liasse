@@ -1,14 +1,14 @@
-import { z } from 'zod';
-import type { EntityIdentifierType } from '../domain/enums.ts';
 import {
+  type EntityIdentifierType,
+  entityIdentifierTypeSchema,
   MAX_IDENTIFIER_FORMAT_LENGTH,
   MAX_IDENTIFIER_VALUE_LENGTH,
+  MIN_ATTACHING_CUSTOMER_NUMBER_LENGTH,
   MIN_COMPANY_ID_LENGTH,
   MIN_EXTENDABLE_COMPANY_ID_LENGTH,
   MIN_VAT_NUMBER_LENGTH,
-  MIN_ATTACHING_CUSTOMER_NUMBER_LENGTH,
-} from '../domain/limits.ts';
-import { entityIdentifierTypeSchema } from '../domain/schemas.ts';
+} from '@liasse/contract/domain';
+import { z } from 'zod';
 import { isValidCardNumber } from './card-number.ts';
 import { isValidIban } from './iban.ts';
 import {

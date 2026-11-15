@@ -1,4 +1,4 @@
-import type { QueryError } from '../query/errors.ts';
+import type { QueryError } from '@liasse/contract/query';
 import { QueryExecutionError } from '../query/execute.ts';
 import type { QueryResult } from '../query/result.ts';
 import { runQuery } from '../query/run.ts';

@@ -1,5 +1,5 @@
-import { TYPE_MERGE_EXAMPLES } from '../domain/limits.ts';
-import { ownValue } from '../registry/own.ts';
+import { TYPE_MERGE_EXAMPLES } from '@liasse/contract/domain';
+import { ownValue } from '@liasse/contract/registry';
 import type { RegisteredType } from '../registry/type-store.ts';
 import { insertChange, type StoredChange } from './change-store.ts';
 import type { ConsolidationContext } from './context.ts';
