@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { type Config, loadConfig } from '@liasse/core/config';
 import type { Database } from '@liasse/core/db';
-import { createTestDatabase } from '@liasse/core/testing';
+import { createApiKeyOverHttp, createTestDatabase } from '@liasse/core/testing';
 import { createRuntime, type RuntimeOptions } from '@liasse/server/runtime';
 
 export type Env = Readonly<Record<string, string | undefined>>;
@@ -13,17 +13,22 @@ export type Env = Readonly<Record<string, string | undefined>>;
 export interface Instance {
   readonly config: Config;
   readonly baseUrl: string;
-  /** The one API token of the instance, drawn for the run. */
+  /** An API key of the one account of the instance, both made for the run. */
   readonly token: string;
   /** A connection of the harness to the database of the instance, to read what it stored. */
   readonly db: Database;
   readonly stop: () => Promise<void>;
 }
 
+interface RunAccount {
+  readonly email: string;
+  readonly password: string;
+}
+
 // Everything that would reach outside the run is switched off: the watched folder, the
-// Hindsight bank and the web UI of the operator's configuration. The models and the
+// Hindsight bank and the accounts of the operator's configuration. The models and the
 // embedder stay as configured: they are what a run measures.
-const throwawayEnv = (env: Env, databaseUrl: string, folder: string, token: string): Env => ({
+const throwawayEnv = (env: Env, databaseUrl: string, folder: string, account: RunAccount): Env => ({
   ...env,
   DATABASE_URL: databaseUrl,
   STORAGE_DRIVER: 'fs',
@@ -31,8 +36,9 @@ const throwawayEnv = (env: Env, databaseUrl: string, folder: string, token: stri
   WATCH_DIR: undefined,
   HINDSIGHT_URL: undefined,
   HINDSIGHT_API_KEY: undefined,
-  UI_PASSWORD: undefined,
-  API_TOKENS: token,
+  AUTH_SECRET: randomBytes(32).toString('hex'),
+  AUTH_BOOTSTRAP_EMAIL: account.email,
+  AUTH_BOOTSTRAP_PASSWORD: account.password,
   HOST: '127.0.0.1',
   PORT: undefined,
   PUBLIC_URL: undefined,
@@ -54,8 +60,8 @@ export const startInstance = async (
     await database.dispose();
   };
   try {
-    const token = randomBytes(32).toString('hex');
-    const loaded = loadConfig(throwawayEnv(env, database.url, folder, token));
+    const account = { email: 'eval@example.com', password: randomBytes(32).toString('hex') };
+    const loaded = loadConfig(throwawayEnv(env, database.url, folder, account));
     // Port 0 lets the system pick a free one; the configuration itself refuses it.
     const config = { ...loaded, server: { ...loaded.server, port: 0 } };
     const runtime = await createRuntime(config, logger === undefined ? {} : { logger });
@@ -63,12 +69,22 @@ export const startInstance = async (
       await runtime.stop();
       throw new Error('The server of the run listens on no port');
     }
+    const baseUrl = `http://127.0.0.1:${String(runtime.port)}`;
+    const token = await createApiKeyOverHttp({
+      baseUrl,
+      publicUrl: config.server.publicUrl,
+      account,
+      name: 'evaluation run',
+    }).catch(async (error: unknown) => {
+      await runtime.stop();
+      throw error;
+    });
     // An interrupted run stops the instance from its signal handler, then again on its way
     // out: the second call waits for the first.
     let stopped: Promise<void> | undefined;
     return {
       config,
-      baseUrl: `http://127.0.0.1:${String(runtime.port)}`,
+      baseUrl,
       token,
       db: database.db,
       stop: () => {
