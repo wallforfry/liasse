@@ -13,6 +13,7 @@ import {
   listDocumentEvents,
   listDocuments,
   removeDocument,
+  retryDocument,
 } from '@liasse/core/api';
 import { Hono } from 'hono';
 import { z } from 'zod';
@@ -107,6 +108,24 @@ export const documentRoutes = ({ api, authenticated }: RouteDeps): Hono<AppEnv> 
         const { id } = context.req.valid('param');
         await correctDocument(api, id, context.req.valid('json'));
         return context.json(await getDocument(api, id, { include: [...CORRECTED_PARTS] }));
+      },
+    )
+    .post(
+      '/documents/:id/retry',
+      operation({
+        summary: 'Process a failed document again',
+        tag: TAG,
+        responses: {
+          202: jsonResponse('The document, queued for processing.', documentSchema),
+          ...failures(400, 404),
+        },
+      }),
+      authenticated,
+      valid('param', idParam),
+      async (context) => {
+        const { id } = context.req.valid('param');
+        await retryDocument(api, id);
+        return context.json(await getDocument(api, id), 202);
       },
     )
     .delete(

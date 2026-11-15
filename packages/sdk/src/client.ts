@@ -71,6 +71,8 @@ export interface LiasseClient {
   readonly listDocumentEvents: (id: string) => Promise<DocumentEventList>;
   readonly downloadFile: (id: string) => Promise<DownloadedFile>;
   readonly correctDocument: (id: string, correction: DocumentCorrection) => Promise<DocumentView>;
+  /** Queues a failed document for processing again; refused for any other status. */
+  readonly retryDocument: (id: string) => Promise<DocumentView>;
   readonly deleteDocument: (id: string) => Promise<void>;
   readonly search: (request: SearchRequest) => Promise<SearchResults>;
   readonly query: (request: QueryRequest) => Promise<QueryResultEnvelope>;
@@ -121,6 +123,8 @@ export const createLiasseClient = (options: ClientOptions): LiasseClient => {
         documentSchema,
         await send({ method: 'PATCH', path: documentPath(id), json: correction }),
       ),
+    retryDocument: async (id) =>
+      parseJson(documentSchema, await send({ method: 'POST', path: `${documentPath(id)}/retry` })),
     deleteDocument: async (id) => {
       await send({ method: 'DELETE', path: documentPath(id) });
     },

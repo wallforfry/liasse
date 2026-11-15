@@ -1,9 +1,8 @@
 import { DOCUMENT_JOB_FAILURE_CODES, IN_PROGRESS_STATUSES } from '@liasse/contract/domain';
-import { and, asc, eq, inArray, notExists, sql } from 'drizzle-orm';
+import { and, asc, inArray, notExists } from 'drizzle-orm';
 import type { Database } from '../db/client.ts';
 import { documents } from '../db/schema/documents.ts';
-import { jobs } from '../db/schema/jobs.ts';
-import { processDocumentJob } from '../ingest/process-document-job.ts';
+import { pendingProcessingOf } from '../ingest/process-document-job.ts';
 import { recordDocumentEvent } from '../processing-log/record.ts';
 import { pendingStageOf } from '../processing-log/stage.ts';
 
@@ -18,16 +17,7 @@ const ABANDONED = DOCUMENT_JOB_FAILURE_CODES.stale;
  */
 export const failAbandonedDocuments = (db: Database): Promise<number> =>
   db.transaction(async (tx) => {
-    const pending = tx
-      .select({ id: jobs.id })
-      .from(jobs)
-      .where(
-        and(
-          eq(jobs.kind, processDocumentJob.name),
-          inArray(jobs.status, ['queued', 'running']),
-          sql`${jobs.payload}->>'documentId' = ${documents.id}`,
-        ),
-      );
+    const pending = pendingProcessingOf(tx, documents.id);
     // Locked in the order of their ids, as every writer of several documents does.
     const abandoned = await tx
       .select({ id: documents.id, status: documents.status, confidence: documents.confidence })

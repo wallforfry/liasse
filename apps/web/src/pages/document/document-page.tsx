@@ -14,6 +14,7 @@ import { CorrectionForm } from './correction-form.tsx';
 import { DeleteDocument } from './delete-document.tsx';
 import { DocumentDetails, DocumentText, OriginalFile, ValueTable } from './document-parts.tsx';
 import { ProcessingLog } from './processing-log.tsx';
+import { RetryDocument } from './retry-document.tsx';
 
 export const DocumentPage = () => {
   const client = useClient();
@@ -50,7 +51,12 @@ export const DocumentPage = () => {
             <span>{view.type ?? 'untyped'}</span>
           </span>
         }
-        actions={<DeleteDocument id={view.id} name={name} />}
+        actions={
+          <>
+            {view.status === 'failed' ? <RetryDocument id={view.id} /> : null}
+            <DeleteDocument id={view.id} name={name} />
+          </>
+        }
       />
       {view.summary === null ? null : <p className="text-sm leading-relaxed">{view.summary}</p>}
       <Tabs defaultValue="details">

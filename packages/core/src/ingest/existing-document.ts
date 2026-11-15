@@ -12,6 +12,7 @@ import { enqueue } from '../jobs/enqueue.ts';
 import type { StorageKey } from '../storage/key.ts';
 import type { Storage } from '../storage/port.ts';
 import { processDocumentJob } from './process-document-job.ts';
+import { requeueFailed } from './requeue-failed.ts';
 
 export type Transaction = Parameters<Parameters<Database['transaction']>[0]>[0];
 
@@ -134,14 +135,11 @@ const repairLiveDocument = async (
   if (fileMissing) await storage.put(file.storageKey, file.bytes);
   const unchanged = { id, status, duplicate: true, fileRestored: fileMissing };
   if (status !== 'failed') return unchanged;
-  const requeued = await tx
-    .update(documents)
-    .set({ status: 'received', error: null, watchRequeues: requeueCount(file.source) })
-    .where(and(eq(documents.id, id), eq(documents.status, status), mayRequeue(file.source)))
-    .returning({ id: documents.id });
-  if (requeued.length === 0) return unchanged;
-  await queueProcessing(tx, id);
-  return { ...unchanged, status: 'received' };
+  const requeued = await requeueFailed(tx, id, {
+    watchRequeues: requeueCount(file.source),
+    condition: mayRequeue(file.source),
+  });
+  return requeued ? { ...unchanged, status: 'received' } : unchanged;
 };
 
 const ATTEMPTS = 3;

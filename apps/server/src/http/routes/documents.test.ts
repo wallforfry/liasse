@@ -322,6 +322,37 @@ describe('document routes', () => {
     });
   });
 
+  describe('POST /documents/:id/retry', () => {
+    const retry = (id: string) => harness.call(`/documents/${id}/retry`, { method: 'POST' });
+
+    it('queues a failed document again and answers 202 with it', async () => {
+      const { id } = uploaded.parse(await (await post(form(syntheticPdf('to retry')))).json());
+      await harness.database.db
+        .update(documents)
+        .set({ status: 'failed', error: 'model_provider_failed' })
+        .where(eq(documents.id, id));
+      await harness.database.db.delete(jobs).where(eq(jobs.kind, 'process_document'));
+      const response = await retry(id);
+      expect(response.status).toBe(202);
+      expect(await response.json()).toMatchObject({ id, status: 'received', error: null });
+      const queued = await harness.database.db
+        .select()
+        .from(jobs)
+        .where(eq(jobs.kind, 'process_document'));
+      expect(queued.map(({ payload }) => payload)).toContainEqual({ documentId: id });
+    });
+
+    it('refuses a document that did not fail with 400, and an unknown one with 404', async () => {
+      const { id } = uploaded.parse(await (await post(form(syntheticPdf('not failed')))).json());
+      const notFailed = await retry(id);
+      expect(notFailed.status).toBe(400);
+      expect(await codeOf(notFailed)).toBe('document_not_failed');
+      const unknown = await retry('doc_01JC0000000000000000000000');
+      expect(unknown.status).toBe(404);
+      expect(await codeOf(unknown)).toBe('document_not_found');
+    });
+  });
+
   describe('PATCH /documents/:id', () => {
     it('answers 501 while the pipeline is not bound', async () => {
       const id = await harness.addDocument([]);
