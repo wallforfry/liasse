@@ -3,12 +3,7 @@ import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/
 import { CallToolResultSchema } from '@modelcontextprotocol/sdk/types.js';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { z } from 'zod';
-import {
-  authorized,
-  createHttpHarness,
-  type HttpHarness,
-  TEST_TOKEN,
-} from '../harness.test-helper.ts';
+import { createHttpHarness, type HttpHarness } from '../harness.test-helper.ts';
 
 const ENDPOINT = 'http://liasse.test/mcp';
 
@@ -77,23 +72,25 @@ describe('/mcp', () => {
       ...init,
     });
 
-  it('refuses a client without a valid Bearer token', async () => {
+  it('refuses a client without a valid token, pointing it at the resource metadata', async () => {
     await expect(connect(undefined)).rejects.toThrow();
     await expect(connect('synthetic-wrong-token')).rejects.toThrow();
     const response = await post(INITIALIZE);
     expect(response.status).toBe(401);
-    expect(response.headers.get('WWW-Authenticate')).toBe('Bearer realm="liasse"');
+    expect(response.headers.get('WWW-Authenticate')).toBe(
+      'Bearer resource_metadata="https://liasse.example.com/.well-known/oauth-protected-resource/mcp"',
+    );
     expect(await response.json()).toMatchObject({ error: { code: 'unauthorized' } });
   });
 
   it('serves the tools to a client with the token', async () => {
-    const client = await connect(TEST_TOKEN);
+    const client = await connect(harness.token);
     const { tools } = await client.listTools();
     expect(tools).toHaveLength(14);
   });
 
   it('applies the private-document rules of REST to search', async () => {
-    const client = await connect(TEST_TOKEN);
+    const client = await connect(harness.token);
     const idsOf = async (args: Readonly<Record<string, unknown>>) => {
       const result = CallToolResultSchema.parse(
         await client.callTool({ name: 'search', arguments: { ...args } }),
@@ -117,31 +114,31 @@ describe('/mcp', () => {
   });
 
   it.each(['GET', 'DELETE'])('answers %s with 405: the server keeps no session', async (method) => {
-    const response = await harness.app.request('/mcp', authorized({ method }));
+    const response = await harness.app.request('/mcp', harness.authorized({ method }));
     expect(response.status).toBe(405);
     expect(response.headers.get('Allow')).toBe('POST');
     expect(await response.json()).toMatchObject({ error: { code: 'method_not_allowed' } });
   });
 
   it('refuses a body that is not JSON, nested too deep, or of another type', async () => {
-    const notJson = await post('{', authorized({ headers: MCP_HEADERS }));
+    const notJson = await post('{', harness.authorized({ headers: MCP_HEADERS }));
     expect(notJson.status).toBe(400);
     const deep = await post(
       `${'['.repeat(40)}${']'.repeat(40)}`,
-      authorized({ headers: MCP_HEADERS }),
+      harness.authorized({ headers: MCP_HEADERS }),
     );
     expect(deep.status).toBe(400);
     expect(await deep.json()).toMatchObject({ error: { code: 'invalid_body' } });
     const text = await post(
       JSON.stringify(INITIALIZE),
-      authorized({ headers: { ...MCP_HEADERS, 'Content-Type': 'text/plain' } }),
+      harness.authorized({ headers: { ...MCP_HEADERS, 'Content-Type': 'text/plain' } }),
     );
     expect(text.status).toBe(415);
   });
 
   it('refuses a body larger than a base64 file of the size limit', async () => {
     const tooLarge = JSON.stringify({ ...INITIALIZE, padding: 'x'.repeat(2 * 1024 * 1024) });
-    const response = await post(tooLarge, authorized({ headers: MCP_HEADERS }));
+    const response = await post(tooLarge, harness.authorized({ headers: MCP_HEADERS }));
     expect(response.status).toBe(413);
   });
 });

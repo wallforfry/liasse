@@ -20,7 +20,7 @@ TypeScript · Node 22 · Hono · Drizzle · Zod · Postgres + pgvector · MCP Ty
 
 ## Run with Docker
 
-`docker-compose.yml` runs Liasse and Postgres (with pgvector); the server applies its migrations at startup. Next to it, write a `.env` from [`.env.example`](.env.example) (models, `API_TOKENS`, `FILE_URL_SECRET`, optionally `UI_PASSWORD`) and add the variables of the compose file:
+`docker-compose.yml` runs Liasse and Postgres (with pgvector); the server applies its migrations at startup. Next to it, write a `.env` from [`.env.example`](.env.example) (models, `AUTH_SECRET`, `FILE_URL_SECRET`, and `AUTH_BOOTSTRAP_EMAIL` with `AUTH_BOOTSTRAP_PASSWORD` for the first account) and add the variables of the compose file:
 
 | Variable            | Default                 | Role                                                                             |
 | ------------------- | ----------------------- | -------------------------------------------------------------------------------- |
@@ -33,7 +33,7 @@ TypeScript · Node 22 · Hono · Drizzle · Zod · Postgres + pgvector · MCP Ty
 docker compose up -d
 ```
 
-The compose file sets `DATABASE_URL`, `HOST`, `PORT`, `STORAGE_PATH` and `EMBEDDING_CACHE_DIR` itself. Files and the local embedding model live in the `liasse-data` volume, the database in `postgres-data`. Liasse speaks plain HTTP: put a TLS reverse proxy in front of it before publishing it beyond `127.0.0.1`. The image carries the build of the web UI: with `UI_PASSWORD` set, it is served at `PUBLIC_URL/ui/`, and `/` redirects there.
+The compose file sets `DATABASE_URL`, `HOST`, `PORT`, `STORAGE_PATH` and `EMBEDDING_CACHE_DIR` itself. Files and the local embedding model live in the `liasse-data` volume, the database in `postgres-data`. Liasse speaks plain HTTP: put a TLS reverse proxy in front of it before publishing it beyond `127.0.0.1`. The image carries the build of the web UI, served at `PUBLIC_URL/ui/` (`/` redirects there). Sign in with the bootstrap account, then create an API key for each agent or program on the API keys screen: the REST API, the SDK and MCP take it as `Authorization: Bearer <key>`. MCP clients that speak OAuth can instead connect to `PUBLIC_URL/mcp` and sign in through the web UI, once `PUBLIC_URL` is https.
 
 Inside the container, `127.0.0.1` is the container itself: an Ollama server on the host is `LLM_BASE_URL=http://host.docker.internal:11434` (on Linux, add `extra_hosts: ['host.docker.internal:host-gateway']` to the `liasse` service), and a `WATCH_DIR` needs a volume that mounts the host folder at that path.
 
@@ -41,7 +41,7 @@ On shutdown the server lets running jobs finish for 30 seconds, so the compose f
 
 The image (`linux/amd64`, `linux/arm64`) is published to GHCR by the `Image` workflow: `edge` and `sha-<commit>` for every push to `main`, `<version>`, `<major>.<minor>` and `latest` for every `v*` tag. While the repository is private, so is the package: `docker login ghcr.io` with a token that can read it first. `latest` exists only once a `v*` tag is published; until then, set `LIASSE_VERSION=edge`, or Compose, finding no image to pull, builds it from the checkout. `docker compose up -d --build` always builds from the checkout.
 
-[`docker-compose.coolify.yml`](docker-compose.coolify.yml) is the same stack for a Coolify Docker Compose application built from this repository: Coolify generates the database password, `API_TOKENS`, `FILE_URL_SECRET` and `UI_PASSWORD`, and routes the domain set on the `liasse` service to port 8080. Create the application from the repository with the Docker Compose build pack and `/docker-compose.coolify.yml` as its Docker Compose location, set `LLM_PROVIDER`, `LLM_API_KEY`, `TEXT_MODEL` and `VISION_MODEL` among its environment variables, and read the generated `SERVICE_PASSWORD_64_UI` there to log in to the web UI. Behind a reverse proxy every client shares the login rate limit (5 attempts per minute, counted on the proxy address), so anyone who reaches the login page can keep the owner out for as long as they keep trying; remove the `UI_PASSWORD` line of the compose file to turn the web UI off when that matters.
+[`docker-compose.coolify.yml`](docker-compose.coolify.yml) is the same stack for a Coolify Docker Compose application built from this repository: Coolify generates the database password, `AUTH_SECRET`, `FILE_URL_SECRET` and the password of the first account, and routes the domain set on the `liasse` service to port 8080. Create the application from the repository with the Docker Compose build pack and `/docker-compose.coolify.yml` as its Docker Compose location, set `AUTH_BOOTSTRAP_EMAIL`, `LLM_PROVIDER`, `LLM_API_KEY`, `TEXT_MODEL` and `VISION_MODEL` among its environment variables, and read the generated `SERVICE_PASSWORD_64_ADMIN` there to sign in to the web UI, then change it there. Behind a reverse proxy every client shares the sign-in rate limit (5 attempts per minute, counted on the proxy address), so anyone who reaches the login page can keep the owner out for as long as they keep trying; API keys keep working meanwhile.
 
 ## Contributing
 

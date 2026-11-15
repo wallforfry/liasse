@@ -8,7 +8,6 @@ import {
   type HttpHarness,
   TEST_MAX_FILE_SIZE,
   TEST_PUBLIC_URL,
-  TEST_TOKEN,
 } from './harness.test-helper.ts';
 
 // The SDK against the real application, over a real socket and the global fetch.
@@ -24,7 +23,7 @@ describe('the TypeScript SDK', () => {
     harness = await createHttpHarness();
     listener = await listen({ fetch: harness.app.fetch, host: '127.0.0.1', port: 0 });
     baseUrl = `http://127.0.0.1:${String(listener.port)}`;
-    client = createLiasseClient({ baseUrl, token: TEST_TOKEN });
+    client = createLiasseClient({ baseUrl, token: harness.token });
     publicId = await harness.addDocument(['Synthetic zircon invoice of the workshop'], {
       title: 'Public invoice',
     });

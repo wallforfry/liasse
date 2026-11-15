@@ -15,7 +15,32 @@ import {
   SidebarMenuItem,
 } from '../components/ui/sidebar.tsx';
 import { useSidebar } from '../components/ui/sidebar-context.ts';
-import { NAVIGATION } from './navigation.ts';
+import { ACCOUNT_NAVIGATION, NAVIGATION, type NavigationItem } from './navigation.ts';
+
+interface NavigationGroupProps {
+  readonly label: string;
+  readonly items: readonly NavigationItem[];
+  readonly pathname: string;
+  readonly onNavigate: () => void;
+}
+
+const NavigationGroup = ({ label, items, pathname, onNavigate }: NavigationGroupProps) => (
+  <SidebarGroup>
+    <SidebarGroupLabel>{label}</SidebarGroupLabel>
+    <SidebarMenu>
+      {items.map(({ label: itemLabel, path, icon: Icon }) => (
+        <SidebarMenuItem key={path}>
+          <SidebarMenuButton asChild isActive={pathname.startsWith(path)} tooltip={itemLabel}>
+            <Link to={path} onClick={onNavigate}>
+              <Icon />
+              <span>{itemLabel}</span>
+            </Link>
+          </SidebarMenuButton>
+        </SidebarMenuItem>
+      ))}
+    </SidebarMenu>
+  </SidebarGroup>
+);
 
 export const AppSidebar = () => {
   const { pathname } = useLocation();
@@ -41,21 +66,18 @@ export const AppSidebar = () => {
         </SidebarMenu>
       </SidebarHeader>
       <SidebarContent>
-        <SidebarGroup>
-          <SidebarGroupLabel>Library</SidebarGroupLabel>
-          <SidebarMenu>
-            {NAVIGATION.map(({ label, path, icon: Icon }) => (
-              <SidebarMenuItem key={path}>
-                <SidebarMenuButton asChild isActive={pathname.startsWith(path)} tooltip={label}>
-                  <Link to={path} onClick={closeOnMobile}>
-                    <Icon />
-                    <span>{label}</span>
-                  </Link>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-            ))}
-          </SidebarMenu>
-        </SidebarGroup>
+        <NavigationGroup
+          label="Library"
+          items={NAVIGATION}
+          pathname={pathname}
+          onNavigate={closeOnMobile}
+        />
+        <NavigationGroup
+          label="Account"
+          items={ACCOUNT_NAVIGATION}
+          pathname={pathname}
+          onNavigate={closeOnMobile}
+        />
       </SidebarContent>
       <SidebarFooter>
         <SidebarMenu>

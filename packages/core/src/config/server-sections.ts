@@ -1,7 +1,10 @@
-import { storageDriverSchema } from '@liasse/contract/domain';
+import {
+  MAX_PASSWORD_LENGTH,
+  MIN_PASSWORD_LENGTH,
+  storageDriverSchema,
+} from '@liasse/contract/domain';
 import { z } from 'zod';
-import { type CrossFieldProblem, duration, integer, list, reportProblems, text } from './fields.ts';
-import { uiPassword } from './ui-password.ts';
+import { type CrossFieldProblem, duration, integer, reportProblems, text } from './fields.ts';
 
 // What clients are told to call: the origin signed file URLs start with. It is never read
 // from a request, whose Host header belongs to the caller.
@@ -104,40 +107,48 @@ export const storageSection = storageFields.transform((env, ctx) => {
   });
 });
 
-const MIN_API_TOKEN_LENGTH = 16;
-const MIN_FILE_URL_SECRET_LENGTH = 32;
+const MIN_SECRET_LENGTH = 32;
+
+const secret = z
+  .string()
+  .min(MIN_SECRET_LENGTH, `expected at least ${String(MIN_SECRET_LENGTH)} characters`);
+
+// Kept exactly as written: a password may start or end with a space.
+const password = z
+  .string()
+  .min(MIN_PASSWORD_LENGTH, `expected at least ${String(MIN_PASSWORD_LENGTH)} characters`)
+  .max(MAX_PASSWORD_LENGTH, `expected at most ${String(MAX_PASSWORD_LENGTH)} characters`);
+
+const BOOTSTRAP_KEYS = ['AUTH_BOOTSTRAP_EMAIL', 'AUTH_BOOTSTRAP_PASSWORD'] as const;
 
 export const authSection = z
   .object({
-    API_TOKENS: list.pipe(
-      z
-        .array(
-          z
-            .string()
-            .min(
-              MIN_API_TOKEN_LENGTH,
-              `each token needs at least ${String(MIN_API_TOKEN_LENGTH)} characters`,
-            ),
-        )
-        .min(1, 'expected at least one token')
-        .readonly(),
-    ),
-    UI_PASSWORD: uiPassword.optional(),
-    UI_SESSION_TTL: duration.prefault('7d'),
-    FILE_URL_SECRET: z
-      .string()
-      .min(
-        MIN_FILE_URL_SECRET_LENGTH,
-        `expected at least ${String(MIN_FILE_URL_SECRET_LENGTH)} characters`,
-      ),
+    AUTH_SECRET: secret,
+    AUTH_SESSION_TTL: duration.prefault('7d'),
+    AUTH_BOOTSTRAP_EMAIL: z.email('expected an email address').optional(),
+    AUTH_BOOTSTRAP_PASSWORD: password.optional(),
+    FILE_URL_SECRET: secret,
   })
-  .transform((env) =>
-    Object.freeze({
-      apiTokens: env.API_TOKENS,
-      fileUrlSecret: env.FILE_URL_SECRET,
-      ui:
-        env.UI_PASSWORD === undefined
+  .transform((env, ctx) => {
+    const { AUTH_BOOTSTRAP_EMAIL: email, AUTH_BOOTSTRAP_PASSWORD: bootstrapPassword } = env;
+    // One without the other would create no user, silently.
+    if ((email === undefined) !== (bootstrapPassword === undefined)) {
+      reportProblems(
+        ctx,
+        BOOTSTRAP_KEYS.filter((key) => env[key] === undefined).map((key) => ({
+          key,
+          message: `required when ${BOOTSTRAP_KEYS.find((other) => other !== key) ?? ''} is set`,
+        })),
+      );
+      return z.NEVER;
+    }
+    return Object.freeze({
+      secret: env.AUTH_SECRET,
+      sessionTtlMs: env.AUTH_SESSION_TTL,
+      bootstrap:
+        email === undefined || bootstrapPassword === undefined
           ? undefined
-          : Object.freeze({ password: env.UI_PASSWORD, sessionTtlMs: env.UI_SESSION_TTL }),
-    }),
-  );
+          : Object.freeze({ email, password: bootstrapPassword }),
+      fileUrlSecret: env.FILE_URL_SECRET,
+    });
+  });

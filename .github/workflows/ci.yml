@@ -89,8 +89,9 @@ jobs:
         env:
           NODE_OPTIONS: --max-old-space-size=4096
       - run: pnpm typecheck
-      - run: pnpm test
+      # The tests start the real server, which refuses to start without the web UI build.
       - run: pnpm build
+      - run: pnpm test
 
   bm25:
     name: BM25 tests (ParadeDB)
@@ -119,4 +120,6 @@ jobs:
           node-version-file: .nvmrc
           cache: pnpm
       - run: pnpm install --frozen-lockfile
+      # The server these tests start refuses to start without the web UI build.
+      - run: pnpm --filter @liasse/web build
       - run: pnpm test:paradedb

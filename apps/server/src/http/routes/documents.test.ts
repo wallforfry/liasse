@@ -311,7 +311,7 @@ describe('document routes', () => {
         ...jsonRequest('PATCH', { private: true, core: { reference: 'SYN-1' } }),
         headers: {
           'Content-Type': 'application/json',
-          Authorization: 'Bearer synthetic-token-0001',
+          Authorization: `Bearer ${harness.token}`,
         },
       });
       expect(response.status).toBe(200);

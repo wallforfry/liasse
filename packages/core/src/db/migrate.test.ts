@@ -23,6 +23,13 @@ import { migrate, MIGRATIONS_FOLDER } from './migrate.ts';
 import { readMigrationFiles } from './migration-files.ts';
 
 const TABLES = [
+  'auth_accounts',
+  'auth_api_keys',
+  'auth_rate_limits',
+  'auth_sessions',
+  'auth_signing_keys',
+  'auth_users',
+  'auth_verifications',
   'chunks',
   'doc_types',
   'document_dates',
@@ -32,6 +39,13 @@ const TABLES = [
   'entities',
   'facts',
   'jobs',
+  'oauth_access_tokens',
+  'oauth_client_assertions',
+  'oauth_client_resources',
+  'oauth_clients',
+  'oauth_consents',
+  'oauth_refresh_tokens',
+  'oauth_resources',
   'subjects',
   'type_changes',
 ];
@@ -73,7 +87,7 @@ describe('migrate', () => {
     await database.dispose();
   });
 
-  it('creates the eleven tables on an empty database', async () => {
+  it('creates the twenty-five tables on an empty database', async () => {
     expect(await publicTables(database)).toEqual(TABLES);
   });
 

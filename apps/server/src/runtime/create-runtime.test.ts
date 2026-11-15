@@ -4,7 +4,7 @@ import { createServer as createHttpServer } from 'node:http';
 import { createServer } from 'node:net';
 import { join } from 'node:path';
 import { loadConfig } from '@liasse/core/config';
-import { documents, facts, jobs } from '@liasse/core/db';
+import { authUsers, documents, facts, jobs } from '@liasse/core/db';
 import { StartupError } from '@liasse/core/domain';
 import { enqueueHindsightSync } from '@liasse/core/hindsight';
 import { DeferJobError, defineJobKind, enqueue, handle } from '@liasse/core/jobs';
@@ -13,6 +13,7 @@ import {
   insertSyntheticDocument,
   SYNTHETIC_ENV,
   syntheticPdf,
+  TEST_ACCOUNT,
   waitUntil,
 } from '@liasse/core/testing';
 import { eq, ne } from 'drizzle-orm';
@@ -56,12 +57,30 @@ describe('createRuntime', () => {
     expect((await call(runtime, '/types')).status).toBe(200);
     expect(harness.lines()).toEqual(
       expect.arrayContaining([
-        'Optional parts: watched folder off, Hindsight off, web UI off.',
+        'Optional parts: watched folder off, Hindsight off.',
         `Liasse is listening on http://127.0.0.1:${String(runtime.port)}`,
       ]),
     );
     expect(harness.lines().some((line) => line.includes('consolidation'))).toBe(false);
     expect(harness.lines().some((line) => line.includes('document processing'))).toBe(false);
+  });
+
+  it('creates the bootstrap account at the first start only, and says so', async () => {
+    const first = await start();
+    expect(harness.lines()).toContain(
+      'Created the first account from AUTH_BOOTSTRAP_EMAIL and AUTH_BOOTSTRAP_PASSWORD.',
+    );
+    await first.stop();
+    const second = await start({
+      AUTH_BOOTSTRAP_EMAIL: 'other@example.com',
+      AUTH_BOOTSTRAP_PASSWORD: 'synthetic-other-password',
+    });
+    expect(
+      harness.lines().filter((line) => line.startsWith('Notice: AUTH_BOOTSTRAP_EMAIL')),
+    ).toHaveLength(1);
+    expect((await call(second, '/types')).status).toBe(200);
+    const users = await harness.database().db.select({ email: authUsers.email }).from(authUsers);
+    expect(users).toEqual([{ email: TEST_ACCOUNT.email }]);
   });
 
   it('queues again at startup the file removals a past run gave up on', async () => {
@@ -98,9 +117,7 @@ describe('createRuntime', () => {
     await mkdir(inbox);
     await writeFile(join(inbox, 'dropped.pdf'), syntheticPdf('dropped'));
     await start({ WATCH_DIR: inbox });
-    expect(harness.lines()).toContain(
-      'Optional parts: watched folder on, Hindsight off, web UI off.',
-    );
+    expect(harness.lines()).toContain('Optional parts: watched folder on, Hindsight off.');
     await waitUntil(async () => (await harness.database().db.$count(documents)) === 1);
     const [row] = await harness.database().db.select().from(documents);
     expect(row).toMatchObject({ source: 'watch', originalName: 'dropped.pdf' });

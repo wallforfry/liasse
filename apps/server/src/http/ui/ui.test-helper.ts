@@ -1,16 +1,14 @@
-import type { ApiFeatures } from '@liasse/core/api';
-import type { UiPassword } from '@liasse/core/config';
-import { CSRF_HEADER, uiSessionSchema } from '@liasse/contract';
+import { TEST_ACCOUNT } from '@liasse/core/testing';
 import type { Hono } from 'hono';
 import { expect } from 'vitest';
 import type { AppEnv } from '../env.ts';
-import { type HttpHarness, jsonRequest } from '../harness.test-helper.ts';
-import type { UiOptions } from './ui.ts';
+import { jsonRequest, TEST_PUBLIC_URL } from '../harness.test-helper.ts';
 import type { WebAssets } from './web-assets.ts';
 
-export const UI_TEST_PASSWORD = 'synthetic-ui-password';
-export const TEST_CLIENT_HEADER = 'X-Test-Client';
 export const TEST_SCRIPT = 'assets/index-synthetic.js';
+export const SESSION_COOKIE = 'liasse.session_token';
+// `useSecureCookies` prefixes every cookie of an https PUBLIC_URL.
+export const SECURE_SESSION_COOKIE = `__Secure-${SESSION_COOKIE}`;
 
 export const TEST_INDEX =
   '<!doctype html><html lang="en"><head><title>Liasse</title>' +
@@ -30,29 +28,6 @@ export const testAssets = (): WebAssets => ({
     ['favicon.svg', { body: encoded('<svg/>'), type: 'image/svg+xml', immutable: false }],
   ]),
 });
-
-export interface UiAppOptions extends Partial<UiOptions> {
-  readonly features?: ApiFeatures;
-  readonly requestTimeoutMs?: number;
-}
-
-/** The application with the UI on, counting login attempts by a header the test sets. */
-export const uiApp = (
-  harness: HttpHarness,
-  { features = {}, requestTimeoutMs, ...options }: UiAppOptions = {},
-): Hono<AppEnv> =>
-  harness.appWith({
-    features,
-    ...(requestTimeoutMs === undefined ? {} : { requestTimeoutMs }),
-    ui: {
-      password: { kind: 'plain', value: UI_TEST_PASSWORD } satisfies UiPassword,
-      sessionTtlMs: 7 * 24 * 60 * 60 * 1000,
-      secureCookies: true,
-      assets: testAssets(),
-      clientAddress: (context) => context.req.header(TEST_CLIENT_HEADER) ?? 'client-a',
-      ...options,
-    },
-  });
 
 /** The `name=value` of each cookie a response sets, by name. */
 export const cookiesOf = (response: Response): Readonly<Record<string, string>> =>
@@ -75,33 +50,50 @@ export const withHeaders = (
   headers: { ...Object.fromEntries(new Headers(init.headers)), ...headers },
 });
 
-export const logIn = async (
-  app: Hono<AppEnv>,
-  password: string,
-  headers: Readonly<Record<string, string>> = {},
-): Promise<Response> =>
-  app.request('/ui/session', withHeaders(jsonRequest('POST', { password }), headers));
+/** A request of the web UI: from the origin of `PUBLIC_URL`. */
+export const fromUi = (init: RequestInit = {}): RequestInit =>
+  withHeaders(init, { Origin: TEST_PUBLIC_URL });
+
+export const signInRequest = (email: string, password: string): RequestInit =>
+  fromUi(jsonRequest('POST', { email, password }));
+
+/** The bindings the Node server gives a request: here, the address of its socket. */
+export interface ClientBindings {
+  readonly incoming: { readonly socket: { readonly remoteAddress: string } };
+}
+
+const clients = { count: 0 };
+
+/**
+ * A client of its own, by its socket address: better-auth counts sign-in attempts per
+ * address, and a request handed to `app.request` has no socket at all.
+ */
+export const newClient = (): ClientBindings => {
+  clients.count += 1;
+  return { incoming: { socket: { remoteAddress: `198.51.100.${String(clients.count % 250)}` } } };
+};
 
 export interface SignedIn {
   /** The `Cookie` header of the session. */
   readonly cookie: string;
-  readonly csrf: string;
-  /** A request with the cookie, and the CSRF header unless `csrf` is false. */
-  readonly request: (path: string, init?: RequestInit, csrf?: boolean) => Promise<Response>;
+  /** A request with the cookie, and the `Origin` of the web UI unless `origin` is false. */
+  readonly request: (path: string, init?: RequestInit, origin?: boolean) => Promise<Response>;
 }
 
+/** Signs the test account in through `POST /api/auth/sign-in/email`. */
 export const signIn = async (app: Hono<AppEnv>): Promise<SignedIn> => {
-  const response = await logIn(app, UI_TEST_PASSWORD);
+  const client = newClient();
+  const response = await app.request(
+    '/api/auth/sign-in/email',
+    signInRequest(TEST_ACCOUNT.email, TEST_ACCOUNT.password),
+    client,
+  );
   expect(response.status).toBe(200);
-  const cookie = cookiesOf(response).liasse_session ?? '';
-  const csrf = uiSessionSchema.parse(await response.json()).csrf_token;
+  const cookie = cookiesOf(response)[SECURE_SESSION_COOKIE] ?? '';
+  expect(cookie).not.toBe('');
   return {
     cookie,
-    csrf,
-    request: async (path, init = {}, sendCsrf = true) =>
-      app.request(
-        path,
-        withHeaders(init, { Cookie: cookie, ...(sendCsrf ? { [CSRF_HEADER]: csrf } : {}) }),
-      ),
+    request: async (path, init = {}, origin = true) =>
+      app.request(path, withHeaders(origin ? fromUi(init) : init, { Cookie: cookie }), client),
   };
 };

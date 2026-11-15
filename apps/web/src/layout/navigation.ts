@@ -2,6 +2,8 @@ import {
   FileTextIcon,
   GitPullRequestArrowIcon,
   InboxIcon,
+  KeyRoundIcon,
+  LockKeyholeIcon,
   type LucideIcon,
   SearchIcon,
   UploadIcon,
@@ -20,6 +22,11 @@ export const NAVIGATION: readonly NavigationItem[] = [
   { label: 'Search', path: '/search', icon: SearchIcon },
   { label: 'Upload', path: '/upload', icon: UploadIcon },
   { label: 'Changes', path: '/changes', icon: GitPullRequestArrowIcon },
+];
+
+export const ACCOUNT_NAVIGATION: readonly NavigationItem[] = [
+  { label: 'API keys', path: '/account/api-keys', icon: KeyRoundIcon },
+  { label: 'Change password', path: '/account/password', icon: LockKeyholeIcon },
 ];
 
 export const documentPath = (id: string): string => `/documents/${encodeURIComponent(id)}`;

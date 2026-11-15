@@ -2,13 +2,7 @@ import { ApiError } from '@liasse/core/api';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { z } from 'zod';
 import { MAX_JSON_BODY_BYTES, MAX_JSON_DEPTH, SECURITY_HEADERS } from './guards.ts';
-import {
-  authorized,
-  createHttpHarness,
-  type HttpHarness,
-  jsonRequest,
-  TEST_TOKEN,
-} from './harness.test-helper.ts';
+import { createHttpHarness, type HttpHarness, jsonRequest } from './harness.test-helper.ts';
 
 const errorOf = async (response: Response) =>
   z
@@ -56,7 +50,7 @@ describe('hardening', () => {
     it('carries them without a credential and after a failure', async () => {
       const responses = [
         await harness.app.request('/types'),
-        await failing().request('/subjects', authorized()),
+        await failing().request('/subjects', harness.authorized()),
       ];
       expect(responses.map((response) => response.status)).toEqual([401, 500]);
       for (const response of responses) {
@@ -95,7 +89,7 @@ describe('hardening', () => {
 
   describe('an unexpected failure', () => {
     it('answers 500 with the request id and nothing of what failed', async () => {
-      const response = await failing().request('/subjects', authorized());
+      const response = await failing().request('/subjects', harness.authorized());
       expect(response.status).toBe(500);
       expect(await response.json()).toEqual({
         error: {
@@ -107,7 +101,7 @@ describe('hardening', () => {
     });
 
     it('logs its class under the request id, without its message', async () => {
-      const response = await failing().request('/subjects', authorized());
+      const response = await failing().request('/subjects', harness.authorized());
       const requestId = response.headers.get('X-Request-Id') ?? 'none';
       const lines = harness.logs().filter((line) => line.includes(requestId));
       expect(
@@ -133,7 +127,7 @@ describe('hardening', () => {
             ),
         },
       });
-      const response = await app.request('/subjects', authorized());
+      const response = await app.request('/subjects', harness.authorized());
       expect(response.status).toBe(400);
       expect(await response.json()).toEqual({
         error: {
@@ -236,7 +230,7 @@ describe('hardening', () => {
         requestTimeoutMs: 20,
         features: { listSubjects: () => new Promise(() => undefined) },
       });
-      const response = await app.request('/subjects', authorized());
+      const response = await app.request('/subjects', harness.authorized());
       expect(response.status).toBe(504);
       expect((await errorOf(response)).code).toBe('request_timeout');
     });
@@ -248,7 +242,7 @@ describe('hardening', () => {
       const before = harness.logs().length;
       await harness.call(`/documents/${id}?include=fields`);
       await harness.app.request(`/documents/${id}/file?expires=1&signature=synthetic-signature`);
-      await harness.call(`/secret-path-${TEST_TOKEN}?q=1`);
+      await harness.call(`/secret-path-${harness.token}?q=1`);
       const lines = harness.logs().slice(before);
       expect(
         lines.map((line) =>
@@ -260,7 +254,7 @@ describe('hardening', () => {
         { event: 'request', method: 'GET', route: 'unmatched', status: 404 },
       ]);
       const written = lines.join('\n');
-      for (const hidden of [id, 'synthetic-signature', 'include', TEST_TOKEN, 'secret-path']) {
+      for (const hidden of [id, 'synthetic-signature', 'include', harness.token, 'secret-path']) {
         expect(written).not.toContain(hidden);
       }
     });

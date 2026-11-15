@@ -1,17 +1,8 @@
-import { CSRF_HEADER, errorBodySchema } from '@liasse/contract';
+import { errorBodySchema } from '@liasse/contract';
 import type { z } from 'zod';
 import { LiasseApiError, LiasseResponseError } from './errors.ts';
 
 export const DEFAULT_TIMEOUT_MS = 60_000;
-
-/**
- * The session of the web UI, for a page served by the server itself: the browser sends
- * the session cookie, and every request that changes something carries the CSRF token.
- */
-export interface SessionCredentials {
-  /** Read before each such request, since logging in again changes it. */
-  readonly csrfToken: () => string;
-}
 
 interface ConnectionOptions {
   /** Origin of the server, with the path prefix of a reverse proxy if any. */
@@ -25,11 +16,19 @@ interface ConnectionOptions {
 export type ClientOptions = ConnectionOptions &
   (
     | {
-        /** One of the `API_TOKENS` of the server. */
+        /** An API key, created in the web UI. */
         readonly token: string;
         readonly session?: never;
       }
-    | { readonly session: SessionCredentials; readonly token?: never }
+    | {
+        /**
+         * The session of the web UI, for a page served by the server itself: the browser
+         * sends the session cookie, and the `Origin` the server checks on every request
+         * that changes something.
+         */
+        readonly session: true;
+        readonly token?: never;
+      }
   );
 
 type QueryValue = string | number | boolean | readonly string[] | undefined;
@@ -115,21 +114,15 @@ const bodyOf = ({ json, form }: RequestSpec): Body => {
   return { body: JSON.stringify(json), headers: { 'Content-Type': 'application/json' } };
 };
 
-type Method = NonNullable<RequestSpec['method']>;
-
 interface Credentials {
   readonly headers: Readonly<Record<string, string>>;
   readonly credentials?: RequestInit['credentials'];
 }
 
-const credentialsOf = (options: ClientOptions, method: Method): Credentials => {
-  if (options.session === undefined)
-    return { headers: { Authorization: `Bearer ${options.token}` } };
-  return {
-    headers: method === 'GET' ? {} : { [CSRF_HEADER]: options.session.csrfToken() },
-    credentials: 'same-origin',
-  };
-};
+const credentialsOf = (options: ClientOptions): Credentials =>
+  options.session === true
+    ? { headers: {}, credentials: 'same-origin' }
+    : { headers: { Authorization: `Bearer ${options.token}` } };
 
 /**
  * Sends one request with the token or the session, under the timeout. Rejects with
@@ -144,7 +137,7 @@ export const createSend = (options: ClientOptions): Send => {
     url.search = searchOf(spec.query ?? {});
     const method = spec.method ?? 'GET';
     const { body, headers } = bodyOf(spec);
-    const credentials = credentialsOf(options, method);
+    const credentials = credentialsOf(options);
     const response = await fetchImpl(url, {
       method,
       signal: AbortSignal.timeout(timeoutMs),

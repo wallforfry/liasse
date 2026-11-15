@@ -5,11 +5,13 @@ import { type Config, loadConfig } from '@liasse/core/config';
 import { documents, jobs } from '@liasse/core/db';
 import {
   buildSyntheticPdf,
+  createApiKeyOverHttp,
   createFakeEmbedder,
   createFakeTextModel,
   createFakeVisionModel,
   createTestDatabase,
   SYNTHETIC_ENV,
+  TEST_ACCOUNT,
   type TestDatabase,
 } from '@liasse/core/testing';
 import { eq } from 'drizzle-orm';
@@ -19,8 +21,6 @@ import { createLogger } from '../log.ts';
 import { answerFor } from '../synthetic-documents.fixture.ts';
 import { type Bind, bindFeatures, type RuntimeParts } from './bindings.ts';
 import { createRuntime, type Runtime, type RuntimeOptions } from './create-runtime.ts';
-
-const TOKEN = 'synthetic-token-0001';
 
 // The models are fakes: no test of the runtime calls a provider.
 const withFakeModels = (parts: RuntimeParts): RuntimeParts => ({
@@ -52,6 +52,8 @@ export interface RuntimeHarness {
   readonly configOf: (env?: Env) => Config;
   /** Starts a runtime bound with fake models, stopped after the test. */
   readonly start: (env?: Env, options?: RuntimeOptions) => Promise<Runtime>;
+  /** An API key of the test account on that runtime, made once per runtime. */
+  readonly apiKey: (runtime: Runtime) => Promise<string>;
   readonly call: (runtime: Runtime, path: string, init?: RequestInit) => Promise<Response>;
   /** Uploads a PDF of these lines and returns the id of its document. */
   readonly upload: (runtime: Runtime, lines: readonly string[], name: string) => Promise<string>;
@@ -70,6 +72,7 @@ export const useRuntimeHarness = (): RuntimeHarness => {
   let root: string | undefined;
   const lines: string[] = [];
   const started: Runtime[] = [];
+  const keys = new Map<Runtime, Promise<string>>();
 
   beforeEach(async () => {
     database = await createTestDatabase({ migrate: false });
@@ -79,6 +82,7 @@ export const useRuntimeHarness = (): RuntimeHarness => {
 
   afterEach(async () => {
     await Promise.all(started.splice(0).map((runtime) => runtime.stop()));
+    keys.clear();
     if (root !== undefined) await rm(root, { recursive: true, force: true });
     await database?.dispose();
   });
@@ -99,17 +103,34 @@ export const useRuntimeHarness = (): RuntimeHarness => {
       DATABASE_URL: current().url,
       STORAGE_PATH: join(folder(), 'files'),
       EMBEDDING_CACHE_DIR: join(folder(), 'models'),
+      AUTH_BOOTSTRAP_EMAIL: TEST_ACCOUNT.email,
+      AUTH_BOOTSTRAP_PASSWORD: TEST_ACCOUNT.password,
       ...env,
     });
     return env.PORT === undefined ? { ...config, server: { ...config.server, port: 0 } } : config;
   };
 
-  const call = (runtime: Runtime, path: string, init: RequestInit = {}) =>
-    fetch(`http://127.0.0.1:${String(runtime.port)}${path}`, {
+  const baseUrlOf = (runtime: Runtime): string => `http://127.0.0.1:${String(runtime.port)}`;
+
+  const apiKey = (runtime: Runtime): Promise<string> => {
+    const known = keys.get(runtime);
+    if (known !== undefined) return known;
+    const created = createApiKeyOverHttp({
+      baseUrl: baseUrlOf(runtime),
+      publicUrl: configOf().server.publicUrl,
+      account: TEST_ACCOUNT,
+      name: 'runtime test',
+    });
+    keys.set(runtime, created);
+    return created;
+  };
+
+  const call = async (runtime: Runtime, path: string, init: RequestInit = {}) =>
+    fetch(`${baseUrlOf(runtime)}${path}`, {
       ...init,
       headers: {
         ...Object.fromEntries(new Headers(init.headers)),
-        Authorization: `Bearer ${TOKEN}`,
+        Authorization: `Bearer ${await apiKey(runtime)}`,
       },
     });
 
@@ -127,6 +148,7 @@ export const useRuntimeHarness = (): RuntimeHarness => {
       started.push(runtime);
       return runtime;
     },
+    apiKey,
     call,
     upload: async (runtime, pdfLines, name) => {
       const form = new FormData();

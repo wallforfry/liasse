@@ -25,10 +25,7 @@ export interface WebAssets {
 }
 
 const missingBuild = (directory: string, reason: string): StartupError =>
-  new StartupError(
-    `The web UI is enabled (UI_PASSWORD is set) but its build ${reason} at ${directory}. ` +
-      'Run `pnpm build`, or unset UI_PASSWORD to run without the web UI.',
-  );
+  new StartupError(`The build of the web UI ${reason} at ${directory}. Run \`pnpm build\` first.`);
 
 /** The `dist` directory of the installed `@liasse/web` package. */
 export const resolveWebAssetsDirectory = (
@@ -40,8 +37,7 @@ export const resolveWebAssetsDirectory = (
     return join(dirname(manifest), 'dist');
   } catch {
     throw new StartupError(
-      'The web UI is enabled (UI_PASSWORD is set) but the package @liasse/web is not ' +
-        'installed. Install the workspace, or unset UI_PASSWORD to run without the web UI.',
+      'The web UI is missing: @liasse/web is not installed. Install the workspace.',
     );
   }
 };

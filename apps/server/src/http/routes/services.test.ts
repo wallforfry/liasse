@@ -2,12 +2,7 @@ import { documents, entities } from '@liasse/core/db';
 import { sql } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { z } from 'zod';
-import {
-  authorized,
-  createHttpHarness,
-  type HttpHarness,
-  jsonRequest,
-} from '../harness.test-helper.ts';
+import { createHttpHarness, type HttpHarness, jsonRequest } from '../harness.test-helper.ts';
 
 const results = z.object({ results: z.array(z.looseObject({ id: z.string() })) });
 const failed = z.object({ error: z.looseObject({ code: z.string() }) });
@@ -108,7 +103,7 @@ describe('search, query, registry and metrics routes', () => {
       const app = harness.appWith({ queryTimeoutMs: 150 });
       const response = await harness.database.db.transaction(async (tx) => {
         await tx.execute(sql`LOCK TABLE documents IN ACCESS EXCLUSIVE MODE`);
-        return app.request('/query', authorized(jsonRequest('POST', {})));
+        return app.request('/query', harness.authorized(jsonRequest('POST', {})));
       });
       expect(response.status).toBe(504);
       expect(await response.json()).toMatchObject({ error: { code: 'query_timeout' } });
@@ -215,12 +210,12 @@ describe('search, query, registry and metrics routes', () => {
       });
       const dates = await app.request(
         '/upcoming?from=2026-01-01&to=2026-03-31&kinds=expiry,renewal&current_only=false',
-        authorized(),
+        harness.authorized(),
       );
       expect(await dates.json()).toEqual({ dates: [] });
       const change = await app.request(
         '/changes/chg_missing',
-        authorized(jsonRequest('POST', { decision: 'reject', note: 'not the same type' })),
+        harness.authorized(jsonRequest('POST', { decision: 'reject', note: 'not the same type' })),
       );
       expect(change.status).toBe(404);
       expect(received).toEqual([

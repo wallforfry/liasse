@@ -34,15 +34,6 @@ export const baseUrl = z.string().refine((value) => {
   );
 }, 'expected an http or https URL without credentials, query string or fragment');
 
-export const list = z.string().transform((value) =>
-  Object.freeze(
-    value
-      .split(',')
-      .map((item) => item.trim())
-      .filter((item) => item !== ''),
-  ),
-);
-
 export const duration = z.string().transform((value, ctx) => {
   const milliseconds = parseDuration(value);
   if (milliseconds === undefined) {

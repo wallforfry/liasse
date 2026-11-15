@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createHttpHarness, type HttpHarness } from '../harness.test-helper.ts';
-import { TEST_SCRIPT, uiApp } from './ui.test-helper.ts';
+import { TEST_SCRIPT } from './ui.test-helper.ts';
 
 const NONCE_META = /<meta property="csp-nonce" nonce="([A-Za-z0-9+/=]+)" \/>/;
 
@@ -18,7 +18,7 @@ describe('the built web UI under /ui', () => {
   });
 
   it('serves index.html for the routes of the application, never from a cache', async () => {
-    const app = uiApp(harness);
+    const { app } = harness;
     for (const path of ['/ui', '/ui/', '/ui/documents', '/ui/documents/doc_01/file-view']) {
       const response = await app.request(path);
       expect([path, response.status]).toEqual([path, 200]);
@@ -29,7 +29,7 @@ describe('the built web UI under /ui', () => {
   });
 
   it('writes a fresh nonce into the page and its policy, with no inline script allowed', async () => {
-    const app = uiApp(harness);
+    const { app } = harness;
     const pages = await Promise.all([app.request('/ui/'), app.request('/ui/')]);
     const nonces = await Promise.all(
       pages.map(async (page) => {
@@ -50,7 +50,7 @@ describe('the built web UI under /ui', () => {
   });
 
   it('serves hashed files for a year and the others revalidated', async () => {
-    const app = uiApp(harness);
+    const { app } = harness;
     const script = await app.request(`/ui/${TEST_SCRIPT}`);
     expect(script.status).toBe(200);
     expect(script.headers.get('Content-Type')).toBe('text/javascript; charset=utf-8');
@@ -62,13 +62,13 @@ describe('the built web UI under /ui', () => {
   });
 
   it('answers 404 for a missing file rather than the page', async () => {
-    const response = await uiApp(harness).request('/ui/assets/index-missing.js');
+    const response = await harness.app.request('/ui/assets/index-missing.js');
     expect(response.status).toBe(404);
     expect(response.headers.get('Content-Type')).toContain('application/json');
   });
 
   it('sends the root of the server to the application', async () => {
-    const response = await uiApp(harness).request('/');
+    const response = await harness.app.request('/');
     expect(response.status).toBe(302);
     expect(response.headers.get('Location')).toBe('/ui/');
   });

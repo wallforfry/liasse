@@ -1,7 +1,7 @@
 import { screen } from '@testing-library/react';
 import { userEvent } from '@testing-library/user-event';
 import { describe, expect, it } from 'vitest';
-import { fakeServer, json, renderApp, TEST_CSRF } from '../test/render.test-helper.tsx';
+import { fakeServer, json, renderApp } from '../test/render.test-helper.tsx';
 
 const UPLOADED = {
   id: 'doc_01UPLOADED',
@@ -48,7 +48,7 @@ describe('the upload page', () => {
 
     expect(await screen.findByRole('heading', { name: 'synthetic-bill.pdf' })).toBeInTheDocument();
     const upload = server.requests.find(({ method }) => method === 'POST');
-    expect(upload?.headers.get('X-CSRF-Token')).toBe(TEST_CSRF);
+    expect(upload?.credentials).toBe('same-origin');
     const form = upload?.body;
     if (!(form instanceof FormData)) throw new Error('Expected a multipart form');
     expect(form.get('private')).toBe('true');

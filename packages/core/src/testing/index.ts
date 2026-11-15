@@ -1,3 +1,4 @@
+export { type ApiKeyRequest, createApiKeyOverHttp } from './api-key-over-http.ts';
 export { createGate, type Gate, sleep, waitUntil } from './async.ts';
 export { columnsHolding } from './column-scan.ts';
 export { createFakeEmbedder, type FakeEmbedderOptions } from './fake-embedder.ts';
@@ -28,6 +29,14 @@ export {
   type StubServer,
 } from './provider-stub-server.ts';
 export { SYNTHETIC_ENV } from './synthetic-env.ts';
+export {
+  createTestApiKey,
+  createTestAuth,
+  TEST_ACCOUNT,
+  TEST_AUTH_SECRET,
+  TEST_SESSION_TTL_MS,
+  type TestAuthOptions,
+} from './test-auth.ts';
 export {
   buildSyntheticPdf,
   type SyntheticPdfJpeg,
