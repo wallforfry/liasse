@@ -21,7 +21,8 @@ export const reextractDocumentJob = defineJobKind({
   name: 'reextract_document',
   schema: payload,
   maxAttempts: PROCESS_DOCUMENT_MAX_ATTEMPTS,
-  // The handler logs the attempt that failed with its code; this logs a worker that died.
+  // The handler flags and logs the attempt that failed with its code, in one transaction.
+  // This flags what no handler did, and logs it when a worker died.
   onTerminalFailure: async (tx, { payload, cause, attempt }) => {
     const documentId = documentOfPayload(payload);
     if (documentId === undefined) return;

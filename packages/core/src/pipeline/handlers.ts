@@ -1,8 +1,10 @@
 import {
+  DOCUMENT_JOB_FAILURE_CODES,
   type DocumentStatus,
   IN_PROGRESS_STATUSES,
   type ProcessingStage,
 } from '@liasse/contract/domain';
+import { type FailureTrace, flagDocument, logFailedAttempt } from '../ingest/document-failure.ts';
 import {
   PROCESS_DOCUMENT_MAX_ATTEMPTS,
   processDocumentJob,
@@ -10,7 +12,7 @@ import {
 import { PermanentJobError } from '../jobs/errors.ts';
 import { handle, type JobContext, type RegisteredHandler } from '../jobs/handlers.ts';
 import type { PipelineDeps } from './deps.ts';
-import { type FailureTrace, flagDocument, logFailedAttempt } from '../ingest/document-failure.ts';
+import { SETTLED_STATUSES } from './document.ts';
 import { DocumentProcessingError, documentErrorCode, isPermanentFailure } from './errors.ts';
 import { reextractDocumentJob, reindexDocumentJob } from './jobs.ts';
 import { processDocument, reextractDocument, reindexDocument } from './process-document.ts';
@@ -22,26 +24,31 @@ type DocumentJob = JobContext<{ readonly documentId: string }>;
 const errorNameOf = (error: unknown): string | undefined =>
   error instanceof Error && /^\w{1,64}$/.test(error.name) ? error.name : undefined;
 
+interface Flag {
+  readonly from: readonly DocumentStatus[];
+  readonly status: DocumentStatus;
+  /** The code of the failure when left out. */
+  readonly error?: string;
+}
+
 interface FailurePolicy {
+  /** The executions the queue gives a job of this kind. */
+  readonly maxAttempts: number;
   /** Left out: the stage the document waits on. */
   readonly stage?: ProcessingStage;
   /**
-   * The attempt that fails for good gives a document in one of `from` this status, with
-   * its code as the error, and logs it in the same transaction.
+   * What the attempt that fails for good writes on a document in one of `from`, in the
+   * transaction that logs it. Left out, the document stays as it was.
    */
-  readonly flag?: { readonly from: readonly DocumentStatus[]; readonly status: DocumentStatus };
+  readonly flag?: Flag;
 }
 
-const traceOf = (
-  error: unknown,
-  attempt: number,
-  stage: ProcessingStage | undefined,
-): FailureTrace => {
+const traceOf = (error: unknown, attempt: number, policy: FailurePolicy): FailureTrace => {
   const errorName = errorNameOf(error);
   return {
-    ...(stage === undefined ? {} : { stage }),
+    ...(policy.stage === undefined ? {} : { stage: policy.stage }),
     attempt,
-    maxAttempts: PROCESS_DOCUMENT_MAX_ATTEMPTS,
+    maxAttempts: policy.maxAttempts,
     errorCode: documentErrorCode(error),
     ...(errorName === undefined ? {} : { errorName }),
     retryable: !isPermanentFailure(error),
@@ -60,14 +67,21 @@ const loggingFailures =
     } catch (error) {
       if (signal.aborted) throw error;
       const permanent = isPermanentFailure(error);
-      const trace = traceOf(error, attempt, policy.stage);
+      const trace = traceOf(error, attempt, policy);
       const code = documentErrorCode(error);
-      const final = permanent || attempt >= PROCESS_DOCUMENT_MAX_ATTEMPTS;
+      const final = permanent || attempt >= policy.maxAttempts;
       const { flag } = policy;
       const flagged =
         final &&
         flag !== undefined &&
-        (await flagDocument(deps.db, payload.documentId, flag.from, flag.status, code, trace));
+        (await flagDocument(
+          deps.db,
+          payload.documentId,
+          flag.from,
+          flag.status,
+          flag.error ?? code,
+          trace,
+        ));
       if (!flagged) {
         await logFailedAttempt(deps.db, payload.documentId, final ? 'failed' : 'retrying', trace);
       }
@@ -80,19 +94,32 @@ const loggingFailures =
 // A document must not stay on its way for ever: when its job will not run again, it
 // ends `failed` with the code of what stopped it.
 const failingTheDocument: FailurePolicy = {
+  maxAttempts: processDocumentJob.maxAttempts ?? PROCESS_DOCUMENT_MAX_ATTEMPTS,
   flag: { from: IN_PROGRESS_STATUSES, status: 'failed' },
 };
 
-// A re-extraction that never succeeds is flagged for review by the hook of its kind, in
-// the transaction that fails its job.
-const reextracting: FailurePolicy = { stage: 'reextraction' };
+// A re-extraction that never succeeds leaves the document indexed and queryable, flagged
+// for review; its log keeps the code of what stopped it.
+const flaggingForReview: FailurePolicy = {
+  maxAttempts: reextractDocumentJob.maxAttempts ?? PROCESS_DOCUMENT_MAX_ATTEMPTS,
+  stage: 'reextraction',
+  flag: {
+    from: SETTLED_STATUSES,
+    status: 'needs_review',
+    error: DOCUMENT_JOB_FAILURE_CODES.reextraction,
+  },
+};
 
 // A re-indexing that never succeeds leaves the document as it was.
-const reindexing: FailurePolicy = { stage: 'indexing' };
+const reindexing: FailurePolicy = {
+  maxAttempts: reindexDocumentJob.maxAttempts ?? PROCESS_DOCUMENT_MAX_ATTEMPTS,
+  stage: 'indexing',
+};
 
 /**
- * The job handlers of the pipeline, for `startWorkers`. A re-extraction or a re-indexing
- * that fails leaves the document as it was: only `process_document` fails a document.
+ * The job handlers of the pipeline, for `startWorkers`. Only `process_document` fails a
+ * document; a re-extraction that fails for good flags it for review, and a re-indexing
+ * leaves it as it was.
  */
 export const createPipelineHandlers = (deps: PipelineDeps): readonly RegisteredHandler[] => [
   handle(
@@ -103,7 +130,7 @@ export const createPipelineHandlers = (deps: PipelineDeps): readonly RegisteredH
   ),
   handle(
     reextractDocumentJob,
-    loggingFailures(deps, reextracting, ({ payload, signal }) =>
+    loggingFailures(deps, flaggingForReview, ({ payload, signal }) =>
       reextractDocument(deps, payload.documentId, signal),
     ),
   ),
