@@ -6,6 +6,7 @@ import {
   LockKeyholeIcon,
   type LucideIcon,
   SearchIcon,
+  ShapesIcon,
   UploadIcon,
 } from 'lucide-react';
 
@@ -21,6 +22,7 @@ export const NAVIGATION: readonly NavigationItem[] = [
   { label: 'Review', path: '/review', icon: InboxIcon },
   { label: 'Search', path: '/search', icon: SearchIcon },
   { label: 'Upload', path: '/upload', icon: UploadIcon },
+  { label: 'Types', path: '/types', icon: ShapesIcon },
   { label: 'Changes', path: '/changes', icon: GitPullRequestArrowIcon },
 ];
 
