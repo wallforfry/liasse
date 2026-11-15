@@ -56,7 +56,6 @@ export const UploadPage = () => {
               <Input
                 id="upload-file"
                 type="file"
-                required
                 onChange={(event) => {
                   setFile(event.target.files?.[0]);
                 }}

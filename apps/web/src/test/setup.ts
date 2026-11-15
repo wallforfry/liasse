@@ -6,6 +6,20 @@ afterEach(() => {
   cleanup();
 });
 
+// jsdom lays nothing out: Radix and cmdk observe sizes and scroll the selected item into
+// view, which it does not implement.
+const ignored = (): void => undefined;
+class StillResizeObserver {
+  readonly observe = ignored;
+  readonly unobserve = ignored;
+  readonly disconnect = ignored;
+}
+Object.defineProperty(window, 'ResizeObserver', { configurable: true, value: StillResizeObserver });
+Object.defineProperty(Element.prototype, 'scrollIntoView', {
+  configurable: true,
+  value: () => undefined,
+});
+
 // jsdom has no media queries; the application reads the theme and the width from them.
 Object.defineProperty(window, 'matchMedia', {
   configurable: true,

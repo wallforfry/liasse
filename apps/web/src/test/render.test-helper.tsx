@@ -12,6 +12,7 @@ export interface Request {
   readonly path: string;
   readonly headers: Headers;
   readonly credentials: RequestCredentials | undefined;
+  readonly body: RequestInit['body'];
 }
 
 export type Answer = (request: Request) => Response | undefined;
@@ -34,6 +35,7 @@ export const fakeServer = (...answers: readonly Answer[]) => {
       path: url.pathname + url.search,
       headers: new Headers(init?.headers),
       credentials: init?.credentials,
+      body: init?.body,
     };
     requests.push(request);
     const answered = answers.map((answer) => answer(request)).find((value) => value !== undefined);
