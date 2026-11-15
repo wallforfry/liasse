@@ -1,9 +1,10 @@
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { StartupError } from '@liasse/core/domain';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { loadWebAssets } from './web-assets.ts';
+import { loadWebAssets, resolveWebAssetsDirectory } from './web-assets.ts';
 
 describe('loadWebAssets', () => {
   let directory: string;
@@ -41,6 +42,19 @@ describe('loadWebAssets', () => {
     const message = error instanceof Error ? error.message : '';
     expect(message).toContain('pnpm build');
     expect(message).toContain('unset UI_PASSWORD');
+  });
+
+  it('finds the build in the installed @liasse/web package', () => {
+    const webPackage = fileURLToPath(new URL('../../../../web/', import.meta.url));
+    expect(resolveWebAssetsDirectory()).toBe(join(webPackage, 'dist'));
+  });
+
+  it('refuses to start when @liasse/web is not installed', () => {
+    const missing = (specifier: string): string => {
+      throw new Error(`Cannot find module '${specifier}'`);
+    };
+    expect(() => resolveWebAssetsDirectory(missing)).toThrow(StartupError);
+    expect(() => resolveWebAssetsDirectory(missing)).toThrow(/@liasse\/web is not installed/);
   });
 
   it('refuses a build without its page', async () => {

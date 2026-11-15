@@ -31,9 +31,12 @@ const missingBuild = (directory: string, reason: string): StartupError =>
   );
 
 /** The `dist` directory of the installed `@liasse/web` package. */
-export const resolveWebAssetsDirectory = (): string => {
+export const resolveWebAssetsDirectory = (
+  /** Node's resolution from this module by default; a test resolves nothing. */
+  resolve: (specifier: string) => string = createRequire(import.meta.url).resolve,
+): string => {
   try {
-    const manifest = createRequire(import.meta.url).resolve('@liasse/web/package.json');
+    const manifest = resolve('@liasse/web/package.json');
     return join(dirname(manifest), 'dist');
   } catch {
     throw new StartupError(
