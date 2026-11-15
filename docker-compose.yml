@@ -22,6 +22,9 @@ services:
     image: ghcr.io/wallforfry/liasse:${LIASSE_VERSION:-latest}
     build: .
     restart: unless-stopped
+    # Longer than the server's 30 s shutdown grace period, so a running job ends or is requeued
+    # before Docker sends SIGKILL (10 s by default).
+    stop_grace_period: 40s
     depends_on:
       postgres:
         condition: service_healthy
