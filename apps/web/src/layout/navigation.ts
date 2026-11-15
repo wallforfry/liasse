@@ -5,6 +5,7 @@ import {
   KeyRoundIcon,
   LockKeyholeIcon,
   type LucideIcon,
+  PlugIcon,
   SearchIcon,
   UploadIcon,
 } from 'lucide-react';
@@ -26,6 +27,7 @@ export const NAVIGATION: readonly NavigationItem[] = [
 
 export const ACCOUNT_NAVIGATION: readonly NavigationItem[] = [
   { label: 'API keys', path: '/account/api-keys', icon: KeyRoundIcon },
+  { label: 'MCP connections', path: '/account/mcp-connections', icon: PlugIcon },
   { label: 'Change password', path: '/account/password', icon: LockKeyholeIcon },
 ];
 

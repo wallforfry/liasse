@@ -7,6 +7,7 @@ import {
 } from 'better-auth/oauth2';
 import { errors, type JSONWebKeySet } from 'jose';
 import type { Auth } from './create-auth.ts';
+import type { McpGrantCheck } from './mcp-grant.ts';
 
 /** What of an HTTP request proves an OAuth access token. */
 export interface AccessTokenRequest {
@@ -32,13 +33,15 @@ const ACCESS_TOKEN_TYPE = 'at+jwt';
 
 /**
  * Checks an OAuth access token issued by this server for `resource`: its signature, by the
- * keys of this server read in process, its issuer, audience, type and expiry, then its
- * DPoP binding. `requireMcpAuth` of `@better-auth/mcp` does the same but fetches the key
- * set over HTTP from `PUBLIC_URL`, which a server behind a proxy may not reach.
+ * keys of this server read in process, its issuer, audience, type and expiry, its DPoP
+ * binding, then `grantIsLive` on its client and issue time. `requireMcpAuth` of
+ * `@better-auth/mcp` checks the token but fetches the key set over HTTP from `PUBLIC_URL`,
+ * which a server behind a proxy may not reach.
  */
 export const createAccessTokenCheck = (
   auth: Auth,
   resource: string,
+  grantIsLive: McpGrantCheck,
   /** The public keys of this server by default; a test signs with keys of its own. */
   signingKeys: () => Promise<JSONWebKeySet> = async () => auth.api.getJwks(),
 ): AccessTokenCheck => {
@@ -56,7 +59,7 @@ export const createAccessTokenCheck = (
           issuer: baseURL,
           audience: resource,
           typ: ACCESS_TOKEN_TYPE,
-          requiredClaims: ['azp'],
+          requiredClaims: ['azp', 'iat'],
         },
       });
       await enforceDpopBinding({
@@ -67,7 +70,8 @@ export const createAccessTokenCheck = (
         url,
         replayStore: createDpopReplayStore(internalAdapter),
       });
-      return true;
+      const { azp, iat } = payload;
+      return typeof azp === 'string' && iat !== undefined && (await grantIsLive(azp, iat));
     } catch (error) {
       if (isRefusal(error)) return false;
       throw error;

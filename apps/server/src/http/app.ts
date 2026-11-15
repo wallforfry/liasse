@@ -1,5 +1,5 @@
 import type { ApiContext } from '@liasse/core/api';
-import { type Auth, mcpResourceOf } from '@liasse/core/auth';
+import { type Auth, createMcpGrantCheck, mcpResourceOf } from '@liasse/core/auth';
 import { createClientAddressResolver, type TrustedProxies } from '@liasse/core/network';
 import { Hono, type MiddlewareHandler } from 'hono';
 import { every } from 'hono/combine';
@@ -87,7 +87,9 @@ export const createApp = ({
   const apiCredentials: readonly Credential[] = [apiKey, sessionCookie(auth, publicUrl)];
   const mcpResource = mcpResourceOf(publicUrl);
   const mcpCredentials: readonly Credential[] =
-    mcpResource === undefined ? [apiKey] : [apiKey, mcpAccessToken(auth, mcpResource, publicUrl)];
+    mcpResource === undefined
+      ? [apiKey]
+      : [apiKey, mcpAccessToken(auth, createMcpGrantCheck(api.db), mcpResource, publicUrl)];
   const within = (
     milliseconds: number,
     credentials: readonly Credential[] = apiCredentials,

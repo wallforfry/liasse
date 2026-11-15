@@ -9,6 +9,8 @@ import { betterAuth } from 'better-auth';
 import { jwt } from 'better-auth/plugins';
 import type { Database } from '../db/client.ts';
 import { authIdOf, authSchema } from './models.ts';
+import { mcpConnections } from './mcp-connections-plugin.ts';
+import { MCP_ACCESS_TOKEN_TTL_SECONDS } from './mcp-grant.ts';
 import { mcpResourceOf } from './mcp-resource.ts';
 
 export const API_KEY_PREFIX = 'liasse_';
@@ -48,6 +50,7 @@ const mcpPlugins = (publicUrl: string) => {
       loginPage: UI_LOGIN_PATH,
       consentPage: UI_CONSENT_PATH,
       allowDynamicClientRegistration: false,
+      accessTokenExpiresIn: MCP_ACCESS_TOKEN_TTL_SECONDS,
     }),
     cimd({ fetchClientMetadataResource, metadataProfile: 'mcp-2026-07-28' }),
   ];
@@ -116,6 +119,7 @@ export const createAuth = ({ db, secret, publicUrl, sessionTtlMs, report }: Auth
         enableSessionForAPIKeys: false,
       }),
       ...mcpPlugins(publicUrl),
+      mcpConnections(db),
     ],
   });
 

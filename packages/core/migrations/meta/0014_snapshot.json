@@ -1,5 +1,5 @@
 {
-  "id": "c1e1cfc8-04a6-4af1-8548-6bbac593d931",
+  "id": "19605b4c-7f66-4f4f-825f-af49e17b38b6",
   "prevId": "a25abf83-2aaf-4c42-8974-5c327a8b9ac2",
   "version": "7",
   "dialect": "postgresql",
@@ -727,18 +727,6 @@
         "retryable": {
           "name": "retryable",
           "type": "boolean",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "http_status": {
-          "name": "http_status",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "provider_code": {
-          "name": "provider_code",
-          "type": "text",
           "primaryKey": false,
           "notNull": false
         },
@@ -2356,6 +2344,31 @@
           "onUpdate": "no action"
         }
       },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.oauth_client_revocations": {
+      "name": "oauth_client_revocations",
+      "schema": "",
+      "columns": {
+        "client_id": {
+          "name": "client_id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "revoked_at": {
+          "name": "revoked_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "policies": {},

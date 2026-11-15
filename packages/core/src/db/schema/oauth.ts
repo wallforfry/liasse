@@ -182,3 +182,12 @@ export const oauthClientAssertions = pgTable('oauth_client_assertions', {
   id: text('id').primaryKey(),
   expiresAt: instant('expires_at').notNull(),
 });
+
+// Not a table of the plugin: when Liasse revoked each client id, so that `/mcp` refuses the
+// access tokens issued to it before, which are JWTs the plugin never records. Keyed by the
+// client id, not by the row of `oauth_clients`: the revocation deletes that row, and a client
+// registered by metadata document comes back under the same id.
+export const oauthClientRevocations = pgTable('oauth_client_revocations', {
+  clientId: text('client_id').primaryKey(),
+  revokedAt: instant('revoked_at').notNull(),
+});

@@ -112,6 +112,18 @@ export {
   upcomingOutputSchema,
 } from './knowledge.ts';
 export {
+  MCP_CONNECTIONS_LIST_PATH,
+  MCP_CONNECTIONS_REVOKE_PATH,
+  type McpConnection,
+  type McpConnectionList,
+  mcpConnectionListSchema,
+  mcpConnectionSchema,
+  type RevokeMcpConnectionRequest,
+  revokeMcpConnectionRequestSchema,
+  type RevokeMcpConnectionResult,
+  revokeMcpConnectionResultSchema,
+} from './mcp-connections.ts';
+export {
   type QueryResultEnvelope,
   queryResultSchema,
   type SearchRequest,
