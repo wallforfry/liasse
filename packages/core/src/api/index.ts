@@ -1,4 +1,4 @@
-// The schemas and types of requests and answers are in `@liasse/core/contract`.
+// The schemas and types of requests and answers are in `@liasse/contract`.
 export type { ApiContext } from './context.ts';
 export { describeTypes } from './describe-types.ts';
 export { openDocumentFile, type OpenedFile, removeDocument } from './document-file.ts';
