@@ -8,9 +8,14 @@ import { type ChildMessage, childMessageSchema, type ParentMessage } from './pro
 import { VERDICT_FD, WATCHDOG_VERDICTS } from './verdict.ts';
 
 // Node runs the TypeScript sources directly in development and in tests, and the compiled
-// files once built: the child entry has the extension of this very file.
+// files once built: the child entry has the extension of this very file. From the sources,
+// the child resolves `@liasse/contract` to its sources too, which may not be built.
 const RUNS_FROM_SOURCE = import.meta.url.endsWith('.ts');
-const SOURCE_FLAGS = ['--experimental-strip-types', '--disable-warning=ExperimentalWarning'];
+const SOURCE_FLAGS = [
+  '--conditions=@liasse/source',
+  '--experimental-strip-types',
+  '--disable-warning=ExperimentalWarning',
+];
 
 export const EXTRACTION_CHILD_ENTRY = new URL(
   `./extract-child.${RUNS_FROM_SOURCE ? 'ts' : 'js'}`,
