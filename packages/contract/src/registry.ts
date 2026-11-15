@@ -20,22 +20,38 @@ export const describeTypesOptionsSchema = z.strictObject({
 });
 export type DescribeTypesOptions = z.input<typeof describeTypesOptionsSchema>;
 
-export const typeListSchema = z.object({
-  types: z.array(
-    z.object({
-      slug: z.string(),
-      description: z.string(),
-      parent_slug: z.string().nullable(),
-      version: z.int(),
-      status: typeStatusSchema,
-      aliases: z.array(z.string()),
-      fields: z.record(z.string(), fieldDefinitionSchema),
-      document_count: z.int(),
-      examples: z.array(z.string()).optional().describe('Titles of documents of the type.'),
-    }),
-  ),
+const typeViewSchema = z.object({
+  slug: z.string(),
+  description: z.string(),
+  parent_slug: z.string().nullable(),
+  version: z.int(),
+  status: typeStatusSchema,
+  aliases: z.array(z.string()),
+  fields: z.record(z.string(), fieldDefinitionSchema),
+  document_count: z.int(),
+  examples: z.array(z.string()).optional().describe('Titles of documents of the type.'),
 });
+export type TypeView = z.output<typeof typeViewSchema>;
+
+export const typeListSchema = z.object({ types: z.array(typeViewSchema) });
 export type TypeList = z.output<typeof typeListSchema>;
+
+// The registry judges the slug, the description, the parent and the field names with
+// its naming rules; the schema only gives the request its shape.
+export const createTypeRequestSchema = z.strictObject({
+  slug: z.string().describe('snake_case, English, generic to specific: `energy_bill`.'),
+  description: z.string(),
+  parent_slug: z
+    .string()
+    .nullable()
+    .default(null)
+    .describe('A type without a parent: the hierarchy has two levels.'),
+  fields: z.record(z.string(), fieldDefinitionSchema).default({}),
+});
+export type CreateTypeRequest = z.input<typeof createTypeRequestSchema>;
+
+export const createdTypeSchema = typeViewSchema.omit({ examples: true });
+export type CreatedType = z.output<typeof createdTypeSchema>;
 
 const { includePrivate, ...sameNameOptions } = listEntitiesOptionsSchema.shape;
 

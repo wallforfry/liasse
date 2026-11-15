@@ -1,5 +1,6 @@
 // The schemas and types of requests and answers are in `@liasse/contract`.
 export type { ApiContext } from './context.ts';
+export { createType } from './create-type.ts';
 export { describeTypes } from './describe-types.ts';
 export { listDocumentEvents, type ListDocumentEventsOptions } from './document-events.ts';
 export { openDocumentFile, type OpenedFile, removeDocument } from './document-file.ts';

@@ -165,6 +165,56 @@ describe('search, query, registry and metrics routes', () => {
     });
   });
 
+  describe('POST /types', () => {
+    const typeCounts = z.object({
+      types: z.array(z.looseObject({ slug: z.string(), document_count: z.int() })),
+    });
+    const countOf = async (path: string): Promise<number | undefined> =>
+      typeCounts
+        .parse(await (await harness.call(path)).json())
+        .types.find(({ slug }) => slug === 'workshop_invoice')?.document_count;
+
+    it('creates a provisional type that GET /types then counts', async () => {
+      const response = await post('/types', {
+        slug: 'workshop_invoice',
+        description: 'Invoice of a workshop',
+        fields: { hours: { type: 'number' } },
+      });
+      expect(response.status).toBe(201);
+      expect(await response.json()).toMatchObject({
+        slug: 'workshop_invoice',
+        status: 'provisional',
+        fields: { hours: { type: 'number' } },
+        document_count: 0,
+      });
+      await harness.database.db.execute(
+        sql`UPDATE documents SET type_id = (SELECT id FROM doc_types WHERE slug = 'workshop_invoice')
+            WHERE id IN (${publicId}, ${privateId})`,
+      );
+      expect(await countOf('/types')).toBe(1);
+      expect(await countOf('/types?include_private=true')).toBe(2);
+    });
+
+    it('answers the refusals of the registry with their codes', async () => {
+      const invalid = await post('/types', { slug: 'Invoice October', description: 'Invoice' });
+      expect(invalid.status).toBe(400);
+      expect(await codeOf(invalid)).toBe('invalid_slug');
+      const taken = await post('/types', { slug: 'workshop_invoice', description: 'Again' });
+      expect(taken.status).toBe(400);
+      expect(await codeOf(taken)).toBe('name_taken');
+      const unknown = await post('/types', { slug: 'tool_invoice', description: 'X', id: 'x' });
+      expect(await codeOf(unknown)).toBe('invalid_request');
+    });
+
+    it('needs credentials', async () => {
+      const response = await harness.app.request(
+        '/types',
+        jsonRequest('POST', { slug: 'tool_invoice', description: 'Invoice of a tool' }),
+      );
+      expect(response.status).toBe(401);
+    });
+  });
+
   describe('routes whose module is not part of this build', () => {
     it.each([
       ['GET', '/subjects', undefined],

@@ -1,3 +1,4 @@
+import type { SchemaLanguage } from '@liasse/contract/domain';
 import type { Database } from '../db/client.ts';
 import type { Embedder } from '../models/ports.ts';
 import type { ChunkRanker } from '../search/rankers.ts';
@@ -12,6 +13,8 @@ export interface ApiContext {
   readonly embedder: Embedder;
   /** The full-text side of hybrid search, chosen at startup by `prepareFullTextRanking`. */
   readonly fullText: ChunkRanker;
+  /** `SCHEMA_LANGUAGE` of the configuration: the language a type created by hand is named in. */
+  readonly schemaLanguage: SchemaLanguage;
   /** In bytes; `config.pipeline.maxFileSize`. */
   readonly maxFileSize: number;
   readonly fileUrls: FileUrls;

@@ -82,6 +82,7 @@ export const createHttpHarness = async (): Promise<HttpHarness> => {
     storage: createFsStorage(root),
     embedder,
     fullText: rankByFullText,
+    schemaLanguage: 'en',
     maxFileSize: TEST_MAX_FILE_SIZE,
     fileUrls: createFileUrls({
       secret: TEST_FILE_URL_SECRET,

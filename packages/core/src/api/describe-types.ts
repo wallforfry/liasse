@@ -1,10 +1,23 @@
 import {
+  type CreatedType,
   type DescribeTypesOptions,
   describeTypesOptionsSchema,
   type TypeList,
 } from '@liasse/contract';
 import { listTypes } from '../registry/read-types.ts';
+import type { RegisteredType } from '../registry/type-store.ts';
 import type { ApiContext } from './context.ts';
+
+export const typeView = (type: RegisteredType, documentCount: number): CreatedType => ({
+  slug: type.slug,
+  description: type.description,
+  parent_slug: type.parentSlug,
+  version: type.version,
+  status: type.status,
+  aliases: [...type.aliases],
+  fields: { ...type.fields },
+  document_count: documentCount,
+});
 
 /** The registry. Descriptions and example titles come from documents: untrusted content. */
 export const describeTypes = async (
@@ -17,16 +30,9 @@ export const describeTypes = async (
     { db },
   );
   return {
-    types: types.map(({ slug, description, parentSlug, version, aliases, docCount, ...type }) => ({
-      slug,
-      description,
-      parent_slug: parentSlug,
-      version,
-      status: type.status,
-      aliases: [...aliases],
-      fields: { ...type.fields },
-      document_count: docCount,
-      ...(type.examples === undefined ? {} : { examples: [...type.examples] }),
+    types: types.map(({ docCount, examples, ...type }) => ({
+      ...typeView(type, docCount),
+      ...(examples === undefined ? {} : { examples: [...examples] }),
     })),
   };
 };

@@ -120,6 +120,7 @@ export const createRuntime = async (
       storage,
       embedder,
       fullText: fullTextRanking.ranker,
+      schemaLanguage: config.pipeline.schemaLanguage,
       maxFileSize: config.pipeline.maxFileSize,
       fileUrls: createFileUrls({
         secret: config.auth.fileUrlSecret,
