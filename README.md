@@ -33,9 +33,15 @@ TypeScript · Node 22 · Hono · Drizzle · Zod · Postgres + pgvector · MCP Ty
 docker compose up -d
 ```
 
-The compose file sets `DATABASE_URL`, `HOST`, `PORT`, `STORAGE_PATH` and `EMBEDDING_CACHE_DIR` itself. Files and the local embedding model live in the `liasse-data` volume, the database in `postgres-data`. Liasse speaks plain HTTP: put a TLS reverse proxy in front of it before publishing it beyond `127.0.0.1`. `docker compose up -d --build` builds the image from the checkout instead of pulling it.
+The compose file sets `DATABASE_URL`, `HOST`, `PORT`, `STORAGE_PATH` and `EMBEDDING_CACHE_DIR` itself. Files and the local embedding model live in the `liasse-data` volume, the database in `postgres-data`. Liasse speaks plain HTTP: put a TLS reverse proxy in front of it before publishing it beyond `127.0.0.1`.
 
-The image (`linux/amd64`, `linux/arm64`) is published to GHCR by the `Image` workflow: `edge` and `sha-<commit>` for every push to `main`, `<version>`, `<major>.<minor>` and `latest` for every `v*` tag.
+Inside the container, `127.0.0.1` is the container itself: an Ollama server on the host is `LLM_BASE_URL=http://host.docker.internal:11434` (on Linux, add `extra_hosts: ['host.docker.internal:host-gateway']` to the `liasse` service), and a `WATCH_DIR` needs a volume that mounts the host folder at that path.
+
+On shutdown the server lets running jobs finish for 30 seconds, so the compose file gives the container 40 seconds before Docker kills it; with `docker run`, pass `--stop-timeout 40`.
+
+The image (`linux/amd64`, `linux/arm64`) is published to GHCR by the `Image` workflow: `edge` and `sha-<commit>` for every push to `main`, `<version>`, `<major>.<minor>` and `latest` for every `v*` tag. While the repository is private, so is the package: `docker login ghcr.io` with a token that can read it first. `latest` exists only once a `v*` tag is published; until then, set `LIASSE_VERSION=edge`, or Compose, finding no image to pull, builds it from the checkout. `docker compose up -d --build` always builds from the checkout.
+
+[`docker-compose.coolify.yml`](docker-compose.coolify.yml) is the same stack for a Coolify Docker Compose application built from this repository: Coolify generates the database password, `API_TOKENS`, `FILE_URL_SECRET` and `UI_PASSWORD`, and routes the domain set on the `liasse` service to port 8080. Set `LLM_PROVIDER`, `LLM_API_KEY`, `TEXT_MODEL` and `VISION_MODEL` in Coolify.
 
 ## Contributing
 
