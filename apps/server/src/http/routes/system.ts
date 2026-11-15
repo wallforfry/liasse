@@ -1,5 +1,5 @@
+import { healthSchema } from '@liasse/contract';
 import { readStats } from '@liasse/core/api';
-import { healthSchema } from '@liasse/core/contract';
 import { Hono } from 'hono';
 import { jsonResponse, operation } from '../describe.ts';
 import type { AppEnv } from '../env.ts';

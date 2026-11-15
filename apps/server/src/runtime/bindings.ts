@@ -9,6 +9,7 @@ import {
   scheduleNightlyRun,
 } from '@liasse/core/consolidation';
 import type { Database } from '@liasse/core/db';
+import { ENTITY_ARBITRATION_CANDIDATES } from '@liasse/contract/domain';
 import { deriveIdentifierKey, findSensitiveIdentifiers } from '@liasse/core/entities';
 import {
   createHindsightIntegration,
@@ -31,6 +32,7 @@ import {
   createPipelineHandlers,
   failAbandonedDocuments,
   type PipelineDeps,
+  type PipelineSettings,
 } from '@liasse/core/pipeline';
 import type { Storage } from '@liasse/core/storage';
 import type { Logger } from '../log.ts';
@@ -65,13 +67,27 @@ export interface Bindings {
 
 export type Bind = (parts: RuntimeParts) => Bindings;
 
+export const pipelineSettingsOf = ({
+  confidenceThreshold,
+  maxNewTypesPerDay,
+  schemaLanguage,
+  maxFileSize,
+  maxVisionPages,
+  entitySimilarity,
+}: Config['pipeline']): PipelineSettings => ({
+  confidenceThreshold,
+  maxNewTypesPerDay,
+  schemaLanguage,
+  maxFileSize,
+  maxVisionPages,
+  entitySimilarity: { ...entitySimilarity, candidates: ENTITY_ARBITRATION_CANDIDATES },
+});
+
 const pipelineDepsOf = (
   { config, db, storage, embedder, textModel, visionModel }: RuntimeParts,
   hindsight: HindsightIntegration,
 ): PipelineDeps => {
   const identifierKey = deriveIdentifierKey(config.auth.fileUrlSecret);
-  const { confidenceThreshold, maxNewTypesPerDay, schemaLanguage, maxFileSize, maxVisionPages } =
-    config.pipeline;
   return {
     db,
     storage,
@@ -79,13 +95,7 @@ const pipelineDepsOf = (
     textModel,
     visionModel,
     identifierKey,
-    settings: {
-      confidenceThreshold,
-      maxNewTypesPerDay,
-      schemaLanguage,
-      maxFileSize,
-      maxVisionPages,
-    },
+    settings: pipelineSettingsOf(config.pipeline),
     // Consolidation counts the documents settled since its last run, and runs again
     // after every batch of them.
     afterIndexed: async (id: string) => {

@@ -1,8 +1,8 @@
+import type { DocumentStatus } from '@liasse/contract/domain';
 import { and, eq } from 'drizzle-orm';
 import type { Database } from '../db/client.ts';
 import type { JsonObject } from '../db/columns.ts';
 import { documents, isLiveDocument } from '../db/schema/documents.ts';
-import type { DocumentStatus } from '../domain/enums.ts';
 import {
   PIPELINE_PROVENANCE_KEY,
   type PipelineProvenance,

@@ -1,4 +1,4 @@
-import { CSRF_HEADER } from '@liasse/core/contract';
+import { CSRF_HEADER } from '@liasse/contract';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import {
   authorized,

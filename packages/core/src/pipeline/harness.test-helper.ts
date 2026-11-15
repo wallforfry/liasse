@@ -54,6 +54,9 @@ const recording = (real: EntityResolver): RecordingEntities => {
 export const isClassification = ({ system }: FakeTextRequest): boolean =>
   system.startsWith('You file');
 
+const isArbitration = ({ system }: FakeTextRequest): boolean =>
+  system.startsWith('You decide whether a name read in a document designates');
+
 export interface ModelScript {
   readonly classify?: (request: FakeTextRequest, call: number) => unknown;
   readonly extract?: (request: FakeTextRequest, call: number) => unknown;
@@ -82,6 +85,9 @@ export const scriptedModel = ({ classify, extract }: ModelScript): FakeTextModel
       classifications += 1;
       return (classify ?? (() => NEW_TYPE))(request, classifications);
     }
+    // Entity resolution asks about a candidate only similarity designates, such as the
+    // entity a concurrent job of the same document has just created; no script picks one.
+    if (isArbitration(request)) return { choice: 'none' };
     extractions += 1;
     return (extract ?? (() => ({ core: {}, fields: {}, extra: {} })))(request, extractions);
   });

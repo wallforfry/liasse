@@ -1,5 +1,5 @@
 import { randomBytes } from 'node:crypto';
-import { CSP_NONCE_META_PROPERTY } from '@liasse/core/contract';
+import { CSP_NONCE_META_PROPERTY } from '@liasse/contract';
 import { Hono } from 'hono';
 import type { AppEnv } from '../env.ts';
 import { failure, respondWith } from '../errors.ts';

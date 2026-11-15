@@ -1,7 +1,6 @@
 import { isDeepStrictEqual } from 'node:util';
-import { AUTO_MERGE_CONFIDENCE } from '../domain/limits.ts';
-import type { AutoApplyMode } from '../domain/enums.ts';
-import { ownValue } from '../registry/own.ts';
+import { AUTO_MERGE_CONFIDENCE, type AutoApplyMode } from '@liasse/contract/domain';
+import { ownValue } from '@liasse/contract/registry';
 import type { RegisteredType } from '../registry/type-store.ts';
 
 /**

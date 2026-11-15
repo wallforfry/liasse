@@ -1,12 +1,12 @@
-import { z } from 'zod';
-import { entityNameKey } from '../domain/entity-name.ts';
-import type { EntityKind } from '../domain/enums.ts';
 import {
+  type EntityKind,
+  entityKindSchema,
   MAX_ENTITY_CONTEXT_LENGTH,
   MAX_ENTITY_NAME_LENGTH,
   MAX_IDENTIFIERS_PER_MENTION,
-} from '../domain/limits.ts';
-import { entityKindSchema } from '../domain/schemas.ts';
+} from '@liasse/contract/domain';
+import { z } from 'zod';
+import { entityNameKey } from '../domain/entity-name.ts';
 import { redactSensitiveIdentifiers } from './detect-sensitive.ts';
 import {
   type IdentifierRejection,
@@ -78,3 +78,10 @@ export const prepareMention = (key: IdentifierKey, mention: EntityMention): Prep
     droppedIdentifiers: countRejections(identifiers),
   };
 };
+
+// The text the similarity rule embeds for a mention, and for the entity it creates.
+export const mentionEmbeddingText = ({
+  name,
+  context,
+}: Pick<PreparedMention, 'name' | 'context'>): string =>
+  context === undefined ? name : `${name}\n${context}`;

@@ -1,5 +1,7 @@
-import type { SubjectIdentifierType } from '../domain/enums.ts';
-import { MIN_ATTACHING_CONTRACT_NUMBER_LENGTH } from '../domain/limits.ts';
+import {
+  MIN_ATTACHING_CONTRACT_NUMBER_LENGTH,
+  type SubjectIdentifierType,
+} from '@liasse/contract/domain';
 import { isCompleteAddress } from './address.ts';
 import {
   ISSUER_ID_KEY,

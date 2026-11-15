@@ -1,4 +1,4 @@
-import { CSP_NONCE_META_PROPERTY } from '@liasse/core/contract';
+import { CSP_NONCE_META_PROPERTY } from '@liasse/contract';
 
 /**
  * The nonce the server wrote into this page for the style elements inserted at run time.

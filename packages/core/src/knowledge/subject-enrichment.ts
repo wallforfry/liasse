@@ -1,4 +1,4 @@
-import type { EntityMatchRule } from '../domain/enums.ts';
+import type { EntityMatchRule } from '@liasse/contract/domain';
 import type { Embedding } from '../models/ports.ts';
 import { mergeSubjectIdentifiers } from './subject-identifier-rules.ts';
 import { subjectIdentifiersFor, withSubjectAliases } from './subject-match.ts';

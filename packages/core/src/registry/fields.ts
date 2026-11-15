@@ -1,9 +1,14 @@
+import { MAX_FIELDS_PER_TYPE } from '@liasse/contract/domain';
+import {
+  err,
+  type FieldDefinition,
+  fieldDefinitionSchema,
+  isPlainRecord,
+  ok,
+  type Result,
+} from '@liasse/contract/registry';
 import type { z } from 'zod';
-import { MAX_FIELDS_PER_TYPE } from '../domain/limits.ts';
 import { fieldNameViolations, type NamingRule } from './naming.ts';
-import { isPlainRecord } from './own.ts';
-import { type FieldDefinition, fieldDefinitionSchema } from './primitives.ts';
-import { err, ok, type Result } from './result.ts';
 
 export type TypeFields = Readonly<Record<string, FieldDefinition>>;
 

@@ -12,14 +12,13 @@ export {
   type MentionIdentifier,
   mentionIdentifierSchema,
 } from './identifiers.ts';
-export {
-  DEFAULT_ENTITY_LIST_LIMIT,
-  type ListEntitiesOptions,
-  listEntitiesOptionsSchema,
-  MAX_ENTITY_LIST_LIMIT,
-} from './list-options.ts';
 export { type EntityList, getEntity, type ListedEntity, listEntities } from './list.ts';
-export { type EntityMention, entityMentionSchema, InvalidEntityMentionError } from './mention.ts';
+export {
+  type EntityMention,
+  entityMentionSchema,
+  InvalidEntityMentionError,
+  mentionEmbeddingText,
+} from './mention.ts';
 export {
   findMergeCandidates,
   MERGE_REASONS,

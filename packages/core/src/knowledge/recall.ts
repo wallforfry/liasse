@@ -1,14 +1,14 @@
-import { and, eq, inArray, notInArray, or, type SQL, sql } from 'drizzle-orm';
 import {
   type Recall,
   type RecalledFact,
   type RecallInput,
   recallInputSchema,
-} from '../contract/knowledge-reads.ts';
+} from '@liasse/contract';
+import { MAX_RECALL_RELATED, RECALL_CANDIDATES_PER_RANKER } from '@liasse/contract/domain';
+import { and, eq, inArray, notInArray, or, type SQL, sql } from 'drizzle-orm';
 import type { Database } from '../db/client.ts';
 import { documents } from '../db/schema/documents.ts';
 import { facts } from '../db/schema/knowledge.ts';
-import { MAX_RECALL_RELATED, RECALL_CANDIDATES_PER_RANKER } from '../domain/limits.ts';
 import type { Embedder } from '../models/ports.ts';
 import { reciprocalRankFusion } from '../search/fusion.ts';
 import {

@@ -1,4 +1,4 @@
-import { ok, type Result } from '../registry/result.ts';
+import { ok, type Result } from '@liasse/contract/registry';
 import type { EntitiesWriteContext } from './context.ts';
 import { withEntityLock } from './entity-lock.ts';
 import type { Entity } from './entity-store.ts';

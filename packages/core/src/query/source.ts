@@ -1,8 +1,8 @@
+import type { TypeStatus } from '@liasse/contract/domain';
 import { sql } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/pg-core';
 import { documents } from '../db/schema/documents.ts';
 import { docTypes } from '../db/schema/registry.ts';
-import type { TypeStatus } from '../domain/enums.ts';
 
 const OWN_TYPE = 'own_type';
 const LIVE_TYPE = 'live_type';

@@ -1,11 +1,11 @@
+import type { DocumentStatus } from '@liasse/contract/domain';
+import { isPlainRecord } from '@liasse/contract/registry';
 import { eq } from 'drizzle-orm';
 import { documents } from '../../db/schema/documents.ts';
 import { docTypes } from '../../db/schema/registry.ts';
-import type { DocumentStatus } from '../../domain/enums.ts';
 import { PROVENANCE_ENTITY_ID_KEY } from '../../domain/provenance.ts';
 import type { Transaction } from '../../ingest/existing-document.ts';
 import { writeIfLive } from '../../ingest/live-write.ts';
-import { isPlainRecord } from '../../registry/own.ts';
 import type { RegisteredType } from '../../registry/type-store.ts';
 import { entitiesOf, persisterOf } from '../bindings.ts';
 import type { PipelineDeps } from '../deps.ts';

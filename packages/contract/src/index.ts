@@ -126,4 +126,4 @@ export {
   type UiSession,
   uiSessionSchema,
 } from './ui-session.ts';
-export { type QueryDsl, queryDslSchema } from '../query/dsl.ts';
+export { type QueryDsl, queryDslSchema } from './query/dsl.ts';

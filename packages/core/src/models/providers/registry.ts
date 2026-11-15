@@ -1,5 +1,5 @@
+import type { EmbeddingProvider, LlmProvider } from '@liasse/contract/domain';
 import type { EmbeddingModel, LanguageModel } from 'ai';
-import type { EmbeddingProvider, LlmProvider } from '../../domain/enums.ts';
 import type { EmbeddingKind } from '../ports.ts';
 
 export interface ProviderEndpoint {

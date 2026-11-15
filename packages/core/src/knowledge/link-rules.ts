@@ -1,5 +1,4 @@
-import type { LinkKind } from '../domain/enums.ts';
-import { MIN_LINK_CONFIDENCE } from '../domain/limits.ts';
+import { type LinkKind, MIN_LINK_CONFIDENCE } from '@liasse/contract/domain';
 import { redactSensitiveIdentifiers } from '../entities/detect-sensitive.ts';
 import type { LinkDocument } from './link-candidates.ts';
 import type { ProposedLink } from './link-prompt.ts';

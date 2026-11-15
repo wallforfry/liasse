@@ -1,11 +1,11 @@
 import { Readable } from 'node:stream';
-import { ApiError, type ApiContext, uploadDocument } from '@liasse/core/api';
 import {
   UPLOAD_FILE_FIELD,
   type UploadOptions,
   uploadOptionsSchema,
   uploadResultSchema,
-} from '@liasse/core/contract';
+} from '@liasse/contract';
+import { ApiError, type ApiContext, uploadDocument } from '@liasse/core/api';
 import { Hono } from 'hono';
 import { bodyLimit } from 'hono/body-limit';
 import { resolver } from 'hono-openapi';

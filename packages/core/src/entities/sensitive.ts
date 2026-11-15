@@ -1,5 +1,5 @@
 import { createHmac, hkdfSync } from 'node:crypto';
-import type { EntityIdentifierType } from '../domain/enums.ts';
+import type { EntityIdentifierType } from '@liasse/contract/domain';
 
 // The identifiers that are never stored in clear: only their last characters and a keyed
 // hash are kept.

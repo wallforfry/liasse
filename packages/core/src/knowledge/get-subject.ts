@@ -1,18 +1,18 @@
-import { and, desc, eq, sql } from 'drizzle-orm';
 import {
   type GetSubjectInput,
   getSubjectInputSchema,
   type GetSubjectOutput,
-} from '../contract/knowledge-reads.ts';
-import type { Database } from '../db/client.ts';
-import { documents } from '../db/schema/documents.ts';
-import { docTypes } from '../db/schema/registry.ts';
-import { ID_PREFIXES, isId } from '../domain/ids.ts';
+} from '@liasse/contract';
 import {
   MAX_SUBJECT_DOCUMENTS,
   MAX_SUBJECT_NEXT_DATES,
   MAX_SUBJECT_SUGGESTIONS,
-} from '../domain/limits.ts';
+} from '@liasse/contract/domain';
+import { and, desc, eq, sql } from 'drizzle-orm';
+import type { Database } from '../db/client.ts';
+import { documents } from '../db/schema/documents.ts';
+import { docTypes } from '../db/schema/registry.ts';
+import { ID_PREFIXES, isId } from '../domain/ids.ts';
 import type { KnowledgeReadContext } from './context.ts';
 import { statedDocumentDate } from './document-day.ts';
 import { effectiveState, holdsId, visibleDocument, visibleSubjectIds } from './read-shared.ts';

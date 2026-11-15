@@ -1,8 +1,8 @@
+import { DOCUMENT_JOB_FAILURE_CODES, IN_PROGRESS_STATUSES } from '@liasse/contract/domain';
 import { and, eq, inArray, notExists, sql } from 'drizzle-orm';
 import type { Database } from '../db/client.ts';
 import { documents } from '../db/schema/documents.ts';
 import { jobs } from '../db/schema/jobs.ts';
-import { DOCUMENT_JOB_FAILURE_CODES, IN_PROGRESS_STATUSES } from '../domain/enums.ts';
 import {
   PROCESS_DOCUMENT_MAX_ATTEMPTS,
   processDocumentJob,

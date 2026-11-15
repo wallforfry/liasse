@@ -1,5 +1,5 @@
+import type { IngestRequest } from '@liasse/contract';
 import { notImplemented, type UploadInput } from '@liasse/core/api';
-import type { IngestRequest } from '@liasse/core/contract';
 
 /**
  * The upload of an `ingest` call. A file named by its URL is refused: fetching an address

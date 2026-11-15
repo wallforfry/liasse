@@ -1,4 +1,4 @@
-import { CSRF_HEADER, errorBodySchema } from '@liasse/core/contract';
+import { CSRF_HEADER, errorBodySchema } from '@liasse/contract';
 import type { z } from 'zod';
 import { LiasseApiError, LiasseResponseError } from './errors.ts';
 

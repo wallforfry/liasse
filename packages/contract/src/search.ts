@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { searchFiltersSchema, searchInputSchema } from '../search/input.ts';
+import { searchFiltersSchema, searchInputSchema } from './search/input.ts';
 
 const { query, limit, includePrivate } = searchInputSchema.shape;
 const { dateFrom, dateTo, ...sameNameFilters } = searchFiltersSchema.shape;

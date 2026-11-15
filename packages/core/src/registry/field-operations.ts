@@ -1,4 +1,5 @@
 import { isDeepStrictEqual } from 'node:util';
+import { err, type FieldDefinition, ok, ownValue, type Result } from '@liasse/contract/registry';
 import type { RegistryWriteContext } from './context.ts';
 import {
   fieldFailure,
@@ -8,9 +9,6 @@ import {
   typeNotFound,
 } from './errors.ts';
 import { checkField, checkTypeFields, type TypeFields } from './fields.ts';
-import { ownValue } from './own.ts';
-import type { FieldDefinition } from './primitives.ts';
-import { err, ok, type Result } from './result.ts';
 import {
   findTypeById,
   type RegisteredType,

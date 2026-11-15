@@ -41,6 +41,7 @@ describe('loadConfig', () => {
         schemaLanguage: 'en',
         workers: 2,
         maxVisionPages: 100,
+        entitySimilarity: { attach: 1, arbitrate: 0.8 },
       },
       hindsight: undefined,
       auth: {
@@ -113,6 +114,44 @@ describe('loadConfig', () => {
       bank: 'documents',
       apiKey: undefined,
     });
+  });
+
+  it('reads the entity similarity thresholds', () => {
+    const config = loadConfig({
+      ...SYNTHETIC_ENV,
+      ENTITY_ATTACH_SIMILARITY: '0.97',
+      ENTITY_ARBITRATION_SIMILARITY: '0.9',
+    });
+    expect(config.pipeline.entitySimilarity).toEqual({ attach: 0.97, arbitrate: 0.9 });
+    expect(
+      loadConfig({
+        ...SYNTHETIC_ENV,
+        ENTITY_ATTACH_SIMILARITY: '0.85',
+        ENTITY_ARBITRATION_SIMILARITY: '0.85',
+      }).pipeline.entitySimilarity,
+    ).toEqual({ attach: 0.85, arbitrate: 0.85 });
+  });
+
+  it('refuses entity similarity thresholds outside 0 to 1', () => {
+    expect(problemsOf({ ...SYNTHETIC_ENV, ENTITY_ATTACH_SIMILARITY: '1.5' })).toEqual([
+      'ENTITY_ATTACH_SIMILARITY: Too big: expected number to be <=1',
+    ]);
+    expect(problemsOf({ ...SYNTHETIC_ENV, ENTITY_ARBITRATION_SIMILARITY: '-0.1' })).toEqual([
+      'ENTITY_ARBITRATION_SIMILARITY: expected a decimal number such as 0.7',
+    ]);
+  });
+
+  it('refuses an arbitration threshold above the attach threshold', () => {
+    expect(
+      problemsOf({
+        ...SYNTHETIC_ENV,
+        ENTITY_ATTACH_SIMILARITY: '0.9',
+        ENTITY_ARBITRATION_SIMILARITY: '0.95',
+      }),
+    ).toEqual(['ENTITY_ARBITRATION_SIMILARITY: must not be above ENTITY_ATTACH_SIMILARITY']);
+    expect(problemsOf({ ...SYNTHETIC_ENV, ENTITY_ATTACH_SIMILARITY: '0.7' })).toEqual([
+      'ENTITY_ARBITRATION_SIMILARITY: must not be above ENTITY_ATTACH_SIMILARITY',
+    ]);
   });
 
   it('defaults the UI session lifetime to seven days', () => {

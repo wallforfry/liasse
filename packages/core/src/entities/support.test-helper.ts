@@ -1,8 +1,8 @@
+import type { EntityKind } from '@liasse/contract/domain';
 import { sql } from 'drizzle-orm';
 import { z } from 'zod';
 import type { Database } from '../db/client.ts';
 import { entities } from '../db/schema/registry.ts';
-import type { EntityKind } from '../domain/enums.ts';
 import type { Embedder, Embedding } from '../models/ports.ts';
 import {
   createFakeTextModel,

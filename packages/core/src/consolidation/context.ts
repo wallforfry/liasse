@@ -1,5 +1,5 @@
+import type { AutoApplyMode, SchemaLanguage } from '@liasse/contract/domain';
 import type { Database } from '../db/client.ts';
-import type { AutoApplyMode, SchemaLanguage } from '../domain/enums.ts';
 import type { TextModel } from '../models/ports.ts';
 
 export interface ConsolidationReadContext {

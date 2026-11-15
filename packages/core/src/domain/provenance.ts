@@ -1,6 +1,5 @@
+import { CLASSIFICATION_OUTCOMES, entityMatchRuleSchema } from '@liasse/contract/domain';
 import { z } from 'zod';
-import { CLASSIFICATION_OUTCOMES } from './enums.ts';
-import { entityMatchRuleSchema } from './schemas.ts';
 
 // `documents.provenance` is keyed by the bare name of the field it describes, for a core
 // field and for a type field alike: the registry reserves the core names, so the two

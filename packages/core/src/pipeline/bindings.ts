@@ -67,4 +67,10 @@ export const indexerOf = (deps: PipelineDeps): IndexDocument =>
   deps.indexDocument ?? ((documentId) => indexDocument(deps, documentId));
 
 export const persisterOf = (deps: PipelineDeps): PersistKnowledge =>
-  deps.persistKnowledge ?? createPersistKnowledge({ identifierKey: deps.identifierKey });
+  deps.persistKnowledge ??
+  createPersistKnowledge({
+    identifierKey: deps.identifierKey,
+    ...(deps.settings.entitySimilarity === undefined
+      ? {}
+      : { similarity: deps.settings.entitySimilarity }),
+  });

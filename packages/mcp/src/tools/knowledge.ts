@@ -1,11 +1,11 @@
-import { getSubject, recall, timeline, upcoming } from '@liasse/core/api';
 import {
   getSubjectOptionsSchema,
   recallOptionsSchema,
   timelineOptionsSchema,
   upcomingOptionsSchema,
-} from '@liasse/core/contract';
-import { keyDateKindSchema, subjectKindSchema } from '@liasse/core/domain';
+} from '@liasse/contract';
+import { keyDateKindSchema, subjectKindSchema } from '@liasse/contract/domain';
+import { getSubject, recall, timeline, upcoming } from '@liasse/core/api';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { type McpDeps, UNTRUSTED } from '../deps.ts';
 import { toolAnswer } from '../outcome.ts';

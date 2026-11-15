@@ -1,10 +1,10 @@
+import { languageCodeSchema } from '@liasse/contract/domain';
+import { ownValue } from '@liasse/contract/registry';
 import type { z } from 'zod';
 import type { TypeFields } from '../../registry/fields.ts';
 import { fieldNameViolations } from '../../registry/naming.ts';
-import { ownValue } from '../../registry/own.ts';
 import { validateDocumentFields } from '../../registry/validate-document-fields.ts';
 import { coreValueSchema, extraValueSchema } from '../../registry/values.ts';
-import { languageCodeSchema } from '../../domain/values.ts';
 import { type Evidenced, evidencedSchema, type ExtractionOutput } from './extraction-schema.ts';
 import type { QuoteIndex } from './quotes.ts';
 import { quoteSupports, type SupportKind } from './support.ts';

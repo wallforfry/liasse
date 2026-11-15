@@ -1,4 +1,4 @@
-import { changeDecisionResultSchema, changeListSchema } from '@liasse/core/contract';
+import { changeDecisionResultSchema, changeListSchema } from '@liasse/contract';
 import { documents, jobs, typeChanges } from '@liasse/core/db';
 import { waitUntil } from '@liasse/core/testing';
 import { eq } from 'drizzle-orm';

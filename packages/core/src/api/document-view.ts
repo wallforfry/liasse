@@ -1,4 +1,4 @@
-import { type DocumentSummary, documentSummarySchema } from '../contract/documents.ts';
+import { type DocumentSummary, documentSummarySchema } from '@liasse/contract';
 import { documents } from '../db/schema/documents.ts';
 import { docTypes } from '../db/schema/registry.ts';
 

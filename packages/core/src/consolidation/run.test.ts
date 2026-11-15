@@ -1,6 +1,6 @@
+import type { AutoApplyMode } from '@liasse/contract/domain';
 import { eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import type { AutoApplyMode } from '../domain/enums.ts';
 import { seedEntity } from '../entities/support.test-helper.ts';
 import { docTypes, entities } from '../db/schema/registry.ts';
 import {

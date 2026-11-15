@@ -1,4 +1,4 @@
-import type { NoticePeriodUnit } from '../../domain/enums.ts';
+import type { NoticePeriodUnit } from '@liasse/contract/domain';
 
 // The words of a duration unit in the schema languages, in ASCII, singular and plural.
 // prettier-ignore

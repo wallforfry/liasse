@@ -1,6 +1,6 @@
+import { err, ok, type Result } from '@liasse/contract/registry';
 import type { z } from 'zod';
 import type { TypeFields } from './fields.ts';
-import { err, ok, type Result } from './result.ts';
 import { valueSchemaForFields } from './values.ts';
 
 export interface FieldValueError {

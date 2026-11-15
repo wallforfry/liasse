@@ -1,11 +1,11 @@
-import { and, asc, eq, gte, sql } from 'drizzle-orm';
-import type { z } from 'zod';
 import {
   type DocumentPart,
   type DocumentView,
   type GetDocumentOptions,
   getDocumentOptionsSchema,
-} from '../contract/documents.ts';
+} from '@liasse/contract';
+import { and, asc, eq, gte, sql } from 'drizzle-orm';
+import type { z } from 'zod';
 import type { Database } from '../db/client.ts';
 import { documentPages, documents, isLiveDocument } from '../db/schema/documents.ts';
 import { docTypes } from '../db/schema/registry.ts';

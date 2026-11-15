@@ -1,4 +1,4 @@
-import { CSRF_HEADER } from '@liasse/core/contract';
+import { CSRF_HEADER } from '@liasse/contract';
 import { deleteCookie, getCookie, setCookie } from 'hono/cookie';
 import type { CookieOptions } from 'hono/utils/cookie';
 import type { Credential } from '../auth.ts';

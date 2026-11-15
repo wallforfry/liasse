@@ -2,7 +2,7 @@ import {
   type EntityListView,
   type ListEntitiesRequest,
   listEntitiesRequestSchema,
-} from '../contract/registry.ts';
+} from '@liasse/contract';
 import { listEntities as listStoredEntities } from '../entities/list.ts';
 import type { ApiContext } from './context.ts';
 

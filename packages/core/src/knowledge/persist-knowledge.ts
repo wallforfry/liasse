@@ -1,15 +1,16 @@
+import { languageCodeSchema } from '@liasse/contract/domain';
 import { and, eq } from 'drizzle-orm';
 import { z } from 'zod';
 import { documents, isLiveDocument } from '../db/schema/documents.ts';
 import { PROVENANCE_ENTITY_ID_KEY } from '../domain/provenance.ts';
-import { languageCodeSchema } from '../domain/values.ts';
 import { missingEntityIds } from '../entities/entity-store.ts';
 import type { IdentifierKey } from '../entities/sensitive.ts';
+import { ENTITY_SIMILARITY, type SimilarityThresholds } from '../entities/similarity.ts';
 import { type FactRow, replaceFacts } from './facts.ts';
 import type { KnowledgeDocument, KnowledgeInput } from './input.ts';
 import { replaceKeyDates } from './key-dates.ts';
 import { type PreparedKnowledge, prepareWithoutModels } from './prepare-knowledge.ts';
-import { type ResolvableSubject, resolveSubjectUnderLock } from './resolve-subject.ts';
+import { resolveSubjectUnderLock } from './resolve-subject.ts';
 import type { SubjectOrigin } from './subject-enrichment.ts';
 import { subjectLabelKey } from './subject-label.ts';
 import { blankOrphanSubjects } from './subject-orphans.ts';
@@ -84,12 +85,12 @@ interface ResolvedSubjects {
 // there for the next.
 const resolveSubjects = async (
   tx: SubjectTransaction,
-  subjects: readonly ResolvableSubject[],
+  { subjects, similarity }: Pick<PreparedKnowledge, 'subjects' | 'similarity'>,
   origin: SubjectOrigin,
 ): Promise<ResolvedSubjects> => {
   const labelled: (readonly [labelKey: string, subjectId: string])[] = [];
   for (const resolvable of subjects) {
-    const { subjectId } = await resolveSubjectUnderLock(tx, resolvable, origin);
+    const { subjectId } = await resolveSubjectUnderLock(tx, resolvable, origin, similarity);
     labelled.push([resolvable.mention.labelKey, subjectId]);
   }
   const ids = [...new Set(labelled.map(([, subjectId]) => subjectId))];
@@ -146,7 +147,7 @@ export const persistKnowledge = (
     const document = await lockDocument(locked, id);
     if (document === undefined) return { rejectedValues: knowledge.rejectedValues };
     const usable = withoutExternalEmbeddings(knowledge, document);
-    const { ids, byLabelKey } = await resolveSubjects(locked, usable.subjects, {
+    const { ids, byLabelKey } = await resolveSubjects(locked, usable, {
       issuerId: document.issuerId,
       private: document.private,
     });
@@ -167,6 +168,8 @@ export interface PersistedKnowledge {
 
 export interface PersistKnowledgeDeps {
   readonly identifierKey: IdentifierKey;
+  // The thresholds of entities, which subjects are resolved on.
+  readonly similarity?: SimilarityThresholds;
 }
 
 const isPrepared = (
@@ -179,7 +182,7 @@ const isPrepared = (
  * prepares it without any model first (see `prepareWithoutModels`).
  */
 export const createPersistKnowledge =
-  ({ identifierKey }: PersistKnowledgeDeps) =>
+  ({ identifierKey, similarity = ENTITY_SIMILARITY }: PersistKnowledgeDeps) =>
   (
     tx: SubjectTransaction,
     document: KnowledgeDocument,
@@ -188,5 +191,7 @@ export const createPersistKnowledge =
     persistKnowledge(
       tx,
       document,
-      isPrepared(knowledge) ? knowledge : prepareWithoutModels(identifierKey, knowledge),
+      isPrepared(knowledge)
+        ? knowledge
+        : prepareWithoutModels(identifierKey, knowledge, similarity),
     );

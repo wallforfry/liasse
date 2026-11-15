@@ -32,11 +32,6 @@
       "types": "./dist/consolidation/index.d.ts",
       "default": "./dist/consolidation/index.js"
     },
-    "./contract": {
-      "@liasse/source": "./src/contract/index.ts",
-      "types": "./dist/contract/index.d.ts",
-      "default": "./dist/contract/index.js"
-    },
     "./db": {
       "@liasse/source": "./src/db/index.ts",
       "types": "./dist/db/index.d.ts",
@@ -145,6 +140,7 @@
     "@ai-sdk/openai": "^4.0.118",
     "@ai-sdk/openai-compatible": "^3.0.92",
     "@huggingface/transformers": "^4.3.2",
+    "@liasse/contract": "workspace:*",
     "ai": "^7.0.173",
     "aws4fetch": "^1.0.20",
     "drizzle-orm": "^0.45.4",

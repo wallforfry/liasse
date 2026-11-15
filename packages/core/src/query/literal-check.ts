@@ -1,8 +1,13 @@
+import { MAX_ENUM_VALUES } from '@liasse/contract/domain';
+import { cut } from '@liasse/contract/query';
+import {
+  err,
+  fieldValueSchema,
+  ok,
+  type Result,
+  type ScalarFieldDefinition,
+} from '@liasse/contract/registry';
 import type { z } from 'zod';
-import { MAX_ENUM_VALUES } from '../domain/limits.ts';
-import { fieldValueSchema, type ScalarFieldDefinition } from '../registry/primitives.ts';
-import { err, ok, type Result } from '../registry/result.ts';
-import { cut } from './errors.ts';
 
 export interface LiteralRefusal {
   // What was expected, in words of Liasse only.

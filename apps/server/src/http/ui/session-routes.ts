@@ -1,4 +1,4 @@
-import { uiLoginSchema, type UiSession } from '@liasse/core/contract';
+import { uiLoginSchema, type UiSession } from '@liasse/contract';
 import { type Context, Hono, type MiddlewareHandler } from 'hono';
 import { validator } from 'hono/validator';
 import type { AppContext, AppEnv } from '../env.ts';

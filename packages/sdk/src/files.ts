@@ -1,4 +1,4 @@
-import { UPLOAD_FILE_FIELD, UPLOAD_OPTION_FIELDS, type UploadOptions } from '@liasse/core/contract';
+import { UPLOAD_FILE_FIELD, UPLOAD_OPTION_FIELDS, type UploadOptions } from '@liasse/contract';
 
 /** A `File` brings its name; a bare `Blob` needs one. */
 export type UploadInput = Readonly<UploadOptions> &

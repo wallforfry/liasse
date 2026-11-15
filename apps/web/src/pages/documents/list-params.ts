@@ -3,7 +3,7 @@ import {
   type ListDocumentsOptions,
   PRIVATE_FILTERS,
   type PrivateFilter,
-} from '@liasse/core/contract';
+} from '@liasse/contract';
 
 export const PAGE_SIZE = 50;
 

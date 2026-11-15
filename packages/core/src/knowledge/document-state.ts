@@ -1,7 +1,7 @@
+import type { DocumentState, LinkKind } from '@liasse/contract/domain';
 import { and, asc, eq, inArray, type SQL, sql } from 'drizzle-orm';
 import { documents, isLiveDocument } from '../db/schema/documents.ts';
 import { documentLinks } from '../db/schema/knowledge.ts';
-import type { DocumentState, LinkKind } from '../domain/enums.ts';
 import type { EntityTransaction } from '../entities/entity-store.ts';
 
 const TERMINATED = 'terminated' satisfies DocumentState;

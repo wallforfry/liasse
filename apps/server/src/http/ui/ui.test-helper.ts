@@ -1,6 +1,6 @@
 import type { ApiFeatures } from '@liasse/core/api';
 import type { UiPassword } from '@liasse/core/config';
-import { CSRF_HEADER, uiSessionSchema } from '@liasse/core/contract';
+import { CSRF_HEADER, uiSessionSchema } from '@liasse/contract';
 import type { Hono } from 'hono';
 import { expect } from 'vitest';
 import type { AppEnv } from '../env.ts';

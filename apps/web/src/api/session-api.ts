@@ -1,9 +1,4 @@
-import {
-  CSRF_HEADER,
-  errorBodySchema,
-  type UiSession,
-  uiSessionSchema,
-} from '@liasse/core/contract';
+import { CSRF_HEADER, errorBodySchema, type UiSession, uiSessionSchema } from '@liasse/contract';
 import { LiasseApiError, LiasseResponseError } from '@liasse/sdk';
 
 const SESSION_PATH = '/ui/session';

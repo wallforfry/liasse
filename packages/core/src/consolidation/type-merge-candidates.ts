@@ -1,14 +1,14 @@
-import { sql } from 'drizzle-orm';
-import { z } from 'zod';
-import type { Database } from '../db/client.ts';
-import { docTypes } from '../db/schema/registry.ts';
-import { CHANGE_STATUSES } from '../domain/enums.ts';
 import {
+  CHANGE_STATUSES,
   MAX_TYPE_MERGE_PAIRS_PER_RUN,
   TYPE_MERGE_FIELD_OVERLAP,
   TYPE_MERGE_ISSUER_OVERLAP,
   TYPE_MERGE_SIMILARITY,
-} from '../domain/limits.ts';
+} from '@liasse/contract/domain';
+import { sql } from 'drizzle-orm';
+import { z } from 'zod';
+import type { Database } from '../db/client.ts';
+import { docTypes } from '../db/schema/registry.ts';
 import { hasChange } from './change-store.ts';
 import type { TypeProfile } from './type-profiles.ts';
 

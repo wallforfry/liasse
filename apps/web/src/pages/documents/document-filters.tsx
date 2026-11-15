@@ -1,4 +1,4 @@
-import { PRIVATE_FILTERS, type PrivateFilter } from '@liasse/core/contract';
+import { PRIVATE_FILTERS, type PrivateFilter } from '@liasse/contract';
 import { useQuery } from '@tanstack/react-query';
 import { useClient } from '../../api/session.ts';
 import { statusLabel } from '../../lib/format.ts';

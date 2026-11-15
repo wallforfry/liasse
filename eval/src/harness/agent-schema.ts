@@ -1,4 +1,4 @@
-import { isoDateSchema, moneySchema } from '@liasse/core/domain';
+import { isoDateSchema, moneySchema } from '@liasse/contract/domain';
 import { z } from 'zod';
 import type { Answer, Question } from '../schema/index.ts';
 import type { CorpusIds } from './ingest.ts';

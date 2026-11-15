@@ -1,6 +1,9 @@
+import {
+  MIN_LICENSE_PLATE_LENGTH,
+  type SubjectIdentifierType,
+  type SubjectKind,
+} from '@liasse/contract/domain';
 import { z } from 'zod';
-import type { SubjectIdentifierType, SubjectKind } from '../domain/enums.ts';
-import { MIN_LICENSE_PLATE_LENGTH } from '../domain/limits.ts';
 import { isValidCardNumber } from '../entities/card-number.ts';
 import { findSensitiveIdentifiers } from '../entities/detect-sensitive.ts';
 import { isValidIban } from '../entities/iban.ts';

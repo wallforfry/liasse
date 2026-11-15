@@ -1,5 +1,5 @@
+import type { SubjectKind } from '@liasse/contract/domain';
 import type { Database } from '../db/client.ts';
-import type { SubjectKind } from '../domain/enums.ts';
 import { nameTokens } from '../domain/entity-name.ts';
 import { visibleSubjectIds } from './read-shared.ts';
 import { isWrittenAs } from './subject-identifiers.ts';

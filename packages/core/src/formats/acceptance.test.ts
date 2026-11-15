@@ -1,6 +1,6 @@
 import { readFile } from 'node:fs/promises';
+import type { SupportedMime } from '@liasse/contract/domain';
 import { describe, expect, it } from 'vitest';
-import type { SupportedMime } from '../domain/enums.ts';
 import { detectMimeType } from '../ingest/mime.ts';
 import { createFakeVisionModel } from '../testing/fake-vision-model.ts';
 import { buildSyntheticDocx } from '../testing/synthetic-docx.ts';
