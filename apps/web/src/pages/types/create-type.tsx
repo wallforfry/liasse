@@ -26,7 +26,13 @@ import {
   SelectValue,
 } from '../../components/ui/select.tsx';
 import { Textarea } from '../../components/ui/textarea.tsx';
-import { emptyField, type FieldDraft, fieldsOf, repeatedNames } from './field-drafts.ts';
+import {
+  emptyField,
+  type FieldDraft,
+  fieldsOf,
+  hasUnnamedRow,
+  repeatedNames,
+} from './field-drafts.ts';
 import { FieldRow } from './field-row.tsx';
 import { TYPES_QUERY_KEY, typePath } from './types-query.ts';
 
@@ -72,6 +78,7 @@ export const CreateType = ({ roots }: { readonly roots: readonly TypeView[] }) =
     },
   });
   const repeated = repeatedNames(draft.fields);
+  const unnamed = hasUnnamedRow(draft.fields);
   const parents = roots.filter(({ parent_slug }) => parent_slug === null);
 
   const setFields = (fields: readonly FieldDraft[]) => {
@@ -96,7 +103,8 @@ export const CreateType = ({ roots }: { readonly roots: readonly TypeView[] }) =
             <DialogTitle>Create a type</DialogTitle>
             <DialogDescription>
               Generic to specific, in snake_case: energy_bill, never edf_october. The type starts
-              provisional, like one the pipeline creates.
+              provisional, like one the pipeline creates, and counts towards the daily quota of new
+              types the pipeline may create.
             </DialogDescription>
           </DialogHeader>
           {create.error === null ? null : (
@@ -174,6 +182,9 @@ export const CreateType = ({ roots }: { readonly roots: readonly TypeView[] }) =
               <PlusIcon />
               Add field
             </Button>
+            {unnamed ? (
+              <p className="text-sm text-muted-foreground">Name every field, or remove it.</p>
+            ) : null}
             {repeated.length === 0 ? null : (
               <p className="text-sm text-destructive">
                 Two fields have the same name: {repeated.join(', ')}.
@@ -187,7 +198,8 @@ export const CreateType = ({ roots }: { readonly roots: readonly TypeView[] }) =
               create.isPending ||
               draft.slug.trim() === '' ||
               draft.description.trim() === '' ||
-              repeated.length > 0
+              repeated.length > 0 ||
+              unnamed
             }
           >
             {create.isPending ? 'Creating...' : 'Create'}

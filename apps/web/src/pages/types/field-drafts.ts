@@ -74,15 +74,15 @@ export const repeatedNames = (drafts: readonly FieldDraft[]): readonly string[] 
   return [...new Set(names.filter((name, index) => name !== '' && names.indexOf(name) !== index))];
 };
 
-/** The fields of the request. The registry judges the names; rows left unnamed are dropped. */
+/** Whether a row has no name yet: an object cannot carry it, so it is never sent. */
+export const hasUnnamedRow = (drafts: readonly FieldDraft[]): boolean =>
+  drafts.some(({ name }) => name.trim() === '');
+
+/** The fields of the request, names trimmed; the registry judges the names. */
 export const fieldsOf = (
   drafts: readonly FieldDraft[],
 ): Readonly<Record<string, FieldDefinition>> =>
-  Object.fromEntries(
-    drafts
-      .filter(({ name }) => name.trim() !== '')
-      .map((draft) => [draft.name.trim(), fieldDefinition(draft)]),
-  );
+  Object.fromEntries(drafts.map((draft) => [draft.name.trim(), fieldDefinition(draft)]));
 
 /** The primitive as the registry writes it, `list<number>` for a list. */
 export const primitiveLabel = (definition: FieldDefinition): string =>

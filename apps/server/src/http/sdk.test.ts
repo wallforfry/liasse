@@ -150,6 +150,19 @@ describe('the TypeScript SDK', () => {
     });
   });
 
+  it('creates a type, and answers the refusal of the registry', async () => {
+    expect(
+      await client.createType({
+        slug: 'workshop_invoice',
+        description: 'Invoice of a workshop',
+        fields: { hours: { type: 'number' } },
+      }),
+    ).toMatchObject({ slug: 'workshop_invoice', status: 'provisional', document_count: 0 });
+    expect(
+      await refusal(client.createType({ slug: 'workshop_invoice', description: 'Again' })),
+    ).toMatchObject({ status: 400, code: 'name_taken' });
+  });
+
   it('serves the metrics and the OpenAPI document', async () => {
     expect(await client.metrics()).toContain('liasse_');
     expect((await client.openApi()).openapi).toMatch(/^3\./);

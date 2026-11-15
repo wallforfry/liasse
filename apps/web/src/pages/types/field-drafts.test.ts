@@ -1,6 +1,12 @@
 import { fieldDefinitionSchema } from '@liasse/contract/registry';
 import { describe, expect, it } from 'vitest';
-import { emptyField, type FieldDraft, fieldDefinition, fieldsOf } from './field-drafts.ts';
+import {
+  emptyField,
+  type FieldDraft,
+  fieldDefinition,
+  fieldsOf,
+  hasUnnamedRow,
+} from './field-drafts.ts';
 
 const draft = (overrides: Partial<FieldDraft>): FieldDraft => ({ ...emptyField(0), ...overrides });
 
@@ -30,9 +36,12 @@ describe('field drafts', () => {
     expect(fieldDefinitionSchema.parse(definition)).toEqual(expected);
   });
 
-  it('drops the rows left unnamed and trims the names', () => {
-    expect(
-      fieldsOf([draft({ name: ' tenant ' }), draft({ key: 1, name: ' ', primitive: 'number' })]),
-    ).toEqual({ tenant: { type: 'text' } });
+  it('trims the names', () => {
+    expect(fieldsOf([draft({ name: ' tenant ' })])).toEqual({ tenant: { type: 'text' } });
+  });
+
+  it('tells a row left unnamed', () => {
+    expect(hasUnnamedRow([draft({ name: 'tenant' })])).toBe(false);
+    expect(hasUnnamedRow([draft({ name: 'tenant' }), draft({ key: 1, name: ' ' })])).toBe(true);
   });
 });

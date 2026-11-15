@@ -163,4 +163,16 @@ describe('the types page', () => {
     expect(screen.getByText('Two fields have the same name: tenant.')).toBeTruthy();
     expect(screen.getByRole<HTMLButtonElement>('button', { name: 'Create' }).disabled).toBe(true);
   });
+
+  it('asks for the name of every field before sending', async () => {
+    renderApp('/types', fakeServer(typesAnswer).fetch);
+
+    await userEvent.click(await screen.findByRole('button', { name: 'Create type' }));
+    await userEvent.type(screen.getByLabelText('Slug'), 'rent_receipt');
+    await userEvent.type(screen.getByLabelText('Description'), 'Receipt of a rent');
+    await userEvent.click(screen.getByRole('button', { name: 'Add field' }));
+
+    expect(screen.getByText('Name every field, or remove it.')).toBeTruthy();
+    expect(screen.getByRole<HTMLButtonElement>('button', { name: 'Create' }).disabled).toBe(true);
+  });
 });
