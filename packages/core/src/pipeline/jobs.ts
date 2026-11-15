@@ -7,6 +7,8 @@ import { SETTLED_STATUSES } from './document.ts';
 
 const payload = z.object({ documentId: z.string().min(1) });
 
+const REEXTRACT_MAX_ATTEMPTS = PROCESS_DOCUMENT_MAX_ATTEMPTS;
+
 /**
  * Extracts the fields of a document again from the text stored for it, with the current
  * schema of its type: one text-model call, never a vision call. Queued by consolidation
@@ -20,9 +22,11 @@ const payload = z.object({ documentId: z.string().min(1) });
 export const reextractDocumentJob = defineJobKind({
   name: 'reextract_document',
   schema: payload,
-  maxAttempts: PROCESS_DOCUMENT_MAX_ATTEMPTS,
-  onTerminalFailure: async (tx, failure) => {
-    const documentId = documentOfPayload(failure.payload);
+  maxAttempts: REEXTRACT_MAX_ATTEMPTS,
+  // The handler flags and logs the attempt that failed with its code, in one transaction.
+  // This flags what no handler did, and logs it when a worker died.
+  onTerminalFailure: async (tx, { payload, cause, attempt }) => {
+    const documentId = documentOfPayload(payload);
     if (documentId === undefined) return;
     await flagDocument(
       tx,
@@ -30,6 +34,14 @@ export const reextractDocumentJob = defineJobKind({
       SETTLED_STATUSES,
       'needs_review',
       DOCUMENT_JOB_FAILURE_CODES.reextraction,
+      cause === 'stale'
+        ? {
+            stage: 'reextraction',
+            attempt,
+            maxAttempts: REEXTRACT_MAX_ATTEMPTS,
+            errorCode: DOCUMENT_JOB_FAILURE_CODES.stale,
+          }
+        : undefined,
     );
   },
 });

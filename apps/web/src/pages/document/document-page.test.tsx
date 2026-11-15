@@ -147,4 +147,65 @@ describe('the document page', () => {
       '/documents/doc_01HOSTILE/file',
     );
   });
+
+  it('shows the processing log oldest first, with the code and attempt of each failure', async () => {
+    const failure = {
+      id: 'evt_02',
+      occurred_at: '2026-11-15T10:05:00.000Z',
+      stage: 'extraction',
+      outcome: 'failed',
+      status: 'failed',
+      attempt: 3,
+      max_attempts: 3,
+      error_code: 'model_output_invalid',
+      error_name: 'ModelOutputError',
+      retryable: true,
+      model: 'synthetic-model',
+      details: {},
+    };
+    const success = {
+      ...failure,
+      id: 'evt_01',
+      occurred_at: '2026-11-15T10:01:00.000Z',
+      stage: 'text',
+      outcome: 'succeeded',
+      status: 'extracted',
+      attempt: null,
+      max_attempts: null,
+      error_code: null,
+      error_name: null,
+      retryable: null,
+      model: null,
+      details: { text_method: 'native', pages: 2, rejected_values: 1 },
+    };
+    const server = fakeServer(
+      (request) =>
+        request.path === '/documents/doc_01HOSTILE/events'
+          ? json({ events: [success, failure] })
+          : undefined,
+      answerDocument,
+    );
+    renderApp('/documents/doc_01HOSTILE', server.fetch);
+    await userEvent.setup().click(await screen.findByRole('tab', { name: 'Processing' }));
+    expect(await screen.findByText('model_output_invalid')).toBeInTheDocument();
+    expect(screen.getByText('3 of 3')).toBeInTheDocument();
+    expect(screen.getByText('native text, 2 pages, 1 rejected value')).toBeInTheDocument();
+    const rows = screen.getAllByRole('row').map((row) => row.textContent);
+    expect(rows.findIndex((row) => row.includes('succeeded'))).toBeLessThan(
+      rows.findIndex((row) => row.includes('failed')),
+    );
+  });
+
+  it('says why the processing log could not be read', async () => {
+    const server = fakeServer(
+      (request) =>
+        request.path === '/documents/doc_01HOSTILE/events'
+          ? errorBody(503, 'unavailable', 'The log cannot be read.')
+          : undefined,
+      answerDocument,
+    );
+    renderApp('/documents/doc_01HOSTILE', server.fetch);
+    await userEvent.setup().click(await screen.findByRole('tab', { name: 'Processing' }));
+    expect(await screen.findByText('The log cannot be read.')).toBeInTheDocument();
+  });
 });

@@ -8,6 +8,8 @@ import {
   JOB_STATUSES,
   KEY_DATE_KINDS,
   LINK_KINDS,
+  PROCESSING_OUTCOMES,
+  PROCESSING_STAGES,
   SUBJECT_KINDS,
   TYPE_STATUSES,
 } from '@liasse/contract/domain';
@@ -33,6 +35,7 @@ const TABLES = [
   'chunks',
   'doc_types',
   'document_dates',
+  'document_events',
   'document_links',
   'document_pages',
   'documents',
@@ -88,7 +91,7 @@ describe('migrate', () => {
     await database.dispose();
   });
 
-  it('creates the twenty-six tables on an empty database', async () => {
+  it('creates the twenty-seven tables on an empty database', async () => {
     expect(await publicTables(database)).toEqual(TABLES);
   });
 
@@ -156,6 +159,8 @@ describe('migrate', () => {
       job_status: JOB_STATUSES,
       key_date_kind: KEY_DATE_KINDS,
       link_kind: LINK_KINDS,
+      processing_outcome: PROCESSING_OUTCOMES,
+      processing_stage: PROCESSING_STAGES,
       subject_kind: SUBJECT_KINDS,
       type_status: TYPE_STATUSES,
     });

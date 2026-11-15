@@ -17,6 +17,8 @@ export interface TerminalFailure {
   /** As stored: it may not match the schema of the kind. */
   readonly payload: unknown;
   readonly cause: TerminalFailureCause;
+  /** The execution that failed, from 1. */
+  readonly attempt: number;
 }
 
 /**
