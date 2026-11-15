@@ -22,7 +22,7 @@ describe('the access token check of /mcp', () => {
     const auth = await createTestAuth(database.db, PUBLIC_URL);
     const { publicKey, privateKey } = await generateKeyPair('EdDSA', { crv: 'Ed25519' });
     const jwk = { ...(await exportJWK(publicKey)), kid: KEY_ID, alg: 'EdDSA' };
-    check = createAccessTokenCheck(auth, RESOURCE, async () => ({ keys: [jwk] }));
+    check = createAccessTokenCheck(auth, RESOURCE, () => Promise.resolve({ keys: [jwk] }));
     sign = async (claims, typ = 'at+jwt') =>
       new SignJWT({ iss: ISSUER, azp: 'synthetic-client', scope: 'openid', ...claims })
         .setProtectedHeader({ alg: 'EdDSA', kid: KEY_ID, typ })
