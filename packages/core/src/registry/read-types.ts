@@ -1,7 +1,7 @@
+import type { TypeStatus } from '@liasse/contract/domain';
 import { and, asc, cosineDistance, eq, isNotNull, ne } from 'drizzle-orm';
 import { documents, isLiveDocument } from '../db/schema/documents.ts';
 import { docTypes } from '../db/schema/registry.ts';
-import type { TypeStatus } from '../domain/enums.ts';
 import type { Embedding } from '../models/ports.ts';
 import type { RegistryReadContext } from './context.ts';
 import { exampleTitles } from './example-titles.ts';

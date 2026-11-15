@@ -1,10 +1,10 @@
 import { createHash } from 'node:crypto';
 import { Readable } from 'node:stream';
+import { MAX_HINT_LENGTH } from '@liasse/contract/domain';
 import { eq, sql } from 'drizzle-orm';
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 import { documents } from '../db/schema/documents.ts';
 import { jobs } from '../db/schema/jobs.ts';
-import { MAX_HINT_LENGTH } from '../domain/limits.ts';
 import { storageKeyOf } from '../storage/key.ts';
 import { syntheticEml, syntheticJpeg, syntheticPdf } from '../testing/synthetic-files.ts';
 import { buildSyntheticDocx } from '../testing/synthetic-docx.ts';

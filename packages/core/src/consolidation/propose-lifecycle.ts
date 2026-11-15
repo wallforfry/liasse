@@ -1,9 +1,9 @@
-import type { Database } from '../db/client.ts';
 import {
   FIELD_CLEANUP_MIN_DOCUMENTS,
   FIELD_CLEANUP_SHARE,
   STABILIZATION_DOCUMENTS,
-} from '../domain/limits.ts';
+} from '@liasse/contract/domain';
+import type { Database } from '../db/client.ts';
 import { hasChange, insertChange, type StoredChange } from './change-store.ts';
 import type { RemoveFieldPayload, StabilizePayload } from './payloads.ts';
 import type { TypeProfile } from './type-profiles.ts';

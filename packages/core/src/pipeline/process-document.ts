@@ -1,6 +1,6 @@
+import type { DocumentStatus } from '@liasse/contract/domain';
 import { eq } from 'drizzle-orm';
 import { documents } from '../db/schema/documents.ts';
-import type { DocumentStatus } from '../domain/enums.ts';
 import { readPipelineProvenance } from '../domain/provenance.ts';
 import { enqueue } from '../jobs/enqueue.ts';
 import { detectLinksJob } from '../knowledge/jobs.ts';

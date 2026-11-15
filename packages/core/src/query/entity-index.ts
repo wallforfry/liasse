@@ -1,12 +1,12 @@
+import { MAX_QUERY_ENTITY_NAME_LENGTH, MAX_QUERY_ENTITY_NAMES } from '@liasse/contract/domain';
+import type { QueryError } from '@liasse/contract/query';
+import { ok, type Result } from '@liasse/contract/registry';
 import { sql } from 'drizzle-orm';
 import { z } from 'zod';
 import type { Database } from '../db/client.ts';
 import { entities } from '../db/schema/registry.ts';
 import { entityNameKey } from '../domain/entity-name.ts';
-import { MAX_QUERY_ENTITY_NAME_LENGTH, MAX_QUERY_ENTITY_NAMES } from '../domain/limits.ts';
-import { ok, type Result } from '../registry/result.ts';
 import { textParameters } from './access.ts';
-import type { QueryError } from './errors.ts';
 import { executeStatement } from './execute.ts';
 
 export interface KnownEntity {

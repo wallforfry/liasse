@@ -1,4 +1,4 @@
-import type { DocumentStatus } from '../domain/enums.ts';
+import type { DocumentStatus } from '@liasse/contract/domain';
 import type { TypeProvenance } from '../domain/provenance.ts';
 
 // A type a person chose is certain; a document that reached extraction without any

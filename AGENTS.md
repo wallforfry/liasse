@@ -38,9 +38,10 @@ Before pushing, `pnpm lint`, `pnpm typecheck`, `pnpm test` and `pnpm build` must
 ## Layout
 
 - `apps/server` (`@liasse/server`): the Node process. `src/runtime/` builds it from the configuration (`createRuntime`; `bindings.ts` is the one module that binds a feature to it), `src/http/` is the REST transport (Hono): credentials, guards, error bodies, metrics and one file of routes per resource. A route validates, calls a use case of `@liasse/core/api` and answers; it holds no logic of its own, since MCP calls the same use cases. `src/ui/` is the web UI, server-rendered pages under `/ui` that call the same use cases: views escape everything through `hono/html` and run no script. Everything the server logs goes to stderr through `src/log.ts`, never to stdout.
+- `packages/contract` (`@liasse/contract`): the Zod schemas and types of every request and answer of the API, at the root entry, and the pure modules they are built from, one subpath per directory: `/domain` (enumerations, shared Zod schemas, values, limits, languages, currencies), `/query` (the query DSL and its errors), `/registry` (field primitives, `Result`, own-property helpers), `/entities` (entity list options), `/search` (search input) and `/casing` (the snake_case rule of wire keys, for tests). It depends on `zod` alone, which a test enforces on every entry: the SDK installs it and nothing of the server. The server side imports these modules from here, never a copy.
 - `packages/core` (`@liasse/core`): everything else on the server side. No barrel: import a subpath such as `@liasse/core/config` or `@liasse/core/db`, each declared in `exports` of its `package.json`.
 - `packages/mcp` (`@liasse/mcp`): the MCP server.
-- `packages/sdk` (`@liasse/sdk`): the TypeScript client.
+- `packages/sdk` (`@liasse/sdk`): the TypeScript client. It depends on `@liasse/contract` and `zod` only.
 - `eval` (`@liasse/eval`, private): the public evaluation set. A synthetic corpus of 50 documents with its ground truth, 20 reference questions, the generator that writes them, the scoring functions and the regression harness, which runs the server of `@liasse/server/runtime` on a throwaway database; see [`eval/README.md`](eval/README.md). Nothing of the application depends on it.
 - `docs/spec.md`: the design.
 
@@ -49,11 +50,10 @@ Inside `packages/core/src`, one directory per concern. A new concern gets its ow
 | Directory        | Content                                                                                             |
 | ---------------- | --------------------------------------------------------------------------------------------------- |
 | `api/`           | The use cases REST and MCP share, their schemas, `ApiError`, signed file URLs; knows no transport   |
-| `contract/`      | Zod schemas of the requests and answers of the API, shared by the server and the SDK; Zod only      |
 | `config/`        | The Zod schema that turns `process.env` into the typed, frozen configuration                        |
 | `consolidation/` | Type merges, field promotion, stabilization, cleanup, applying changes, `consolidate` job           |
 | `db/`            | Drizzle schema, `createDb`, the migration runner; SQL migrations are in `migrations/`               |
-| `domain/`        | Enumerations, ids, shared Zod schemas, limits                                                       |
+| `domain/`        | Ids, entity names, provenance, `StartupError`; enumerations and limits are in `@liasse/contract`    |
 | `embeddings/`    | `createEmbedder`; the local embedder runs an ONNX model in a child process, ended when idle         |
 | `entities/`      | Entity resolution, sensitive identifier masking, entity listing and merges                          |
 | `formats/`       | What a PDF, an image, a DOCX and an email are, from their bytes: one rule for ingestion and text    |
@@ -89,7 +89,7 @@ Tests sit next to the code they cover, as `*.test.ts`. A helper that only the te
 
 ## Code rules
 
-- **Single source of truth.** Enumerations are `as const` arrays in `packages/core/src/domain/enums.ts`; Zod schemas and Postgres enums derive from them. Environment variables exist only in the schema of `packages/core/src/config`. Never copy a list of values, a schema or a constant: import it.
+- **Single source of truth.** Enumerations are `as const` arrays in `packages/contract/src/domain/enums.ts`; Zod schemas and Postgres enums derive from them. Environment variables exist only in the schema of `packages/core/src/config`. Never copy a list of values, a schema or a constant: import it.
 - **No provider SDK in feature code.** Depend on the ports in `@liasse/core/models`; adapters implement them.
 - **Functional and immutable.** Prefer expressions, `map`/`filter`/`reduce` and new values over mutation and imperative loops. Mark properties and parameters `readonly` (`readonly T[]`, `Readonly<...>`). Local state is acceptable when the alternative is less clear, for instance a sequential `for...of` over awaited steps.
 - **No `as` assertions.** Narrow with type guards, `in`, `instanceof` or a Zod parse. `as const` is allowed. Values that come from outside the process (environment, database catalog, HTTP, LLM output) are parsed with a schema, never asserted.

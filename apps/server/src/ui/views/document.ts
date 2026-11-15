@@ -1,4 +1,4 @@
-import type { DocumentView } from '@liasse/core/contract';
+import type { DocumentView } from '@liasse/contract';
 import { html } from 'hono/html';
 import { csrfField, documentPath, formatTime, type Markup, notice } from '../markup.ts';
 

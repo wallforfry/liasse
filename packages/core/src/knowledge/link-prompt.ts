@@ -1,6 +1,5 @@
+import { linkKindSchema, MAX_LINK_RATIONALE_LENGTH } from '@liasse/contract/domain';
 import { z } from 'zod';
-import { MAX_LINK_RATIONALE_LENGTH } from '../domain/limits.ts';
-import { linkKindSchema } from '../domain/schemas.ts';
 import { redactSensitiveIdentifiers } from '../entities/detect-sensitive.ts';
 import type { TextModel } from '../models/ports.ts';
 import { wrapUntrusted } from '../prompt/untrusted.ts';

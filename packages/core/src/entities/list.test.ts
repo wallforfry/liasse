@@ -1,10 +1,10 @@
+import { TOMBSTONE_STATUS } from '@liasse/contract/domain';
+import type { ListEntitiesOptions } from '@liasse/contract/entities';
 import { sql } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { TOMBSTONE_STATUS } from '../domain/enums.ts';
 import { ID_PREFIXES, newId } from '../domain/ids.ts';
 import { insertSyntheticDocument } from '../testing/fixtures.ts';
 import { createTestDatabase, type TestDatabase } from '../testing/test-database.ts';
-import type { ListEntitiesOptions } from './list-options.ts';
 import { getEntity, listEntities } from './list.ts';
 import { seedEntity, SYNTHETIC_IBAN } from './support.test-helper.ts';
 

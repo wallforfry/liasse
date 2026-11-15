@@ -1,7 +1,7 @@
+import { isPlainRecord, ownValue } from '@liasse/contract/registry';
 import { z } from 'zod';
 import type { JsonObject } from '../db/columns.ts';
 import { checkTypeFields, type FieldIssue, type TypeFields } from './fields.ts';
-import { isPlainRecord, ownValue } from './own.ts';
 import { valueSchemaForFields } from './values.ts';
 
 // JSON Schema ignores a keyword it does not know, so the definition travels with the

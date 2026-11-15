@@ -1,4 +1,4 @@
-import { err, ok, type Result } from '../registry/result.ts';
+import { err, ok, type Result } from '@liasse/contract/registry';
 
 type Checked<Value, Failure> = Result<Value, readonly Failure[]>;
 

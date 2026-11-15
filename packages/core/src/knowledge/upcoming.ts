@@ -1,17 +1,17 @@
-import { and, asc, eq, gte, inArray, lte, or, sql } from 'drizzle-orm';
-import { z } from 'zod';
-import type { Upcoming } from '../contract/knowledge.ts';
-import { documents } from '../db/schema/documents.ts';
-import { documentDates } from '../db/schema/knowledge.ts';
-import { docTypes } from '../db/schema/registry.ts';
+import type { Upcoming } from '@liasse/contract';
 import {
   DEFAULT_UPCOMING_LIMIT,
+  isoDateSchema,
+  keyDateKindSchema,
   MAX_QUERY_IN_VALUES,
   MAX_SLUG_LENGTH,
   MAX_UPCOMING_LIMIT,
-} from '../domain/limits.ts';
-import { keyDateKindSchema } from '../domain/schemas.ts';
-import { isoDateSchema } from '../domain/values.ts';
+} from '@liasse/contract/domain';
+import { and, asc, eq, gte, inArray, lte, or, sql } from 'drizzle-orm';
+import { z } from 'zod';
+import { documents } from '../db/schema/documents.ts';
+import { documentDates } from '../db/schema/knowledge.ts';
+import { docTypes } from '../db/schema/registry.ts';
 import { ofType } from '../search/filters.ts';
 import type { KnowledgeReadContext } from './context.ts';
 import {

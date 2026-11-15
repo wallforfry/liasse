@@ -44,6 +44,9 @@ importers:
       '@hono/node-server':
         specifier: ^2.1.8
         version: 2.1.8(hono@4.13.18)
+      '@liasse/contract':
+        specifier: workspace:*
+        version: link:../../packages/contract
       '@liasse/core':
         specifier: workspace:*
         version: link:../../packages/core
@@ -78,6 +81,9 @@ importers:
 
   eval:
     devDependencies:
+      '@liasse/contract':
+        specifier: workspace:*
+        version: link:../packages/contract
       '@liasse/core':
         specifier: workspace:*
         version: link:../packages/core
@@ -106,6 +112,12 @@ importers:
         specifier: ^4.6.7
         version: 4.6.7
 
+  packages/contract:
+    dependencies:
+      zod:
+        specifier: ^4.6.7
+        version: 4.6.7
+
   packages/core:
     dependencies:
       '@ai-sdk/anthropic':
@@ -126,6 +138,9 @@ importers:
       '@huggingface/transformers':
         specifier: ^4.3.2
         version: 4.3.2(@types/node@22.20.5)
+      '@liasse/contract':
+        specifier: workspace:*
+        version: link:../contract
       ai:
         specifier: ^7.0.173
         version: 7.0.173(zod@4.6.7)
@@ -163,6 +178,9 @@ importers:
 
   packages/mcp:
     dependencies:
+      '@liasse/contract':
+        specifier: workspace:*
+        version: link:../contract
       '@liasse/core':
         specifier: workspace:*
         version: link:../core
@@ -175,9 +193,9 @@ importers:
 
   packages/sdk:
     dependencies:
-      '@liasse/core':
+      '@liasse/contract':
         specifier: workspace:*
-        version: link:../core
+        version: link:../contract
       zod:
         specifier: ^4.6.7
         version: 4.6.7

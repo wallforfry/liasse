@@ -1,6 +1,6 @@
+import type { KeyDateKind } from '@liasse/contract/domain';
 import { eq } from 'drizzle-orm';
 import { documentDates } from '../db/schema/knowledge.ts';
-import type { KeyDateKind } from '../domain/enums.ts';
 import { redactSensitiveIdentifiers } from '../entities/detect-sensitive.ts';
 import type { EntityTransaction } from '../entities/entity-store.ts';
 import type { KnowledgeKeyDate, NoticePeriod } from './input.ts';

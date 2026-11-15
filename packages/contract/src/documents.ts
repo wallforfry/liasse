@@ -3,7 +3,7 @@ import {
   documentSourceSchema,
   documentStateSchema,
   liveDocumentStatusSchema,
-} from '../domain/schemas.ts';
+} from './domain/schemas.ts';
 
 const jsonObjectSchema = z.record(z.string(), z.unknown());
 

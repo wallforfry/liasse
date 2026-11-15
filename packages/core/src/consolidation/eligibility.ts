@@ -1,5 +1,5 @@
 import { isDeepStrictEqual } from 'node:util';
-import { ownValue } from '../registry/own.ts';
+import { ownValue } from '@liasse/contract/registry';
 import {
   findTypeById,
   type RegistryTransaction,

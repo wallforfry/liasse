@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { changeKindSchema, changeStatusSchema } from '../domain/schemas.ts';
+import { changeKindSchema, changeStatusSchema } from './domain/schemas.ts';
 import { untrustedText } from './knowledge.ts';
 
 // A change of consolidation. Its rationale was written by a model from documents, and its

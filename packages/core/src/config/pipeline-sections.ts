@@ -1,6 +1,9 @@
+import {
+  autoApplyModeSchema,
+  DEFAULT_MAX_VISION_PAGES,
+  schemaLanguageSchema,
+} from '@liasse/contract/domain';
 import { z } from 'zod';
-import { DEFAULT_MAX_VISION_PAGES } from '../domain/limits.ts';
-import { autoApplyModeSchema, schemaLanguageSchema } from '../domain/schemas.ts';
 import { baseUrl, decimal, integer, text } from './fields.ts';
 
 const MEBIBYTE = 1024 * 1024;

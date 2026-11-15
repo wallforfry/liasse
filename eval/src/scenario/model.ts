@@ -1,4 +1,4 @@
-import type { KeyDateKind, LanguageCode, LinkKind, Money } from '@liasse/core/domain';
+import type { KeyDateKind, LanguageCode, LinkKind, Money } from '@liasse/contract/domain';
 import type { PaperName } from '../render/paper.ts';
 import type {
   CoreTruth,

@@ -1,5 +1,5 @@
+import { err, ok, type Result } from '@liasse/contract/registry';
 import { ID_PREFIXES, isId } from '../domain/ids.ts';
-import { err, ok, type Result } from '../registry/result.ts';
 import type { KnowledgeWriteContext } from './context.ts';
 import {
   selfSubjectMerge,

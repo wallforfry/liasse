@@ -26,6 +26,7 @@
     "typecheck": "tsc --noEmit -p tsconfig.json"
   },
   "devDependencies": {
+    "@liasse/contract": "workspace:*",
     "@liasse/core": "workspace:*",
     "@liasse/sdk": "workspace:*",
     "@liasse/server": "workspace:*",

@@ -1,9 +1,9 @@
 import { createHash } from 'node:crypto';
+import { languageCodeSchema } from '@liasse/contract/domain';
 import { and, asc, eq } from 'drizzle-orm';
 import type { Database } from '../db/client.ts';
 import { chunks, documentPages, documents, isLiveDocument } from '../db/schema/documents.ts';
 import { docTypes } from '../db/schema/registry.ts';
-import { languageCodeSchema } from '../domain/values.ts';
 import { batchesOf } from '../models/batching.ts';
 import type { Embedder, Embedding } from '../models/ports.ts';
 import { chunkingFor } from './chunk-budget.ts';

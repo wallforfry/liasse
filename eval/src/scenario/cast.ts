@@ -1,4 +1,4 @@
-import type { EntityKind } from '@liasse/core/domain';
+import type { EntityKind } from '@liasse/contract/domain';
 import {
   frenchIban,
   seededDigits,

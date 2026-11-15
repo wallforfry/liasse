@@ -1,5 +1,5 @@
+import { MAX_CHANGE_RATIONALE_LENGTH, MAX_FIELDS_PER_TYPE } from '@liasse/contract/domain';
 import { z } from 'zod';
-import { MAX_CHANGE_RATIONALE_LENGTH, MAX_FIELDS_PER_TYPE } from '../domain/limits.ts';
 import { redactSensitiveIdentifiers } from '../entities/detect-sensitive.ts';
 import type { TextModel } from '../models/ports.ts';
 import { UNTRUSTED_RULE } from '../pipeline/prompts/classification.ts';

@@ -1,8 +1,8 @@
+import type { LinkKind, SubjectKind } from '@liasse/contract/domain';
 import { eq } from 'drizzle-orm';
 import type { Database } from '../db/client.ts';
 import { documentDates, documentLinks, facts, subjects } from '../db/schema/knowledge.ts';
 import { documents } from '../db/schema/documents.ts';
-import type { LinkKind, SubjectKind } from '../domain/enums.ts';
 import { TEST_IDENTIFIER_KEY } from '../entities/support.test-helper.ts';
 import type { Embedding } from '../models/ports.ts';
 import { createFakeTextModel } from '../testing/fake-text-model.ts';

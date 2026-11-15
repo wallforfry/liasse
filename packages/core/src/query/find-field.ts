@@ -1,7 +1,13 @@
-import { MAX_QUERY_LISTED_FIELDS } from '../domain/limits.ts';
-import { err, ok, type Result } from '../registry/result.ts';
+import { MAX_QUERY_LISTED_FIELDS } from '@liasse/contract/domain';
+import {
+  cut,
+  type QueryError,
+  type QueryLocation,
+  quoted,
+  type UnknownField,
+} from '@liasse/contract/query';
+import { err, ok, type Result } from '@liasse/contract/registry';
 import { editDistance, isClose, rankByDistance } from './closest.ts';
-import { cut, type QueryError, type QueryLocation, quoted, type UnknownField } from './errors.ts';
 import type { QueryField } from './fields.ts';
 
 const TYPE_FIELDS_PREFIX = 'fields.';

@@ -1,8 +1,8 @@
+import type { ChangeKind, ChangeStatus } from '@liasse/contract/domain';
 import { eq, sql } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { facts } from '../db/schema/knowledge.ts';
 import { typeChanges } from '../db/schema/registry.ts';
-import type { ChangeKind, ChangeStatus } from '../domain/enums.ts';
 import { ID_PREFIXES, newId } from '../domain/ids.ts';
 import { atSimilarity, SYNTHETIC_IBAN } from '../entities/support.test-helper.ts';
 import { deleteDocument } from '../ingest/delete-document.ts';

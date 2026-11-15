@@ -1,6 +1,6 @@
+import { SUPPORTED_MIMES, type SupportedMime } from '@liasse/contract/domain';
 import { describe, expect, it } from 'vitest';
 import { z } from 'zod';
-import { SUPPORTED_MIMES, type SupportedMime } from '../domain/enums.ts';
 import { createFakeVisionModel } from '../testing/fake-vision-model.ts';
 import { buildSyntheticPng } from '../testing/synthetic-png.ts';
 import { extractText } from './extract-text.ts';

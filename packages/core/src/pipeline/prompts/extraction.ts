@@ -1,13 +1,13 @@
 import {
   KEY_DATE_KINDS,
+  MAX_FACTS_PER_DOCUMENT,
   NOTICE_PERIOD_UNITS,
   type SchemaLanguage,
   SUBJECT_KINDS,
-} from '../../domain/enums.ts';
-import { MAX_FACTS_PER_DOCUMENT } from '../../domain/limits.ts';
+} from '@liasse/contract/domain';
+import type { FieldDefinition } from '@liasse/contract/registry';
 import { wrapUntrusted } from '../../prompt/untrusted.ts';
 import type { TypeFields } from '../../registry/fields.ts';
-import type { FieldDefinition } from '../../registry/primitives.ts';
 import { MAX_QUOTE_LENGTH } from '../extract/extraction-schema.ts';
 import { MIN_FACT_QUOTE_LENGTH } from '../extract/support.ts';
 import type { PageText } from '../token-budget.ts';

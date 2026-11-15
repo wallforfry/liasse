@@ -6,13 +6,13 @@ import {
   moneySchema,
   periodSchema,
   supportedMimeSchema,
-} from '@liasse/core/domain';
+} from '@liasse/contract/domain';
 import {
-  type CORE_FIELDS,
   fieldDefinitionSchema,
   type FieldPrimitive,
   fieldValueSchema,
-} from '@liasse/core/registry';
+} from '@liasse/contract/registry';
+import type { CORE_FIELDS } from '@liasse/core/registry';
 import { PAGE_TEXT_METHODS } from '@liasse/core/text';
 import { z } from 'zod';
 import { expectationSchema, keySchema, requirementSchema } from './expectation.ts';

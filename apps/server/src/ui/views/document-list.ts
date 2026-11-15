@@ -1,5 +1,5 @@
-import { type DocumentList, PRIVATE_FILTERS, type PrivateFilter } from '@liasse/core/contract';
-import { liveDocumentStatusSchema } from '@liasse/core/domain';
+import { type DocumentList, PRIVATE_FILTERS, type PrivateFilter } from '@liasse/contract';
+import { liveDocumentStatusSchema } from '@liasse/contract/domain';
 import { html } from 'hono/html';
 import { documentPath, formatTime, type Markup } from '../markup.ts';
 

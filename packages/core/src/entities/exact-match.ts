@@ -1,5 +1,5 @@
+import type { EntityMatchRule } from '@liasse/contract/domain';
 import { entityNameKey } from '../domain/entity-name.ts';
-import type { EntityMatchRule } from '../domain/enums.ts';
 import type { Entity } from './entity-store.ts';
 import {
   haveConflictingIdentifiers,

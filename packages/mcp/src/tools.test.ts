@@ -2,7 +2,7 @@ import {
   DEFAULT_TIMELINE_LIMIT,
   MAX_QUERY_ENTITY_NAME_LENGTH,
   MAX_QUERY_ENTITY_NAMES,
-} from '@liasse/core/domain';
+} from '@liasse/contract/domain';
 import { syntheticPdf } from '@liasse/core/testing';
 import type { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';

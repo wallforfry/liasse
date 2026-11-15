@@ -1,5 +1,3 @@
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { entities } from '../db/schema/registry.ts';
 import {
   DEFAULT_QUERY_TIMEOUT_MILLISECONDS,
   MAX_QUERY_CONDITIONS,
@@ -10,7 +8,9 @@ import {
   MAX_QUERY_REPORTED_PROBLEMS,
   MAX_QUERY_SUGGESTED_NAMES,
   MAX_QUERY_SUGGESTION_NAMES,
-} from '../domain/limits.ts';
+} from '@liasse/contract/domain';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { entities } from '../db/schema/registry.ts';
 import { insertSyntheticDocument } from '../testing/fixtures.ts';
 import { createTestDatabase, type TestDatabase } from '../testing/test-database.ts';
 import { runQuery } from './run.ts';

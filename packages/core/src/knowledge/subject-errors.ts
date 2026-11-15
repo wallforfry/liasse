@@ -1,4 +1,4 @@
-import type { SubjectKind } from '../domain/enums.ts';
+import type { SubjectKind } from '@liasse/contract/domain';
 
 interface Failure<Code extends string> {
   readonly code: Code;

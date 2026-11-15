@@ -1,7 +1,7 @@
+import type { EntityKind } from '@liasse/contract/domain';
 import { and, asc, cosineDistance, eq, inArray, isNotNull, sql } from 'drizzle-orm';
 import type { Database } from '../db/client.ts';
 import { entities } from '../db/schema/registry.ts';
-import type { EntityKind } from '../domain/enums.ts';
 import type { Embedding } from '../models/ports.ts';
 import {
   parseIdentifiersColumn,

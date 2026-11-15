@@ -1,4 +1,4 @@
-import type { EntityKind } from '../domain/enums.ts';
+import type { EntityKind } from '@liasse/contract/domain';
 
 interface Failure<Code extends string> {
   readonly code: Code;

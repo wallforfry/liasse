@@ -1,7 +1,6 @@
+import { CURRENCY_CODES, isoDateSchema } from '@liasse/contract/domain';
 import { z } from 'zod';
-import { CURRENCY_CODES } from '../../domain/currencies.ts';
 import { normalizeEntityName, significantWords } from '../../domain/entity-name.ts';
-import { isoDateSchema } from '../../domain/values.ts';
 import { dateParts, datesIn, type StatedDates } from './quote-dates.ts';
 import { numbersIn, statesNumber } from './quote-numbers.ts';
 import { normalizeForQuote } from './quotes.ts';

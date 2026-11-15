@@ -1,4 +1,4 @@
-import type { Result } from '../registry/result.ts';
+import type { Result } from '@liasse/contract/registry';
 
 /**
  * A change the registry, the entities or the subjects refuse as they are now: thrown
