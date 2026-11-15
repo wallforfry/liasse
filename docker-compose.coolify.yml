@@ -1,0 +1,47 @@
+# Coolify: a Docker Compose application built from this repository. Coolify generates every
+# SERVICE_* value once and keeps it across deployments; SERVICE_URL_LIASSE_8080 routes the
+# domain set on the `liasse` service to port 8080. Fill LLM_PROVIDER, LLM_API_KEY, TEXT_MODEL
+# and VISION_MODEL in Coolify; any other variable of `.env.example` can be added there too.
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    environment:
+      POSTGRES_USER: liasse
+      POSTGRES_PASSWORD: ${SERVICE_PASSWORD_64_POSTGRES}
+      POSTGRES_DB: liasse
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U liasse -d liasse']
+      interval: 5s
+      timeout: 3s
+      retries: 30
+
+  liasse:
+    build: .
+    # Longer than the server's 30 s shutdown grace period (Docker kills after 10 s by default).
+    stop_grace_period: 40s
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      SERVICE_URL_LIASSE_8080:
+      PUBLIC_URL: ${SERVICE_URL_LIASSE}
+      DATABASE_URL: postgres://liasse:${SERVICE_PASSWORD_64_POSTGRES}@postgres:5432/liasse
+      HOST: 0.0.0.0
+      PORT: 8080
+      STORAGE_PATH: /data/files
+      EMBEDDING_CACHE_DIR: /data/models
+      API_TOKENS: ${SERVICE_BASE64_64_APITOKEN}
+      FILE_URL_SECRET: ${SERVICE_BASE64_64_FILEURLSECRET}
+      UI_PASSWORD: ${SERVICE_PASSWORD_64_UI}
+      LLM_PROVIDER: ${LLM_PROVIDER:?}
+      LLM_API_KEY: ${LLM_API_KEY}
+      TEXT_MODEL: ${TEXT_MODEL:?}
+      VISION_MODEL: ${VISION_MODEL:?}
+    volumes:
+      - liasse-data:/data
+
+volumes:
+  postgres-data:
+  liasse-data:
