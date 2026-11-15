@@ -36,10 +36,10 @@ describe('the auth server', () => {
 
   it('creates the bootstrap account on an empty table, and never again', async () => {
     const server = auth();
-    expect(await bootstrapAccount(server, TEST_ACCOUNT)).toBe('created');
+    expect(await bootstrapAccount(server, database.db, TEST_ACCOUNT)).toBe('created');
     const other = { email: 'other@example.com', password: 'synthetic-other-password' };
-    expect(await bootstrapAccount(server, other)).toBe('kept');
-    expect(await bootstrapAccount(server, TEST_ACCOUNT)).toBe('kept');
+    expect(await bootstrapAccount(server, database.db, other)).toBe('kept');
+    expect(await bootstrapAccount(server, database.db, TEST_ACCOUNT)).toBe('kept');
     const users = await database.db.select().from(authUsers);
     expect(users.map(({ email }) => email)).toEqual([TEST_ACCOUNT.email]);
     const accounts = await database.db.select().from(authAccounts);
@@ -50,6 +50,29 @@ describe('the auth server', () => {
     ).rejects.toThrow();
     const { user } = await server.api.signInEmail({ body: TEST_ACCOUNT });
     expect(isId('usr', user.id)).toBe(true);
+  });
+
+  it('lets two instances bootstrap one empty database together: one account, no error', async () => {
+    const empty = await createTestDatabase();
+    try {
+      const instance = () =>
+        createAuth({
+          db: empty.db,
+          secret: TEST_AUTH_SECRET,
+          publicUrl: PUBLIC_URL,
+          sessionTtlMs: 60_000,
+          report: () => undefined,
+        });
+      const outcomes = await Promise.all(
+        Array.from({ length: 4 }, async () => bootstrapAccount(instance(), empty.db, TEST_ACCOUNT)),
+      );
+      expect(outcomes.toSorted()).toEqual(['created', 'kept', 'kept', 'kept']);
+      expect(await empty.db.select({ email: authUsers.email }).from(authUsers)).toEqual([
+        { email: TEST_ACCOUNT.email },
+      ]);
+    } finally {
+      await empty.dispose();
+    }
   });
 
   it('refuses public sign-up', async () => {

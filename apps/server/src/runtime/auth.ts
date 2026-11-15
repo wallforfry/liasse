@@ -29,7 +29,7 @@ export const startAuth = async ({ db, config, logger }: StartAuthOptions): Promi
   });
   const { bootstrap } = config.auth;
   if (bootstrap !== undefined) {
-    logger.notice(BOOTSTRAP_NOTICES[await bootstrapAccount(auth, bootstrap)]);
+    logger.notice(BOOTSTRAP_NOTICES[await bootstrapAccount(auth, db, bootstrap)]);
   }
   return auth;
 };

@@ -28,7 +28,7 @@ export const createTestAuth = async (
     sessionTtlMs,
     report: () => undefined,
   });
-  await bootstrapAccount(auth, TEST_ACCOUNT);
+  await bootstrapAccount(auth, db, TEST_ACCOUNT);
   return auth;
 };
 
