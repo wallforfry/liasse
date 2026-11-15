@@ -54,6 +54,7 @@ export const startFront = async ({
     api,
     auth: await startAuth({ db: api.db, config, logger }),
     publicUrl: config.server.publicUrl,
+    trustedProxies: config.server.trustedProxies,
     assets,
     ping,
     logger,
