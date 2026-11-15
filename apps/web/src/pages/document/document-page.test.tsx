@@ -1,4 +1,4 @@
-import { screen } from '@testing-library/react';
+import { screen, waitFor } from '@testing-library/react';
 import { userEvent } from '@testing-library/user-event';
 import { describe, expect, it } from 'vitest';
 import { fakeServer, json, renderApp } from '../../test/render.test-helper.tsx';
@@ -42,6 +42,41 @@ describe('the document page', () => {
     expect(await screen.findByText(`Text ${MARKUP}`)).toBeInTheDocument();
     expect(container.querySelector('b')).toBeNull();
     expect(container.querySelector('img[src="x"]')).toBeNull();
+  });
+
+  it('corrects the type with one chosen from the registry, found by an alias', async () => {
+    const types = {
+      types: [
+        { slug: 'note', aliases: [], description: 'A note.' },
+        { slug: 'invoice', aliases: ['bill'], description: 'A bill to pay.' },
+      ].map((type) => ({
+        ...type,
+        parent_slug: null,
+        version: 1,
+        status: 'stable',
+        fields: {},
+        document_count: 0,
+      })),
+    };
+    const server = fakeServer(
+      (request) => (request.path.startsWith('/types') ? json(types) : undefined),
+      (request) =>
+        request.path.startsWith('/documents/doc_01HOSTILE') ? json(HOSTILE_DOCUMENT) : undefined,
+    );
+    renderApp('/documents/doc_01HOSTILE', server.fetch);
+    const user = userEvent.setup();
+    await user.click(await screen.findByRole('tab', { name: 'Correct' }));
+    await user.click(screen.getByRole('combobox', { name: 'Type' }));
+    await user.type(screen.getByPlaceholderText('Search the types...'), 'bill');
+    expect(screen.queryByRole('option', { name: /^note/ })).toBeNull();
+    await user.click(await screen.findByRole('option', { name: /^invoice/ }));
+    expect(screen.getByRole('combobox', { name: 'Type' })).toHaveTextContent('invoice');
+    await user.click(screen.getByRole('button', { name: 'Save the correction' }));
+    await waitFor(() => {
+      expect(server.requests.find(({ method }) => method === 'PATCH')?.body).toBe(
+        JSON.stringify({ type: 'invoice' }),
+      );
+    });
   });
 
   it('shows a PNG original inline from the file route', async () => {
