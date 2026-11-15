@@ -9,6 +9,12 @@ export {
   UI_CONSENT_PATH,
   UI_LOGIN_PATH,
 } from './create-auth.ts';
+export { listMcpConnections, revokeMcpConnection } from './mcp-connections.ts';
+export {
+  createMcpGrantCheck,
+  MCP_ACCESS_TOKEN_TTL_SECONDS,
+  type McpGrantCheck,
+} from './mcp-grant.ts';
 export { MCP_PATH, mcpResourceOf } from './mcp-resource.ts';
 export {
   type AccessTokenCheck,

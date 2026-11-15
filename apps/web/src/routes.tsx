@@ -2,6 +2,7 @@ import { Navigate, type RouteObject } from 'react-router';
 import { AppLayout } from './layout/app-layout.tsx';
 import { RequireSession } from './layout/require-session.tsx';
 import { ApiKeysPage } from './pages/account/api-keys-page.tsx';
+import { McpConnectionsPage } from './pages/account/mcp-connections-page.tsx';
 import { ChangePasswordPage } from './pages/account/change-password-page.tsx';
 import { ChangesPage } from './pages/changes/changes-page.tsx';
 import { ConsentPage } from './pages/consent-page.tsx';
@@ -58,6 +59,7 @@ export const ROUTES: RouteObject[] = [
           { path: '/types/:slug', element: <TypePage /> },
           { path: '/changes', element: <ChangesPage /> },
           { path: '/account/api-keys', element: <ApiKeysPage /> },
+          { path: '/account/mcp-connections', element: <McpConnectionsPage /> },
           { path: '/account/password', element: <ChangePasswordPage /> },
           { path: '*', element: <NotFoundPage /> },
         ],

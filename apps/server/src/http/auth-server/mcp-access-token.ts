@@ -1,4 +1,4 @@
-import { type Auth, createAccessTokenCheck } from '@liasse/core/auth';
+import { type Auth, createAccessTokenCheck, type McpGrantCheck } from '@liasse/core/auth';
 import type { Credential } from '../auth.ts';
 
 /** Where the protected resource metadata of `resource` is served (RFC 9728, section 3.1). */
@@ -16,8 +16,13 @@ export const mcpChallenge = (resource: string): string =>
  * request URL a DPoP proof is checked against is rebuilt on `PUBLIC_URL`: behind a proxy
  * the URL the server sees is not the one the client called.
  */
-export const mcpAccessToken = (auth: Auth, resource: string, publicOrigin: string): Credential => {
-  const check = createAccessTokenCheck(auth, resource);
+export const mcpAccessToken = (
+  auth: Auth,
+  grantIsLive: McpGrantCheck,
+  resource: string,
+  publicOrigin: string,
+): Credential => {
+  const check = createAccessTokenCheck(auth, resource, grantIsLive);
   return async (context) => {
     const { pathname, search } = new URL(context.req.url);
     return check({
