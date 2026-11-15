@@ -256,11 +256,30 @@ describe('web UI actions', () => {
       );
       expect((await session.post(`/ui/changes/${gone}`, { decision: 'maybe' })).status).toBe(400);
       // Without the CSRF token of the session, nothing is decided.
+      const waiting = await seed(created.value.id, 'Still waiting.');
       const forged = await app.request(
-        `/ui/changes/${applied}`,
-        formRequest({ csrf: 'forged', decision: 'reject' }, session.cookie),
+        `/ui/changes/${waiting}`,
+        formRequest({ csrf: 'forged', decision: 'apply' }, session.cookie),
       );
       expect(forged.status).toBe(403);
+      const [untouched] = await db
+        .select({ status: typeChanges.status, decidedAt: typeChanges.decidedAt })
+        .from(typeChanges)
+        .where(eq(typeChanges.id, waiting));
+      expect(untouched).toEqual({ status: 'pending', decidedAt: null });
+    });
+
+    it('answers a page with a 404 for a change it does not know', async () => {
+      const { db } = harness.database;
+      const { session } = await signedIn({
+        features: { applyChange: (id, decision) => applyChange({ db }, id, decision) },
+      });
+      const response = await session.post('/ui/changes/chg_01JC0000000000000000000000', {
+        decision: 'apply',
+      });
+      expect(response.status).toBe(404);
+      expect(response.headers.get('Content-Type')).toMatch(/^text\/html/);
+      expect(await response.text()).toContain('No change has this id.');
     });
   });
 });

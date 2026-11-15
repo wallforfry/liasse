@@ -75,6 +75,18 @@ export const hasChange = async (
     ),
   )) > 0;
 
+/** The kind of a change, read without a lock: it never changes once written. */
+export const findChangeKind = async (
+  reader: ChangeReader,
+  id: string,
+): Promise<ChangeKind | undefined> => {
+  const [row] = await reader
+    .select({ kind: typeChanges.kind })
+    .from(typeChanges)
+    .where(eq(typeChanges.id, id));
+  return row?.kind;
+};
+
 /** The row is locked until the transaction ends: one decision per change. */
 export const lockChange = async (
   tx: ChangeTransaction,
