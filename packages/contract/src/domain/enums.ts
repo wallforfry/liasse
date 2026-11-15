@@ -36,6 +36,30 @@ export const DOCUMENT_JOB_FAILURE_CODES = {
 export const CLASSIFICATION_OUTCOMES = ['existing', 'new', 'fallback', 'untyped'] as const;
 export type ClassificationOutcome = (typeof CLASSIFICATION_OUTCOMES)[number];
 
+// Where the text of one page comes from: the file itself, or the vision model.
+export const PAGE_TEXT_METHODS = ['native', 'vision'] as const;
+export type PageTextMethod = (typeof PAGE_TEXT_METHODS)[number];
+
+// For a whole document, `mixed` when its pages do not all share one method.
+export const TEXT_EXTRACTION_METHODS = [...PAGE_TEXT_METHODS, 'mixed'] as const;
+export type TextExtractionMethod = (typeof TEXT_EXTRACTION_METHODS)[number];
+
+// The part of the processing an event of the log of a document is about. A
+// re-indexing is an `indexing`; a re-extraction has its own stage, since it runs on a
+// document already indexed.
+export const PROCESSING_STAGES = [
+  'text',
+  'classification',
+  'extraction',
+  'reextraction',
+  'indexing',
+] as const;
+export type ProcessingStage = (typeof PROCESSING_STAGES)[number];
+
+// `retrying`: the attempt failed and its job runs again. `failed`: it will not.
+export const PROCESSING_OUTCOMES = ['succeeded', 'retrying', 'failed'] as const;
+export type ProcessingOutcome = (typeof PROCESSING_OUTCOMES)[number];
+
 export const DOCUMENT_SOURCES = ['watch', 'api', 'mcp'] as const;
 export type DocumentSource = (typeof DOCUMENT_SOURCES)[number];
 

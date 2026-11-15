@@ -1,4 +1,5 @@
 export * from './auth.ts';
+export * from './document-events.ts';
 export * from './documents.ts';
 export * from './enums.ts';
 export * from './jobs.ts';

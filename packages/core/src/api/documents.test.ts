@@ -1,10 +1,13 @@
 import { buffer } from 'node:stream/consumers';
 import { eq } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { documentEvents } from '../db/schema/document-events.ts';
 import { documents } from '../db/schema/documents.ts';
+import { type DocumentEventInput, recordDocumentEvent } from '../processing-log/record.ts';
 import { CORPUS } from '../search/corpus.fixture.ts';
 import { parseStorageKey } from '../storage/key.ts';
 import { syntheticPdf } from '../testing/synthetic-files.ts';
+import { listDocumentEvents } from './document-events.ts';
 import { openDocumentFile, removeDocument } from './document-file.ts';
 import { ApiError } from './errors.ts';
 import { getDocument } from './get-document.ts';
@@ -206,6 +209,74 @@ describe('documents of the API', () => {
           code: 'document_not_found',
         });
       }
+    });
+  });
+
+  describe('listDocumentEvents', () => {
+    const log = (documentId: string, event: DocumentEventInput) =>
+      harness.database.db.transaction((tx) => recordDocumentEvent(tx, documentId, event));
+
+    it('answers the log of a document, private ones included, oldest first', async () => {
+      const { id } = await upload('logged privately', { private: true });
+      await log(id, {
+        stage: 'text',
+        outcome: 'retrying',
+        status: 'received',
+        attempt: 1,
+        maxAttempts: 3,
+        errorCode: 'text_process_timeout',
+        errorName: 'TextProcessError',
+        retryable: true,
+      });
+      await log(id, {
+        stage: 'text',
+        outcome: 'succeeded',
+        status: 'extracted',
+        model: 'synthetic-vision',
+        details: { text_method: 'vision', pages: 2 },
+      });
+      const { events } = await listDocumentEvents(harness.context, id);
+      for (const event of events) {
+        expect(event.id).toMatch(/^evt_/);
+        expect(Date.parse(event.occurred_at)).not.toBeNaN();
+      }
+      expect(events.map(({ id: _, occurred_at: __, ...event }) => event)).toEqual([
+        {
+          stage: 'text',
+          outcome: 'retrying',
+          status: 'received',
+          attempt: 1,
+          max_attempts: 3,
+          error_code: 'text_process_timeout',
+          error_name: 'TextProcessError',
+          retryable: true,
+          model: null,
+          details: {},
+        },
+        expect.objectContaining({
+          outcome: 'succeeded',
+          attempt: null,
+          model: 'synthetic-vision',
+          details: { text_method: 'vision', pages: 2 },
+        }),
+      ]);
+    });
+
+    it('does not find an unknown or a deleted document, whose log is gone with it', async () => {
+      const { id } = await upload('log after deletion');
+      await log(id, { stage: 'text', outcome: 'succeeded' });
+      await removeDocument(harness.context, id);
+      for (const missing of [id, 'doc_01JC0000000000000000000000']) {
+        expect(await failureOf(listDocumentEvents(harness.context, missing))).toMatchObject({
+          kind: 'not_found',
+          code: 'document_not_found',
+        });
+      }
+      const left = await harness.database.db
+        .select()
+        .from(documentEvents)
+        .where(eq(documentEvents.documentId, id));
+      expect(left).toEqual([]);
     });
   });
 

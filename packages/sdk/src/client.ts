@@ -7,6 +7,8 @@ import {
   type DescribeTypesOptions,
   type DocumentCorrection,
   type DocumentList,
+  type DocumentEventList,
+  documentEventListSchema,
   documentListSchema,
   documentSchema,
   type DocumentView,
@@ -65,6 +67,8 @@ export interface LiasseClient {
   readonly listDocuments: (options?: ListDocumentsOptions) => Promise<DocumentList>;
   /** A private document too: naming it is asking for it. */
   readonly getDocument: (id: string, options?: GetDocumentOptions) => Promise<DocumentView>;
+  /** The processing log of a document, oldest first: why its processing failed, if it did. */
+  readonly listDocumentEvents: (id: string) => Promise<DocumentEventList>;
   readonly downloadFile: (id: string) => Promise<DownloadedFile>;
   readonly correctDocument: (id: string, correction: DocumentCorrection) => Promise<DocumentView>;
   /** Queues a failed document for processing again; refused for any other status. */
@@ -112,6 +116,7 @@ export const createLiasseClient = (options: ClientOptions): LiasseClient => {
       ),
     listDocuments: async (query = {}) => get(documentListSchema, '/documents', query),
     getDocument: async (id, query = {}) => get(documentSchema, documentPath(id), query),
+    listDocumentEvents: async (id) => get(documentEventListSchema, `${documentPath(id)}/events`),
     downloadFile: async (id) => downloadedFile(await send({ path: `${documentPath(id)}/file` })),
     correctDocument: async (id, correction) =>
       parseJson(

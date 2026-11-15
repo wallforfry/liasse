@@ -13,6 +13,7 @@ import { pollWhileProcessing } from '../../lib/processing.ts';
 import { CorrectionForm } from './correction-form.tsx';
 import { DeleteDocument } from './delete-document.tsx';
 import { DocumentDetails, DocumentText, OriginalFile, ValueTable } from './document-parts.tsx';
+import { ProcessingLog } from './processing-log.tsx';
 import { RetryDocument } from './retry-document.tsx';
 
 export const DocumentPage = () => {
@@ -63,6 +64,7 @@ export const DocumentPage = () => {
           <TabsTrigger value="details">Details</TabsTrigger>
           <TabsTrigger value="text">Text</TabsTrigger>
           <TabsTrigger value="file">File</TabsTrigger>
+          <TabsTrigger value="processing">Processing</TabsTrigger>
           <TabsTrigger value="correct">Correct</TabsTrigger>
         </TabsList>
         <TabsContent value="details" className="grid gap-4 lg:grid-cols-2">
@@ -93,6 +95,13 @@ export const DocumentPage = () => {
         </TabsContent>
         <TabsContent value="file">
           <OriginalFile document={view} />
+        </TabsContent>
+        <TabsContent value="processing">
+          <Card>
+            <CardContent>
+              <ProcessingLog document={view} />
+            </CardContent>
+          </Card>
         </TabsContent>
         <TabsContent value="correct">
           <CorrectionForm key={view.updated_at} document={view} />

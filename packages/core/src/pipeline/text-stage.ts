@@ -2,6 +2,7 @@ import { supportedMimeSchema } from '@liasse/contract/domain';
 import { eq } from 'drizzle-orm';
 import { documentPages, documents } from '../db/schema/documents.ts';
 import { getDocumentFile } from '../ingest/document-file.ts';
+import { recordDocumentEvent } from '../processing-log/record.ts';
 import type { ExtractedText } from '../text/types.ts';
 import { type AttachmentCounts, ingestAttachments } from './attachments.ts';
 import type { ExtractDocumentText, PipelineDeps } from './deps.ts';
@@ -36,6 +37,18 @@ const storeText = (
         }),
       })
       .where(eq(documents.id, documentId));
+    await recordDocumentEvent(tx, documentId, {
+      stage: 'text',
+      outcome: 'succeeded',
+      status: 'extracted',
+      ...(visionModel === undefined ? {} : { model: visionModel }),
+      details: {
+        text_method: method,
+        pages: pages.length,
+        attachments_ingested: attachments.ingested,
+        attachments_skipped: attachments.skipped,
+      },
+    });
   });
 
 /**
