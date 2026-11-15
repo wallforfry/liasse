@@ -154,7 +154,7 @@ or `"decision": "new"` with `new_type` = `{slug, description, parent_slug, field
 
 **Confidence.** A document's confidence is the minimum of the classification confidence and the mean confidence of the filled core fields. A list field such as `key_dates` counts as one field, by the mean of its items. A core value that was rejected counts as a field with a confidence of 0, a core value corrected by hand with 1, and a document with no core value has a confidence of 0. Below `CONFIDENCE_THRESHOLD`, it moves to `needs_review` but stays indexed and queryable; so does a document that got the closest type, or none, because a new type was refused or over quota.
 
-**Limits.** Text extraction runs in a child process ended at 768 MiB of resident memory or 120 s of CPU time (`text_memory_limit`, `text_cpu_limit`), or after five minutes without a word to the server while no vision call is pending (`text_process_timeout`, retried). It gets only the environment variables Node and poppler need. One extraction call carries about 60,000 tokens of the document (240,000 characters); a longer document is cut there and the cut is recorded (`provenance["@pipeline"].extraction.truncated`). A `process_document` job runs at most 3 times, each model call making up to 3 provider attempts; a document whose job will not run again, whatever stopped it (an error at the last attempt, or a worker that died during it), ends `failed` with a short code in `error`, never a message. A re-extraction that never succeeds leaves the document indexed, flagged `needs_review` with `reextraction_failed`.
+**Limits.** Text extraction runs in a child process ended at 768 MiB of resident memory or 120 s of CPU time (`text_memory_limit`, `text_cpu_limit`), or after five minutes without a word to the server while no vision call is pending (`text_process_timeout`, retried). It gets only the environment variables Node and poppler need. One extraction call carries about 60,000 tokens of the document (240,000 characters); a longer document is cut there and the cut is recorded (`provenance["@pipeline"].extraction.truncated`). A `process_document` job runs at most 3 times, each model call making up to 3 provider attempts; a document whose job will not run again, whatever stopped it (an error at the last attempt, or a worker that died during it), ends `failed` with a short code in `error`, never a message. A failed document is processed again from its stored file, from the start, by `retry_document` or `POST /documents/:id/retry`, which also gives the watched folder its tries back. A re-extraction that never succeeds leaves the document indexed, flagged `needs_review` with `reextraction_failed`.
 
 **Target cost**: 1 vision call per page for a scan, 3 text calls per document (classification, extraction, links), 1 embedding call per chunk.
 
@@ -358,7 +358,7 @@ Operators: `=`, `!=`, `<`, `<=`, `>`, `>=`, `in`, `contains`, `exists`. Aggregat
 
 ## MCP contract
 
-Fourteen tools, over Streamable HTTP (`/mcp`, an API key or an OAuth access token) and stdio (no authentication: the client is the process that started the server). All outputs are compact JSON; documents are referenced by ID and never returned in full unless explicitly requested.
+Fifteen tools, over Streamable HTTP (`/mcp`, an API key or an OAuth access token) and stdio (no authentication: the client is the process that started the server). All outputs are compact JSON; documents are referenced by ID and never returned in full unless explicitly requested.
 
 | Tool | Role | Main inputs | Output |
 | --- | --- | --- | --- |
@@ -369,6 +369,7 @@ Fourteen tools, over Streamable HTTP (`/mcp`, an API key or an OAuth access toke
 | `list_entities` | List or search entities | `query?`, `kind?` | Entities with aliases and document count |
 | `ingest` | Add a document | `file` (base64) or `url`, `filename`, `hint?`, `private?` | ID and status; asynchronous processing |
 | `get_status` | Track processing | `id` | Status and state, error if any |
+| `retry_document` | Process a failed document again | `id` | Status and state; refused unless `failed` |
 | `update_document` | Correct a document | `id`, `type?`, `core?`, `fields?`, `private?` | Updated document (provenance `manual`) |
 | `list_pending_changes` | See consolidation proposals | `kind?` | Pending changes with rationale, oldest first (at most 100, `truncated`) |
 | `apply_change` | Approve or reject | `id`, `decision` (`apply`/`reject`), `note?` | Result and number of documents to re-extract |
@@ -406,7 +407,7 @@ Fourteen tools, over Streamable HTTP (`/mcp`, an API key or an OAuth access toke
 
 A single Node binary, configured through environment variables, shipped as a multi-arch Docker image (amd64, arm64) with a `docker-compose.yml` including Postgres and pgvector.
 
-**REST API** (generated OpenAPI, same logic as MCP): `POST /documents`, `GET /documents`, `GET /documents/:id`, `GET /documents/:id/file`, `PATCH /documents/:id`, `DELETE /documents/:id`, `POST /search`, `POST /query`, `GET /types`, `GET /entities`, `GET /subjects`, `GET /upcoming`, `GET /changes`, `POST /changes/:id`, `GET /health`, `GET /metrics` (Prometheus), `GET /openapi.json`.
+**REST API** (generated OpenAPI, same logic as MCP): `POST /documents`, `GET /documents`, `GET /documents/:id`, `GET /documents/:id/file`, `PATCH /documents/:id`, `POST /documents/:id/retry`, `DELETE /documents/:id`, `POST /search`, `POST /query`, `GET /types`, `GET /entities`, `GET /subjects`, `GET /upcoming`, `GET /changes`, `POST /changes/:id`, `GET /health`, `GET /metrics` (Prometheus), `GET /openapi.json`.
 
 - **One logic, two transports.** The use cases live in `@liasse/core/api`; REST and MCP both call them, so a tool and its route answer the same thing.
 - **Wire casing.** Every key on the wire is snake_case: request parameters and bodies, REST answers, MCP tool arguments and results, error details, and the types of the SDK, which are those of the contract (`@liasse/contract`). Code may name things in camelCase inside the process; a use case maps them where it builds its answer. A test of the contract fails on any key of a request or an answer schema, or of the payload of a consolidation change, that is not snake_case.

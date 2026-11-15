@@ -1,6 +1,7 @@
-import { entities } from '@liasse/core/db';
+import { documents, entities, jobs } from '@liasse/core/db';
 import { syntheticPdf } from '@liasse/core/testing';
 import { createLiasseClient, LiasseApiError, type LiasseClient } from '@liasse/sdk';
+import { eq } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { type Listener, listen } from '../runtime/listen.ts';
 import {
@@ -151,6 +152,25 @@ describe('the TypeScript SDK', () => {
   it('serves the metrics and the OpenAPI document', async () => {
     expect(await client.metrics()).toContain('liasse_');
     expect((await client.openApi()).openapi).toMatch(/^3\./);
+  });
+
+  it('retries a failed document, and refuses one that did not fail', async () => {
+    const { id } = await client.uploadDocument({
+      file: new File([syntheticPdf('sdk retry')], 'retry.pdf'),
+    });
+    expect(await refusal(client.retryDocument(id))).toMatchObject({
+      status: 400,
+      code: 'document_not_failed',
+    });
+    await harness.database.db
+      .update(documents)
+      .set({ status: 'failed', error: 'model_provider_failed' })
+      .where(eq(documents.id, id));
+    await harness.database.db
+      .update(jobs)
+      .set({ status: 'failed' })
+      .where(eq(jobs.kind, 'process_document'));
+    expect(await client.retryDocument(id)).toMatchObject({ id, status: 'received', error: null });
   });
 
   it('deletes a document, after which it is not found', async () => {

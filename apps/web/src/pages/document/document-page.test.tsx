@@ -111,6 +111,31 @@ describe('the document page', () => {
     expect(await screen.findByText('The registry cannot be read.')).toBeInTheDocument();
   });
 
+  it('offers to retry a failed document only, and reads it again once queued', async () => {
+    const failed = { ...HOSTILE_DOCUMENT, status: 'failed', error: 'model_provider_failed' };
+    const views = [failed, { ...failed, status: 'received', error: null }];
+    const server = fakeServer((request) => {
+      if (request.method === 'POST' && request.path === '/documents/doc_01HOSTILE/retry') {
+        views.shift();
+        return json(views[0], 202);
+      }
+      return request.path.startsWith('/documents/doc_01HOSTILE') ? json(views[0]) : undefined;
+    });
+    renderApp('/documents/doc_01HOSTILE', server.fetch);
+    await userEvent.setup().click(await screen.findByRole('button', { name: 'Retry' }));
+    await waitFor(() => {
+      expect(screen.queryByRole('button', { name: 'Retry' })).toBeNull();
+    });
+    expect(screen.getAllByText('received').length).toBeGreaterThan(0);
+  });
+
+  it('offers no retry for a document that did not fail', async () => {
+    const server = fakeServer(answerDocument);
+    renderApp('/documents/doc_01HOSTILE', server.fetch);
+    expect(await screen.findByRole('button', { name: 'Delete' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Retry' })).toBeNull();
+  });
+
   it('shows a PNG original inline from the file route', async () => {
     const server = fakeServer((request) =>
       request.path.startsWith('/documents/doc_01HOSTILE') ? json(HOSTILE_DOCUMENT) : undefined,

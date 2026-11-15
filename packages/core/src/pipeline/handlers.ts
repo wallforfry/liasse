@@ -1,9 +1,9 @@
 import { DOCUMENT_JOB_FAILURE_CODES, IN_PROGRESS_STATUSES } from '@liasse/contract/domain';
-import { and, eq, inArray, notExists, sql } from 'drizzle-orm';
+import { and, inArray, notExists } from 'drizzle-orm';
 import type { Database } from '../db/client.ts';
 import { documents } from '../db/schema/documents.ts';
-import { jobs } from '../db/schema/jobs.ts';
 import {
+  pendingProcessingOf,
   PROCESS_DOCUMENT_MAX_ATTEMPTS,
   processDocumentJob,
 } from '../ingest/process-document-job.ts';
@@ -59,16 +59,7 @@ const ABANDONED = DOCUMENT_JOB_FAILURE_CODES.stale;
  * no queued or running job will take further, and returns how many.
  */
 export const failAbandonedDocuments = async (db: Database): Promise<number> => {
-  const pending = db
-    .select({ id: jobs.id })
-    .from(jobs)
-    .where(
-      and(
-        eq(jobs.kind, processDocumentJob.name),
-        inArray(jobs.status, ['queued', 'running']),
-        sql`${jobs.payload}->>'documentId' = ${documents.id}`,
-      ),
-    );
+  const pending = pendingProcessingOf(db, documents.id);
   const failed = await db
     .update(documents)
     .set({ status: 'failed', error: ABANDONED })
