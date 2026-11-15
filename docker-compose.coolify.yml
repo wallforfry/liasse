@@ -31,6 +31,9 @@ services:
       DATABASE_URL: postgres://liasse:${SERVICE_PASSWORD_64_POSTGRES}@postgres:5432/liasse
       HOST: 0.0.0.0
       PORT: 8080
+      # Coolify's proxy reaches the container over a private Docker network; add `cloudflare`
+      # when the domain is proxied by Cloudflare. See TRUSTED_PROXIES in .env.example.
+      TRUSTED_PROXIES: ${TRUSTED_PROXIES:-10.0.0.0/8,172.16.0.0/12,192.168.0.0/16}
       STORAGE_PATH: /data/files
       EMBEDDING_CACHE_DIR: /data/models
       AUTH_SECRET: ${SERVICE_BASE64_64_AUTHSECRET}
