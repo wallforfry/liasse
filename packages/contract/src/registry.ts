@@ -93,8 +93,9 @@ export const listChangesOptionsSchema = z.strictObject({
 export type ListChangesOptions = z.output<typeof listChangesOptionsSchema>;
 
 export const CHANGE_DECISIONS = ['apply', 'reject'] as const;
+export const MAX_CHANGE_NOTE_LENGTH = 2000;
 export const changeDecisionSchema = z.strictObject({
   decision: z.enum(CHANGE_DECISIONS),
-  note: z.string().trim().min(1).max(2000).optional(),
+  note: z.string().trim().min(1).max(MAX_CHANGE_NOTE_LENGTH).optional(),
 });
 export type ChangeDecision = z.output<typeof changeDecisionSchema>;

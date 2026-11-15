@@ -1,3 +1,4 @@
+import { MAX_CHANGE_NOTE_LENGTH } from '@liasse/contract';
 import type { ChangeDecisionRequest, ChangeView } from '@liasse/sdk';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
@@ -30,8 +31,6 @@ import { Label } from '../../components/ui/label.tsx';
 import { formatTime } from '../../lib/format.ts';
 
 type Decision = ChangeDecisionRequest['decision'];
-
-const MAX_NOTE_LENGTH = 2000;
 
 const DECISIONS: Readonly<
   Record<Decision, { readonly label: string; readonly question: string; readonly done: string }>
@@ -122,7 +121,7 @@ export const ChangeCard = ({ change }: { readonly change: ChangeView }) => {
           <Label htmlFor={`note-${change.id}`}>Note (optional)</Label>
           <Input
             id={`note-${change.id}`}
-            maxLength={MAX_NOTE_LENGTH}
+            maxLength={MAX_CHANGE_NOTE_LENGTH}
             value={note}
             onChange={(event) => {
               setNote(event.target.value);

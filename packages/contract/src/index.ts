@@ -40,6 +40,7 @@ export {
 } from './documents.ts';
 export {
   CHANGE_DECISIONS,
+  MAX_CHANGE_NOTE_LENGTH,
   type ChangeDecision,
   changeDecisionSchema,
   type DescribeTypesOptions,
