@@ -27,7 +27,7 @@ try {
 }
 ```
 
-Every route has its method: `health`, `metrics`, `openApi`, `uploadDocument`, `listDocuments`, `getDocument`, `downloadFile`, `correctDocument`, `deleteDocument`, `search`, `query`, `listTypes`, `listEntities`, `listSubjects`, `upcoming`, `listChanges` and `decideChange`.
+Every route has its method: `health`, `metrics`, `openApi`, `uploadDocument`, `listDocuments`, `getDocument`, `downloadFile`, `correctDocument`, `retryDocument`, `deleteDocument`, `search`, `query`, `listTypes`, `listEntities`, `listSubjects`, `upcoming`, `listChanges` and `decideChange`.
 
 - **Private documents** stay out of lists, search and queries unless asked for (`private: 'include'` or `'only'` on a list, `include_private: true` elsewhere). `getDocument` returns one by its id.
 - **Errors.** A refusal of the API rejects with `LiasseApiError`, which carries the HTTP `status`, the stable `code`, the `requestId` and the `details` of the code. An answer that does not follow the contract (a proxy error page, a server of another version) rejects with `LiasseResponseError`. A network failure or the timeout rejects as `fetch` does.
