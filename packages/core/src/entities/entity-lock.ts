@@ -12,6 +12,13 @@ const isTransaction = (executor: EntityExecutor): executor is EntityTransaction 
 
 const LOCK = sql`SELECT pg_advisory_xact_lock(hashtext('liasse.entities'))`;
 
+// Takes the lock in a read committed transaction, held until it ends. Re-entrant: a
+// later `withEntityLock` in the same transaction goes through at once.
+export const lockEntities = async (tx: EntityTransaction): Promise<void> => {
+  await assertReadCommitted(tx, 'Entities');
+  await tx.execute(LOCK);
+};
+
 // Every write to `entities`, and every write of an entity id elsewhere, runs under this
 // one lock. Resolution reads before it writes (no identifier, name or alias matches, so
 // create), and what it reads spans identifiers, names and aliases of every row: no unique
@@ -27,8 +34,7 @@ export const withEntityLock = async <Outcome>(
   work: (tx: EntityTransaction) => Promise<Outcome>,
 ): Promise<Outcome> => {
   if (isTransaction(executor)) {
-    await assertReadCommitted(executor, 'Entities');
-    await executor.execute(LOCK);
+    await lockEntities(executor);
     return executor.transaction(work);
   }
   return executor.transaction(
