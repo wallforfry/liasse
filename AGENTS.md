@@ -64,6 +64,7 @@ Inside `packages/core/src`, one directory per concern. A new concern gets its ow
 | `jobs/`          | The job queue on the `jobs` table: kinds, `enqueue`, workers                                        |
 | `knowledge/`     | Key dates, subjects, facts and links of a document, derived state, and the four knowledge tools     |
 | `models/`        | Ports for the text model, the vision model and the embedder; `providers/` adapts them               |
+| `network/`       | Client address behind trusted proxies: subnets, `X-Forwarded-For`, Cloudflare's bundled ranges      |
 | `pipeline/`      | The `process_document` job: text, classification, extraction, manual corrections                    |
 | `prompt/`        | Prompt helpers, starting with the untrusted-content wrapper                                         |
 | `query/`         | The structured query DSL: its schema, field typing and compilation to bound SQL                     |

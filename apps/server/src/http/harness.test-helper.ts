@@ -5,6 +5,7 @@ import { type ApiContext, type ApiFeatures, createFileUrls } from '@liasse/core/
 import { documentPages } from '@liasse/core/db';
 import { indexDocument, rankByFullText } from '@liasse/core/search';
 import type { Auth } from '@liasse/core/auth';
+import { NO_TRUSTED_PROXIES } from '@liasse/core/network';
 import { createFsStorage } from '@liasse/core/storage';
 import {
   createFakeEmbedder,
@@ -94,6 +95,7 @@ export const createHttpHarness = async (): Promise<HttpHarness> => {
       api: { ...api, features, ...(queryTimeoutMs === undefined ? {} : { queryTimeoutMs }) },
       auth,
       publicUrl: TEST_PUBLIC_URL,
+      trustedProxies: NO_TRUSTED_PROXIES,
       assets: testAssets(),
       ping: database.ping,
       logger: createLogger((line) => lines.push(line)),

@@ -15,7 +15,12 @@ const problemsOf = (env: Readonly<Record<string, string | undefined>>): readonly
 describe('loadConfig', () => {
   it('applies the spec defaults', () => {
     expect(loadConfig(SYNTHETIC_ENV)).toEqual({
-      server: { host: '127.0.0.1', port: 8080, publicUrl: 'http://127.0.0.1:8080' },
+      server: {
+        host: '127.0.0.1',
+        port: 8080,
+        publicUrl: 'http://127.0.0.1:8080',
+        trustedProxies: { subnets: [], cloudflare: false },
+      },
       database: { url: SYNTHETIC_ENV.DATABASE_URL },
       storage: { driver: 'fs', path: '/data/files' },
       llm: {
@@ -93,6 +98,7 @@ describe('loadConfig', () => {
       host: '0.0.0.0',
       port: 9090,
       publicUrl: 'http://127.0.0.1:9090',
+      trustedProxies: { subnets: [], cloudflare: false },
     });
     expect(config.embedding).toEqual({
       provider: 'ollama',
@@ -368,6 +374,31 @@ describe('loadConfig', () => {
     ]);
   });
 
+  it('reads the trusted proxies and the cloudflare keyword', () => {
+    expect(
+      loadConfig({ ...SYNTHETIC_ENV, TRUSTED_PROXIES: ' 10.0.0.0/8, ,fd00::1,cloudflare' }).server
+        .trustedProxies,
+    ).toEqual({
+      subnets: [
+        { network: '10.0.0.0', prefix: 8, family: 'ipv4' },
+        { network: 'fd00::1', prefix: 128, family: 'ipv6' },
+      ],
+      cloudflare: true,
+    });
+  });
+
+  it('refuses a trusted proxy that is not an address, naming its position only', () => {
+    expect(
+      problemsOf({ ...SYNTHETIC_ENV, TRUSTED_PROXIES: '10.0.0.0/8,,proxy-9f3a,10.0.0.0/99' }),
+    ).toEqual(
+      [3, 4].map(
+        (position) =>
+          `TRUSTED_PROXIES: entry ${String(position)} is not an IP address, ` +
+          'a CIDR range such as 10.0.0.0/8, or cloudflare',
+      ),
+    );
+  });
+
   it('formats one readable message', () => {
     expect(() => loadConfig({ ...SYNTHETIC_ENV, PORT: 'http' })).toThrow(
       /^Invalid configuration:\n {2}- PORT: /,
@@ -386,6 +417,7 @@ describe('loadConfig', () => {
       AUTH_SESSION_TTL: 'ttl-9f3a',
       WORKERS: 'workers-9f3a',
       STORAGE_DRIVER: 'driver-9f3a',
+      TRUSTED_PROXIES: 'proxy-9f3a',
     };
     const message = (() => {
       try {
@@ -399,6 +431,7 @@ describe('loadConfig', () => {
     expect(message).toContain('AUTH_SECRET');
     expect(message).toContain('AUTH_BOOTSTRAP_PASSWORD');
     expect(message).toContain('FILE_URL_SECRET');
+    expect(message).toContain('TRUSTED_PROXIES');
     expect(message).not.toContain('9f3a');
   });
 });
