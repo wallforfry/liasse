@@ -6,7 +6,14 @@ import type { EntityReader, EntityTransaction } from './entity-store.ts';
 
 // The kinds of change that merge two rows of one table into one. They have the same
 // payload and the same rule: a pair is proposed once.
-export type MergeChangeKind = Extract<ChangeKind, 'merge_entity' | 'merge_subject'>;
+export const MERGE_CHANGE_KINDS = [
+  'merge_entity',
+  'merge_subject',
+] as const satisfies readonly ChangeKind[];
+export type MergeChangeKind = (typeof MERGE_CHANGE_KINDS)[number];
+
+export const isMergeChangeKind = (kind: ChangeKind): kind is MergeChangeKind =>
+  MERGE_CHANGE_KINDS.some((merge) => merge === kind);
 
 const MERGE_ENTITY = 'merge_entity' satisfies MergeChangeKind;
 
