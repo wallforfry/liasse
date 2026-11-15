@@ -1,6 +1,7 @@
 import { eq } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { documents } from '../db/schema/documents.ts';
+import { RULE_SIMILARITY } from '../entities/similarity.fixture.ts';
 import { atSimilarity, TEST_IDENTIFIER_KEY } from '../entities/support.test-helper.ts';
 import { deleteDocument } from '../ingest/delete-document.ts';
 import { createTestDatabase, type TestDatabase } from '../testing/test-database.ts';
@@ -81,6 +82,7 @@ describe('subjects and private documents', () => {
         tx,
         { mention, embedding: atSimilarity(1), verdict: undefined },
         { issuerId: undefined, private: true },
+        RULE_SIMILARITY,
       ),
     );
     expect(resolution).toMatchObject({ subjectId: boat, match: 'similarity' });

@@ -658,6 +658,8 @@ describe('processDocument', () => {
     expect(await harness.db.select().from(documentPages)).toHaveLength(2);
     expect(await harness.db.select().from(facts)).toHaveLength(1);
     expect(await harness.db.select().from(docTypes)).toHaveLength(1);
+    // The second job finds the issuer and the recipient the first one created.
+    expect(await harness.db.select().from(entities)).toHaveLength(2);
   });
 
   it('stops between two stages when the job is aborted', async () => {

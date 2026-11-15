@@ -63,6 +63,21 @@ describe('calibrate', () => {
     expect(calibration.suggested).toBeNull();
   });
 
+  it('counts as arbitrated only what the attach threshold leaves to the text model', () => {
+    const names = [named('a', 'A'), named('a', 'A2'), named('b', 'B'), named('c', 'C')];
+    // c is 5 degrees from both names of a (attached), 35 from b (arbitrated); a and b are
+    // 30 apart (arbitrated), A2 and b 40 (below arbitration).
+    const { current } = calibrate(names, [at(0), at(10), at(-30), at(5)], CURRENT);
+    expect(current).toMatchObject({ differentAttached: 2, differentArbitrated: 2 });
+  });
+
+  it('leaves out two equal names of one entity, which the name rule attaches first', () => {
+    const names = [named('a', 'Synthétique'), named('a', 'SYNTHETIQUE'), named('a', 'Other')];
+    const calibration = calibrate(names, [at(0), at(0), at(30)], CURRENT);
+    expect(calibration.same.pairs).toBe(2);
+    expect(calibration.same.max).toBeCloseTo(Math.cos((30 * Math.PI) / 180), 10);
+  });
+
   it('counts what the current thresholds attach and arbitrate', () => {
     const names = [named('a', 'A'), named('a', 'A2'), named('b', 'B')];
     // cos 10 = 0.985 between the two names of a; cos 30 = 0.866 and cos 40 = 0.766 to b.

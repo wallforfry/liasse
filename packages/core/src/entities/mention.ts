@@ -78,3 +78,10 @@ export const prepareMention = (key: IdentifierKey, mention: EntityMention): Prep
     droppedIdentifiers: countRejections(identifiers),
   };
 };
+
+// The text the similarity rule embeds for a mention, and for the entity it creates.
+export const mentionEmbeddingText = ({
+  name,
+  context,
+}: Pick<PreparedMention, 'name' | 'context'>): string =>
+  context === undefined ? name : `${name}\n${context}`;

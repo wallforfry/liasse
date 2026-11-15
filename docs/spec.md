@@ -254,7 +254,7 @@ Entities are managed locally and deterministically: it is the most queried field
 
 1. **Strong identifier**: if a company ID, VAT number or known customer number matches, attach directly.
 2. **Normalized name**: lowercase, no accents, no legal form (SA, SAS, Ltd, Inc…); equal to the canonical name or an alias → attach.
-3. **Similarity**: embedding of the name and context; above 0.92, attach and add an alias; between 0.80 and 0.92, the LLM arbitrates among the 3 closest candidates.
+3. **Similarity**: embedding of the name and context; above `ENTITY_ATTACH_SIMILARITY`, attach and add an alias; from `ENTITY_ARBITRATION_SIMILARITY` up to it, the LLM arbitrates among the 3 closest candidates. Both thresholds depend on the embedding model. The defaults, 1 and 0.80, are measured with the default local model by `pnpm eval:calibrate` (see `eval/README.md`): with it, the context of a mention weighs more than its name, two distinct entities reach a similarity no alias reaches, and similarity alone attaches nothing. Any other embedding model needs its own measure with `pnpm eval:calibrate` before the thresholds are set for it.
 4. **Otherwise**: create a new entity.
 
 Entity merges go through `type_changes` (kind `merge_entity`) with the same policy: automatic if a strong identifier is shared, approval otherwise. Consolidation proposes a merge for every pair of entities of one kind that share a global identifier or a normalized name.
@@ -443,6 +443,7 @@ A single Node binary, configured through environment variables, shipped as a mul
 | `EMBEDDING_MAX_INPUT_TOKENS` | empty | Tokens a remote embedding model reads per input; chunks are sized to fit (the local model states its own) |
 | `AUTO_APPLY` | `safe` | `none`, `safe`, `all` |
 | `CONFIDENCE_THRESHOLD` | `0.7` | Below: `needs_review` |
+| `ENTITY_ATTACH_SIMILARITY` / `ENTITY_ARBITRATION_SIMILARITY` | `1` / `0.8` | Entity resolution by similarity (cosine, 0 to 1, arbitration not above attach); measured for the default local embedder, to measure again with `pnpm eval:calibrate` for any other |
 | `MAX_NEW_TYPES_PER_DAY` | `5` | Beyond: closest type + `needs_review` |
 | `SCHEMA_LANGUAGE` | `en` | Language of generated slugs and field names: `en`, `fr`, `de`, `es` or `it` |
 | `HINDSIGHT_URL` / `HINDSIGHT_BANK` / `HINDSIGHT_API_KEY` | empty / `documents` / empty | Optional integration: base URL of the Hindsight server (disabled if empty), bank, Bearer key |

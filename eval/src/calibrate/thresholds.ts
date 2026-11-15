@@ -1,3 +1,4 @@
+import { entityNameKey } from '@liasse/core/domain';
 import type { Embedding } from '@liasse/core/models';
 import type { Corpus } from '../schema/index.ts';
 
@@ -66,8 +67,9 @@ const up = (value: number): number => Math.ceil(value * 100) / 100;
 const down = (value: number): number => Math.floor(value * 100) / 100;
 
 /**
- * Measures the similarity rule of entity resolution on the names of the corpus: the
- * cosine of every pair of names of one kind, as `similarEntities` compares them. The
+ * Measures the similarity rule of entity resolution on names of the corpus: the cosine of
+ * every pair of names of one kind, as `similarEntities` compares them, but for two equal
+ * names of one entity, which the name rule attaches first. The
  * suggestion attaches no two entities (`attach` at or above the closest pair of distinct
  * names, the rule attaching strictly above it) and sends every alias at least to
  * arbitration (`arbitrate` at or below the farthest pair of one entity's names, and never
@@ -82,7 +84,10 @@ export const calibrate = (
     names.slice(i + 1).flatMap((right, offset) => {
       const [a, b] = [embeddings[i], embeddings[i + 1 + offset]];
       if (a === undefined || b === undefined || left.kind !== right.kind) return [];
-      return [{ same: left.entity === right.entity, similarity: cosine(a, b) }];
+      const same = left.entity === right.entity;
+      // The name rule attaches two equal names before similarity is looked at.
+      if (same && entityNameKey(left.name) === entityNameKey(right.name)) return [];
+      return [{ same, similarity: cosine(a, b) }];
     }),
   );
   const same = pairs.filter((pair) => pair.same).map(({ similarity }) => similarity);
@@ -95,7 +100,10 @@ export const calibrate = (
     sameAttached: count(same, (value) => value > thresholds.attach),
     sameBelowArbitrate: count(same, (value) => value < thresholds.arbitrate),
     differentAttached: count(different, (value) => value > thresholds.attach),
-    differentArbitrated: count(different, (value) => value >= thresholds.arbitrate),
+    differentArbitrated: count(
+      different,
+      (value) => value >= thresholds.arbitrate && value <= thresholds.attach,
+    ),
   });
   const attach = differentSpread.max === null ? null : up(differentSpread.max);
   const arbitrate = sameSpread.min === null ? null : down(sameSpread.min);

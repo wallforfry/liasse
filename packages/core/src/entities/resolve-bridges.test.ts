@@ -5,6 +5,7 @@ import { createFakeTextModel } from '../testing/fake-text-model.ts';
 import { createTestDatabase, type TestDatabase } from '../testing/test-database.ts';
 import type { EntitiesContext } from './context.ts';
 import { resolveEntity } from './resolve.ts';
+import { RULE_SIMILARITY } from './similarity.fixture.ts';
 import {
   atSimilarity,
   recordingEmbedder,
@@ -27,6 +28,7 @@ describe('resolveEntity on a mention that bridges entities', () => {
     embedder: recordingEmbedder(false),
     textModel: createFakeTextModel([]),
     identifierKey: TEST_IDENTIFIER_KEY,
+    similarity: RULE_SIMILARITY,
     ...overrides,
   });
 
