@@ -5,6 +5,7 @@ import {
 } from '@liasse/contract/domain';
 import { z } from 'zod';
 import { type CrossFieldProblem, duration, integer, reportProblems, text } from './fields.ts';
+import { trustedProxies } from './trusted-proxies.ts';
 
 // What clients are told to call: the origin signed file URLs start with. It is never read
 // from a request, whose Host header belongs to the caller.
@@ -39,12 +40,14 @@ export const serverSection = z
     HOST: text.default('127.0.0.1'),
     PORT: integer(1, 65_535).default(8080),
     PUBLIC_URL: publicUrl.optional(),
+    TRUSTED_PROXIES: trustedProxies.prefault(''),
   })
   .transform((env) =>
     Object.freeze({
       host: env.HOST,
       port: env.PORT,
       publicUrl: env.PUBLIC_URL ?? defaultPublicUrl(env.HOST, env.PORT),
+      trustedProxies: env.TRUSTED_PROXIES,
     }),
   );
 

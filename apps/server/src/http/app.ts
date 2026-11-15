@@ -1,5 +1,6 @@
 import type { ApiContext } from '@liasse/core/api';
 import { type Auth, createMcpGrantCheck, mcpResourceOf } from '@liasse/core/auth';
+import { createClientAddressResolver, type TrustedProxies } from '@liasse/core/network';
 import { Hono, type MiddlewareHandler } from 'hono';
 import { every } from 'hono/combine';
 import { generateSpecs } from 'hono-openapi';
@@ -36,6 +37,8 @@ export interface AppDependencies {
   readonly auth: Auth;
   /** `config.server.publicUrl`: the origin the web UI and OAuth clients call. */
   readonly publicUrl: string;
+  /** `config.server.trustedProxies`: whose forwarded client address is believed. */
+  readonly trustedProxies: TrustedProxies;
   /** The build of `@liasse/web`, served under `/ui`. */
   readonly assets: WebAssets;
   readonly ping: () => Promise<void>;
@@ -70,6 +73,7 @@ export const createApp = ({
   api,
   auth,
   publicUrl,
+  trustedProxies,
   assets,
   ping,
   logger = createLogger(),
@@ -109,7 +113,10 @@ export const createApp = ({
   );
   app.route('/', searchRoutes({ api, authenticated }));
   app.route('/', registryRoutes({ api, authenticated }));
-  app.route('/', authRoutes(auth, requestTimeout(requestTimeoutMs)));
+  app.route(
+    '/',
+    authRoutes(auth, requestTimeout(requestTimeoutMs), createClientAddressResolver(trustedProxies)),
+  );
   app.route(UI_ROOT, webRoutes(assets));
   app.get('/', (context) => context.redirect(`${UI_ROOT}/`, 302));
   // `ingest` carries a file: an MCP call gets the deadline of an upload.
