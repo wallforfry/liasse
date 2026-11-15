@@ -97,6 +97,11 @@
       "types": "./dist/pipeline/index.d.ts",
       "default": "./dist/pipeline/index.js"
     },
+    "./processing-log": {
+      "@liasse/source": "./src/processing-log/index.ts",
+      "types": "./dist/processing-log/index.d.ts",
+      "default": "./dist/processing-log/index.js"
+    },
     "./prompt": {
       "@liasse/source": "./src/prompt/index.ts",
       "types": "./dist/prompt/index.d.ts",

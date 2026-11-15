@@ -1,8 +1,11 @@
-import { supportedMimeSchema } from '@liasse/contract/domain';
+import {
+  PAGE_TEXT_METHODS,
+  supportedMimeSchema,
+  TEXT_EXTRACTION_METHODS,
+} from '@liasse/contract/domain';
 import { z } from 'zod';
 import { TEXT_EXTRACTION_ERROR_CODES } from '../../text/errors.ts';
 import type { TextLimits } from '../../text/limits.ts';
-import { PAGE_TEXT_METHODS, TEXT_EXTRACTION_METHODS } from '../../text/types.ts';
 
 // Messages between the server and the process that reads one document. Both ends parse
 // what they receive: the child has read a file nobody vouches for.

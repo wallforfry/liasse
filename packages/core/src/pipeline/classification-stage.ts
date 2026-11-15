@@ -1,6 +1,7 @@
 import { eq } from 'drizzle-orm';
 import { documents } from '../db/schema/documents.ts';
 import { MANUAL_TYPE_FIELD } from '../domain/provenance.ts';
+import { recordDocumentEvent } from '../processing-log/record.ts';
 import { findCandidates } from './classify/candidates.ts';
 import { decideType, type TypeDecision } from './classify/decide-type.ts';
 import type { PipelineDeps } from './deps.ts';
@@ -19,17 +20,29 @@ const storeDecision = (
   decision: TypeDecision | undefined,
 ): Promise<boolean> =>
   writeFromStatus(db, documentId, ['extracted'], async (tx, current) => {
+    const chosen = decision === undefined || hasManualType(current) ? undefined : decision;
     const typed =
-      decision === undefined || hasManualType(current)
+      chosen === undefined
         ? {}
         : {
-            typeId: decision.typeId,
-            provenance: withPipelineProvenance(current.provenance, { type: decision.provenance }),
+            typeId: chosen.typeId,
+            provenance: withPipelineProvenance(current.provenance, { type: chosen.provenance }),
           };
     await tx
       .update(documents)
       .set({ ...typed, status: 'classified', confidence: null })
       .where(eq(documents.id, documentId));
+    await recordDocumentEvent(tx, documentId, {
+      stage: 'classification',
+      outcome: 'succeeded',
+      status: 'classified',
+      ...(chosen === undefined || !('model' in chosen.provenance)
+        ? {}
+        : {
+            model: chosen.provenance.model,
+            details: { classification: chosen.provenance.outcome },
+          }),
+    });
   });
 
 /**

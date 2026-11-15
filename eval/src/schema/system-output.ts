@@ -2,9 +2,9 @@ import {
   isoDateSchema,
   keyDateSchema,
   linkKindSchema,
+  PAGE_TEXT_METHODS,
   subjectKindSchema,
 } from '@liasse/contract/domain';
-import { PAGE_TEXT_METHODS } from '@liasse/core/text';
 import { z } from 'zod';
 import { keySchema } from './expectation.ts';
 import { CORE_TRUTH_VALUES } from './ground-truth.ts';

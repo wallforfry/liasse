@@ -2,6 +2,7 @@
 export type { ApiContext } from './context.ts';
 export { createType } from './create-type.ts';
 export { describeTypes } from './describe-types.ts';
+export { listDocumentEvents, type ListDocumentEventsOptions } from './document-events.ts';
 export { openDocumentFile, type OpenedFile, removeDocument } from './document-file.ts';
 export {
   API_ERROR_KINDS,

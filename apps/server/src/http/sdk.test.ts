@@ -67,6 +67,7 @@ describe('the TypeScript SDK', () => {
       hint: 'a synthetic bill',
       private: true,
     });
+    expect(await client.listDocumentEvents(first.id)).toEqual({ events: [] });
     const downloaded = await client.downloadFile(first.id);
     expect(downloaded).toMatchObject({ type: 'application/pdf', filename: 'sdk-invoice.pdf' });
     expect(new Uint8Array(await downloaded.content.arrayBuffer())).toEqual(new Uint8Array(bytes));

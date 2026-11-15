@@ -1,4 +1,5 @@
 import { documents, jobs } from '@liasse/core/db';
+import { recordDocumentEvent } from '@liasse/core/processing-log';
 import { syntheticEml, syntheticPdf } from '@liasse/core/testing';
 import { eq } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -267,6 +268,46 @@ describe('document routes', () => {
         expect((await harness.call(`/documents/${id}/file`)).status).toBe(400);
       },
     );
+  });
+
+  describe('GET /documents/:id/events', () => {
+    const events = z.object({
+      events: z.array(z.looseObject({ stage: z.string(), outcome: z.string() })),
+    });
+
+    it('answers the processing log of a document, a private one included', async () => {
+      const id = await harness.addDocument([], { status: 'failed', private: true });
+      await harness.database.db.transaction((tx) =>
+        recordDocumentEvent(tx, id, {
+          stage: 'extraction',
+          outcome: 'failed',
+          status: 'failed',
+          attempt: 3,
+          maxAttempts: 3,
+          errorCode: 'model_output_invalid',
+          details: { rejected_values: 4 },
+        }),
+      );
+      const response = await harness.call(`/documents/${id}/events`);
+      expect(response.status).toBe(200);
+      expect(events.parse(await response.json()).events).toMatchObject([
+        {
+          stage: 'extraction',
+          outcome: 'failed',
+          attempt: 3,
+          max_attempts: 3,
+          error_code: 'model_output_invalid',
+          details: { rejected_values: 4 },
+        },
+      ]);
+    });
+
+    it('answers 404 for an id no document has, and 400 for an id that is not one', async () => {
+      const missing = await harness.call('/documents/doc_01JC0000000000000000000000/events');
+      expect(missing.status).toBe(404);
+      expect(await codeOf(missing)).toBe('document_not_found');
+      expect((await harness.call('/documents/doc_%00/events')).status).toBe(400);
+    });
   });
 
   describe('DELETE /documents/:id', () => {

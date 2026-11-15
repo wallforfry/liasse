@@ -6,6 +6,7 @@ import { docTypes } from '../../db/schema/registry.ts';
 import { PROVENANCE_ENTITY_ID_KEY } from '../../domain/provenance.ts';
 import type { Transaction } from '../../ingest/existing-document.ts';
 import { writeIfLive } from '../../ingest/live-write.ts';
+import { recordDocumentEvent } from '../../processing-log/record.ts';
 import type { RegisteredType } from '../../registry/type-store.ts';
 import { entitiesOf, persisterOf } from '../bindings.ts';
 import type { PipelineDeps } from '../deps.ts';
@@ -101,6 +102,13 @@ const write = async (
       .set({ provenance: merge(rejectedValues).provenance })
       .where(eq(documents.id, documentId));
   }
+  await recordDocumentEvent(tx, documentId, {
+    stage: mode === 'process' ? 'extraction' : 'reextraction',
+    outcome: 'succeeded',
+    status: stored.status,
+    model,
+    details: { rejected_values: fresh.rejected + rejectedValues, truncated },
+  });
   return 'stored';
 };
 

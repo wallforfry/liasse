@@ -27,7 +27,8 @@ export {
 } from './errors.ts';
 export { MAX_QUOTE_LENGTH } from './extract/extraction-schema.ts';
 export { MIN_QUOTE_LENGTH, normalizeForQuote } from './extract/quotes.ts';
-export { createPipelineHandlers, failAbandonedDocuments } from './handlers.ts';
+export { failAbandonedDocuments } from './abandoned.ts';
+export { createPipelineHandlers } from './handlers.ts';
 export { reextractDocumentJob, reindexDocumentJob } from './jobs.ts';
 export { processDocument, reextractDocument, reindexDocument } from './process-document.ts';
 export {

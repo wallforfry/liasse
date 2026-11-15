@@ -3,6 +3,7 @@ import { eq } from 'drizzle-orm';
 import { documents } from '../db/schema/documents.ts';
 import { readPipelineProvenance } from '../domain/provenance.ts';
 import { enqueue } from '../jobs/enqueue.ts';
+import { recordDocumentEvent } from '../processing-log/record.ts';
 import { detectLinksJob } from '../knowledge/jobs.ts';
 import { DocumentNotFoundError } from '../search/indexing.ts';
 import { indexerOf } from './bindings.ts';
@@ -27,17 +28,13 @@ const settle = (
     // A change of type during the indexing put the extraction back to do: the document
     // is not settled, and the next step extracts it for its new type.
     if (current.confidence === null) return;
-    await tx
-      .update(documents)
-      .set({
-        status: settledStatus(
-          current.confidence,
-          readPipelineProvenance(current.provenance).type,
-          settings.confidenceThreshold,
-        ),
-        error: null,
-      })
-      .where(eq(documents.id, documentId));
+    const status = settledStatus(
+      current.confidence,
+      readPipelineProvenance(current.provenance).type,
+      settings.confidenceThreshold,
+    );
+    await tx.update(documents).set({ status, error: null }).where(eq(documents.id, documentId));
+    await recordDocumentEvent(tx, documentId, { stage: 'indexing', outcome: 'succeeded', status });
     // Link detection reads the title, summary and knowledge just settled: it is queued
     // with them, once per extraction that reaches this point.
     await enqueue(tx, { kind: detectLinksJob, payload: { documentId } });

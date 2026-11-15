@@ -1,9 +1,5 @@
-import type {
-  ExtractedAttachment,
-  ExtractedPage,
-  ExtractedText,
-  TextExtractionMethod,
-} from './types.ts';
+import type { TextExtractionMethod } from '@liasse/contract/domain';
+import type { ExtractedAttachment, ExtractedPage, ExtractedText } from './types.ts';
 
 export interface PageText {
   readonly text: string;

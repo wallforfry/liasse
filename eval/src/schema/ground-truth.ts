@@ -4,6 +4,7 @@ import {
   languageCodeSchema,
   linkKindSchema,
   moneySchema,
+  PAGE_TEXT_METHODS,
   periodSchema,
   supportedMimeSchema,
 } from '@liasse/contract/domain';
@@ -13,7 +14,6 @@ import {
   fieldValueSchema,
 } from '@liasse/contract/registry';
 import type { CORE_FIELDS } from '@liasse/core/registry';
-import { PAGE_TEXT_METHODS } from '@liasse/core/text';
 import { z } from 'zod';
 import { expectationSchema, keySchema, requirementSchema } from './expectation.ts';
 

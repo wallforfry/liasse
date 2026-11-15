@@ -1,5 +1,6 @@
-import { eq, sql } from 'drizzle-orm';
+import { and, asc, eq, ne, sql } from 'drizzle-orm';
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
+import { documentEvents } from '../db/schema/document-events.ts';
 import { documents } from '../db/schema/documents.ts';
 import { jobs } from '../db/schema/jobs.ts';
 import { deleteDocument } from '../ingest/delete-document.ts';
@@ -16,7 +17,8 @@ import { insertSyntheticDocument } from '../testing/fixtures.ts';
 import { syntheticPdf } from '../testing/synthetic-files.ts';
 import { TextExtractionError } from '../text/errors.ts';
 import type { PipelineDeps } from './deps.ts';
-import { createPipelineHandlers, failAbandonedDocuments } from './handlers.ts';
+import { failAbandonedDocuments } from './abandoned.ts';
+import { createPipelineHandlers } from './handlers.ts';
 import {
   createPipelineHarness,
   live,
@@ -141,19 +143,58 @@ describe('the job handlers of the pipeline', () => {
     expect(await harness.document(id)).toMatchObject({ status, error: null });
   });
 
-  it('leaves the document as it was when a re-extraction or a re-indexing fails', async () => {
+  it('flags for review a re-extraction whose last attempt fails, and leaves a re-indexing be', async () => {
     const id = await harness.ingest('settled');
     await run(harness.deps(), id);
     const before = await harness.document(id);
     const deps = harness.deps({
       indexDocument: () => Promise.reject(new Error('the index is down')),
     });
+    const runKind = (kind: string, attempt: number) =>
+      handlerOf(deps, kind).run({ documentId: id }, { signal: live(), attempt });
+    await expect(runKind(reindexDocumentJob.name, 3)).rejects.toThrow('the index is down');
+    await expect(runKind(reextractDocumentJob.name, 2)).rejects.toThrow('the index is down');
+    expect(await harness.document(id)).toMatchObject({ status: before.status, error: null });
+    await expect(runKind(reextractDocumentJob.name, 3)).rejects.toThrow('the index is down');
+    expect(await harness.document(id)).toMatchObject({
+      status: 'needs_review',
+      error: 'reextraction_failed',
+    });
+  });
+
+  it('ends a re-extraction or a re-indexing at once on a failure another attempt cannot fix', async () => {
+    const id = await harness.ingest('refused');
+    await run(harness.deps(), id);
+    const refusal = new ModelProviderError({ provider: 'p', model: 'm', retryable: false });
+    const deps = harness.deps({ indexDocument: () => Promise.reject(refusal) });
     for (const kind of [reextractDocumentJob.name, reindexDocumentJob.name]) {
       await expect(
-        handlerOf(deps, kind).run({ documentId: id }, { signal: live(), attempt: 3 }),
-      ).rejects.toThrow('the index is down');
+        handlerOf(deps, kind).run({ documentId: id }, { signal: live(), attempt: 1 }),
+      ).rejects.toBeInstanceOf(PermanentJobError);
     }
-    expect(await harness.document(id)).toMatchObject({ status: before.status, error: null });
+    const failures = await harness.db
+      .select()
+      .from(documentEvents)
+      .where(and(eq(documentEvents.documentId, id), ne(documentEvents.outcome, 'succeeded')))
+      .orderBy(asc(documentEvents.occurredAt), asc(documentEvents.id));
+    expect(failures).toMatchObject([
+      {
+        stage: 'reextraction',
+        outcome: 'failed',
+        status: 'needs_review',
+        attempt: 1,
+        errorCode: 'model_provider_failed',
+        retryable: false,
+      },
+      {
+        stage: 'indexing',
+        outcome: 'failed',
+        status: 'needs_review',
+        attempt: 1,
+        errorCode: 'model_provider_failed',
+        retryable: false,
+      },
+    ]);
   });
 
   it('re-indexes a settled document and runs the hook, and leaves one on its way alone', async () => {
