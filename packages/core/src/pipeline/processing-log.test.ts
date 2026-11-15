@@ -189,7 +189,7 @@ describe('the processing log of a document', () => {
         stage: 'reextraction',
         outcome: 'failed',
         status: 'needs_review',
-        errorCode: 'reextraction_failed',
+        errorCode: 'processing_abandoned',
         attempt: 3,
       },
     ]);

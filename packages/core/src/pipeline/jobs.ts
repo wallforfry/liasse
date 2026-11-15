@@ -17,10 +17,12 @@ const payload = z.object({ documentId: z.string().min(1) });
  * flagged for review with a code: what it owes stays recorded on the document itself
  * (`confidence` and `schema_version` stay null until an extraction succeeds).
  */
+const REEXTRACT_MAX_ATTEMPTS = PROCESS_DOCUMENT_MAX_ATTEMPTS;
+
 export const reextractDocumentJob = defineJobKind({
   name: 'reextract_document',
   schema: payload,
-  maxAttempts: PROCESS_DOCUMENT_MAX_ATTEMPTS,
+  maxAttempts: REEXTRACT_MAX_ATTEMPTS,
   // The handler flags and logs the attempt that failed with its code, in one transaction.
   // This flags what no handler did, and logs it when a worker died.
   onTerminalFailure: async (tx, { payload, cause, attempt }) => {
@@ -33,7 +35,12 @@ export const reextractDocumentJob = defineJobKind({
       'needs_review',
       DOCUMENT_JOB_FAILURE_CODES.reextraction,
       cause === 'stale'
-        ? { stage: 'reextraction', attempt, maxAttempts: PROCESS_DOCUMENT_MAX_ATTEMPTS }
+        ? {
+            stage: 'reextraction',
+            attempt,
+            maxAttempts: REEXTRACT_MAX_ATTEMPTS,
+            errorCode: DOCUMENT_JOB_FAILURE_CODES.stale,
+          }
         : undefined,
     );
   },
