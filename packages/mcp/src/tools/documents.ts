@@ -5,7 +5,13 @@ import {
   ingestRequestSchema,
 } from '@liasse/contract';
 import { liveDocumentStatusSchema } from '@liasse/contract/domain';
-import { correctDocument, CORRECTED_PARTS, getDocument, uploadDocument } from '@liasse/core/api';
+import {
+  correctDocument,
+  CORRECTED_PARTS,
+  getDocument,
+  listDocumentEvents,
+  uploadDocument,
+} from '@liasse/core/api';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import { type McpDeps, UNTRUSTED } from '../deps.ts';
@@ -34,7 +40,9 @@ const INGEST_DESCRIPTION =
 
 const GET_STATUS_DESCRIPTION =
   `Processing status of a document (${liveDocumentStatusSchema.options.join(', ')}), ` +
-  'with its error if any.';
+  'with its error if any, and `events`, its processing log oldest first: each stage that ' +
+  'succeeded and each attempt that failed, with its error code, whether it is retried, ' +
+  'the model and counts such as the values the model returned that were rejected.';
 
 const UPDATE_DESCRIPTION =
   'Corrects a document: its type, core values, fields, or its `private` flag. A manual ' +
@@ -58,7 +66,8 @@ export const registerDocumentTools = (server: McpServer, { api, report }: McpDep
     async ({ id }) =>
       toolAnswer('get_status', report, async () => {
         const { status, state, error } = await getDocument(api, id);
-        return { id, status, state, error };
+        const { events } = await listDocumentEvents(api, id);
+        return { id, status, state, error, events };
       }),
   );
   server.registerTool(

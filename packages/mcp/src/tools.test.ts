@@ -3,6 +3,7 @@ import {
   MAX_QUERY_ENTITY_NAME_LENGTH,
   MAX_QUERY_ENTITY_NAMES,
 } from '@liasse/contract/domain';
+import { recordDocumentEvent } from '@liasse/core/processing-log';
 import { syntheticPdf } from '@liasse/core/testing';
 import type { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -187,9 +188,31 @@ describe('the tools', () => {
       );
     });
 
-    it('gives the status of a document', async () => {
+    it('gives the status of a document, with its processing log', async () => {
       const { body } = await callTool(client, 'get_status', { id: publicId });
-      expect(body).toEqual({ id: publicId, status: 'indexed', state: 'current', error: null });
+      expect(body).toEqual({
+        id: publicId,
+        status: 'indexed',
+        state: 'current',
+        error: null,
+        events: [],
+      });
+      const failing = await harness.addDocument([], { status: 'failed', error: 'no_text' });
+      await harness.database.db.transaction((tx) =>
+        recordDocumentEvent(tx, failing, {
+          stage: 'text',
+          outcome: 'failed',
+          status: 'failed',
+          errorCode: 'no_text',
+          retryable: false,
+        }),
+      );
+      const failed = await callTool(client, 'get_status', { id: failing });
+      expect(failed.body).toMatchObject({
+        status: 'failed',
+        error: 'no_text',
+        events: [{ stage: 'text', outcome: 'failed', error_code: 'no_text', retryable: false }],
+      });
     });
   });
 

@@ -1,5 +1,6 @@
 import {
   documentCorrectionSchema,
+  documentEventListSchema,
   documentListSchema,
   documentSchema,
   getDocumentOptionsSchema,
@@ -9,6 +10,7 @@ import {
   correctDocument,
   CORRECTED_PARTS,
   getDocument,
+  listDocumentEvents,
   listDocuments,
   removeDocument,
 } from '@liasse/core/api';
@@ -72,6 +74,20 @@ export const documentRoutes = ({ api, authenticated }: RouteDeps): Hono<AppEnv> 
         context.json(
           await getDocument(api, context.req.valid('param').id, context.req.valid('query')),
         ),
+    )
+    .get(
+      '/documents/:id/events',
+      operation({
+        summary: 'Read the processing log of a document, oldest first',
+        tag: TAG,
+        responses: {
+          200: jsonResponse('The most recent events of its processing.', documentEventListSchema),
+          ...failures(400, 404),
+        },
+      }),
+      authenticated,
+      valid('param', idParam),
+      async (context) => context.json(await listDocumentEvents(api, context.req.valid('param').id)),
     )
     .patch(
       '/documents/:id',

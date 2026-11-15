@@ -180,6 +180,40 @@ describe('createLiasseClient', () => {
     expect(error).toMatchObject({ status: 200, cause: { name: 'ZodError' } });
   });
 
+  it('reads the processing log of a document on its path, held to its schema', async () => {
+    const event = {
+      id: 'evt_01',
+      occurred_at: '2026-11-14T03:00:00.000Z',
+      stage: 'text',
+      outcome: 'retrying',
+      status: 'received',
+      attempt: 1,
+      max_attempts: 3,
+      error_code: 'text_process_timeout',
+      error_name: 'TextProcessError',
+      retryable: true,
+      model: null,
+      details: {},
+    };
+    const server = answering(() => json({ events: [event] }));
+    const client = createLiasseClient({
+      baseUrl: 'http://x.test',
+      token: 't',
+      fetch: server.fetch,
+    });
+    expect(await client.listDocumentEvents('doc/01')).toEqual({ events: [event] });
+    expect(server.sent.map(({ url }) => url)).toEqual(['http://x.test/documents/doc%2F01/events']);
+    const strange = answering(() => json({ events: [{ ...event, stage: 'guessing' }] }));
+    const refused: unknown = await createLiasseClient({
+      baseUrl: 'http://x.test',
+      token: 't',
+      fetch: strange.fetch,
+    })
+      .listDocumentEvents('doc_01')
+      .catch((caught: unknown) => caught);
+    expect(refused).toBeInstanceOf(LiasseResponseError);
+  });
+
   it('holds the answers of subjects and key dates to their schemas', async () => {
     const server = answering(() => json({ dates: [] }));
     const client = createLiasseClient({
