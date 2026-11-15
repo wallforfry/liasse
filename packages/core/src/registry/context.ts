@@ -1,5 +1,5 @@
+import type { SchemaLanguage } from '@liasse/contract/domain';
 import type { Database } from '../db/client.ts';
-import type { SchemaLanguage } from '../domain/enums.ts';
 import type { Embedder } from '../models/ports.ts';
 import type { RegistryExecutor } from './type-store.ts';
 

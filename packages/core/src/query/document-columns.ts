@@ -1,7 +1,7 @@
+import { DOCUMENT_STATES, DOCUMENT_STATUSES } from '@liasse/contract/domain';
+import type { ScalarFieldDefinition } from '@liasse/contract/registry';
 import { type SQL, sql } from 'drizzle-orm';
 import { documents } from '../db/schema/documents.ts';
-import { DOCUMENT_STATES, DOCUMENT_STATUSES } from '../domain/enums.ts';
-import type { ScalarFieldDefinition } from '../registry/primitives.ts';
 import { liveType } from './source.ts';
 
 interface DocumentColumn {

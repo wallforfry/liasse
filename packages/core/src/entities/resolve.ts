@@ -1,4 +1,4 @@
-import type { EntityKind } from '../domain/enums.ts';
+import type { EntityKind } from '@liasse/contract/domain';
 import type { Embedder, Embedding } from '../models/ports.ts';
 import { arbitrate } from './arbitrate.ts';
 import {

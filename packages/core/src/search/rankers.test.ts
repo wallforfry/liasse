@@ -1,3 +1,4 @@
+import type { SearchFilters } from '@liasse/contract/search';
 import { eq, type SQL, sql } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createDb, type Database } from '../db/client.ts';
@@ -8,7 +9,6 @@ import { insertSyntheticDocument } from '../testing/fixtures.ts';
 import { createTestDatabase, type TestDatabase } from '../testing/test-database.ts';
 import { CORPUS, type CorpusDocument, seedCorpus, type SeededCorpus } from './corpus.fixture.ts';
 import { documentFilter } from './filters.ts';
-import type { SearchFilters } from './input.ts';
 import { parseSearchQuery } from './tsquery.ts';
 import {
   fullTextCandidates,

@@ -1,14 +1,17 @@
-import { err, ok, type Result } from '../registry/result.ts';
-import { capabilitiesOf } from './capabilities.ts';
-import { collect } from './collect.ts';
 import {
   AGGREGATE_FUNCTIONS,
   type AggregateFunction,
   COUNT_ALL,
+  failure,
+  notAllowed,
   type OrderDirection,
   type QueryDsl,
-} from './dsl.ts';
-import { failure, notAllowed, type QueryError, type QueryWarning } from './errors.ts';
+  type QueryError,
+  type QueryWarning,
+} from '@liasse/contract/query';
+import { err, ok, type Result } from '@liasse/contract/registry';
+import { capabilitiesOf } from './capabilities.ts';
+import { collect } from './collect.ts';
 import type { QueryField } from './fields.ts';
 import { findField, partsHint } from './find-field.ts';
 

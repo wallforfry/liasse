@@ -1,6 +1,6 @@
+import type { SubjectKind } from '@liasse/contract/domain';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { subjects } from '../db/schema/knowledge.ts';
-import type { SubjectKind } from '../domain/enums.ts';
 import { ID_PREFIXES, newId } from '../domain/ids.ts';
 import {
   atSimilarity,

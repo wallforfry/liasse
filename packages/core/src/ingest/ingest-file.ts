@@ -1,8 +1,8 @@
 import { createHash } from 'node:crypto';
+import type { DocumentSource } from '@liasse/contract/domain';
 import { eq } from 'drizzle-orm';
 import type { Database } from '../db/client.ts';
 import { documents } from '../db/schema/documents.ts';
-import type { DocumentSource } from '../domain/enums.ts';
 import { storageKeyOf } from '../storage/key.ts';
 import type { Storage } from '../storage/port.ts';
 import { UnsupportedFormatError } from './errors.ts';

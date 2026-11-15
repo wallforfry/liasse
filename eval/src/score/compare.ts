@@ -1,10 +1,5 @@
-import {
-  entityNameKey,
-  isoDateSchema,
-  type Money,
-  moneySchema,
-  periodSchema,
-} from '@liasse/core/domain';
+import { isoDateSchema, type Money, moneySchema, periodSchema } from '@liasse/contract/domain';
+import { entityNameKey } from '@liasse/core/domain';
 import type { TruthPrimitive } from '../schema/index.ts';
 
 // The tolerance rules of the evaluation set, in one place:

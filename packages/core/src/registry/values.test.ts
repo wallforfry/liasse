@@ -1,9 +1,9 @@
+import type { ValueWrapper } from '@liasse/contract/registry';
 import { describe, expect, it } from 'vitest';
 import { z } from 'zod';
 import { fieldPaths } from './field-paths.ts';
 import type { TypeFields } from './fields.ts';
 import { validateDocumentFields } from './validate-document-fields.ts';
-import type { ValueWrapper } from './primitives.ts';
 import { coreValueSchema, extraValueSchema, valueSchemaForFields } from './values.ts';
 
 const FIELDS: TypeFields = {

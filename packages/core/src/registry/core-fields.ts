@@ -1,5 +1,5 @@
-import { LANGUAGE_CODES } from '../domain/languages.ts';
-import type { FieldDefinition } from './primitives.ts';
+import { LANGUAGE_CODES } from '@liasse/contract/domain';
+import type { FieldDefinition } from '@liasse/contract/registry';
 
 // The common core is fixed here and nowhere else: no registry operation reads or writes
 // it, and its names are reserved so that a type field can never shadow one.

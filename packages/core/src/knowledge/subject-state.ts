@@ -1,8 +1,8 @@
+import type { DocumentState, LinkKind, SubjectKind } from '@liasse/contract/domain';
 import { and, eq, inArray, or, type SQL, sql } from 'drizzle-orm';
 import type { Database } from '../db/client.ts';
 import { documents } from '../db/schema/documents.ts';
 import { documentLinks } from '../db/schema/knowledge.ts';
-import type { DocumentState, LinkKind, SubjectKind } from '../domain/enums.ts';
 import { effectiveState, holdsId } from './read-shared.ts';
 
 // What the state of a subject is read from, for each of its documents.

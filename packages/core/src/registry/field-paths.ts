@@ -1,6 +1,6 @@
+import type { FieldDefinition, FieldPrimitive } from '@liasse/contract/registry';
 import { CORE_FIELDS, KEY_DATES_FIELD } from './core-fields.ts';
 import type { TypeFields } from './fields.ts';
-import type { FieldDefinition, FieldPrimitive } from './primitives.ts';
 
 export type FieldPath =
   | {

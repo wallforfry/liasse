@@ -1,4 +1,4 @@
-import type { EntityMatchRule } from '../domain/enums.ts';
+import type { EntityMatchRule } from '@liasse/contract/domain';
 import {
   decideBySimilarity,
   ENTITY_SIMILARITY,

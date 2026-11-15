@@ -1,6 +1,6 @@
+import { ENTITY_ARBITRATION_SIMILARITY, ENTITY_ATTACH_SIMILARITY } from '@liasse/contract/domain';
 import { loadConfig } from '@liasse/core/config';
 import { createEmbedder } from '@liasse/core/embeddings';
-import { ENTITY_ARBITRATION_SIMILARITY, ENTITY_ATTACH_SIMILARITY } from '@liasse/core/domain';
 import { loadCorpus } from '../corpus.ts';
 import {
   type Calibration,

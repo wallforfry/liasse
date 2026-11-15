@@ -1,8 +1,8 @@
+import type { JobStatus } from '@liasse/contract/domain';
 import { eq } from 'drizzle-orm';
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 import { documents } from '../db/schema/documents.ts';
 import { jobs } from '../db/schema/jobs.ts';
-import type { JobStatus } from '../domain/enums.ts';
 import { deleteDocument } from '../ingest/delete-document.ts';
 import { insertSyntheticDocument, type NewDocumentRow } from '../testing/fixtures.ts';
 import { createTestDatabase, type TestDatabase } from '../testing/test-database.ts';

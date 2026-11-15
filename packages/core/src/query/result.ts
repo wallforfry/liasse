@@ -1,12 +1,11 @@
+import type { AggregateFunction, QueryWarning } from '@liasse/contract/query';
+import { isPlainRecord } from '@liasse/contract/registry';
 import { z } from 'zod';
 import type { JsonObject } from '../db/columns.ts';
-import { isPlainRecord } from '../registry/own.ts';
 import type { QueryPrimitive } from './capabilities.ts';
 import type { CheckedQuery } from './check.ts';
 import type { AggregateShape, CheckedAggregate, RowsShape } from './check-shape.ts';
 import { AGGREGATE_COLUMN, GROUP_COLUMN } from './compile.ts';
-import type { AggregateFunction } from './dsl.ts';
-import type { QueryWarning } from './errors.ts';
 import type { StoredRow } from './execute.ts';
 import { exactNumberOrText, nearestNumberOrText } from './numeric-text.ts';
 

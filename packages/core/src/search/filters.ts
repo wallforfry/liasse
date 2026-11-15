@@ -1,9 +1,9 @@
+import type { SearchFilters } from '@liasse/contract/search';
 import { type SQL, sql } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/pg-core';
 import { documents } from '../db/schema/documents.ts';
 import { docTypes } from '../db/schema/registry.ts';
 import { entityIdProvenancePath } from '../domain/provenance.ts';
-import type { SearchFilters } from './input.ts';
 
 // `core` holds the name of an entity as it was extracted; the entity it resolved to is recorded
 // in the provenance of the field (spec, Data model).

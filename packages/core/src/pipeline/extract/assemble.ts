@@ -1,8 +1,7 @@
+import { type FieldDefinition, ownValue } from '@liasse/contract/registry';
 import type { ExtractedProvenance } from '../../domain/provenance.ts';
 import { CORE_FIELDS } from '../../registry/core-fields.ts';
 import type { TypeFields } from '../../registry/fields.ts';
-import { ownValue } from '../../registry/own.ts';
-import type { FieldDefinition } from '../../registry/primitives.ts';
 import { type EntityResolutions, mentionKey } from './entities.ts';
 import {
   isListReading,

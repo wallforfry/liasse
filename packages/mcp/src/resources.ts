@@ -1,5 +1,5 @@
+import { idSchema, MAX_TEXT_LENGTH } from '@liasse/contract';
 import { describeTypes, getDocument } from '@liasse/core/api';
-import { idSchema, MAX_TEXT_LENGTH } from '@liasse/core/contract';
 import { type McpServer, ResourceTemplate } from '@modelcontextprotocol/sdk/server/mcp.js';
 import type { ReadResourceResult } from '@modelcontextprotocol/sdk/types.js';
 import { type McpDeps, UNTRUSTED } from './deps.ts';

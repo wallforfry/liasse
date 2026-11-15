@@ -1,7 +1,7 @@
+import { MAX_QUERY_SUGGESTED_ENTITIES } from '@liasse/contract/domain';
 import { sql } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { entities } from '../db/schema/registry.ts';
-import { MAX_QUERY_SUGGESTED_ENTITIES } from '../domain/limits.ts';
 import { entityIdProvenancePath, PROVENANCE_ENTITY_ID_KEY } from '../domain/provenance.ts';
 import { createType } from '../registry/create-type.ts';
 import { createFakeEmbedder } from '../testing/fake-embedder.ts';

@@ -1,5 +1,5 @@
+import { MAX_FIELDS_PER_TYPE, MAX_QUERY_LISTED_FIELDS } from '@liasse/contract/domain';
 import { describe, expect, it } from 'vitest';
-import { MAX_FIELDS_PER_TYPE, MAX_QUERY_LISTED_FIELDS } from '../domain/limits.ts';
 import { editDistance } from './closest.ts';
 import { queryFields } from './fields.ts';
 import { findField } from './find-field.ts';

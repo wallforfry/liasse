@@ -1,5 +1,5 @@
+import type { EntityIdentifierType, EntityKind, SchemaLanguage } from '@liasse/contract/domain';
 import type { Database } from '../db/client.ts';
-import type { EntityIdentifierType, EntityKind, SchemaLanguage } from '../domain/enums.ts';
 import type { EntityProvenance } from '../domain/provenance.ts';
 import type { IdentifierKey } from '../entities/sensitive.ts';
 import type { SimilarityThresholds } from '../entities/similarity.ts';

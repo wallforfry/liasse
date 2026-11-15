@@ -1,7 +1,12 @@
+import {
+  type EmbeddingProvider,
+  embeddingProviderSchema,
+  type LlmProvider,
+  llmProviderSchema,
+  MAX_EMBEDDING_DIM,
+  MIN_EMBEDDING_INPUT_TOKENS,
+} from '@liasse/contract/domain';
 import { z } from 'zod';
-import type { EmbeddingProvider, LlmProvider } from '../domain/enums.ts';
-import { MAX_EMBEDDING_DIM, MIN_EMBEDDING_INPUT_TOKENS } from '../domain/limits.ts';
-import { embeddingProviderSchema, llmProviderSchema } from '../domain/schemas.ts';
 import {
   baseUrl,
   type CrossFieldProblem,

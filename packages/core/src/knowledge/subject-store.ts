@@ -1,6 +1,6 @@
+import type { SubjectKind } from '@liasse/contract/domain';
 import { and, asc, cosineDistance, eq, inArray, isNotNull, type SQL, sql } from 'drizzle-orm';
 import { subjects } from '../db/schema/knowledge.ts';
-import type { SubjectKind } from '../domain/enums.ts';
 import type { EntityReader, EntityTransaction } from '../entities/entity-store.ts';
 import type { Embedding } from '../models/ports.ts';
 import {

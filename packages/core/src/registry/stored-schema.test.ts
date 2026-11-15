@@ -1,5 +1,5 @@
+import { MAX_FIELDS_PER_TYPE } from '@liasse/contract/domain';
 import { describe, expect, it } from 'vitest';
-import { MAX_FIELDS_PER_TYPE } from '../domain/limits.ts';
 import {
   FIELD_ANNOTATION,
   InvalidTypeSchemaError,

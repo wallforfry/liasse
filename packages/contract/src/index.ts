@@ -117,4 +117,4 @@ export {
   HEALTH_STATUSES,
   healthSchema,
 } from './system.ts';
-export { type QueryDsl, queryDslSchema } from '../query/dsl.ts';
+export { type QueryDsl, queryDslSchema } from './query/dsl.ts';

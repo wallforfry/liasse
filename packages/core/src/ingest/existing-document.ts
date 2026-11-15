@@ -1,13 +1,13 @@
-import { and, eq, lt, sql } from 'drizzle-orm';
-import type { Database } from '../db/client.ts';
-import { documents, isLiveDocument } from '../db/schema/documents.ts';
 import {
   type DocumentSource,
   type DocumentStatus,
   isLiveStatus,
+  MAX_WATCH_REQUEUES,
   type SupportedMime,
-} from '../domain/enums.ts';
-import { MAX_WATCH_REQUEUES } from '../domain/limits.ts';
+} from '@liasse/contract/domain';
+import { and, eq, lt, sql } from 'drizzle-orm';
+import type { Database } from '../db/client.ts';
+import { documents, isLiveDocument } from '../db/schema/documents.ts';
 import { enqueue } from '../jobs/enqueue.ts';
 import type { StorageKey } from '../storage/key.ts';
 import type { Storage } from '../storage/port.ts';

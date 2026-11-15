@@ -1,9 +1,12 @@
+import {
+  type ChangeKind,
+  type ChangeStatus,
+  MAX_CHANGE_RATIONALE_LENGTH,
+} from '@liasse/contract/domain';
 import { and, asc, eq, inArray, sql, type SQL } from 'drizzle-orm';
 import type { Database } from '../db/client.ts';
 import type { JsonObject } from '../db/columns.ts';
 import { typeChanges } from '../db/schema/registry.ts';
-import type { ChangeKind, ChangeStatus } from '../domain/enums.ts';
-import { MAX_CHANGE_RATIONALE_LENGTH } from '../domain/limits.ts';
 
 export type ChangeTransaction = Parameters<Parameters<Database['transaction']>[0]>[0];
 export type ChangeReader = Database | ChangeTransaction;

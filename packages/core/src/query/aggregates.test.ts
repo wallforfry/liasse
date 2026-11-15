@@ -1,3 +1,4 @@
+import { AGGREGATE_FUNCTIONS, type AggregateFunction } from '@liasse/contract/query';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { entities } from '../db/schema/registry.ts';
 import { createType } from '../registry/create-type.ts';
@@ -5,7 +6,6 @@ import { createFakeEmbedder } from '../testing/fake-embedder.ts';
 import { insertSyntheticDocument } from '../testing/fixtures.ts';
 import { createTestDatabase, type TestDatabase } from '../testing/test-database.ts';
 import type { QueryPrimitive } from './capabilities.ts';
-import { AGGREGATE_FUNCTIONS, type AggregateFunction } from './dsl.ts';
 import { runQuery } from './run.ts';
 
 const INVOICE_FIELDS = {

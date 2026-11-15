@@ -26,6 +26,7 @@
   },
   "dependencies": {
     "@hono/node-server": "^2.1.8",
+    "@liasse/contract": "workspace:*",
     "@liasse/core": "workspace:*",
     "@liasse/mcp": "workspace:*",
     "hash-wasm": "4.12.0",

@@ -1,5 +1,5 @@
+import { UPLOAD_FILE_FIELD } from '@liasse/contract';
 import { type ApiContext, ApiError, uploadDocument } from '@liasse/core/api';
-import { UPLOAD_FILE_FIELD } from '@liasse/core/contract';
 import { Hono, type MiddlewareHandler } from 'hono';
 import { failureOf } from '../../http/errors.ts';
 import { MULTIPART_OVERHEAD_BYTES, textUploadOptionsSchema } from '../../http/routes/upload.ts';

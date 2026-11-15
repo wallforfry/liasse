@@ -1,14 +1,14 @@
-import { count, sql } from 'drizzle-orm';
-import { z } from 'zod';
-import type { SubjectList } from '../contract/knowledge.ts';
-import type { Database } from '../db/client.ts';
-import { documents } from '../db/schema/documents.ts';
+import type { SubjectList } from '@liasse/contract';
 import {
   DEFAULT_SUBJECT_LIST_LIMIT,
   MAX_SUBJECT_LIST_LIMIT,
   MAX_SUBJECT_NAME_LENGTH,
-} from '../domain/limits.ts';
-import { subjectKindSchema } from '../domain/schemas.ts';
+  subjectKindSchema,
+} from '@liasse/contract/domain';
+import { count, sql } from 'drizzle-orm';
+import { z } from 'zod';
+import type { Database } from '../db/client.ts';
+import { documents } from '../db/schema/documents.ts';
 import type { KnowledgeReadContext } from './context.ts';
 import { visibleDocument } from './read-shared.ts';
 import { designatedBy, shownTo } from './subject-designation.ts';

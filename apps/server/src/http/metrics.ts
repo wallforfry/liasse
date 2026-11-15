@@ -1,5 +1,5 @@
+import { DOCUMENT_STATUSES, isLiveStatus } from '@liasse/contract/domain';
 import type { Stats } from '@liasse/core/api';
-import { DOCUMENT_STATUSES, isLiveStatus } from '@liasse/core/domain';
 
 export const METRICS_CONTENT_TYPE = 'text/plain; version=0.0.4; charset=utf-8';
 

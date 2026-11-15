@@ -1,5 +1,5 @@
+import type { DocumentSource } from '@liasse/contract/domain';
 import { documentLinks } from '../db/schema/knowledge.ts';
-import type { DocumentSource } from '../domain/enums.ts';
 import { IngestError } from '../ingest/errors.ts';
 import { ingestFile } from '../ingest/ingest-file.ts';
 import { writeIfBothLive } from '../ingest/live-write.ts';

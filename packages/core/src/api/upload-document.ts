@@ -1,5 +1,5 @@
-import { type UploadResult, uploadResultSchema } from '../contract/documents.ts';
-import type { DocumentSource } from '../domain/enums.ts';
+import { type UploadResult, uploadResultSchema } from '@liasse/contract';
+import type { DocumentSource } from '@liasse/contract/domain';
 import {
   EmptyFileError,
   FileTooLargeError,

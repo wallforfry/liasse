@@ -1,10 +1,10 @@
-import { and, asc, eq, type SQL, sql } from 'drizzle-orm';
 import {
   type Timeline,
   type TimelineInput,
-  type TimelineItem,
   timelineInputSchema,
-} from '../contract/knowledge-reads.ts';
+  type TimelineItem,
+} from '@liasse/contract';
+import { and, asc, eq, type SQL, sql } from 'drizzle-orm';
 import type { Database } from '../db/client.ts';
 import { documents } from '../db/schema/documents.ts';
 import { facts } from '../db/schema/knowledge.ts';

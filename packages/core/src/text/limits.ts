@@ -1,4 +1,4 @@
-import { DEFAULT_MAX_VISION_PAGES } from '../domain/limits.ts';
+import { DEFAULT_MAX_VISION_PAGES } from '@liasse/contract/domain';
 
 const MEBIBYTE = 1024 * 1024;
 

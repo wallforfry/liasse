@@ -1,23 +1,20 @@
-import { z } from 'zod';
-import { ENTITY_IDENTIFIER_TYPES } from '../../domain/enums.ts';
 import {
+  ENTITY_IDENTIFIER_TYPES,
+  entityKindSchema,
+  isoDateSchema,
   MAX_ENTITY_CONTEXT_LENGTH,
   MAX_ENTITY_NAME_LENGTH,
   MAX_FACT_LENGTH,
   MAX_IDENTIFIER_VALUE_LENGTH,
   MAX_IDENTIFIERS_PER_MENTION,
   MAX_SUBJECT_NAME_LENGTH,
-} from '../../domain/limits.ts';
-import {
-  entityKindSchema,
   noticePeriodUnitSchema,
   subjectKindSchema,
-} from '../../domain/schemas.ts';
-import { isoDateSchema } from '../../domain/values.ts';
+} from '@liasse/contract/domain';
+import { isPlainRecord, untypedValueSchema, type ValueWrapper } from '@liasse/contract/registry';
+import { z } from 'zod';
 import { CORE_FIELD_NAMES } from '../../registry/core-fields.ts';
 import type { TypeFields } from '../../registry/fields.ts';
-import { isPlainRecord } from '../../registry/own.ts';
-import { untypedValueSchema, type ValueWrapper } from '../../registry/primitives.ts';
 import { coreValueSchema, valueSchemaForFields } from '../../registry/values.ts';
 
 export const MAX_QUOTE_LENGTH = 300;

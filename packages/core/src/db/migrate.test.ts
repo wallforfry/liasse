@@ -1,6 +1,3 @@
-import { sql } from 'drizzle-orm';
-import postgres from 'postgres';
-import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import {
   CHANGE_KINDS,
   CHANGE_STATUSES,
@@ -13,7 +10,10 @@ import {
   LINK_KINDS,
   SUBJECT_KINDS,
   TYPE_STATUSES,
-} from '../domain/enums.ts';
+} from '@liasse/contract/domain';
+import { sql } from 'drizzle-orm';
+import postgres from 'postgres';
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { createTestDatabase, type TestDatabase } from '../testing/test-database.ts';
 import {
   EmbeddingDimensionMismatchError,

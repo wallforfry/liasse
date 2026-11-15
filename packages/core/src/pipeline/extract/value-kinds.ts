@@ -1,8 +1,12 @@
-import { isoDateSchema } from '../../domain/values.ts';
+import { isoDateSchema } from '@liasse/contract/domain';
+import {
+  type FieldDefinition,
+  isPlainRecord,
+  ownValue,
+  type ScalarFieldDefinition,
+} from '@liasse/contract/registry';
 import { CORE_FIELDS, KEY_DATES_FIELD } from '../../registry/core-fields.ts';
 import type { TypeFields } from '../../registry/fields.ts';
-import { isPlainRecord, ownValue } from '../../registry/own.ts';
-import type { FieldDefinition, ScalarFieldDefinition } from '../../registry/primitives.ts';
 import type { SupportKind } from './support.ts';
 
 /** How the quote of each value of a section is read: by its field, or by its shape. */

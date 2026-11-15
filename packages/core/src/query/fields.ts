@@ -1,6 +1,6 @@
+import { moneySchema, periodSchema } from '@liasse/contract/domain';
 import type { SQL } from 'drizzle-orm';
 import { entityIdProvenancePath } from '../domain/provenance.ts';
-import { moneySchema, periodSchema } from '../domain/values.ts';
 import { type FieldPath, fieldPaths } from '../registry/field-paths.ts';
 import type { TypeFields } from '../registry/fields.ts';
 import type { QueryPrimitive } from './capabilities.ts';

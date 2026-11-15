@@ -1,5 +1,6 @@
-import { z } from 'zod';
 import {
+  isoDateSchema,
+  keyDateKindSchema,
   MAX_FACT_LENGTH,
   MAX_FACTS_PER_DOCUMENT,
   MAX_IDENTIFIER_VALUE_LENGTH,
@@ -9,9 +10,10 @@ import {
   MAX_NOTICE_PERIOD,
   MAX_SUBJECT_NAME_LENGTH,
   MAX_SUBJECTS_PER_DOCUMENT,
-} from '../domain/limits.ts';
-import { keyDateKindSchema, noticePeriodUnitSchema, subjectKindSchema } from '../domain/schemas.ts';
-import { isoDateSchema } from '../domain/values.ts';
+  noticePeriodUnitSchema,
+  subjectKindSchema,
+} from '@liasse/contract/domain';
+import { z } from 'zod';
 
 // The knowledge section of one extraction call, as the pipeline hands it over once it has
 // verified the quotes and resolved the entities. Every text in it was read in a document

@@ -1,3 +1,4 @@
+import { TOMBSTONE_STATUS } from '@liasse/contract/domain';
 import { ne, sql } from 'drizzle-orm';
 import {
   boolean,
@@ -9,7 +10,6 @@ import {
   real,
   text,
 } from 'drizzle-orm/pg-core';
-import { TOMBSTONE_STATUS } from '../../domain/enums.ts';
 import { ID_PREFIXES, newId } from '../../domain/ids.ts';
 import {
   embeddingVector,
@@ -88,7 +88,7 @@ export const documents = pgTable(
  * A deleted document leaves a tombstone: its row, with the status `deleted`, the hash
  * of its file and none of its content. A tombstone is not a document: every query that
  * lists, counts, searches or serves documents adds this condition to its `where`.
- * `isLiveStatus` in `@liasse/core/domain` is the same rule for a row already read.
+ * `isLiveStatus` in `@liasse/contract/domain` is the same rule for a row already read.
  */
 export const isLiveDocument = ne(documents.status, TOMBSTONE_STATUS);
 

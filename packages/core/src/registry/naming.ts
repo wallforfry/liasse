@@ -1,6 +1,10 @@
+import {
+  type EntityKind,
+  MAX_FIELD_NAME_LENGTH,
+  MAX_SLUG_LENGTH,
+  type SchemaLanguage,
+} from '@liasse/contract/domain';
 import { normalizeEntityName, significantWords } from '../domain/entity-name.ts';
-import type { EntityKind, SchemaLanguage } from '../domain/enums.ts';
-import { MAX_FIELD_NAME_LENGTH, MAX_SLUG_LENGTH } from '../domain/limits.ts';
 import { CORE_FIELD_NAMES } from './core-fields.ts';
 
 export const NAMING_RULES = [

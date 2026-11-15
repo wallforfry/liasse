@@ -1,6 +1,6 @@
+import type { FieldDefinition } from '@liasse/contract/registry';
 import type { FieldIssue } from './fields.ts';
 import type { NamingViolation } from './naming.ts';
-import type { FieldDefinition } from './primitives.ts';
 
 interface Failure<Code extends string> {
   readonly code: Code;

@@ -1,9 +1,9 @@
 import { createHash } from 'node:crypto';
+import type { JobStatus } from '@liasse/contract/domain';
 import { and, eq } from 'drizzle-orm';
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 import { documents } from '../db/schema/documents.ts';
 import { jobs } from '../db/schema/jobs.ts';
-import type { JobStatus } from '../domain/enums.ts';
 import { storageKeyOf } from '../storage/key.ts';
 import { syntheticPdf } from '../testing/synthetic-files.ts';
 import { deleteDocument } from './delete-document.ts';

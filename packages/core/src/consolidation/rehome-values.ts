@@ -1,6 +1,5 @@
+import { err, ok, ownValue, type Result } from '@liasse/contract/registry';
 import type { TypeFields } from '../registry/fields.ts';
-import { ownValue } from '../registry/own.ts';
-import { err, ok, type Result } from '../registry/result.ts';
 import { validateDocumentFields } from '../registry/validate-document-fields.ts';
 
 type Values = Readonly<Record<string, unknown>>;

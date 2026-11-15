@@ -1,7 +1,7 @@
+import type { DocumentStatus } from '@liasse/contract/domain';
 import type { Database } from '../db/client.ts';
 import { documentPages } from '../db/schema/documents.ts';
 import { docTypes } from '../db/schema/registry.ts';
-import type { DocumentStatus } from '../domain/enums.ts';
 import type { EntityProvenance } from '../domain/provenance.ts';
 import type { Embedder } from '../models/ports.ts';
 import { insertSyntheticDocument } from '../testing/fixtures.ts';

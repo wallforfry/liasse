@@ -1,8 +1,8 @@
+import { TOMBSTONE_STATUS } from '@liasse/contract/domain';
 import { and, eq, inArray, isNotNull, notExists, or, sql } from 'drizzle-orm';
 import type { Database } from '../db/client.ts';
 import { documents } from '../db/schema/documents.ts';
 import { jobs } from '../db/schema/jobs.ts';
-import { TOMBSTONE_STATUS } from '../domain/enums.ts';
 import { enqueueHindsightSync, hindsightSyncJob } from './sync-job.ts';
 
 export interface HindsightForgetSweepDeps {

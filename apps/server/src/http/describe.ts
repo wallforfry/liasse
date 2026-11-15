@@ -1,4 +1,4 @@
-import { errorBodySchema } from '@liasse/core/contract';
+import { errorBodySchema } from '@liasse/contract';
 import { describeRoute, type DescribeRouteOptions, resolver, validator } from 'hono-openapi';
 import type { ValidationTargets } from 'hono';
 import type { z } from 'zod';

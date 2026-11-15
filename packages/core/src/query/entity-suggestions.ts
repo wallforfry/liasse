@@ -1,16 +1,16 @@
-import { sql } from 'drizzle-orm';
-import { z } from 'zod';
-import { documents, isLiveDocument } from '../db/schema/documents.ts';
 import {
   MAX_QUERY_SUGGESTED_ENTITIES,
   MAX_QUERY_SUGGESTION_CANDIDATES,
   MAX_QUERY_SUGGESTION_NAMES,
-} from '../domain/limits.ts';
+} from '@liasse/contract/domain';
+import { cut, type QueryError } from '@liasse/contract/query';
+import { ok, type Result } from '@liasse/contract/registry';
+import { sql } from 'drizzle-orm';
+import { z } from 'zod';
+import { documents, isLiveDocument } from '../db/schema/documents.ts';
 import { PROVENANCE_ENTITY_ID_KEY } from '../domain/provenance.ts';
-import { ok, type Result } from '../registry/result.ts';
 import { textParameters } from './access.ts';
 import { editDistance, isClose, rankByDistance } from './closest.ts';
-import { cut, type QueryError } from './errors.ts';
 import { executeStatement } from './execute.ts';
 import { type EntityReading, type KnownEntity, queryNameKey } from './entity-index.ts';
 

@@ -1,9 +1,16 @@
-import { MAX_QUERY_IN_VALUES, MAX_QUERY_STRING_LENGTH } from '../domain/limits.ts';
-import { err, ok, type Result } from '../registry/result.ts';
+import { MAX_QUERY_IN_VALUES, MAX_QUERY_STRING_LENGTH } from '@liasse/contract/domain';
+import {
+  failure,
+  notAllowed,
+  type Operator,
+  type QueryDsl,
+  type QueryError,
+  type QueryLocation,
+  quoted,
+} from '@liasse/contract/query';
+import { err, ok, type Result } from '@liasse/contract/registry';
 import { capabilitiesOf } from './capabilities.ts';
 import { collect } from './collect.ts';
-import type { Operator, QueryDsl } from './dsl.ts';
-import { failure, notAllowed, type QueryError, type QueryLocation, quoted } from './errors.ts';
 import type { QueryField } from './fields.ts';
 import { findField, partsHint } from './find-field.ts';
 
