@@ -7,6 +7,8 @@ import { SETTLED_STATUSES } from './document.ts';
 
 const payload = z.object({ documentId: z.string().min(1) });
 
+const REEXTRACT_MAX_ATTEMPTS = PROCESS_DOCUMENT_MAX_ATTEMPTS;
+
 /**
  * Extracts the fields of a document again from the text stored for it, with the current
  * schema of its type: one text-model call, never a vision call. Queued by consolidation
@@ -17,8 +19,6 @@ const payload = z.object({ documentId: z.string().min(1) });
  * flagged for review with a code: what it owes stays recorded on the document itself
  * (`confidence` and `schema_version` stay null until an extraction succeeds).
  */
-const REEXTRACT_MAX_ATTEMPTS = PROCESS_DOCUMENT_MAX_ATTEMPTS;
-
 export const reextractDocumentJob = defineJobKind({
   name: 'reextract_document',
   schema: payload,
