@@ -22,6 +22,7 @@ import {
   SUBJECT_IDENTIFIER_TYPES,
   SUBJECT_KINDS,
   SUPPORTED_MIMES,
+  TEXT_EXTRACTION_METHODS,
   TOMBSTONE_STATUS,
   TYPE_STATUSES,
 } from './enums.ts';
@@ -33,6 +34,7 @@ export const documentSourceSchema = z.enum(DOCUMENT_SOURCES);
 export const documentStateSchema = z.enum(DOCUMENT_STATES);
 export const processingStageSchema = z.enum(PROCESSING_STAGES);
 export const processingOutcomeSchema = z.enum(PROCESSING_OUTCOMES);
+export const textExtractionMethodSchema = z.enum(TEXT_EXTRACTION_METHODS);
 export const typeStatusSchema = z.enum(TYPE_STATUSES);
 export const changeKindSchema = z.enum(CHANGE_KINDS);
 export const changeStatusSchema = z.enum(CHANGE_STATUSES);

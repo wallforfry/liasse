@@ -11,14 +11,10 @@ export { NATIVE_PAGE_MIN_CHARS, NATIVE_PDF_MIN_CHARS_PER_PAGE } from './pdf/extr
 export { PDF_RENDER_DPI } from './pdf/render.ts';
 export { TRANSCRIPTION_PROMPT } from './transcription-prompt.ts';
 export {
-  PAGE_TEXT_METHODS,
-  TEXT_EXTRACTION_METHODS,
   type ExtractedAttachment,
   type ExtractedPage,
   type ExtractedText,
   type ExtractTextDeps,
   type ExtractTextInput,
-  type PageTextMethod,
   type PdfRendererOptions,
-  type TextExtractionMethod,
 } from './types.ts';

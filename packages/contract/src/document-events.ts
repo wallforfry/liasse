@@ -4,6 +4,7 @@ import {
   liveDocumentStatusSchema,
   processingOutcomeSchema,
   processingStageSchema,
+  textExtractionMethodSchema,
 } from './domain/schemas.ts';
 
 const count = z.int().min(0);
@@ -11,7 +12,7 @@ const count = z.int().min(0);
 // Counts and labels only: an event never holds a value read from the document, a quote,
 // an identifier or an error message.
 export const documentEventDetailsSchema = z.strictObject({
-  text_method: z.string().optional().describe('How the text was read: native, vision or mixed.'),
+  text_method: textExtractionMethodSchema.optional(),
   pages: count.optional(),
   attachments_ingested: count.optional(),
   attachments_skipped: count.optional(),
