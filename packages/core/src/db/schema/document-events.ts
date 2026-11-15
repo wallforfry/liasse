@@ -27,6 +27,8 @@ export const documentEvents = pgTable(
     errorCode: text('error_code'),
     errorName: text('error_name'),
     retryable: boolean('retryable'),
+    httpStatus: integer('http_status'),
+    providerCode: text('provider_code'),
     model: text('model'),
     details: jsonObject('details'),
   },

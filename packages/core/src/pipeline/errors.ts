@@ -26,8 +26,8 @@ export class DocumentProcessingError extends PermanentJobError {
   override readonly name = 'DocumentProcessingError';
   readonly code: string;
 
-  constructor(code: string) {
-    super(`The document cannot be processed (${code})`);
+  constructor(code: string, options?: ErrorOptions) {
+    super(`The document cannot be processed (${code})`, options);
     this.code = code;
   }
 }

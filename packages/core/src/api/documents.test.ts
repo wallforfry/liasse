@@ -249,6 +249,8 @@ describe('documents of the API', () => {
           max_attempts: 3,
           error_code: 'text_process_timeout',
           error_name: 'TextProcessError',
+          http_status: null,
+          provider_code: null,
           retryable: true,
           model: null,
           details: {},

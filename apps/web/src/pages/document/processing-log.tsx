@@ -54,12 +54,23 @@ const attemptOf = ({ attempt, max_attempts }: DocumentEvent): string =>
       ? String(attempt)
       : `${String(attempt)} of ${String(max_attempts)}`;
 
+const providerDetailOf = ({ http_status, provider_code }: DocumentEvent): string | undefined => {
+  const parts = [
+    ...(http_status === null ? [] : [`HTTP ${String(http_status)}`]),
+    ...(provider_code === null ? [] : [provider_code]),
+  ];
+  return parts.length === 0 ? undefined : parts.join(', ');
+};
+
 const ErrorCell = ({ event }: { readonly event: DocumentEvent }) =>
   event.error_code === null ? null : (
     <span className="flex flex-col gap-0.5">
       <code className="text-xs">{event.error_code}</code>
       {event.error_name === null ? null : (
         <span className="text-xs text-muted-foreground">{event.error_name}</span>
+      )}
+      {providerDetailOf(event) === undefined ? null : (
+        <code className="text-xs text-muted-foreground">{providerDetailOf(event)}</code>
       )}
       {event.retryable === false ? (
         <span className="text-xs text-muted-foreground">not retryable</span>

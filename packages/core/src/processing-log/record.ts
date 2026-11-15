@@ -16,6 +16,8 @@ export interface DocumentEventInput {
   readonly errorCode?: string;
   readonly errorName?: string;
   readonly retryable?: boolean;
+  readonly httpStatus?: number;
+  readonly providerCode?: string;
   readonly model?: string;
   readonly details?: DocumentEventDetails;
 }

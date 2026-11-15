@@ -121,6 +121,33 @@ describe('the processing log of a document', () => {
     expect(JSON.stringify(await eventsOf(id))).not.toContain(SECRET);
   });
 
+  it('logs the model, HTTP status and code of a provider refusal, and keeps it as the cause', async () => {
+    const id = await harness.ingest('refused');
+    const refusal = new ModelProviderError({
+      provider: 'openai',
+      model: 'synthetic-model',
+      retryable: false,
+      statusCode: 400,
+      code: 'invalid_request_error:invalid_json_schema',
+    });
+    const thrown = await run(classifyFailing(refusal), processDocumentJob.name, id, 1).then(
+      () => undefined,
+      (error: unknown) => error,
+    );
+    expect(thrown).toBeInstanceOf(Error);
+    expect(thrown instanceof Error ? thrown.cause : undefined).toBe(refusal);
+    expect((await eventsOf(id)).filter(({ outcome }) => outcome === 'failed')).toMatchObject([
+      {
+        stage: 'classification',
+        errorCode: 'model_provider_failed',
+        model: 'synthetic-model',
+        httpStatus: 400,
+        providerCode: 'invalid_request_error:invalid_json_schema',
+        retryable: false,
+      },
+    ]);
+  });
+
   it('logs a failure another attempt cannot fix as final, at the first attempt', async () => {
     const id = await harness.ingest('encrypted');
     const deps = harness.deps({
