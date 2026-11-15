@@ -7,10 +7,10 @@ import { useClient } from '../../api/session.ts';
 import { Alert, AlertDescription, AlertTitle } from '../../components/ui/alert.tsx';
 import { Button } from '../../components/ui/button.tsx';
 import { Checkbox } from '../../components/ui/checkbox.tsx';
-import { Input } from '../../components/ui/input.tsx';
 import { Label } from '../../components/ui/label.tsx';
 import { Textarea } from '../../components/ui/textarea.tsx';
 import { type CorrectionDraft, draftOf, readCorrection } from './correction.ts';
+import { TypePicker } from './type-picker.tsx';
 
 // `invalid_correction` lists what the registry refused, one message per value.
 const problemsOf = (error: unknown): readonly string[] => {
@@ -79,11 +79,11 @@ export const CorrectionForm = ({ document }: { readonly document: DocumentView }
       )}
       <div className="grid gap-2">
         <Label htmlFor="correction-type">Type</Label>
-        <Input
+        <TypePicker
           id="correction-type"
           value={draft.type}
-          onChange={(event) => {
-            edit({ type: event.target.value });
+          onChange={(type) => {
+            edit({ type });
           }}
         />
       </div>
