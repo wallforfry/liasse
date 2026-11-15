@@ -21,6 +21,11 @@
       "types": "./dist/index.d.ts",
       "default": "./dist/index.js"
     },
+    "./casing": {
+      "@liasse/source": "./src/casing.ts",
+      "types": "./dist/casing.d.ts",
+      "default": "./dist/casing.js"
+    },
     "./domain": {
       "@liasse/source": "./src/domain/index.ts",
       "types": "./dist/domain/index.d.ts",

@@ -57,7 +57,6 @@ export {
   type UpcomingOptions,
   upcomingOptionsSchema,
 } from './registry.ts';
-export { notSnakeCase, wireKeyPaths } from './casing.ts';
 export { idSchema } from './id.ts';
 export {
   type GetSubjectInput,

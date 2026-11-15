@@ -1,4 +1,4 @@
-import { notSnakeCase, wireKeyPaths } from '@liasse/contract';
+import { notSnakeCase, wireKeyPaths } from '@liasse/contract/casing';
 import { describe, expect, it } from 'vitest';
 import { mergeEntityPayloadSchema } from '../entities/proposal-store.ts';
 import {
