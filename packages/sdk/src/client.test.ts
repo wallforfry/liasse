@@ -58,6 +58,33 @@ describe('createLiasseClient', () => {
     );
   });
 
+  it('sends a session through its cookie, with the CSRF token on what changes something', async () => {
+    const server = answering((url) =>
+      url.endsWith('/documents/doc_01') ? new Response(null, { status: 204 }) : json(EMPTY_LIST),
+    );
+    const tokens = ['synthetic-csrf-1', 'synthetic-csrf-2'];
+    const client = createLiasseClient({
+      baseUrl: 'https://liasse.example.com',
+      session: { csrfToken: () => tokens.shift() ?? 'synthetic-csrf-spent' },
+      fetch: server.fetch,
+    });
+    await client.listDocuments();
+    await client.deleteDocument('doc_01');
+    await client.deleteDocument('doc_01');
+    const headers = server.sent.map(({ init }) => new Headers(init?.headers));
+    expect(headers.map((sent) => sent.get('X-CSRF-Token'))).toEqual([
+      null,
+      'synthetic-csrf-1',
+      'synthetic-csrf-2',
+    ]);
+    expect(headers.map((sent) => sent.get('Authorization'))).toEqual([null, null, null]);
+    expect(server.sent.map(({ init }) => init?.credentials)).toEqual([
+      'same-origin',
+      'same-origin',
+      'same-origin',
+    ]);
+  });
+
   it('forwards the filters of every list and the decision on a change', async () => {
     const answers: Readonly<Record<string, unknown>> = {
       '/subjects': { subjects: [], truncated: false },
