@@ -1,3 +1,4 @@
+import { mcpResourceOf } from '@liasse/core/auth';
 import type { Config } from '@liasse/core/config';
 import { describeEmbeddingWindow } from '@liasse/core/embeddings';
 import { describeModelPrivacy, type HostLookup } from '@liasse/core/models';
@@ -9,7 +10,7 @@ const describeListener = ({ host }: Config['server']): string | undefined =>
   LOOPBACK_HOSTS.includes(host)
     ? undefined
     : `Notice: the server listens on ${host}, beyond this machine. Every route but /health ` +
-      'needs a Bearer token or a signed file URL; put TLS in front of it.';
+      'needs an API key, a session of the web UI or a signed file URL; put TLS in front of it.';
 
 // A wildcard address is where the server listens, not where it is reached: the default
 // of PUBLIC_URL is then the loopback address, which only this machine can open.
@@ -19,12 +20,19 @@ const describePublicUrl = ({ host, port, publicUrl }: Config['server']): string 
       `${publicUrl}. Set PUBLIC_URL to the origin clients reach the server at.`
     : undefined;
 
-const describeOptionalParts = ({ pipeline, hindsight, auth }: Config): string =>
+// OAuth 2.1 needs https, but on the loopback: on plain http elsewhere, MCP over HTTP
+// takes API keys only.
+const describeMcpOAuth = ({ publicUrl }: Config['server']): string | undefined =>
+  mcpResourceOf(publicUrl) === undefined
+    ? `Notice: PUBLIC_URL is ${publicUrl}, plain http beyond this machine: MCP over HTTP ` +
+      'accepts API keys only, and no OAuth client can connect. Serve it on https.'
+    : undefined;
+
+const describeOptionalParts = ({ pipeline, hindsight }: Config): string =>
   'Optional parts: ' +
   [
     `watched folder ${pipeline.watchDir === undefined ? 'off' : 'on'}`,
     `Hindsight ${hindsight === undefined ? 'off' : 'configured'}`,
-    `web UI ${auth.ui === undefined ? 'off' : 'configured'}`,
   ].join(', ') +
   '.';
 
@@ -45,6 +53,7 @@ export const startupNotices = async (
     describeEmbeddingWindow(config.embedding),
     describeListener(config.server),
     describePublicUrl(config.server),
+    describeMcpOAuth(config.server),
     describeOptionalParts(config),
   ].filter((line) => line !== undefined);
 };

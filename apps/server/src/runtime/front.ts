@@ -4,6 +4,7 @@ import { serveStdio } from '@liasse/mcp';
 import { createApp } from '../http/app.ts';
 import { loadWebAssets, resolveWebAssetsDirectory } from '../http/ui/web-assets.ts';
 import type { Logger } from '../log.ts';
+import { startAuth } from './auth.ts';
 import { reportMcpFailure } from '../mcp-failures.ts';
 import type { ShutdownStep } from '../shutdown.ts';
 import { listen } from './listen.ts';
@@ -48,21 +49,14 @@ export const startFront = async ({
     logger.notice('Liasse is serving MCP on stdio');
     return { stop: { name: 'mcp', run: session.close }, ended: session.ended };
   }
-  const { ui } = config.auth;
+  const assets = await loadWebAssets(resolveWebAssetsDirectory());
   const app = createApp({
     api,
-    apiTokens: config.auth.apiTokens,
+    auth: await startAuth({ db: api.db, config, logger }),
+    publicUrl: config.server.publicUrl,
+    assets,
     ping,
     logger,
-    ui:
-      ui === undefined
-        ? undefined
-        : {
-            password: ui.password,
-            sessionTtlMs: ui.sessionTtlMs,
-            secureCookies: config.server.publicUrl.startsWith('https:'),
-            assets: await loadWebAssets(resolveWebAssetsDirectory()),
-          },
   });
   const listener = await listen({
     fetch: app.fetch,

@@ -9,6 +9,9 @@ const documentSchema = z.looseObject({
   components: z.looseObject({ securitySchemes: z.record(z.string(), z.unknown()) }),
 });
 
+// The web UI and the auth server are no part of the contract of the API.
+const OUTSIDE_THE_CONTRACT = ['/', '/ui/*', '/api/auth/*', '/.well-known/*'];
+
 // `/documents/:id` in Hono is `/documents/{id}` in OpenAPI.
 const openApiPath = (path: string): string => path.replaceAll(/:([A-Za-z]+)/g, '{$1}');
 
@@ -35,7 +38,7 @@ describe('GET /openapi.json', () => {
 
   it('describes every route the application registers, and no other', () => {
     const registered = harness.app.routes
-      .filter(({ method }) => method !== 'ALL')
+      .filter(({ method, path }) => method !== 'ALL' && !OUTSIDE_THE_CONTRACT.includes(path))
       .map(({ method, path }) => `${method} ${openApiPath(path)}`);
     const { paths } = documentSchema.parse(raw);
     const described = Object.entries(paths).flatMap(([path, operations]) =>

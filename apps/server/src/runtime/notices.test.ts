@@ -43,4 +43,16 @@ describe('startupNotices', () => {
     );
     expect(configured.some((line) => line.includes('PUBLIC_URL is not set'))).toBe(false);
   });
+
+  it('says MCP takes API keys only when PUBLIC_URL is plain http beyond this machine', async () => {
+    const resolve = { resolve: () => Promise.resolve(['127.0.0.1']) };
+    const plain = await startupNotices(configOf({ PUBLIC_URL: 'http://liasse.lan' }), resolve);
+    expect(plain.some((line) => line.includes('MCP over HTTP accepts API keys only'))).toBe(true);
+    const local = await startupNotices(configOf({}), resolve);
+    const secure = await startupNotices(
+      configOf({ PUBLIC_URL: 'https://liasse.example.com' }),
+      resolve,
+    );
+    expect([...local, ...secure].some((line) => line.includes('API keys only'))).toBe(false);
+  });
 });

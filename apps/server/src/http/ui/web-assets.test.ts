@@ -41,7 +41,7 @@ describe('loadWebAssets', () => {
     expect(error).toBeInstanceOf(StartupError);
     const message = error instanceof Error ? error.message : '';
     expect(message).toContain('pnpm build');
-    expect(message).toContain('unset UI_PASSWORD');
+    expect(message).toContain(missing);
   });
 
   it('finds the build in the installed @liasse/web package', () => {
