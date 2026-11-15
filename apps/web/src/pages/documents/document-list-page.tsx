@@ -7,6 +7,7 @@ import { PageHeader } from '../../components/page-header.tsx';
 import { Button } from '../../components/ui/button.tsx';
 import { Skeleton } from '../../components/ui/skeleton.tsx';
 import { plural } from '../../lib/format.ts';
+import { pollWhileProcessing } from '../../lib/processing.ts';
 import { DocumentFilters } from './document-filters.tsx';
 import { DocumentTable } from './document-table.tsx';
 import {
@@ -35,6 +36,7 @@ export const DocumentListPage = ({ title, description, status }: DocumentListPag
     queryKey: ['documents', options],
     queryFn: async () => client.listDocuments(options),
     placeholderData: keepPreviousData,
+    refetchInterval: (query) => pollWhileProcessing(query.state.data?.documents),
   });
 
   return (

@@ -1,4 +1,4 @@
-import { type ReactNode, useEffect, useMemo, useState, useSyncExternalStore } from 'react';
+import { type ReactNode, useLayoutEffect, useMemo, useState, useSyncExternalStore } from 'react';
 import { isTheme, type ResolvedTheme, type Theme, ThemeContext } from './theme.ts';
 
 const STORAGE_KEY = 'liasse-theme';
@@ -39,7 +39,8 @@ export const ThemeProvider = ({ children }: { readonly children: ReactNode }) =>
   const system = useSyncExternalStore(subscribeToSystem, systemTheme);
   const resolvedTheme = theme === 'system' ? system : theme;
 
-  useEffect(() => {
+  // Before the first paint, so a dark page does not flash light.
+  useLayoutEffect(() => {
     document.documentElement.classList.toggle('dark', resolvedTheme === 'dark');
     document.documentElement.style.colorScheme = resolvedTheme;
   }, [resolvedTheme]);

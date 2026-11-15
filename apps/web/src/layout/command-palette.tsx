@@ -51,19 +51,6 @@ export const CommandPalette = ({ open, setOpen }: CommandPaletteProps) => {
       />
       <CommandList>
         <CommandEmpty>Nothing matches.</CommandEmpty>
-        {query.trim() === '' ? null : (
-          <CommandGroup heading="Search">
-            <CommandItem
-              value={`search ${query}`}
-              onSelect={run(() => {
-                void navigate(searchPath(query.trim()));
-              })}
-            >
-              <SearchIcon />
-              <span>Search the documents for {query.trim()}</span>
-            </CommandItem>
-          </CommandGroup>
-        )}
         <CommandGroup heading="Pages">
           {NAVIGATION.map(({ label, path, icon: Icon }) => (
             <CommandItem
@@ -98,6 +85,20 @@ export const CommandPalette = ({ open, setOpen }: CommandPaletteProps) => {
             <span>Dark theme</span>
           </CommandItem>
         </CommandGroup>
+        {/* Last, so a page or a theme the query names comes first. */}
+        {query.trim() === '' ? null : (
+          <CommandGroup heading="Search">
+            <CommandItem
+              value={`search ${query}`}
+              onSelect={run(() => {
+                void navigate(searchPath(query.trim()));
+              })}
+            >
+              <SearchIcon />
+              <span>Search the documents for {query.trim()}</span>
+            </CommandItem>
+          </CommandGroup>
+        )}
       </CommandList>
     </CommandDialog>
   );

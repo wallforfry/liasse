@@ -9,6 +9,7 @@ import { Button } from '../../components/ui/button.tsx';
 import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/card.tsx';
 import { Skeleton } from '../../components/ui/skeleton.tsx';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../../components/ui/tabs.tsx';
+import { pollWhileProcessing } from '../../lib/processing.ts';
 import { CorrectionForm } from './correction-form.tsx';
 import { DeleteDocument } from './delete-document.tsx';
 import { DocumentDetails, DocumentText, OriginalFile, ValueTable } from './document-parts.tsx';
@@ -19,6 +20,8 @@ export const DocumentPage = () => {
   const document = useQuery({
     queryKey: ['document', id],
     queryFn: async () => client.getDocument(id, { include: ['fields', 'text'] }),
+    refetchInterval: (query) =>
+      pollWhileProcessing(query.state.data === undefined ? undefined : [query.state.data]),
   });
 
   if (document.isPending) return <Skeleton className="h-96 w-full" />;

@@ -15,8 +15,8 @@ const IMAGE_TYPES: readonly string[] = ['image/jpeg', 'image/png'];
 
 const Row = ({ label, children }: { readonly label: string; readonly children: ReactNode }) => (
   <TableRow>
-    <TableHead className="w-40 align-top text-muted-foreground">{label}</TableHead>
-    <TableCell className="break-words whitespace-normal">{children}</TableCell>
+    <TableHead className="h-auto w-40 py-2 align-top text-muted-foreground">{label}</TableHead>
+    <TableCell className="align-top break-words whitespace-normal">{children}</TableCell>
   </TableRow>
 );
 
