@@ -2,7 +2,9 @@ import type { AutoApplyMode } from '@liasse/contract/domain';
 import type { Database } from '../db/client.ts';
 import { READ_COMMITTED } from '../db/isolation.ts';
 import { ID_PREFIXES, isId } from '../domain/ids.ts';
+import { lockEntities } from '../entities/entity-lock.ts';
 import { mergeEntities } from '../entities/merge.ts';
+import { isMergeChangeKind } from '../entities/proposal-store.ts';
 import { mergeSubjects } from '../knowledge/subject-merge.ts';
 import {
   applyFieldRemoval,
@@ -13,6 +15,7 @@ import {
 import {
   type ChangeTransaction,
   closeChange,
+  findChangeKind,
   lockChange,
   markUnsafe,
   type StoredChange,
@@ -104,6 +107,20 @@ const applyLocked = async (
   }
 };
 
+// The row of a change is locked after the entity lock for a merge of entities or
+// subjects: applying one rewrites the pending rows of the other merges, under that lock,
+// so a decision holding its row while it waits for the lock would deadlock with another.
+const lockPendingChange = async (
+  tx: ChangeTransaction,
+  id: string,
+): Promise<StoredChange | undefined> => {
+  if (!isId(ID_PREFIXES.typeChange, id)) return undefined;
+  const kind = await findChangeKind(tx, id);
+  if (kind === undefined) return undefined;
+  if (isMergeChangeKind(kind)) await lockEntities(tx);
+  return lockChange(tx, id);
+};
+
 // Runs `work` on a pending change whose row is locked until the transaction ends: one
 // decision per change. The registry and entity locks are taken in this transaction too,
 // which `withRegistryLock` requires to be read committed.
@@ -114,7 +131,7 @@ const onPendingChange = <Result extends PolicyResult>(
 ): Promise<Result | DecideResult> =>
   db.transaction(
     async (tx) => {
-      const stored = isId(ID_PREFIXES.typeChange, id) ? await lockChange(tx, id) : undefined;
+      const stored = await lockPendingChange(tx, id);
       if (stored === undefined) return { outcome: 'not_found' };
       if (stored.status !== 'pending') return { outcome: 'already_decided', change: stored };
       return work(tx, stored);
