@@ -311,11 +311,11 @@ describe('persistKnowledge', () => {
     });
     const document = await insertSyntheticDocument(database.db);
     const textModel = createFakeTextModel([]);
-    await store(
-      knowledge({ subjects: [candidate('vehicle', 'Van of the household')] }),
-      document,
-      { embedder: recordingEmbedder(), textModel, similarity: RULE_SIMILARITY },
-    );
+    await store(knowledge({ subjects: [candidate('vehicle', 'Van of the household')] }), document, {
+      embedder: recordingEmbedder(),
+      textModel,
+      similarity: RULE_SIMILARITY,
+    });
     expect(textModel.calls).toHaveLength(0);
     expect((await documentRow(database.db, document.id)).subjectIds).toEqual([van]);
     expect((await subjectRow(database.db, van))?.aliases).toEqual(['Van of the household']);
