@@ -154,6 +154,15 @@ export const LINK_KINDS = [
 ] as const;
 export type LinkKind = (typeof LINK_KINDS)[number];
 
+export const GRAPH_NODE_KINDS = ['document', 'type', 'subject', 'entity'] as const;
+export type GraphNodeKind = (typeof GRAPH_NODE_KINDS)[number];
+
+// An edge of the graph is a link between two documents, or one of these: a document of a
+// type, a type under its parent, a document about a subject, a document naming an entity.
+export const GRAPH_MEMBERSHIP_KINDS = ['typed_as', 'child_of', 'about', 'names'] as const;
+export const GRAPH_EDGE_KINDS = [...LINK_KINDS, ...GRAPH_MEMBERSHIP_KINDS] as const;
+export type GraphEdgeKind = (typeof GRAPH_EDGE_KINDS)[number];
+
 export const SUBJECT_KINDS = [
   'property',
   'vehicle',

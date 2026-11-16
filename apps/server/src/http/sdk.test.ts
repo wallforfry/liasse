@@ -126,6 +126,16 @@ describe('the TypeScript SDK', () => {
     expect((await idsOf(true)).toSorted()).toEqual([publicId, privateId].toSorted());
   });
 
+  it('draws the graph, with private documents only when asked', async () => {
+    const documentIdsOf = async (includePrivate: boolean) =>
+      (await client.graph({ include_private: includePrivate })).nodes
+        .filter(({ kind }) => kind === 'document')
+        .map(({ id }) => id);
+    expect(await documentIdsOf(false)).toContain(publicId);
+    expect(await documentIdsOf(false)).not.toContain(privateId);
+    expect(await documentIdsOf(true)).toEqual(expect.arrayContaining([publicId, privateId]));
+  });
+
   it('runs a structured query and refuses a malformed one with its code', async () => {
     expect(
       await client.query({ select: ['private'], where: [['title', '=', 'Public invoice']] }),

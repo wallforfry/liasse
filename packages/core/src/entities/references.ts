@@ -64,6 +64,32 @@ export const countDocumentsByEntity = async (
   return new Map(rows.map(({ entityId, total }) => [entityId, total]));
 };
 
+export interface DocumentEntity {
+  readonly documentId: string;
+  readonly entityId: string;
+}
+
+// The entities each of the documents names in an entity-typed field, core or not, once
+// per document.
+export const entitiesNamedByDocuments = async (
+  reader: EntityReader,
+  documentIds: readonly string[],
+): Promise<readonly DocumentEntity[]> => {
+  if (documentIds.length === 0) return [];
+  const referenced = sql<string>`(referenced.entry #>> '{}')`;
+  return (
+    reader
+      // The table is in a raw FROM, which Drizzle does not see: the column goes through `sql`.
+      .selectDistinct({ documentId: sql<string>`${documents.id}`, entityId: referenced })
+      .from(
+        sql`${documents} CROSS JOIN LATERAL jsonb_path_query(
+        ${documents.provenance}, ${EVERY_ENTITY_ID}::jsonpath
+      ) AS referenced(entry)`,
+      )
+      .where(inArray(documents.id, [...documentIds]))
+  );
+};
+
 // The rewrites work on the text of a JSON column. An id is a prefix and Crockford base32
 // characters: its JSON form is itself between quotes, with nothing to escape, and inside
 // a longer JSON string a quote is written `\"`. So the quoted id is only found where a

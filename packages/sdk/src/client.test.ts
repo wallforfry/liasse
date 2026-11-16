@@ -82,6 +82,7 @@ describe('createLiasseClient', () => {
       '/subjects': { subjects: [], truncated: false },
       '/entities': { entities: [], total: 0 },
       '/types': { types: [] },
+      '/graph': { nodes: [], edges: [], document_total: 0 },
       '/changes': { changes: [], truncated: false },
       '/changes/chg_01': { change: REJECTED_CHANGE, documents_to_reextract: 0 },
     };
@@ -94,6 +95,11 @@ describe('createLiasseClient', () => {
     await client.listSubjects({ query: 'home', kind: 'contract' });
     await client.listEntities({ query: 'zirc', kind: 'org', limit: 5, include_private: true });
     await client.listTypes({ status: 'stable', include_examples: true, include_private: false });
+    expect(await client.graph({ limit: 50, include_private: true })).toEqual({
+      nodes: [],
+      edges: [],
+      document_total: 0,
+    });
     expect(await client.listChanges({ kind: 'merge' })).toEqual({ changes: [], truncated: false });
     expect(
       await client.decideChange('chg_01', { decision: 'reject', note: 'Not the same type.' }),
@@ -102,10 +108,11 @@ describe('createLiasseClient', () => {
       'http://x.test/subjects?query=home&kind=contract',
       'http://x.test/entities?query=zirc&kind=org&limit=5&include_private=true',
       'http://x.test/types?status=stable&include_examples=true&include_private=false',
+      'http://x.test/graph?limit=50&include_private=true',
       'http://x.test/changes?kind=merge',
       'http://x.test/changes/chg_01',
     ]);
-    const decision = server.sent[4]?.init;
+    const decision = server.sent[5]?.init;
     expect(decision?.method).toBe('POST');
     expect(new Headers(decision?.headers).get('Content-Type')).toBe('application/json');
     expect(decision?.body).toBe(JSON.stringify({ decision: 'reject', note: 'Not the same type.' }));
