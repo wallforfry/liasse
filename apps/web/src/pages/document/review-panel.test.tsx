@@ -181,6 +181,12 @@ describe('the review panel', () => {
     await userEvent.setup().click(await screen.findByRole('button', { name: 'Submit review' }));
     expect(await screen.findByText('The correction was not saved')).toBeInTheDocument();
     expect(screen.getByText('There is no value "issuer" to confirm.')).toBeInTheDocument();
+    // Any other refusal leaves the document as it was read, and the card as it is.
+    const documentReads = server.requests.filter(
+      ({ method, path }) => method === 'GET' && path.startsWith('/documents/doc_01FLAGGED'),
+    );
+    expect(documentReads).toHaveLength(1);
+    expect(screen.queryByText(/The document changed since it was read/)).not.toBeInTheDocument();
   });
 
   it('reads the document again when a confirmed value changed since it was read', async () => {
