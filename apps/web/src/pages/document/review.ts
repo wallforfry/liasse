@@ -60,6 +60,8 @@ export const reasonSentences = (
         return 'No type could be given to it.';
       case 'reextraction_failed':
         return 'Its last re-extraction failed: its values are the ones read before.';
+      case 'flagged_at_settlement':
+        return `It was flagged when it was processed; the threshold is ${percent(review.threshold)} now.`;
       case 'rejected_values':
         return `${plural(review.rejected_values, 'value')} the model read could not be checked against the text and ${review.rejected_values === 1 ? 'was' : 'were'} left out.`;
     }
@@ -79,14 +81,24 @@ const readEdit = (text: string, current: unknown): Edited => {
   }
 };
 
+/**
+ * A field of a document whose type the review changes is extracted again for the new
+ * type: it is neither confirmed nor corrected. Core values stay.
+ */
+export const extractedAgain = (
+  value: ReviewedValue,
+  draft: ReviewDraft,
+  document: DocumentView,
+): boolean => value.section === 'fields' && draft.type.trim() !== (document.type ?? '');
+
 interface Outcome {
-  readonly confirm: readonly string[];
+  readonly confirm: Readonly<Record<string, unknown>>;
   readonly core: Readonly<Record<string, unknown>>;
   readonly fields: Readonly<Record<string, unknown>>;
   readonly problems: readonly string[];
 }
 
-const EMPTY: Outcome = { confirm: [], core: {}, fields: {}, problems: [] };
+const EMPTY: Outcome = { confirm: {}, core: {}, fields: {}, problems: [] };
 
 const decide = (
   outcome: Outcome,
@@ -94,7 +106,9 @@ const decide = (
   decision: ValueDecision,
   current: unknown,
 ): Outcome => {
-  if (decision.kind === 'accept') return { ...outcome, confirm: [...outcome.confirm, value.name] };
+  if (decision.kind === 'accept') {
+    return { ...outcome, confirm: { ...outcome.confirm, [value.name]: current } };
+  }
   const edited: Edited =
     decision.kind === 'reject' ? { ok: true, value: null } : readEdit(decision.text, current);
   if (!edited.ok) {
@@ -111,8 +125,9 @@ const decide = (
 
 /**
  * The one correction a review sends: the type always, so the review clears the flag even
- * when every value is accepted; the accepted values confirmed, never sent back, so a
- * masked identifier keeps its real value; the rejected ones cleared, the edited ones set.
+ * when every value is accepted; the accepted values confirmed with the value shown, which
+ * the server refuses if it changed since and never rewrites; the rejected ones cleared,
+ * the edited ones set.
  */
 export const readReview = (
   draft: ReviewDraft,
@@ -121,16 +136,23 @@ export const readReview = (
 ): ReviewReading => {
   const type = draft.type.trim();
   if (type === '') return { ok: false, problem: 'Choose a type for the document.' };
-  const outcome = reviewedValues(review).reduce(
-    (current, value) =>
-      decide(current, value, draft.decisions[valueKey(value)] ?? ACCEPT, valueOf(document, value)),
-    EMPTY,
-  );
+  const outcome = reviewedValues(review)
+    .filter((value) => !extractedAgain(value, draft, document))
+    .reduce(
+      (current, value) =>
+        decide(
+          current,
+          value,
+          draft.decisions[valueKey(value)] ?? ACCEPT,
+          valueOf(document, value),
+        ),
+      EMPTY,
+    );
   const [problem] = outcome.problems;
   if (problem !== undefined) return { ok: false, problem };
   const correction: DocumentCorrection = {
     type,
-    ...(outcome.confirm.length === 0 ? {} : { confirm: [...outcome.confirm] }),
+    ...(Object.keys(outcome.confirm).length === 0 ? {} : { confirm: outcome.confirm }),
     ...(Object.keys(outcome.core).length === 0 ? {} : { core: outcome.core }),
     ...(Object.keys(outcome.fields).length === 0 ? {} : { fields: outcome.fields }),
   };

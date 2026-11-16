@@ -82,19 +82,19 @@ describe('the review panel', () => {
     await waitFor(() => {
       expect(jsonBody(server.requests.find(({ method }) => method === 'PATCH'))).toEqual({
         type: 'note',
-        confirm: ['issuer'],
+        confirm: { issuer: `Issuer ${MARKUP}` },
         core: { reference: null, amount: { amount: 13, currency: 'EUR' } },
       });
     });
   });
 
-  it('resets every decision with Accept all', async () => {
+  it('resets every decision with Set all to Accept', async () => {
     const server = serve();
     renderApp('/documents/doc_01FLAGGED', server.fetch);
     const user = userEvent.setup();
     const reference = await screen.findByRole('group', { name: 'Decision for reference' });
     await user.click(within(reference).getByRole('button', { name: 'Reject' }));
-    await user.click(screen.getByRole('button', { name: 'Accept all' }));
+    await user.click(screen.getByRole('button', { name: 'Set all to Accept' }));
     expect(within(reference).getByRole('button', { name: 'Accept' })).toHaveAttribute(
       'aria-pressed',
       'true',
@@ -103,7 +103,55 @@ describe('the review panel', () => {
     await waitFor(() => {
       expect(jsonBody(server.requests.find(({ method }) => method === 'PATCH'))).toEqual({
         type: 'note',
-        confirm: ['issuer', 'reference', 'amount'],
+        confirm: {
+          issuer: `Issuer ${MARKUP}`,
+          reference: 'SYN-1',
+          amount: { amount: 12, currency: 'EUR' },
+        },
+      });
+    });
+  });
+
+  it('leaves the fields out of a review that changes the type', async () => {
+    const document = {
+      ...FLAGGED_DOCUMENT,
+      review: {
+        ...FLAGGED_DOCUMENT.review,
+        values: [reviewed('reference', 'core', true), reviewed('note', 'fields', true)],
+      },
+    };
+    const types = {
+      types: [
+        {
+          slug: 'invoice',
+          aliases: [],
+          description: 'A request for payment.',
+          parent_slug: null,
+          version: 1,
+          status: 'stable',
+          fields: {},
+          document_count: 0,
+        },
+      ],
+    };
+    const server = fakeServer((request) => {
+      if (request.path.startsWith('/types')) return json(types);
+      return request.path.startsWith('/documents/doc_01FLAGGED') ? json(document) : undefined;
+    });
+    renderApp('/documents/doc_01FLAGGED', server.fetch);
+    const user = userEvent.setup();
+    const typeDecision = await screen.findByRole('group', { name: 'Decision for the type' });
+    await user.click(within(typeDecision).getByRole('button', { name: 'Change' }));
+    await user.click(screen.getByRole('combobox', { name: 'Type' }));
+    await user.click(await screen.findByRole('option', { name: /^invoice/ }));
+    expect(screen.getByText('Will be extracted again for the new type.')).toBeInTheDocument();
+    const note = screen.getByRole('group', { name: 'Decision for note' });
+    expect(within(note).getByRole('button', { name: 'Accept' })).toBeDisabled();
+    await user.click(screen.getByRole('button', { name: 'Submit review' }));
+    await waitFor(() => {
+      expect(jsonBody(server.requests.find(({ method }) => method === 'PATCH'))).toEqual({
+        type: 'invoice',
+        confirm: { reference: 'SYN-1' },
       });
     });
   });

@@ -68,13 +68,16 @@ describe('the review of a document', () => {
   it('confirms every value and vouches for the type when everything is accepted', () => {
     expect(readReview(draftOfReview(DOCUMENT), DOCUMENT, REVIEW)).toEqual({
       ok: true,
-      correction: { type: 'invoice', confirm: ['reference', 'iban', 'amount'] },
+      correction: {
+        type: 'invoice',
+        confirm: { reference: 'SYN-1', iban: 'FR76 **** 1234', amount: 12.5 },
+      },
     });
   });
 
-  it('clears a rejected value and sets an edited one, never sending an accepted one back', () => {
+  it('clears a rejected value and sets an edited one', () => {
     const draft = {
-      type: 'receipt',
+      type: 'invoice',
       decisions: {
         'core.reference': { kind: 'edit', text: 'SYN-2' },
         'fields.amount': { kind: 'edit', text: '13.5' },
@@ -84,10 +87,21 @@ describe('the review of a document', () => {
     expect(readReview(draft, DOCUMENT, REVIEW)).toEqual({
       ok: true,
       correction: {
-        type: 'receipt',
+        type: 'invoice',
         core: { reference: 'SYN-2', iban: null },
         fields: { amount: 13.5 },
       },
+    });
+  });
+
+  it('leaves the fields out when the type changes: they are extracted again for it', () => {
+    const draft = {
+      type: 'receipt',
+      decisions: { 'fields.amount': { kind: 'reject' }, 'core.iban': { kind: 'reject' } },
+    } as const;
+    expect(readReview(draft, DOCUMENT, REVIEW)).toEqual({
+      ok: true,
+      correction: { type: 'receipt', confirm: { reference: 'SYN-1' }, core: { iban: null } },
     });
   });
 

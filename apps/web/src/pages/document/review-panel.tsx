@@ -14,6 +14,7 @@ import { ValueTable } from './document-parts.tsx';
 import {
   ACCEPT,
   draftOfReview,
+  extractedAgain,
   otherValues,
   readReview,
   reasonSentences,
@@ -79,6 +80,7 @@ export const ReviewPanel = ({ document, review }: ReviewPanelProps) => {
                 reviewed={value}
                 current={valueOf(document, value)}
                 decision={draft.decisions[valueKey(value)] ?? ACCEPT}
+                extractedAgain={extractedAgain(value, draft, document)}
                 onChange={(decision) => {
                   setDraft((current) => ({
                     ...current,
@@ -108,7 +110,7 @@ export const ReviewPanel = ({ document, review }: ReviewPanelProps) => {
                 setDraft(draftOfReview(document));
               }}
             >
-              Accept all
+              Set all to Accept
             </Button>
           </div>
         </form>

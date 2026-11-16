@@ -21,11 +21,13 @@ const ChoiceGroup = <Value extends string>({
   choices,
   value,
   onChange,
+  disabled = false,
 }: {
   readonly label: string;
   readonly choices: readonly Choice<Value>[];
   readonly value: Value;
   readonly onChange: (value: Value) => void;
+  readonly disabled?: boolean;
 }) => (
   <div role="group" aria-label={label} className="flex flex-wrap gap-1">
     {choices.map((choice) => (
@@ -35,6 +37,7 @@ const ChoiceGroup = <Value extends string>({
         size="sm"
         variant={choice.value === value ? 'default' : 'outline'}
         aria-pressed={choice.value === value}
+        disabled={disabled}
         onClick={() => {
           onChange(choice.value);
         }}
@@ -136,11 +139,14 @@ export const ValueRow = ({
   reviewed,
   current,
   decision,
+  extractedAgain,
   onChange,
 }: {
   readonly reviewed: ReviewedValue;
   readonly current: unknown;
   readonly decision: ValueDecision;
+  /** The review changes the type: this field is extracted again for the new one. */
+  readonly extractedAgain: boolean;
   readonly onChange: (decision: ValueDecision) => void;
 }) => {
   const inputId = `review-${reviewed.section}-${reviewed.name}`;
@@ -159,17 +165,21 @@ export const ValueRow = ({
               {reviewed.quote}
             </blockquote>
           )}
+          {extractedAgain ? (
+            <p className="text-sm">Will be extracted again for the new type.</p>
+          ) : null}
         </div>
         <ChoiceGroup
           label={`Decision for ${reviewed.name}`}
           choices={VALUE_CHOICES}
           value={decision.kind}
+          disabled={extractedAgain}
           onChange={(kind) => {
             onChange(kind === 'edit' ? { kind, text: editTextOf(current) } : { kind });
           }}
         />
       </div>
-      {decision.kind === 'edit' ? (
+      {decision.kind === 'edit' && !extractedAgain ? (
         <div className="grid gap-2">
           <Label htmlFor={inputId}>New value of {reviewed.name}</Label>
           <EditInput
