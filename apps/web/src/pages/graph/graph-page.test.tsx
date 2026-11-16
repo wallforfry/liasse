@@ -173,11 +173,31 @@ describe('the graph page', () => {
   it('hides a kind of node, and asks for private documents only when told', async () => {
     const server = fakeServer(graphAnswer);
     renderApp('/graph', server.fetch);
-    await nodeButton('entity Synthetic Power');
+    await userEvent.click(await nodeButton('document Synthetic power contract'));
+    const kept = [
+      'document Synthetic power contract',
+      'subject Synthetic flat',
+      'type energy_contract',
+    ];
+    const placesOf = () =>
+      kept.map((name) => screen.getByRole('button', { name }).getAttribute('transform'));
+    const lines = () => document.querySelectorAll('svg line').length;
+    const neighbors = () => {
+      const details = screen.getByText('Joined to').closest('div');
+      if (details === null) throw new Error('Expected the list of neighbors');
+      return within(details)
+        .getAllByRole('listitem')
+        .map((item) => item.textContent);
+    };
+    const places = placesOf();
+    expect(lines()).toBe(GRAPH.edges.length);
+    expect(neighbors()).toContain('Synthetic Powernames');
 
     await userEvent.click(screen.getByLabelText('Entities (1)'));
     expect(screen.queryByRole('button', { name: 'entity Synthetic Power' })).toBeNull();
-    expect(screen.getByRole('button', { name: 'subject Synthetic flat' })).toBeTruthy();
+    expect(placesOf()).toEqual(places);
+    expect(lines()).toBe(GRAPH.edges.length - 1);
+    expect(neighbors()).not.toContain('Synthetic Powernames');
 
     await userEvent.click(screen.getByLabelText('Include private documents'));
     await waitFor(() => {
