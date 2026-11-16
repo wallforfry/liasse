@@ -10,6 +10,8 @@ import {
   ENTITY_IDENTIFIER_TYPES,
   ENTITY_KINDS,
   ENTITY_MATCH_RULES,
+  GRAPH_EDGE_KINDS,
+  GRAPH_NODE_KINDS,
   JOB_STATUSES,
   KEY_DATE_KINDS,
   LINK_KINDS,
@@ -45,6 +47,8 @@ export const entityIdentifierTypeSchema = z.enum(ENTITY_IDENTIFIER_TYPES);
 export const keyDateKindSchema = z.enum(KEY_DATE_KINDS);
 export const linkKindSchema = z.enum(LINK_KINDS);
 export const subjectKindSchema = z.enum(SUBJECT_KINDS);
+export const graphNodeKindSchema = z.enum(GRAPH_NODE_KINDS);
+export const graphEdgeKindSchema = z.enum(GRAPH_EDGE_KINDS);
 export const subjectIdentifierTypeSchema = z.enum(SUBJECT_IDENTIFIER_TYPES);
 export const noticePeriodUnitSchema = z.enum(NOTICE_PERIOD_UNITS);
 export const storageDriverSchema = z.enum(STORAGE_DRIVERS);
