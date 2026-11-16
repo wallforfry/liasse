@@ -60,3 +60,5 @@ The `Release` workflow does the rest on `main`:
 2. Merging that pull request releases the version of `@liasse/server`: a GitHub release `v<version>`, whose notes are the new sections of the changelogs, and the multi-arch image `ghcr.io/wallforfry/liasse` with the tags `<version>`, `<major>.<minor>` and `latest`.
 
 GitHub starts no workflow for a pull request the workflow token opened: close and reopen the version pull request to run CI on it before merging. The repository must allow GitHub Actions to create pull requests (Settings, Actions, General).
+
+Probe of the Markdown-only CI path; this pull request is closed unmerged.
