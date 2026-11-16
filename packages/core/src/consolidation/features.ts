@@ -2,6 +2,7 @@ import type {
   ChangeDecision,
   ChangeDecisionResult,
   ChangeList,
+  ConsolidationRun,
   ListChangesOptions,
 } from '@liasse/contract';
 import { MAX_LISTED_CHANGES } from '@liasse/contract/domain';
@@ -10,6 +11,7 @@ import { ApiError } from '../api/errors.ts';
 import { typeChanges } from '../db/schema/registry.ts';
 import { decideChange } from './apply-change.ts';
 import { pendingChanges } from './change-store.ts';
+import { queueManualRun } from './schedule.ts';
 import type { ConsolidationReadContext } from './context.ts';
 import { viewChange, viewDecision } from './views.ts';
 
@@ -53,3 +55,8 @@ export const applyChange = async (
       return viewDecision(result.decided);
   }
 };
+
+/** A person asks for a run now; it runs on a worker, after a run in progress. */
+export const requestConsolidationRun = async ({
+  db,
+}: ConsolidationReadContext): Promise<ConsolidationRun> => ({ queued: await queueManualRun(db) });

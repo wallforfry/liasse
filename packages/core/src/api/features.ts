@@ -33,6 +33,7 @@ export interface ApiFeatures extends KnowledgeFeatures {
   readonly upcoming?: (options: UpcomingOptions) => Promise<JsonObject>;
   readonly listChanges?: (options: ListChangesOptions) => Promise<JsonObject>;
   readonly applyChange?: (id: string, decision: ChangeDecision) => Promise<JsonObject | undefined>;
+  readonly requestConsolidationRun?: () => Promise<JsonObject>;
   /**
    * Runs in the transaction of a deletion, for what must follow it outside Liasse: the
    * Hindsight sync queues its forget there, so it commits with the tombstone.
@@ -95,4 +96,11 @@ export const applyChange = async (
     throw new ApiError('not_found', 'change_not_found', 'No change has this id.');
   }
   return result;
+};
+
+export const requestConsolidationRun = async ({
+  features,
+}: Pick<ApiContext, 'features'>): Promise<JsonObject> => {
+  if (features.requestConsolidationRun === undefined) throw notImplemented('consolidation runs');
+  return features.requestConsolidationRun();
 };

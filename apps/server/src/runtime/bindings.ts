@@ -6,6 +6,7 @@ import {
   createConsolidationHandlers,
   listChanges,
   queueBatchRunIfDue,
+  requestConsolidationRun,
   scheduleNightlyRun,
 } from '@liasse/core/consolidation';
 import type { Database } from '@liasse/core/db';
@@ -116,6 +117,7 @@ const featuresOf = (deps: PipelineDeps, hindsight: HindsightIntegration): ApiFea
   getSubject: (input) => getSubject({ db: deps.db }, input),
   listChanges: (options) => listChanges({ db: deps.db }, options),
   applyChange: (id, decision) => applyChange({ db: deps.db }, id, decision),
+  requestConsolidationRun: () => requestConsolidationRun({ db: deps.db }),
   ...(hindsight.enabled
     ? { onDocumentDeleted: (tx, { id }) => hindsight.enqueueSync(tx, id) }
     : {}),

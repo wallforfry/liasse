@@ -7,6 +7,7 @@ import { PageHeader } from '../../components/page-header.tsx';
 import { Alert, AlertDescription, AlertTitle } from '../../components/ui/alert.tsx';
 import { Skeleton } from '../../components/ui/skeleton.tsx';
 import { ChangeCard } from './change-card.tsx';
+import { RunConsolidation } from './run-consolidation.tsx';
 
 // What the API answers while consolidation is not part of the build.
 const isNotImplemented = (error: unknown): error is LiasseApiError =>
@@ -23,6 +24,7 @@ export const ChangesPage = () => {
       <PageHeader
         title="Changes"
         description="What consolidation proposes for the type registry, waiting for a decision."
+        actions={<RunConsolidation />}
       />
       {changes.isPending ? <Skeleton className="h-48 w-full" /> : null}
       {changes.isError ? (
