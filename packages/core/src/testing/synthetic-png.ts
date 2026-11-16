@@ -15,7 +15,7 @@ const chunk = (type: string, data: Uint8Array): Uint8Array => {
 };
 
 // A greyscale gradient: enough for a real decoder to accept, with nothing to read on it.
-export const buildSyntheticPng = (width: number, height: number): Uint8Array => {
+export const buildSyntheticPng = (width: number, height: number): Uint8Array<ArrayBuffer> => {
   const scanlines = Uint8Array.from({ length: height * (width + 1) }, (_, index) => {
     const column = index % (width + 1);
     return column === 0 ? 0 : Math.round(((column - 1) * 255) / Math.max(1, width - 1));
