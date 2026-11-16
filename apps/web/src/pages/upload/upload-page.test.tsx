@@ -66,8 +66,8 @@ describe('the upload page', () => {
   it('uploads several files one after the other and reports each, without leaving the page', async () => {
     const answers: Readonly<Record<string, Response>> = {
       'first.pdf': json({ id: 'doc_01FIRST', status: 'received', duplicate: false }, 201),
-      'second.pdf': json({ id: 'doc_01SECOND', status: 'indexed', duplicate: true }, 200),
-      'third.pdf': errorBody(413, 'file_too_large', 'The file is larger than 20 MiB.'),
+      'second.pdf': errorBody(413, 'file_too_large', 'The file is larger than 20 MiB.'),
+      'third.pdf': json({ id: 'doc_01THIRD', status: 'indexed', duplicate: true }, 200),
     };
     const server = fakeServer((request) =>
       request.method === 'POST' && request.path === '/documents'
@@ -85,16 +85,20 @@ describe('the upload page', () => {
     await user.click(screen.getByRole('button', { name: 'Upload 3 files' }));
 
     const list = await screen.findByRole('list', { name: 'Uploads' });
-    expect(await within(list).findByText('The file is larger than 20 MiB.')).toBeInTheDocument();
+    expect(await screen.findByText('2 files uploaded, 1 file not.')).toBeInTheDocument();
     const rows = within(list).getAllByRole('listitem');
     expect(rows.map((row) => row.textContent)).toEqual([
       'first.pdf Uploaded',
-      'second.pdf Already in Liasse',
-      'third.pdf The file is larger than 20 MiB.',
+      'second.pdf The file is larger than 20 MiB.',
+      'third.pdf Already in Liasse',
     ]);
     expect(within(list).getByRole('link', { name: 'Uploaded' })).toHaveAttribute(
       'href',
       '/documents/doc_01FIRST',
+    );
+    expect(within(list).getByRole('link', { name: 'Already in Liasse' })).toHaveAttribute(
+      'href',
+      '/documents/doc_01THIRD',
     );
     const uploads = server.requests.filter(({ method }) => method === 'POST');
     expect(uploads.map(sentName)).toEqual(['first.pdf', 'second.pdf', 'third.pdf']);

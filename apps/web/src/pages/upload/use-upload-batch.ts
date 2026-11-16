@@ -30,7 +30,7 @@ export interface UploadBatch {
  * a lost session does, and fails the batch so the session provider sends to the login screen.
  */
 export const useUploadBatch = (
-  onSettled: (outcomes: readonly SettledOutcome[]) => Promise<void>,
+  onBatchDone: (outcomes: readonly SettledOutcome[]) => Promise<void>,
 ) => {
   const client = useClient();
   const [entries, setEntries] = useState<readonly UploadEntry[]>([]);
@@ -70,7 +70,7 @@ export const useUploadBatch = (
       }
       return settled;
     },
-    onSuccess: onSettled,
+    onSuccess: onBatchDone,
   });
 
   return { entries, mutation };

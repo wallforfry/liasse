@@ -3,7 +3,6 @@ import { UploadIcon } from 'lucide-react';
 import { type SubmitEvent, useState } from 'react';
 import { useNavigate } from 'react-router';
 import { toast } from 'sonner';
-import { ErrorAlert } from '../../components/error-alert.tsx';
 import { PageHeader } from '../../components/page-header.tsx';
 import { Button } from '../../components/ui/button.tsx';
 import { Card, CardContent } from '../../components/ui/card.tsx';
@@ -64,7 +63,6 @@ export const UploadPage = () => {
       <Card className="max-w-xl">
         <CardContent className="flex flex-col gap-4">
           <form className="flex flex-col gap-4" onSubmit={submit}>
-            {mutation.isError ? <ErrorAlert error={mutation.error} title="Not uploaded" /> : null}
             <div className="grid gap-2">
               <Label htmlFor="upload-files">Files</Label>
               <Input

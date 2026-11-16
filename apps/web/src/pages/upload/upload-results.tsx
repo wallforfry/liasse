@@ -51,7 +51,7 @@ const OutcomeLine = ({ outcome }: { readonly outcome: UploadOutcome }) => {
 };
 
 export const UploadResults = ({ entries }: { readonly entries: readonly UploadEntry[] }) => (
-  <ul aria-label="Uploads" className="divide-y text-sm">
+  <ul aria-label="Uploads" aria-live="polite" className="divide-y text-sm">
     {entries.map((entry) => (
       <li key={entry.key} className="flex flex-wrap items-center justify-between gap-2 py-2">
         <span className="truncate font-medium">{entry.name}</span>
