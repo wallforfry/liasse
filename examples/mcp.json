@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "liasse": {
+      "type": "http",
+      "url": "http://localhost:8080/mcp",
+      "headers": {
+        "Authorization": "Bearer ${LIASSE_API_KEY}"
+      }
+    }
+  }
+}
