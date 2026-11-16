@@ -4,7 +4,7 @@ Each example expects a running Liasse (see the [README](../README.md#start-in-5-
 
 ## Agents over MCP
 
-Liasse serves MCP over Streamable HTTP on `/mcp`. An API key opens it as `Authorization: Bearer <key>`; a client that speaks OAuth can connect to `PUBLIC_URL/mcp` without a key and sign in through the web UI, once `PUBLIC_URL` is https.
+Liasse serves MCP over Streamable HTTP on `/mcp`. An API key opens it as `Authorization: Bearer <key>`; a client that speaks OAuth can connect to `PUBLIC_URL/mcp` without a key and sign in through the web UI when `PUBLIC_URL` is https or a loopback address, such as the default `http://localhost:8080`.
 
 - **Claude Code**, for every project of your machine:
 

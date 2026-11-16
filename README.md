@@ -11,7 +11,7 @@ Self-hosted document managers rely on classic OCR, manual tags and a UI built fo
 - **Agent first.** MCP is the primary interface: search, structured queries, upcoming deadlines, timelines, ingestion.
 - **Emergent types.** A small fixed core of fields, plus document types and schemas proposed by an LLM and consolidated over time.
 - **Knowledge layer.** Key dates, links between documents, subjects and sourced facts, so that _"which contracts expire this quarter?"_ gets a direct answer.
-- **Lightweight.** One Node container and one Postgres with pgvector, no broker, no separate worker. The container stays under 150 MiB of RAM at idle, which CI checks on every pull request.
+- **Lightweight.** One Node container and one Postgres with pgvector, no broker, no separate worker. The container stays under 150 MB of RAM at idle, which CI checks on every pull request.
 - **Private by default.** Any LLM provider, including fully local ones (Ollama); local embeddings by default; no telemetry.
 
 ## Start in 5 minutes

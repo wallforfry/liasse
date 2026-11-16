@@ -41,7 +41,7 @@ On shutdown the server lets running jobs finish for 30 seconds, so the compose f
 
 ## Reverse proxy and TLS
 
-Liasse speaks plain HTTP and listens on `127.0.0.1` by default. Put a TLS reverse proxy in front of it before publishing it further, and set `PUBLIC_URL` to the address clients use: signed file URLs start with it, and the web UI's requests that change something must come from that origin. MCP clients that speak OAuth connect to `PUBLIC_URL/mcp` and sign in through the web UI, once `PUBLIC_URL` is https; others pass an API key as `Authorization: Bearer <key>`.
+Liasse speaks plain HTTP and listens on `127.0.0.1` by default. Put a TLS reverse proxy in front of it before publishing it further, and set `PUBLIC_URL` to the address clients use: signed file URLs start with it, and the web UI's requests that change something must come from that origin. MCP clients that speak OAuth connect to `PUBLIC_URL/mcp` and sign in through the web UI when `PUBLIC_URL` is https or a loopback address (`localhost`, `127.0.0.1`, `[::1]`); others pass an API key as `Authorization: Bearer <key>`.
 
 The sign-in rate limit (5 attempts per minute) counts each client apart only when `TRUSTED_PROXIES` lists the proxies in front of Liasse. Without it, every client counts as the proxy, so anyone who reaches the login page can keep the owner out for as long as they keep trying; API keys keep working meanwhile. A trusted range must hold only proxies, and the proxy must rewrite `X-Forwarded-For` from peers it does not trust, or a client could pick the address it is counted under. When Cloudflare proxies the domain, add `cloudflare` to `TRUSTED_PROXIES`.
 
@@ -65,4 +65,4 @@ The compose file trusts `172.16.0.0/12`, Docker's default range for the network 
 
 ## Resources
 
-The target is under 150 MiB of RAM for the idle container, Postgres excluded. `scripts/check-idle-memory.sh <image>` starts an image with Postgres, waits for its health check and measures it; CI runs it on every pull request. The local embedding model runs in a child process only while it works, between 0.8 and 1.35 GB at its peak, and ends after 10 minutes without a request.
+The target is under 150 MB of RAM for the idle container, Postgres excluded. `scripts/check-idle-memory.sh <image>` starts an image with Postgres, waits for its health check and measures it; CI runs it on every pull request. The local embedding model runs in a child process only while it works, between 0.8 and 1.35 GB at its peak, and ends after 10 minutes without a request.
