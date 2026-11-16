@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 # Idle memory check of the Docker image: starts it with Postgres and pgvector, waits for its
 # health check, lets it settle, then fails if the container uses more than the target of
-# docs/spec.md (under 150 MiB at idle, Postgres excluded).
+# docs/spec.md (under 150 MB at idle, Postgres excluded).
 # Usage: scripts/check-idle-memory.sh <image>
-# IDLE_MEMORY_LIMIT_MIB (default 150), IDLE_SETTLE_SECONDS (default 30) and
+# IDLE_MEMORY_LIMIT_MB (default 150, in units of 10^6 bytes), IDLE_SETTLE_SECONDS (default 30) and
 # IDLE_SAMPLES (default 10, one per second; the largest counts) tune the measure.
 set -euo pipefail
 
@@ -13,7 +13,7 @@ if [ "$#" -ne 1 ]; then
 fi
 
 image="$1"
-limit_mib="${IDLE_MEMORY_LIMIT_MIB:-150}"
+limit_mb="${IDLE_MEMORY_LIMIT_MB:-150}"
 settle_seconds="${IDLE_SETTLE_SECONDS:-30}"
 samples="${IDLE_SAMPLES:-10}"
 run="liasse-idle-$$"
@@ -62,11 +62,17 @@ wait_healthy "$server" 120
 sleep "$settle_seconds"
 
 # The usage of the container's cgroup (v2) less its inactive page cache: what `docker stats`
-# shows, read in bytes instead of a rounded, human-readable size.
+# shows, read in bytes instead of a rounded, human-readable size. A host without cgroup v2 in the
+# container (cgroup v1, `--cgroupns=host`) has no such files: that is a failure, never a zero.
 used_bytes() {
-  docker exec "$server" sh -c \
-    'echo "$(cat /sys/fs/cgroup/memory.current) $(grep "^inactive_file " /sys/fs/cgroup/memory.stat)"' |
-    awk '{ print $1 - $3 }'
+  local current inactive
+  current="$(docker exec "$server" cat /sys/fs/cgroup/memory.current)"
+  inactive="$(docker exec "$server" sh -c 'grep "^inactive_file " /sys/fs/cgroup/memory.stat' | cut -d' ' -f2)"
+  if ! [[ "$current" =~ ^[0-9]+$ && "$inactive" =~ ^[0-9]+$ ]] || [ "$current" -le "$inactive" ]; then
+    echo "Cannot read the cgroup v2 memory of $server (memory.current: '$current')." >&2
+    return 1
+  fi
+  echo $((current - inactive))
 }
 
 peak_bytes=0
@@ -78,9 +84,9 @@ for _ in $(seq "$samples"); do
   sleep 1
 done
 
-peak_mib=$((peak_bytes / 1024 / 1024))
-echo "Idle memory of $image: ${peak_mib} MiB (limit ${limit_mib} MiB, largest of $samples samples after ${settle_seconds}s)"
-if [ "$peak_mib" -ge "$limit_mib" ]; then
+peak_mb=$((peak_bytes / 1000000))
+echo "Idle memory of $image: ${peak_mb} MB (limit ${limit_mb} MB, largest of $samples samples after ${settle_seconds}s)"
+if [ "$peak_bytes" -ge $((limit_mb * 1000000)) ]; then
   echo "The idle container uses more than the target of docs/spec.md." >&2
   exit 1
 fi
