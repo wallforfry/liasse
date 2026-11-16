@@ -1,0 +1,79 @@
+name: Release
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  # Releases the version of @liasse/server that main carries, once a merged "version packages"
+  # pull request cut it and it is not tagged yet. A job of its own, so that a failure of the
+  # version job never leaves a release without its image. It runs on every push: GitHub cancels a
+  # pending run of the concurrency group when a newer one arrives, so the run of a version merge
+  # may never happen, and a later run must still release that version.
+  tag:
+    name: Release
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    outputs:
+      tag: ${{ steps.tag.outputs.tag }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+      - id: tag
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: scripts/release-tag.sh >>"$GITHUB_OUTPUT"
+
+  # With changesets pending on main, opens or updates the "version packages" pull request, which
+  # bumps the versions and writes the changelogs.
+  version:
+    name: Version packages
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - uses: changesets/action@v2.1.2
+        with:
+          version-script: pnpm exec changeset version
+          # The commit goes through the GitHub API, authored by github-actions[bot]: the DCO check
+          # wants its sign-off.
+          commit-message: |
+            chore(release): version packages
+
+            Signed-off-by: github-actions[bot] <41898282+github-actions[bot]@users.noreply.github.com>
+          pr-title: 'chore(release): version packages'
+
+  # A tag pushed with the workflow token starts no workflow, so the release publishes its image
+  # itself.
+  image:
+    name: Release image
+    needs: tag
+    if: needs.tag.outputs.tag != ''
+    permissions:
+      contents: read
+      packages: write
+    uses: ./.github/workflows/image.yml
+    with:
+      tag: ${{ needs.tag.outputs.tag }}

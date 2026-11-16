@@ -48,3 +48,15 @@ Conventions, layout and testing rules are in [`AGENTS.md`](AGENTS.md); they appl
 
 - The design lives in [`docs/spec.md`](docs/spec.md). For anything beyond a small fix, open an issue first so we can agree on the approach.
 - Never commit real personal documents. Tests and fixtures use synthetic documents only.
+- Be kind: the [code of conduct](CODE_OF_CONDUCT.md) applies everywhere in the project. Report a vulnerability privately, as [`SECURITY.md`](SECURITY.md) describes, never in an issue.
+
+## Changesets and releases
+
+A pull request that changes what users see (a feature, a fix, a configuration variable, an answer of the API) adds a changeset: run `pnpm changeset`, pick the packages it changes and the kind of bump, and describe the change for the changelog. Internal changes (tests, CI, refactoring) need none.
+
+The `Release` workflow does the rest on `main`:
+
+1. While changesets are pending, it opens or updates the pull request `chore(release): version packages`, which bumps the versions and writes the `CHANGELOG.md` of each package.
+2. Merging that pull request releases the version of `@liasse/server`: a GitHub release `v<version>`, whose notes are the new sections of the changelogs, and the multi-arch image `ghcr.io/wallforfry/liasse` with the tags `<version>`, `<major>.<minor>` and `latest`.
+
+GitHub starts no workflow for a pull request the workflow token opened: close and reopen the version pull request to run CI on it before merging. The repository must allow GitHub Actions to create pull requests (Settings, Actions, General).
