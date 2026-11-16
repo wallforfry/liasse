@@ -1,6 +1,7 @@
 import { eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { createDb } from '../db/client.ts';
+import { DeferJobError } from '../jobs/errors.ts';
 import { jobs } from '../db/schema/jobs.ts';
 import { createFakeTextModel } from '../testing/fake-text-model.ts';
 import { createTestDatabase, type TestDatabase } from '../testing/test-database.ts';
@@ -31,7 +32,7 @@ describe('the consolidate handler', () => {
     return registered;
   };
 
-  const run = (trigger: 'nightly' | 'batch') =>
+  const run = (trigger: 'nightly' | 'batch' | 'manual') =>
     handler().run({ trigger }, { signal: new AbortController().signal, attempt: 1 });
 
   const queuedNightly = () => db().$count(jobs, eq(jobs.kind, 'consolidate'));
@@ -53,6 +54,18 @@ describe('the consolidate handler', () => {
       expect(await typeOf(db(), type.id)).toMatchObject({ status: 'provisional' });
     });
     await run('batch');
+    expect(await typeOf(db(), type.id)).toMatchObject({ status: 'stable' });
+  });
+
+  it('defers a manual run while another run is in progress, and runs it after', async () => {
+    const type = await seedType(db(), { slug: 'water_bill' });
+    for (let index = 0; index < 5; index += 1) await seedDocument(db(), type.id);
+
+    await withConsolidationRunLock(db(), async () => {
+      await expect(run('manual')).rejects.toBeInstanceOf(DeferJobError);
+      expect(await typeOf(db(), type.id)).toMatchObject({ status: 'provisional' });
+    });
+    await run('manual');
     expect(await typeOf(db(), type.id)).toMatchObject({ status: 'stable' });
   });
 

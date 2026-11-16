@@ -3,7 +3,7 @@ import {
   CONSOLIDATION_NIGHTLY_HOUR_UTC,
   SETTLED_STATUSES,
 } from '@liasse/contract/domain';
-import { and, desc, eq, gt, inArray, lte, ne, sql } from 'drizzle-orm';
+import { and, desc, eq, gt, inArray, lte, ne, or, sql } from 'drizzle-orm';
 import { z } from 'zod';
 import type { Database } from '../db/client.ts';
 import { documents, isLiveDocument } from '../db/schema/documents.ts';
@@ -86,12 +86,12 @@ const lastRunStart = async (tx: Transaction): Promise<Date | null> => {
 
 /**
  * Queues a `batch` run once `CONSOLIDATION_BATCH_DOCUMENTS` documents ingested since the
- * last run started have settled, unless a run is queued. Called after each indexing: it
+ * last run started have settled, unless a `batch` or `manual` run is queued. Called after each indexing: it
  * reads two counts and writes nothing else. Answers whether it queued one.
  */
 export const queueBatchRunIfDue = (db: Database): Promise<boolean> =>
   withScheduleLock(db, async (tx) => {
-    if ((await tx.$count(jobs, queued('batch'))) > 0) return false;
+    if ((await tx.$count(jobs, queued('batch', 'manual'))) > 0) return false;
     const since = await lastRunStart(tx);
     const fresh = await tx.$count(
       documents,
@@ -107,15 +107,16 @@ export const queueBatchRunIfDue = (db: Database): Promise<boolean> =>
   });
 
 /**
- * Queues a `manual` run, due at once, unless a `batch` or `manual` run due at once is
- * queued already: it does the same work. A run in progress does not count, since it may
- * have read the registry before what the person wants it to see, and neither does a run
- * waiting for a retry. Answers whether it queued one.
+ * Queues a `manual` run, due at once, unless a `manual` run is queued, deferred behind a
+ * run in progress included, or a `batch` run due at once is: it does the same work. A
+ * run in progress does not count, since it may have read the registry before what the
+ * person wants it to see, and neither does a batch run waiting for a retry. Answers
+ * whether it queued one.
  */
 export const queueManualRun = (db: Database): Promise<boolean> =>
   withScheduleLock(db, async (tx) => {
-    const due = and(queued('batch', 'manual'), lte(jobs.runAfter, sql`now()`));
-    if ((await tx.$count(jobs, due)) > 0) return false;
+    const waiting = or(queued('manual'), and(queued('batch'), lte(jobs.runAfter, sql`now()`)));
+    if ((await tx.$count(jobs, waiting)) > 0) return false;
     await enqueue(tx, { kind: consolidateJob, payload: { trigger: 'manual' } });
     return true;
   });

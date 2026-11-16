@@ -18,7 +18,7 @@ describe('a consolidation run asked for by hand', () => {
   it('is queued with the session cookie and no body', async () => {
     const server = await askFor(json({ queued: true }, 202));
     expect(
-      await screen.findByText('A consolidation run was queued. Its proposals will appear here.'),
+      await screen.findByText('A consolidation run was queued. Reload this page once it has run.'),
     ).toBeInTheDocument();
     const posts = server.requests.filter(({ method }) => method === 'POST');
     expect(posts).toHaveLength(1);

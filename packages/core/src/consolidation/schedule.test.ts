@@ -116,7 +116,20 @@ describe('when consolidation runs', () => {
     ]);
   });
 
-  it('does not leave a manual run to a run waiting for its retry', async () => {
+  it('leaves a batch run to a queued manual run, and a manual run to a deferred one', async () => {
+    await db()
+      .insert(jobs)
+      .values({
+        kind: 'consolidate',
+        payload: { trigger: 'manual' },
+        runAfter: new Date(Date.now() + 60 * 60 * 1000),
+      });
+    expect(await queueManualRun(db())).toBe(false);
+    await settle(CONSOLIDATION_BATCH_DOCUMENTS);
+    expect(await queueBatchRunIfDue(db())).toBe(false);
+  });
+
+  it('does not leave a manual run to a batch run waiting for its retry', async () => {
     await db()
       .insert(jobs)
       .values({

@@ -11,8 +11,11 @@ export const RunConsolidation = () => {
   const run = useMutation({
     mutationFn: async () => client.requestConsolidationRun(),
     onSuccess: ({ queued }) => {
-      if (queued) toast.success('A consolidation run was queued. Its proposals will appear here.');
-      else toast.info('A consolidation run is already queued.');
+      if (queued) {
+        toast.success('A consolidation run was queued. Reload this page once it has run.');
+      } else {
+        toast.info('A consolidation run is already queued.');
+      }
     },
     onError: (error) => {
       toast.error(errorMessage(error));
