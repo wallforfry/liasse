@@ -10,7 +10,7 @@ import { Button } from '../../components/ui/button.tsx';
 import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/card.tsx';
 import { Skeleton } from '../../components/ui/skeleton.tsx';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../../components/ui/tabs.tsx';
-import { pollDocument } from '../../lib/processing.ts';
+import { isAnalysedAgain, pollDocument } from '../../lib/processing.ts';
 import { AnalysisPending } from './analysis-pending.tsx';
 import { DeleteDocument } from './delete-document.tsx';
 import { DocumentDetails, DocumentText, OriginalFile, ValueTable } from './document-parts.tsx';
@@ -38,6 +38,7 @@ export const DocumentPage = () => {
 
 const LoadedDocument = ({ view }: { readonly view: DocumentView }) => {
   useAnalysisOutcome(view);
+  const analysedAgain = isAnalysedAgain(view);
   const name = view.title ?? view.original_name;
   return (
     <>
@@ -66,8 +67,8 @@ const LoadedDocument = ({ view }: { readonly view: DocumentView }) => {
         }
       />
       {view.summary === null ? null : <p className="text-sm leading-relaxed">{view.summary}</p>}
-      {view.analysis_pending ? <AnalysisPending /> : null}
-      {view.status === 'needs_review' && view.review !== undefined && !view.analysis_pending ? (
+      {analysedAgain ? <AnalysisPending /> : null}
+      {view.status === 'needs_review' && view.review !== undefined && !analysedAgain ? (
         <ReviewPanel key={view.updated_at} document={view} review={view.review} />
       ) : null}
       <Tabs defaultValue="details">
