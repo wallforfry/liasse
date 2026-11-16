@@ -2,7 +2,6 @@ import { useQuery } from '@tanstack/react-query';
 import { ArrowLeftIcon } from 'lucide-react';
 import { Link, useParams } from 'react-router';
 import { useClient } from '../../api/session.ts';
-import { Disclosure } from '../../components/disclosure.tsx';
 import { PrivateBadge, StatusBadge } from '../../components/document-badges.tsx';
 import { ErrorAlert } from '../../components/error-alert.tsx';
 import { PageHeader } from '../../components/page-header.tsx';
@@ -11,9 +10,9 @@ import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/ca
 import { Skeleton } from '../../components/ui/skeleton.tsx';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../../components/ui/tabs.tsx';
 import { pollWhileProcessing } from '../../lib/processing.ts';
-import { CorrectionForm } from './correction-form.tsx';
 import { DeleteDocument } from './delete-document.tsx';
 import { DocumentDetails, DocumentText, OriginalFile, ValueTable } from './document-parts.tsx';
+import { EditTab } from './edit-tab.tsx';
 import { ProcessingLog } from './processing-log.tsx';
 import { RetryDocument } from './retry-document.tsx';
 import { ReviewPanel } from './review-panel.tsx';
@@ -64,15 +63,13 @@ export const DocumentPage = () => {
       {view.status === 'needs_review' && view.review !== undefined ? (
         <ReviewPanel key={view.updated_at} document={view} review={view.review} />
       ) : null}
-      <Disclosure label="Edit by hand">
-        <CorrectionForm key={view.updated_at} document={view} />
-      </Disclosure>
       <Tabs defaultValue="details">
         <TabsList>
           <TabsTrigger value="details">Details</TabsTrigger>
           <TabsTrigger value="text">Text</TabsTrigger>
           <TabsTrigger value="file">File</TabsTrigger>
           <TabsTrigger value="processing">Processing</TabsTrigger>
+          <TabsTrigger value="edit">Edit</TabsTrigger>
         </TabsList>
         <TabsContent value="details" className="grid gap-4 lg:grid-cols-2">
           <Card className="lg:col-span-2">
@@ -109,6 +106,10 @@ export const DocumentPage = () => {
               <ProcessingLog document={view} />
             </CardContent>
           </Card>
+        </TabsContent>
+        {/* Kept mounted: leaving the tab must not end the follow-up of a type analysis. */}
+        <TabsContent value="edit" forceMount className="data-[state=inactive]:hidden">
+          <EditTab document={view} />
         </TabsContent>
       </Tabs>
     </>

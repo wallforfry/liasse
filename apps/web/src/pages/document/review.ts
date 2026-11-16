@@ -1,6 +1,5 @@
 import type { DocumentCorrection, DocumentReview, DocumentView, ReviewedValue } from '@liasse/sdk';
 import { plural } from '../../lib/format.ts';
-import type { CorrectionReading } from './correction.ts';
 
 /** What the person decided of a doubtful value: as it is, cleared, or another value. */
 export type ValueDecision =
@@ -14,6 +13,10 @@ export interface ReviewDraft {
   /** By `valueKey`. A value without a decision is accepted. */
   readonly decisions: Readonly<Record<string, ValueDecision>>;
 }
+
+export type ReviewReading =
+  | { readonly ok: true; readonly correction: DocumentCorrection }
+  | { readonly ok: false; readonly problem: string };
 
 export const ACCEPT: ValueDecision = { kind: 'accept' };
 
@@ -115,7 +118,7 @@ export const readReview = (
   draft: ReviewDraft,
   document: DocumentView,
   review: DocumentReview,
-): CorrectionReading => {
+): ReviewReading => {
   const type = draft.type.trim();
   if (type === '') return { ok: false, problem: 'Choose a type for the document.' };
   const outcome = reviewedValues(review).reduce(

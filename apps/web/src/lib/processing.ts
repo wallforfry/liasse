@@ -1,4 +1,4 @@
-import { IN_PROGRESS_STATUSES } from '@liasse/contract/domain';
+import { IN_PROGRESS_STATUSES, SETTLED_STATUSES } from '@liasse/contract/domain';
 import type { DocumentSummary } from '@liasse/sdk';
 
 const IN_PROGRESS: ReadonlySet<string> = new Set(IN_PROGRESS_STATUSES);
@@ -10,3 +10,7 @@ export const pollWhileProcessing = (
   documents: readonly Pick<DocumentSummary, 'status'>[] | undefined,
 ): number | false =>
   documents?.some(({ status }) => IN_PROGRESS.has(status)) === true ? POLL_MILLISECONDS : false;
+
+/** Indexed, or waiting for a review: what can have its type analysed again. */
+export const isSettled = ({ status }: Pick<DocumentSummary, 'status'>): boolean =>
+  SETTLED_STATUSES.includes(status);

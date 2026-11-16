@@ -35,6 +35,9 @@ export const documents = pgTable(
     originalName: text('original_name').notNull(),
     // What the caller said about the file at ingestion: untrusted free text.
     hint: text('hint'),
+    // What a person said with the last request to decide the type again: untrusted free
+    // text, read by the `reclassify_document` job, whose payload holds none.
+    reclassificationHint: text('reclassification_hint'),
     source: documentSource('source').notNull(),
     status: documentStatus('status').notNull().default('received'),
     state: documentState('state').notNull().default('current'),

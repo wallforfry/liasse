@@ -131,7 +131,7 @@ describe('the review panel', () => {
     });
     renderApp('/documents/doc_01FLAGGED', server.fetch);
     await userEvent.setup().click(await screen.findByRole('button', { name: 'Submit review' }));
-    expect(await screen.findByText('The review was not saved')).toBeInTheDocument();
+    expect(await screen.findByText('The correction was not saved')).toBeInTheDocument();
     expect(screen.getByText('There is no value "issuer" to confirm.')).toBeInTheDocument();
   });
 });

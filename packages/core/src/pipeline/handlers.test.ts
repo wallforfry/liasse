@@ -25,7 +25,7 @@ import {
   type PipelineHarness,
   scriptedModel,
 } from './harness.test-helper.ts';
-import { reextractDocumentJob, reindexDocumentJob } from './jobs.ts';
+import { reclassifyDocumentJob, reextractDocumentJob, reindexDocumentJob } from './jobs.ts';
 import { processDocument } from './process-document.ts';
 
 const SECRET = 'text of the document that must not leak';
@@ -60,10 +60,12 @@ describe('the job handlers of the pipeline', () => {
     expect(createPipelineHandlers(harness.deps()).map(({ kind }) => kind)).toEqual([
       'process_document',
       'reextract_document',
+      'reclassify_document',
       'reindex_document',
     ]);
     expect(processDocumentJob.maxAttempts).toBe(3);
     expect(reextractDocumentJob.maxAttempts).toBe(3);
+    expect(reclassifyDocumentJob.maxAttempts).toBe(3);
     expect(reindexDocumentJob.maxAttempts).toBe(3);
   });
 

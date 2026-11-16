@@ -1,8 +1,8 @@
 import { TOMBSTONE_STATUS } from '@liasse/contract/domain';
-import { and, eq, inArray, isNotNull, notExists, or, sql } from 'drizzle-orm';
+import { and, eq, isNotNull, notExists, or } from 'drizzle-orm';
 import type { Database } from '../db/client.ts';
 import { documents } from '../db/schema/documents.ts';
-import { jobs } from '../db/schema/jobs.ts';
+import { jobs, unfinishedJobOfDocument } from '../db/schema/jobs.ts';
 import { enqueueHindsightSync, hindsightSyncJob } from './sync-job.ts';
 
 export interface HindsightForgetSweepDeps {
@@ -35,13 +35,7 @@ export const requeueHindsightForgets = async (
   const syncInProgress = db
     .select({ id: jobs.id })
     .from(jobs)
-    .where(
-      and(
-        eq(jobs.kind, hindsightSyncJob.name),
-        inArray(jobs.status, ['queued', 'running']),
-        sql`${jobs.payload}->>'documentId' = ${documents.id}`,
-      ),
-    );
+    .where(and(eq(jobs.kind, hindsightSyncJob.name), unfinishedJobOfDocument(documents.id)));
   const owed = await db
     .select({ id: documents.id })
     .from(documents)

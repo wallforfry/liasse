@@ -191,7 +191,7 @@ describe('MCP over stdio', () => {
           status: 'indexed',
           private: true,
         });
-        expect((await client.listTools()).tools).toHaveLength(15);
+        expect((await client.listTools()).tools).toHaveLength(16);
         const idsOf = async (args: Readonly<Record<string, unknown>>) =>
           rows.parse(await callTool('query', args)).rows.map(({ id }) => id);
         expect(await idsOf({})).toEqual([publicId]);

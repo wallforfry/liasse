@@ -1,4 +1,4 @@
-import { CORE_FIELDS } from '../../registry/core-fields.ts';
+import { CORE_FIELDS } from '@liasse/contract/registry';
 import type { RegisteredType } from '../../registry/type-store.ts';
 import type { KnowledgeInput } from '../../knowledge/input.ts';
 import type { MaskSensitive } from '../deps.ts';

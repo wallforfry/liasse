@@ -11,6 +11,7 @@ export type {
   DocumentEventList,
   DocumentList,
   DocumentPart,
+  DocumentReclassification,
   DocumentReview,
   DocumentSummary,
   DocumentView,

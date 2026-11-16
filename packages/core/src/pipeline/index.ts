@@ -29,8 +29,14 @@ export { MAX_QUOTE_LENGTH } from './extract/extraction-schema.ts';
 export { MIN_QUOTE_LENGTH, normalizeForQuote } from './extract/quotes.ts';
 export { failAbandonedDocuments } from './abandoned.ts';
 export { createPipelineHandlers } from './handlers.ts';
-export { reextractDocumentJob, reindexDocumentJob } from './jobs.ts';
+export { reclassifyDocumentJob, reextractDocumentJob, reindexDocumentJob } from './jobs.ts';
 export { processDocument, reextractDocument, reindexDocument } from './process-document.ts';
+export { reclassifyDocument } from './reclassify-document.ts';
+export {
+  type ReclassificationOutcome,
+  type ReclassificationRequest,
+  requestReclassification,
+} from './request-reclassification.ts';
 export {
   DEFAULT_TEXT_PROCESS_LIMITS,
   extractTextInChild,

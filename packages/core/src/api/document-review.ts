@@ -1,11 +1,12 @@
 import type { DocumentReview, ReviewedValue } from '@liasse/contract';
 import {
   DOCUMENT_JOB_FAILURE_CODES,
+  SETTLED_STATUSES,
   type DocumentStatus,
   type ReviewReason,
   type ValueSection,
 } from '@liasse/contract/domain';
-import { ownValue } from '@liasse/contract/registry';
+import { KEY_DATES_FIELD, ownValue } from '@liasse/contract/registry';
 import { z } from 'zod';
 import {
   entityProvenanceSchema,
@@ -16,7 +17,6 @@ import {
   type TypeProvenance,
 } from '../domain/provenance.ts';
 import { meanConfidence, settlementReasons } from '../pipeline/confidence.ts';
-import { KEY_DATES_FIELD } from '../registry/core-fields.ts';
 
 type Values = Readonly<Record<string, unknown>>;
 
@@ -117,8 +117,6 @@ const reviewedType = (type: TypeProvenance | undefined, threshold: number) => {
   };
 };
 
-const SETTLED: readonly DocumentStatus[] = ['indexed', 'needs_review'];
-
 /**
  * Why a document is flagged, and how sure the pipeline is of its type and its values,
  * by the rule that settled it. A document still on its way has no reason yet.
@@ -127,7 +125,7 @@ export const reviewDocument = (document: ReviewedDocument, threshold: number): D
   const pipeline = readPipelineProvenance(document.provenance);
   const rejected = pipeline.extraction?.rejected_values ?? 0;
   const reasons: readonly ReviewReason[] = [
-    ...(SETTLED.includes(document.status)
+    ...(SETTLED_STATUSES.includes(document.status)
       ? settlementReasons(document.confidence, pipeline.type, threshold)
       : []),
     ...(document.error === DOCUMENT_JOB_FAILURE_CODES.reextraction

@@ -23,7 +23,7 @@ import {
   valueOf,
 } from './review.ts';
 import { TypeRow, ValueRow } from './review-rows.tsx';
-import { useCorrection } from './use-correction.ts';
+import { useCorrectDocument } from './use-correct-document.ts';
 
 interface ReviewPanelProps {
   readonly document: DocumentView;
@@ -36,15 +36,15 @@ interface ReviewPanelProps {
  */
 export const ReviewPanel = ({ document, review }: ReviewPanelProps) => {
   const [draft, setDraft] = useState<ReviewDraft>(() => draftOfReview(document));
-  const correction = useCorrection(document.id, 'The review was saved.');
+  const { correct, problems, setProblems } = useCorrectDocument(document.id);
   const asked = reviewedValues(review);
   const others = otherValues(review);
 
   const submit = (event: SubmitEvent<HTMLFormElement>) => {
     event.preventDefault();
     const reading = readReview(draft, document, review);
-    if (reading.ok) correction.send(reading.correction);
-    else correction.refuse(reading.problem);
+    if (reading.ok) correct.mutate(reading.correction);
+    else setProblems([reading.problem]);
   };
 
   return (
@@ -61,7 +61,7 @@ export const ReviewPanel = ({ document, review }: ReviewPanelProps) => {
       </CardHeader>
       <CardContent>
         <form className="flex flex-col gap-4" onSubmit={submit} aria-label="Review">
-          <CorrectionProblems title="The review was not saved" problems={correction.problems} />
+          <CorrectionProblems problems={problems} />
           <TypeRow
             current={document.type}
             type={review.type}
@@ -98,8 +98,8 @@ export const ReviewPanel = ({ document, review }: ReviewPanelProps) => {
             </Disclosure>
           )}
           <div className="flex flex-wrap gap-2">
-            <Button type="submit" disabled={correction.pending}>
-              {correction.pending ? 'Saving...' : 'Submit review'}
+            <Button type="submit" disabled={correct.isPending}>
+              {correct.isPending ? 'Saving...' : 'Submit review'}
             </Button>
             <Button
               type="button"

@@ -6,7 +6,7 @@ import { errorMessage } from '../../api/errors.ts';
 import { useClient } from '../../api/session.ts';
 
 // `invalid_correction` lists what the registry refused, one message per value.
-const problemsOf = (error: unknown): readonly string[] => {
+const refusedValues = (error: unknown): readonly string[] => {
   if (!(error instanceof LiasseApiError)) return [];
   const { errors } = error.details;
   if (!Array.isArray(errors)) return [];
@@ -20,45 +20,27 @@ const problemsOf = (error: unknown): readonly string[] => {
   );
 };
 
-export interface Correcting {
-  readonly send: (correction: DocumentCorrection) => void;
-  readonly pending: boolean;
-  /** What stopped the last correction, from the server or from reading the form. */
-  readonly problems: readonly string[];
-  readonly refuse: (problem: string) => void;
-}
-
 /**
- * Sends a correction of the document, then reads it again. The page gives a form a new
- * key once the document is read again, which resets it.
+ * Sends a correction of one document and reads it again once saved. The page gives each
+ * form a new key once the document is read again, which resets it.
  */
-export const useCorrection = (documentId: string, saved: string): Correcting => {
+export const useCorrectDocument = (id: string) => {
   const client = useClient();
   const queryClient = useQueryClient();
   const [problems, setProblems] = useState<readonly string[]>([]);
   const correct = useMutation({
-    mutationFn: async (correction: DocumentCorrection) =>
-      client.correctDocument(documentId, correction),
+    mutationFn: async (correction: DocumentCorrection) => client.correctDocument(id, correction),
     onSuccess: async () => {
-      toast.success(saved);
+      toast.success('The correction was saved. The document is processed again.');
       setProblems([]);
       await Promise.all([
-        queryClient.invalidateQueries({ queryKey: ['document', documentId] }),
+        queryClient.invalidateQueries({ queryKey: ['document', id] }),
         queryClient.invalidateQueries({ queryKey: ['documents'] }),
       ]);
     },
     onError: (error) => {
-      setProblems([errorMessage(error), ...problemsOf(error)]);
+      setProblems([errorMessage(error), ...refusedValues(error)]);
     },
   });
-  return {
-    send: (correction) => {
-      correct.mutate(correction);
-    },
-    pending: correct.isPending,
-    problems,
-    refuse: (problem) => {
-      setProblems([problem]);
-    },
-  };
+  return { correct, problems, setProblems };
 };

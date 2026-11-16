@@ -1,6 +1,11 @@
-import { type FieldDefinition, ownValue } from '@liasse/contract/registry';
+import {
+  CORE_FIELD_NAMES,
+  CORE_FIELDS,
+  type FieldDefinition,
+  KEY_DATES_FIELD,
+  ownValue,
+} from '@liasse/contract/registry';
 import { z } from 'zod';
-import { CORE_FIELD_NAMES, CORE_FIELDS, KEY_DATES_FIELD } from '../../registry/core-fields.ts';
 import type { TypeFields } from '../../registry/fields.ts';
 import { validateDocumentFields } from '../../registry/validate-document-fields.ts';
 import { coreValueSchema } from '../../registry/values.ts';

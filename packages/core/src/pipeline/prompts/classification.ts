@@ -1,7 +1,6 @@
 import { MAX_FIELDS_PER_TYPE, type SchemaLanguage } from '@liasse/contract/domain';
-import { FIELD_PRIMITIVES } from '@liasse/contract/registry';
+import { CORE_FIELD_NAMES, FIELD_PRIMITIVES } from '@liasse/contract/registry';
 import { wrapUntrusted } from '../../prompt/untrusted.ts';
-import { CORE_FIELD_NAMES } from '../../registry/core-fields.ts';
 
 export const SCHEMA_LANGUAGE_NAMES = {
   en: 'English',
@@ -39,10 +38,19 @@ export interface CandidateLine {
   readonly exampleTitle: string | null;
 }
 
+/** A person asked for the type of the document to be decided again. */
+export interface ReclassificationLine {
+  /** The type they said is wrong; null for a document that had none. */
+  readonly rejected: { readonly slug: string; readonly description: string } | null;
+  readonly hint: string | null;
+  readonly requireNew: boolean;
+}
+
 export interface ClassificationPromptInput {
   readonly opening: string;
   readonly candidates: readonly CandidateLine[];
   readonly hint: string | null;
+  readonly reclassification?: ReclassificationLine;
   /** The proposal the registry refused and why, when this is the second call. */
   readonly refusal?: { readonly proposal: unknown; readonly reason: string };
 }
@@ -50,19 +58,52 @@ export interface ClassificationPromptInput {
 const candidateLine = ({ slug, description, exampleTitle }: CandidateLine): string =>
   `- ${slug}: ${description}${exampleTitle === null ? '' : ` (example: ${exampleTitle})`}`;
 
+const candidatesSection = (
+  candidates: readonly CandidateLine[],
+  reclassification: ReclassificationLine | undefined,
+): string => {
+  if (candidates.length === 0) {
+    return reclassification === undefined
+      ? 'The registry has no type yet: propose one.'
+      : 'No other type can be offered: propose one.';
+  }
+  const listed = wrapUntrusted(candidates.map(candidateLine).join('\n'));
+  return reclassification?.requireNew === true
+    ? `Existing types, which are not answers: a possible parent_slug, and types the new one must not duplicate:\n${listed}`
+    : `Candidate types:\n${listed}`;
+};
+
+const reclassificationSection = ({
+  rejected,
+  hint,
+  requireNew,
+}: ReclassificationLine): readonly string[] => [
+  ...(rejected === null
+    ? []
+    : [
+        `A person said this document is not of the following type, which is therefore not offered:\n${wrapUntrusted(
+          `- ${rejected.slug}: ${rejected.description}`,
+        )}`,
+      ]),
+  ...(hint === null
+    ? []
+    : [`What that person said when asking for the type again:\n${wrapUntrusted(hint)}`]),
+  ...(requireNew ? ['That person asked for a new type: answer with decision "new".'] : []),
+];
+
 // Descriptions and example titles were written by a model that had read other
 // documents, and the refused proposal by one that had read this one: all of it is
-// delimited like the document itself.
+// delimited like the document itself, as is what a person wrote.
 export const classificationPrompt = ({
   opening,
   candidates,
   hint,
+  reclassification,
   refusal,
 }: ClassificationPromptInput): string =>
   [
-    candidates.length === 0
-      ? 'The registry has no type yet: propose one.'
-      : `Candidate types:\n${wrapUntrusted(candidates.map(candidateLine).join('\n'))}`,
+    candidatesSection(candidates, reclassification),
+    ...(reclassification === undefined ? [] : reclassificationSection(reclassification)),
     ...(hint === null
       ? []
       : [`What the person who added the document said about it:\n${wrapUntrusted(hint)}`]),
@@ -72,6 +113,10 @@ export const classificationPrompt = ({
       : [
           `The registry refused your previous proposal. The proposal and the reason:\n${wrapUntrusted(
             `${JSON.stringify(refusal.proposal)}\n${refusal.reason}`,
-          )}\nChoose a candidate, or propose a type that respects the rules.`,
+          )}\n${
+            reclassification?.requireNew === true
+              ? 'Propose a type that respects the rules.'
+              : 'Choose a candidate, or propose a type that respects the rules.'
+          }`,
         ]),
   ].join('\n\n');

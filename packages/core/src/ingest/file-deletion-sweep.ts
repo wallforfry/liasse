@@ -1,8 +1,8 @@
 import { TOMBSTONE_STATUS } from '@liasse/contract/domain';
-import { and, eq, inArray, isNull, notExists, sql } from 'drizzle-orm';
+import { and, eq, isNull, notExists } from 'drizzle-orm';
 import type { Database } from '../db/client.ts';
 import { documents } from '../db/schema/documents.ts';
-import { jobs } from '../db/schema/jobs.ts';
+import { jobs, unfinishedJobOfDocument } from '../db/schema/jobs.ts';
 import { enqueue } from '../jobs/enqueue.ts';
 import { deleteFileJob } from './delete-file-job.ts';
 
@@ -35,13 +35,7 @@ export const requeueFileDeletions = async (
   const removalInProgress = db
     .select({ id: jobs.id })
     .from(jobs)
-    .where(
-      and(
-        eq(jobs.kind, deleteFileJob.name),
-        inArray(jobs.status, ['queued', 'running']),
-        sql`${jobs.payload}->>'documentId' = ${documents.id}`,
-      ),
-    );
+    .where(and(eq(jobs.kind, deleteFileJob.name), unfinishedJobOfDocument(documents.id)));
   const owed = await db
     .select({ id: documents.id })
     .from(documents)

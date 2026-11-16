@@ -1,11 +1,12 @@
 import { isoDateSchema } from '@liasse/contract/domain';
 import {
+  CORE_FIELDS,
   type FieldDefinition,
   isPlainRecord,
+  KEY_DATES_FIELD,
   ownValue,
   type ScalarFieldDefinition,
 } from '@liasse/contract/registry';
-import { CORE_FIELDS, KEY_DATES_FIELD } from '../../registry/core-fields.ts';
 import type { TypeFields } from '../../registry/fields.ts';
 import type { SupportKind } from './support.ts';
 

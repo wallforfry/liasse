@@ -22,6 +22,9 @@ export const IN_PROGRESS_STATUSES = [
   'classified',
 ] as const satisfies readonly DocumentStatus[];
 
+/** Indexed and queryable; `needs_review` is also flagged for a person to look at. */
+export const SETTLED_STATUSES: readonly DocumentStatus[] = ['indexed', 'needs_review'];
+
 // What `documents.error` says when the queue failed the job of a document for good: the
 // worker stopped during the last attempt, the handler failed in a way it could not give
 // a code for, or a re-extraction never succeeded.
