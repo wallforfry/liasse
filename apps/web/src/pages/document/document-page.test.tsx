@@ -53,7 +53,7 @@ const answerDocument: Answer = (request) =>
   request.path.startsWith('/documents/doc_01HOSTILE') ? json(HOSTILE_DOCUMENT) : undefined;
 
 const openTypePicker = async (user: UserEvent): Promise<HTMLElement> => {
-  await user.click(await screen.findByRole('tab', { name: 'Correct' }));
+  await user.click(await screen.findByRole('button', { name: 'Edit by hand' }));
   await user.click(screen.getByRole('combobox', { name: 'Type' }));
   return screen.getByPlaceholderText('Search the types...');
 };

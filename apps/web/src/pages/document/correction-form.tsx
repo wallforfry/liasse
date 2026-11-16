@@ -1,59 +1,26 @@
-import { LiasseApiError, type DocumentView } from '@liasse/sdk';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import type { DocumentView } from '@liasse/sdk';
 import { type SubmitEvent, useState } from 'react';
-import { toast } from 'sonner';
-import { errorMessage } from '../../api/errors.ts';
-import { useClient } from '../../api/session.ts';
-import { Alert, AlertDescription, AlertTitle } from '../../components/ui/alert.tsx';
 import { Button } from '../../components/ui/button.tsx';
 import { Checkbox } from '../../components/ui/checkbox.tsx';
 import { Label } from '../../components/ui/label.tsx';
 import { Textarea } from '../../components/ui/textarea.tsx';
+import { CorrectionProblems } from './correction-problems.tsx';
 import { type CorrectionDraft, draftOf, readCorrection } from './correction.ts';
 import { TypePicker } from './type-picker.tsx';
-
-// `invalid_correction` lists what the registry refused, one message per value.
-const problemsOf = (error: unknown): readonly string[] => {
-  if (!(error instanceof LiasseApiError)) return [];
-  const { errors } = error.details;
-  if (!Array.isArray(errors)) return [];
-  return errors.flatMap((item: unknown) =>
-    typeof item === 'object' &&
-    item !== null &&
-    'message' in item &&
-    typeof item.message === 'string'
-      ? [item.message]
-      : [],
-  );
-};
+import { useCorrection } from './use-correction.ts';
 
 export const CorrectionForm = ({ document }: { readonly document: DocumentView }) => {
-  const client = useClient();
-  const queryClient = useQueryClient();
   const [draft, setDraft] = useState<CorrectionDraft>(() => draftOf(document));
-  const [problems, setProblems] = useState<readonly string[]>([]);
-  const correct = useMutation({
-    mutationFn: async (correction: Parameters<typeof client.correctDocument>[1]) =>
-      client.correctDocument(document.id, correction),
-    // The page gives the form a new key once the document is read again, which resets it.
-    onSuccess: async () => {
-      toast.success('The correction was saved. The document is processed again.');
-      setProblems([]);
-      await Promise.all([
-        queryClient.invalidateQueries({ queryKey: ['document', document.id] }),
-        queryClient.invalidateQueries({ queryKey: ['documents'] }),
-      ]);
-    },
-    onError: (error) => {
-      setProblems([errorMessage(error), ...problemsOf(error)]);
-    },
-  });
+  const correction = useCorrection(
+    document.id,
+    'The correction was saved. The document is processed again.',
+  );
 
   const submit = (event: SubmitEvent<HTMLFormElement>) => {
     event.preventDefault();
     const reading = readCorrection(draft, document);
-    if (reading.ok) correct.mutate(reading.correction);
-    else setProblems([reading.problem]);
+    if (reading.ok) correction.send(reading.correction);
+    else correction.refuse(reading.problem);
   };
 
   const edit = (change: Partial<CorrectionDraft>) => {
@@ -65,18 +32,7 @@ export const CorrectionForm = ({ document }: { readonly document: DocumentView }
       <p className="text-sm text-muted-foreground">
         Only what differs from the values shown is sent, and it is kept over what extraction finds.
       </p>
-      {problems.length === 0 ? null : (
-        <Alert variant="destructive">
-          <AlertTitle>The correction was not saved</AlertTitle>
-          <AlertDescription>
-            <ul className="list-inside list-disc">
-              {problems.map((problem) => (
-                <li key={problem}>{problem}</li>
-              ))}
-            </ul>
-          </AlertDescription>
-        </Alert>
-      )}
+      <CorrectionProblems title="The correction was not saved" problems={correction.problems} />
       <div className="grid gap-2">
         <Label htmlFor="correction-type">Type</Label>
         <TypePicker
@@ -120,8 +76,8 @@ export const CorrectionForm = ({ document }: { readonly document: DocumentView }
         />
       </div>
       <div>
-        <Button type="submit" disabled={correct.isPending}>
-          {correct.isPending ? 'Saving...' : 'Save the correction'}
+        <Button type="submit" disabled={correction.pending}>
+          {correction.pending ? 'Saving...' : 'Save the correction'}
         </Button>
       </div>
     </form>

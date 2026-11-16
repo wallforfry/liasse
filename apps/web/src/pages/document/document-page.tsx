@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import { ArrowLeftIcon } from 'lucide-react';
 import { Link, useParams } from 'react-router';
 import { useClient } from '../../api/session.ts';
+import { Disclosure } from '../../components/disclosure.tsx';
 import { PrivateBadge, StatusBadge } from '../../components/document-badges.tsx';
 import { ErrorAlert } from '../../components/error-alert.tsx';
 import { PageHeader } from '../../components/page-header.tsx';
@@ -15,13 +16,14 @@ import { DeleteDocument } from './delete-document.tsx';
 import { DocumentDetails, DocumentText, OriginalFile, ValueTable } from './document-parts.tsx';
 import { ProcessingLog } from './processing-log.tsx';
 import { RetryDocument } from './retry-document.tsx';
+import { ReviewPanel } from './review-panel.tsx';
 
 export const DocumentPage = () => {
   const client = useClient();
   const { id = '' } = useParams();
   const document = useQuery({
     queryKey: ['document', id],
-    queryFn: async () => client.getDocument(id, { include: ['fields', 'text'] }),
+    queryFn: async () => client.getDocument(id, { include: ['fields', 'text', 'review'] }),
     refetchInterval: (query) =>
       pollWhileProcessing(query.state.data === undefined ? undefined : [query.state.data]),
   });
@@ -59,13 +61,18 @@ export const DocumentPage = () => {
         }
       />
       {view.summary === null ? null : <p className="text-sm leading-relaxed">{view.summary}</p>}
+      {view.status === 'needs_review' && view.review !== undefined ? (
+        <ReviewPanel key={view.updated_at} document={view} review={view.review} />
+      ) : null}
+      <Disclosure label="Edit by hand">
+        <CorrectionForm key={view.updated_at} document={view} />
+      </Disclosure>
       <Tabs defaultValue="details">
         <TabsList>
           <TabsTrigger value="details">Details</TabsTrigger>
           <TabsTrigger value="text">Text</TabsTrigger>
           <TabsTrigger value="file">File</TabsTrigger>
           <TabsTrigger value="processing">Processing</TabsTrigger>
-          <TabsTrigger value="correct">Correct</TabsTrigger>
         </TabsList>
         <TabsContent value="details" className="grid gap-4 lg:grid-cols-2">
           <Card className="lg:col-span-2">
@@ -102,9 +109,6 @@ export const DocumentPage = () => {
               <ProcessingLog document={view} />
             </CardContent>
           </Card>
-        </TabsContent>
-        <TabsContent value="correct">
-          <CorrectionForm key={view.updated_at} document={view} />
         </TabsContent>
       </Tabs>
     </>
