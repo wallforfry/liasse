@@ -15,6 +15,11 @@ export {
   documentEventSchema,
 } from './document-events.ts';
 export {
+  type DocumentReview,
+  documentReviewSchema,
+  type ReviewedValue,
+} from './document-review.ts';
+export {
   DEFAULT_DOCUMENT_LIST_LIMIT,
   DEFAULT_PAGE_COUNT,
   DEFAULT_TEXT_LENGTH,

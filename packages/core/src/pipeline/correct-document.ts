@@ -6,11 +6,13 @@ import { enqueue } from '../jobs/enqueue.ts';
 import { resolveType } from '../registry/read-types.ts';
 import { findTypeById, type RegisteredType } from '../registry/type-store.ts';
 import { entitiesOf, maskOf } from './bindings.ts';
-import { applyCorrection, type Correction } from './correction/apply.ts';
+import { applyCorrection, type Correction, holdsConfirmed } from './correction/apply.ts';
 import {
   type CorrectionError,
   correctionInputSchema,
+  type CorrectionRequest,
   EMPTY_PATCH,
+  planConfirm,
   planCore,
   planFields,
   type Planned,
@@ -80,6 +82,7 @@ const apply = (
       if (stored === undefined) return undefined;
       const { type } = correction;
       if (stored.typeId !== read.typeId) return 'stale';
+      if (!holdsConfirmed(stored, correction.confirm)) return 'stale';
       if (type !== undefined && !(await isCurrentType(tx, type))) return 'stale';
       // The ids this correction brings in: those the document already holds are kept
       // true by the merges themselves.
@@ -103,6 +106,35 @@ const apply = (
     return outcome.written ? outcome.result : undefined;
   });
 
+interface PlannedSections {
+  readonly core: SectionPatch;
+  readonly fields: SectionPatch;
+  readonly confirm: readonly string[];
+}
+
+// Every refusal at once, so the person fixes the whole request in one go.
+const planSections = (
+  { core: corePatch, fields: fieldsPatch, confirm = [] }: CorrectionRequest,
+  document: PipelineDocument,
+  type: RegisteredType | undefined,
+): Planned<PlannedSections> => {
+  const core =
+    corePatch === undefined ? { ok: true as const, value: EMPTY_PATCH } : planCore(corePatch);
+  const fields = planFieldsFor(fieldsPatch, type);
+  const confirmed = planConfirm({
+    names: confirm,
+    corrected: [...Object.keys(corePatch ?? {}), ...Object.keys(fieldsPatch ?? {})],
+    present: [...Object.keys(document.core), ...Object.keys(document.fields)],
+  });
+  return core.ok && fields.ok && confirmed.ok
+    ? { ok: true, value: { core: core.value, fields: fields.value, confirm: confirmed.value } }
+    : refused(
+        ...(core.ok ? [] : core.errors),
+        ...(fields.ok ? [] : fields.errors),
+        ...(confirmed.ok ? [] : confirmed.errors),
+      );
+};
+
 const NOT_FOUND = (id: string): CorrectionError => ({
   code: 'document_not_found',
   message: `No document has the id "${id}".`,
@@ -121,7 +153,7 @@ export const correctDocument = async (
   const input = correctionInputSchema.safeParse(rawInput);
   if (!input.success)
     return refused({ code: 'invalid_input', message: z.prettifyError(input.error) });
-  const { id, type: slug, core: corePatch, fields: fieldsPatch } = input.data;
+  const { id, type: slug } = input.data;
   for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt += 1) {
     const document = await loadDocument(deps.db, id);
     if (document === undefined) return refused(NOT_FOUND(id));
@@ -132,13 +164,10 @@ export const correctDocument = async (
         message: `No type has the slug or alias "${slug ?? ''}".`,
       });
     }
-    const core =
-      corePatch === undefined ? { ok: true as const, value: EMPTY_PATCH } : planCore(corePatch);
-    const fields = planFieldsFor(fieldsPatch, target.type);
-    if (!core.ok || !fields.ok) {
-      return refused(...(core.ok ? [] : core.errors), ...(fields.ok ? [] : fields.errors));
-    }
-    const names = entityNames(core.value, fields.value);
+    const planned = planSections(input.data, document, target.type);
+    if (!planned.ok) return planned;
+    const { core, fields, confirm } = planned.value;
+    const names = entityNames(core, fields);
     const bound = { entities: entitiesOf(deps), maskSensitive: maskOf(deps) };
     const { resolutions } = await resolveMentions(bound, names, {
       details: [],
@@ -156,8 +185,9 @@ export const correctDocument = async (
       type: target.type,
       typeGiven: slug !== undefined,
       typeChanged: target.changed,
-      core: core.value,
-      fields: fields.value,
+      core,
+      fields,
+      confirm,
       private: input.data.private,
       resolutions,
       maskSensitive: maskOf(deps),

@@ -195,6 +195,96 @@ describe('correctDocument', () => {
     expect(await queued()).toEqual([]);
   });
 
+  describe('confirm', () => {
+    it('keeps a confirmed value untouched, makes it manual and clears the flag', async () => {
+      const type = await bill();
+      const id = await settled(type.id, {
+        core: { reference: 'SYN-1', issuer: 'Old Issuer' },
+        fields: { meter_id: SYNTHETIC_IBAN_MASKED, parties: ['Old Issuer', 'Jane Synthetic'] },
+        provenance: {
+          reference: EXTRACTED,
+          issuer: { entity_id: 'ent_OLD', match: 'created', confidence: 1 },
+          meter_id: EXTRACTED,
+          parties: [
+            { entity_id: 'ent_OLD', match: 'created', confidence: 1 },
+            { entity_id: 'ent_JANE', match: 'alias', confidence: 0.8 },
+          ],
+          [PIPELINE_PROVENANCE_KEY]: { type: { model: 'm', confidence: 0.4, outcome: 'existing' } },
+        },
+      });
+      const before = await harness.document(id);
+      const result = await correctDocument(harness.deps(), {
+        id,
+        confirm: ['issuer', 'meter_id', 'parties'],
+      });
+      const document = await harness.document(id);
+      expect(result).toMatchObject({ ok: true, value: { status: 'indexed' } });
+      expect(document).toMatchObject({
+        status: 'indexed',
+        core: before.core,
+        fields: before.fields,
+        manualFields: ['issuer', 'meter_id', 'parties'],
+      });
+      expect(document.provenance).toMatchObject({
+        reference: EXTRACTED,
+        issuer: { entity_id: 'ent_OLD', match: 'created', confidence: 1, manual: true },
+        meter_id: MANUAL_PROVENANCE,
+        parties: [
+          { entity_id: 'ent_OLD', match: 'created', confidence: 1, manual: true },
+          { entity_id: 'ent_JANE', match: 'alias', confidence: 0.8, manual: true },
+        ],
+      });
+      expect(await harness.db.select().from(entities)).toEqual([]);
+      expect(await queued()).toEqual([{ kind: 'reindex_document', payload: { documentId: id } }]);
+    });
+
+    it('confirms alongside a correction of other values and of the type it has', async () => {
+      const type = await bill();
+      const id = await settled(type.id);
+      await correctDocument(harness.deps(), {
+        id,
+        type: 'energy_bill',
+        core: { reference: 'SYN-2' },
+        confirm: ['meter_id'],
+      });
+      const document = await harness.document(id);
+      expect(document).toMatchObject({
+        status: 'indexed',
+        core: { reference: 'SYN-2', issuer: 'Old Issuer' },
+        fields: { meter_id: 'PDL-1' },
+        manualFields: ['reference', 'meter_id', MANUAL_TYPE_FIELD],
+      });
+      expect(document.provenance).toMatchObject({
+        reference: MANUAL_PROVENANCE,
+        meter_id: MANUAL_PROVENANCE,
+        issuer: { entity_id: 'ent_OLD' },
+      });
+    });
+
+    it.each([
+      ['a name without a value', { confirm: ['due_date'] }, 'unknown_field'],
+      ['key dates', { confirm: ['key_dates'] }, 'unsupported_field'],
+      [
+        'a name the request also sets',
+        { core: { reference: 'SYN-2' }, confirm: ['reference'] },
+        'invalid_input',
+      ],
+      [
+        'a name the request also clears',
+        { fields: { meter_id: null }, confirm: ['meter_id'] },
+        'invalid_input',
+      ],
+    ])('refuses %s and writes nothing', async (_case, patch, code) => {
+      const type = await bill();
+      const id = await settled(type.id);
+      const before = await harness.document(id);
+      const result = await correctDocument(harness.deps(), { id, ...patch });
+      expect(result).toMatchObject({ ok: false, errors: [{ code }] });
+      expect(await harness.document(id)).toEqual(before);
+      expect(await queued()).toEqual([]);
+    });
+  });
+
   it('refuses fields for a document without a type', async () => {
     const id = await settled(null, { fields: {} });
     expect(await correctDocument(harness.deps(), { id, fields: { meter_id: 'x' } })).toMatchObject({

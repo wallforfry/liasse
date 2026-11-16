@@ -183,6 +183,26 @@ describe('the tools', () => {
       });
     });
 
+    it('gives why a document is flagged in its review part', async () => {
+      const id = await harness.addDocument([], {
+        status: 'needs_review',
+        confidence: 0.4,
+        core: { reference: 'SYN-1' },
+        provenance: {
+          reference: { model: 'm', schema_version: null, confidence: 0.4, page: 1, quote: 'SYN-1' },
+          '@pipeline': { type: { model: 'm', confidence: 0.9, outcome: 'existing' } },
+        },
+      });
+      const { body } = await callTool(client, 'get_document', { id, include: ['review'] });
+      expect(body).toMatchObject({
+        review: {
+          threshold: 0.7,
+          reasons: ['low_confidence'],
+          values: [{ name: 'reference', confidence: 0.4, quote: 'SYN-1', doubtful: true }],
+        },
+      });
+    });
+
     it('answers document_not_found for an unknown id', async () => {
       expect((await failureOf('get_document', { id: 'doc_unknown' })).code).toBe(
         'document_not_found',
@@ -341,6 +361,24 @@ describe('the tools of a bound feature', () => {
       { entity: 'ent_x', limit: DEFAULT_TIMELINE_LIMIT, includePrivate: false },
       { id: 'sub_x', asOf: '2026-05-01', includePrivate: false },
     ]);
+  });
+
+  it('hands a correction its confirmed names', async () => {
+    const received: unknown[] = [];
+    const id = await harness.addDocument([]);
+    const client = await harness.connect({
+      correctDocument: (input) => {
+        received.push(input);
+        return Promise.resolve({ ok: true });
+      },
+    });
+    const { isError } = await callTool(client, 'update_document', {
+      id,
+      type: 'note',
+      confirm: ['reference'],
+    });
+    expect(isError).toBe(false);
+    expect(received).toEqual([{ id, type: 'note', confirm: ['reference'] }]);
   });
 
   it('answers internal_error for an unexpected failure, reported and never quoted', async () => {

@@ -226,6 +226,26 @@ describe('document routes', () => {
       expect(document.file_url).toContain(`https://liasse.example.com/documents/${id}/file?`);
     });
 
+    it('reads the review of a flagged document', async () => {
+      const id = await harness.addDocument([], {
+        status: 'needs_review',
+        private: true,
+        confidence: 0.9,
+        error: 'reextraction_failed',
+        provenance: { '@pipeline': { type: { model: 'm', confidence: 0.9, outcome: 'fallback' } } },
+      });
+      const response = await harness.call(`/documents/${id}?include=review`);
+      expect(response.status).toBe(200);
+      expect(await response.json()).toMatchObject({
+        review: {
+          threshold: 0.7,
+          reasons: ['type_fallback', 'reextraction_failed'],
+          type: { confidence: 0.9, outcome: 'fallback', manual: false, doubtful: true },
+          values: [],
+        },
+      });
+    });
+
     it.each(['include=secrets', 'text_limit=0', 'text_limit=1e3', 'page_from=-1', 'verbose=1'])(
       'refuses the query %s',
       async (query) => {
@@ -380,14 +400,20 @@ describe('document routes', () => {
         },
       });
       const response = await app.request(`/documents/${id}`, {
-        ...jsonRequest('PATCH', { private: true, core: { reference: 'SYN-1' } }),
+        ...jsonRequest('PATCH', {
+          private: true,
+          core: { reference: 'SYN-1' },
+          confirm: ['issuer'],
+        }),
         headers: {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${harness.token}`,
         },
       });
       expect(response.status).toBe(200);
-      expect(received).toEqual([{ id, private: true, core: { reference: 'SYN-1' } }]);
+      expect(received).toEqual([
+        { id, private: true, core: { reference: 'SYN-1' }, confirm: ['issuer'] },
+      ]);
       expect(await response.json()).toMatchObject({
         id,
         private: true,

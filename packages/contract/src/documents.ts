@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { documentReviewSchema } from './document-review.ts';
 import {
   documentSourceSchema,
   documentStateSchema,
@@ -52,7 +53,14 @@ export const documentListSchema = z.object({
 });
 export type DocumentList = z.output<typeof documentListSchema>;
 
-export const DOCUMENT_PARTS = ['fields', 'text', 'pages', 'file_url', 'provenance'] as const;
+export const DOCUMENT_PARTS = [
+  'fields',
+  'text',
+  'pages',
+  'file_url',
+  'provenance',
+  'review',
+] as const;
 export type DocumentPart = (typeof DOCUMENT_PARTS)[number];
 
 export const DEFAULT_TEXT_LENGTH = 20_000;
@@ -95,6 +103,7 @@ export const documentSchema = documentSummarySchema.extend({
     .url()
     .optional()
     .describe('Signed URL of the original file, valid for 15 minutes without a token.'),
+  review: documentReviewSchema.optional(),
 });
 export type DocumentView = z.output<typeof documentSchema>;
 
@@ -140,6 +149,13 @@ export const documentCorrectionSchema = z.strictObject({
   type: z.string().min(1).optional(),
   core: jsonObjectSchema.optional(),
   fields: jsonObjectSchema.optional(),
+  confirm: z
+    .array(z.string().min(1))
+    .optional()
+    .describe(
+      'Names of core values or fields a person vouches for as they are: kept untouched, ' +
+        'marked manual.',
+    ),
   private: z.boolean().optional(),
 });
 export type DocumentCorrection = z.output<typeof documentCorrectionSchema>;
