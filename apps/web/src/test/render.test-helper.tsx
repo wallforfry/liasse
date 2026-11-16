@@ -1,8 +1,8 @@
 import { AUTH_BASE_PATH } from '@liasse/contract';
-import { render, type RenderResult } from '@testing-library/react';
+import { getConfig, render, type RenderResult, screen } from '@testing-library/react';
 import { createMemoryRouter } from 'react-router';
 import { RouterProvider } from 'react-router/dom';
-import { type Mock, vi } from 'vitest';
+import { beforeAll, type Mock, vi } from 'vitest';
 import type { NavigateAway } from '../api/redirect.ts';
 import { AppProviders } from '../app.tsx';
 import { ROUTES } from '../routes.tsx';
@@ -83,3 +83,42 @@ export const renderApp = (
     router,
   };
 };
+
+/** Resolves once the text is in the page, however long rendering takes. */
+const untilShown = (text: string): Promise<void> =>
+  new Promise((resolve) => {
+    const check = (): boolean => document.body.textContent.includes(text);
+    if (check()) {
+      resolve();
+      return;
+    }
+    const observer = new MutationObserver(() => {
+      if (!check()) return;
+      observer.disconnect();
+      resolve();
+    });
+    observer.observe(document.body, { childList: true, subtree: true, characterData: true });
+  });
+
+/**
+ * Renders the application once before the tests of a file. Each test file runs in a fresh
+ * process and jsdom: without this, its first test pays inside its first `findBy*` for code
+ * V8 has not compiled yet (React DOM, the router, the shell) and for jsdom loading and
+ * parsing its default stylesheet on the first `getComputedStyle`, which a role query calls.
+ * Waiting here is not bounded by Testing Library's 1 s, only by the hook timeout.
+ */
+const warmUp = async (): Promise<void> => {
+  const library = fakeServer((request) => {
+    if (request.path.startsWith('/types')) return json({ types: [] });
+    if (request.path.startsWith('/documents')) {
+      return json({ documents: [], total: 0, has_more: false });
+    }
+    return undefined;
+  });
+  const { unmount } = renderApp('/documents', library.fetch);
+  await getConfig().asyncWrapper(() => untilShown('Most recent first.'));
+  screen.getByRole('heading', { name: 'Documents' });
+  unmount();
+};
+
+beforeAll(warmUp);
