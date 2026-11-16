@@ -17,6 +17,8 @@ export interface ApiContext {
   readonly schemaLanguage: SchemaLanguage;
   /** In bytes; `config.pipeline.maxFileSize`. */
   readonly maxFileSize: number;
+  /** `CONFIDENCE_THRESHOLD`: the rule of the `review` part of a document. */
+  readonly confidenceThreshold: number;
   readonly fileUrls: FileUrls;
   readonly features: ApiFeatures;
   /** Upper bound of each statement of a structured query; the default of `runQuery` when absent. */

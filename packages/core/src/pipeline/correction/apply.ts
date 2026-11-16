@@ -12,6 +12,7 @@ import type { PipelineDocument } from '../document.ts';
 import { type EntityResolutions, mentionKey } from '../extract/entities.ts';
 import { maskDeep } from '../extract/masking.ts';
 import { moveFields } from './move-fields.ts';
+import { type Confirmations, confirmedEntries } from './confirm.ts';
 import type { SectionPatch } from './plan.ts';
 
 type Values = Readonly<Record<string, unknown>>;
@@ -23,6 +24,8 @@ export interface Correction {
   readonly typeChanged: boolean;
   readonly core: SectionPatch;
   readonly fields: SectionPatch;
+  /** Values a person vouches for as they were shown, in the core or the fields. */
+  readonly confirm: Confirmations;
   readonly private: boolean | undefined;
   readonly resolutions: EntityResolutions;
   readonly maskSensitive: MaskSensitive;
@@ -63,8 +66,9 @@ const manualEntries = (patch: SectionPatch, resolutions: EntityResolutions): Val
 const masked = (mask: MaskSensitive, values: Values): Values =>
   Object.fromEntries(Object.entries(values).map(([name, value]) => [name, maskDeep(mask)(value)]));
 
-// Correcting the type, the core or the fields is the review of a document flagged for
-// one; a correction of the `private` flag alone, or of nothing, says nothing of its values.
+// Correcting or confirming the type, the core or the fields is the review of a document
+// flagged for one; a correction of the `private` flag alone, or of nothing, says nothing of
+// its values.
 // The code of a failed re-extraction goes with the flag it came with.
 const reviewed = (stored: PipelineDocument, correction: Correction, touched: number) =>
   stored.status === 'needs_review' && (correction.typeGiven || touched > 0)
@@ -85,7 +89,7 @@ const reviewed = (stored: PipelineDocument, correction: Correction, touched: num
 export const applyCorrection = (stored: PipelineDocument, correction: Correction) => {
   const { type, typeGiven, typeChanged, core, fields, resolutions, maskSensitive } = correction;
   const kept = typeChanged ? moveFields(stored, type) : stored;
-  const touched = [...namesOf(core), ...namesOf(fields)];
+  const touched = [...namesOf(core), ...namesOf(fields), ...Object.keys(correction.confirm)];
   const pipeline = readPipelineProvenance(stored.provenance);
   return {
     typeId: type?.id ?? null,
@@ -96,6 +100,7 @@ export const applyCorrection = (stored: PipelineDocument, correction: Correction
     extra: omit(kept.extra, namesOf(fields)),
     provenance: {
       ...omit(stored.provenance, touched),
+      ...confirmedEntries(stored, correction.confirm),
       ...manualEntries(core, resolutions),
       ...manualEntries(fields, resolutions),
       [PIPELINE_PROVENANCE_KEY]: typeGiven ? { ...pipeline, type: MANUAL_PROVENANCE } : pipeline,

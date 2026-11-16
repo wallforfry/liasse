@@ -36,7 +36,9 @@ const GET_DOCUMENT_DESCRIPTION =
   '`fields` (the fields of its type, with the ones corrected by hand), `text` (its full ' +
   'text, a slice at a time: `text_offset`, `text_limit`, then `has_more`), `pages` (the ' +
   'text page by page), `file_url` (a signed URL of the original file, valid 15 minutes), ' +
-  `\`provenance\` (where each value was read). ${UNTRUSTED}`;
+  '`provenance` (where each value was read), `review` (why it is flagged `needs_review`, ' +
+  'and how sure extraction is of its type and of each value, against the threshold). ' +
+  UNTRUSTED;
 
 const INGEST_DESCRIPTION =
   'Adds a document: `file` holds its bytes, base64-encoded, with its `filename`; `hint` ' +
@@ -56,9 +58,15 @@ const GET_STATUS_DESCRIPTION =
   'the model and counts such as the values the model returned that were rejected.';
 
 const UPDATE_DESCRIPTION =
-  'Corrects a document: its type, core values, fields, or its `private` flag. A manual ' +
-  'correction takes precedence: consolidation never overwrites it. Returns the corrected ' +
-  `document with its fields and provenance. ${UNTRUSTED}`;
+  'Corrects a document: its type, core values, fields, or its `private` flag. In `core` and ' +
+  '`fields`, a value sets a field and `null` clears it. `confirm` maps core values or ' +
+  'fields that are right as they are to the value `get_document` gave for each: each keeps ' +
+  'its value, never rewritten, and becomes manual; a value that changed since is refused ' +
+  '(`value_changed`): read the document again. Naming the type, even the current one, ' +
+  'vouches for it. ' +
+  'Correcting or confirming anything of the type, core or fields clears `needs_review`. A ' +
+  'manual correction takes precedence: consolidation never overwrites it. Returns the ' +
+  `corrected document with its fields and provenance. ${UNTRUSTED}`;
 
 const RETRY_DESCRIPTION =
   'Processes a `failed` document again from its stored file, for instance after a provider ' +

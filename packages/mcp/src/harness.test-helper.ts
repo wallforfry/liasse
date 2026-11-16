@@ -57,6 +57,7 @@ export const createMcpHarness = async (): Promise<McpHarness> => {
     fullText: rankByFullText,
     schemaLanguage: 'en',
     maxFileSize: TEST_MAX_FILE_SIZE,
+    confidenceThreshold: 0.7,
     fileUrls: createFileUrls({
       secret: 'synthetic-file-url-secret-0123456789',
       publicUrl: 'https://liasse.example.com',

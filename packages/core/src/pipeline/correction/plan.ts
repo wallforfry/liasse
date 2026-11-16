@@ -10,15 +10,20 @@ import type { TypeFields } from '../../registry/fields.ts';
 import { validateDocumentFields } from '../../registry/validate-document-fields.ts';
 import { coreValueSchema } from '../../registry/values.ts';
 
-/** `update_document`: a value sets a field, `null` clears it, an absent key leaves it. */
+/**
+ * `update_document`: a value sets a field, `null` clears it, an absent key leaves it. A
+ * name in `confirm`, with the value the person was shown, keeps that value as it is.
+ */
 export const correctionInputSchema = z.strictObject({
   id: z.string().min(1),
   type: z.string().min(1).optional(),
   core: z.record(z.string(), z.unknown()).optional(),
   fields: z.record(z.string(), z.unknown()).optional(),
+  confirm: z.record(z.string().min(1), z.unknown()).optional(),
   private: z.boolean().optional(),
 });
 export type CorrectionInput = z.input<typeof correctionInputSchema>;
+export type CorrectionRequest = Readonly<z.output<typeof correctionInputSchema>>;
 
 export const CORRECTION_ERROR_CODES = [
   'invalid_input',
@@ -29,6 +34,7 @@ export const CORRECTION_ERROR_CODES = [
   'unsupported_field',
   'invalid_value',
   'unresolved_entity',
+  'value_changed',
 ] as const;
 
 export interface CorrectionError {

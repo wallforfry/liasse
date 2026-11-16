@@ -10,6 +10,7 @@ import type { Database } from '../db/client.ts';
 import { documentPages, documents, isLiveDocument } from '../db/schema/documents.ts';
 import { docTypes } from '../db/schema/registry.ts';
 import type { ApiContext } from './context.ts';
+import { reviewDocument } from './document-review.ts';
 import { SUMMARY_COLUMNS, toDocumentSummary } from './document-view.ts';
 import { documentNotFound } from './errors.ts';
 
@@ -62,7 +63,11 @@ const readPages = async (db: Database, id: string, { page_from, page_limit }: Op
  * is asking for it explicitly.
  */
 export const getDocument = async (
-  { db, fileUrls }: Pick<ApiContext, 'db' | 'fileUrls'>,
+  {
+    db,
+    fileUrls,
+    confidenceThreshold,
+  }: Pick<ApiContext, 'db' | 'fileUrls' | 'confidenceThreshold'>,
   id: string,
   rawOptions: GetDocumentOptions = {},
 ): Promise<DocumentView> => {
@@ -83,6 +88,7 @@ export const getDocument = async (
     .where(and(eq(documents.id, id), isLiveDocument));
   if (row === undefined) throw documentNotFound();
   const { schemaVersion, hint, fields, extra, manualFields, provenance, ...summary } = row;
+  const review = () => reviewDocument({ ...summary, fields, provenance }, confidenceThreshold);
   return {
     ...toDocumentSummary(summary),
     schema_version: schemaVersion,
@@ -92,5 +98,6 @@ export const getDocument = async (
     ...(wants('text') ? { text: await readText(db, id, options) } : {}),
     ...(wants('pages') ? { pages: await readPages(db, id, options) } : {}),
     ...(wants('file_url') ? { file_url: fileUrls.sign(id) } : {}),
+    ...(wants('review') ? { review: review() } : {}),
   };
 };

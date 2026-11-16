@@ -10,6 +10,7 @@ import {
 } from '../domain/provenance.ts';
 import { deleteDocument } from '../ingest/delete-document.ts';
 import { createType } from '../registry/create-type.ts';
+import { createGate } from '../testing/async.ts';
 import { createFakeEmbedder } from '../testing/fake-embedder.ts';
 import { insertSyntheticDocument } from '../testing/fixtures.ts';
 import { correctDocument } from './correct-document.ts';
@@ -193,6 +194,141 @@ describe('correctDocument', () => {
     expect(result).toMatchObject({ ok: false, errors: [{ code }] });
     expect(await harness.document(id)).toEqual(before);
     expect(await queued()).toEqual([]);
+  });
+
+  describe('confirm', () => {
+    it('keeps a confirmed value untouched, makes it manual and clears the flag', async () => {
+      const type = await bill();
+      const id = await settled(type.id, {
+        core: { reference: 'SYN-1', issuer: 'Old Issuer' },
+        fields: { meter_id: SYNTHETIC_IBAN_MASKED, parties: ['Old Issuer', 'Jane Synthetic'] },
+        provenance: {
+          reference: EXTRACTED,
+          issuer: { entity_id: 'ent_OLD', match: 'created', confidence: 1 },
+          meter_id: EXTRACTED,
+          parties: [
+            { entity_id: 'ent_OLD', match: 'created', confidence: 1 },
+            { entity_id: 'ent_JANE', match: 'alias', confidence: 0.8 },
+          ],
+          [PIPELINE_PROVENANCE_KEY]: { type: { model: 'm', confidence: 0.4, outcome: 'existing' } },
+        },
+      });
+      const before = await harness.document(id);
+      const result = await correctDocument(harness.deps(), {
+        id,
+        confirm: {
+          issuer: 'Old Issuer',
+          meter_id: SYNTHETIC_IBAN_MASKED,
+          parties: ['Old Issuer', 'Jane Synthetic'],
+        },
+      });
+      const document = await harness.document(id);
+      expect(result).toMatchObject({ ok: true, value: { status: 'indexed' } });
+      expect(document).toMatchObject({
+        status: 'indexed',
+        core: before.core,
+        fields: before.fields,
+        manualFields: ['issuer', 'meter_id', 'parties'],
+      });
+      expect(document.provenance).toMatchObject({
+        reference: EXTRACTED,
+        issuer: { entity_id: 'ent_OLD', match: 'created', confidence: 1, manual: true },
+        meter_id: MANUAL_PROVENANCE,
+        parties: [
+          { entity_id: 'ent_OLD', match: 'created', confidence: 1, manual: true },
+          { entity_id: 'ent_JANE', match: 'alias', confidence: 0.8, manual: true },
+        ],
+      });
+      expect(await harness.db.select().from(entities)).toEqual([]);
+      expect(await queued()).toEqual([{ kind: 'reindex_document', payload: { documentId: id } }]);
+    });
+
+    it('confirms alongside a correction of other values and of the type it has', async () => {
+      const type = await bill();
+      const id = await settled(type.id);
+      await correctDocument(harness.deps(), {
+        id,
+        type: 'energy_bill',
+        core: { reference: 'SYN-2' },
+        confirm: { meter_id: 'PDL-1' },
+      });
+      const document = await harness.document(id);
+      expect(document).toMatchObject({
+        status: 'indexed',
+        core: { reference: 'SYN-2', issuer: 'Old Issuer' },
+        fields: { meter_id: 'PDL-1' },
+        manualFields: ['reference', 'meter_id', MANUAL_TYPE_FIELD],
+      });
+      expect(document.provenance).toMatchObject({
+        reference: MANUAL_PROVENANCE,
+        meter_id: MANUAL_PROVENANCE,
+        issuer: { entity_id: 'ent_OLD' },
+      });
+    });
+
+    it.each([
+      ['a name without a value', { confirm: { due_date: '2026-10-18' } }, 'unknown_field'],
+      ['key dates', { confirm: { key_dates: [] } }, 'unsupported_field'],
+      ['a value other than the one stored', { confirm: { reference: 'SYN-9' } }, 'value_changed'],
+      [
+        'a name the request also sets',
+        { core: { reference: 'SYN-2' }, confirm: { reference: 'SYN-1' } },
+        'invalid_input',
+      ],
+      [
+        'a name the request also clears',
+        { fields: { meter_id: null }, confirm: { meter_id: 'PDL-1' } },
+        'invalid_input',
+      ],
+    ])('refuses %s and writes nothing', async (_case, patch, code) => {
+      const type = await bill();
+      const id = await settled(type.id);
+      const before = await harness.document(id);
+      const result = await correctDocument(harness.deps(), { id, ...patch });
+      expect(result).toMatchObject({ ok: false, errors: [{ code }] });
+      expect(await harness.document(id)).toEqual(before);
+      expect(await queued()).toEqual([]);
+    });
+
+    // Between the read the confirmation is planned on and the write, another writer (a
+    // re-extraction) changes the value: the person never saw the new one.
+    it.each([
+      ['changes', { reference: 'SYN-EXTRACTED-AGAIN' }],
+      ['disappears', {}],
+    ])(
+      'refuses a confirmed value that %s before the write, and writes nothing',
+      async (_case, core) => {
+        const type = await bill();
+        const id = await settled(type.id);
+        const planned = createGate();
+        const changed = createGate();
+        const interleaved: typeof harness.entities = {
+          ...harness.entities,
+          withLock: async (executor, work) => {
+            planned.open();
+            await changed.opened;
+            return harness.entities.withLock(executor, work);
+          },
+        };
+        const correcting = correctDocument(harness.deps({ entities: interleaved }), {
+          id,
+          confirm: { reference: 'SYN-1' },
+        });
+        await planned.opened;
+        await harness.db
+          .update(documents)
+          .set({ core: { ...core, issuer: 'Old Issuer' } })
+          .where(eq(documents.id, id));
+        const before = await harness.document(id);
+        changed.open();
+        expect(await correcting).toMatchObject({
+          ok: false,
+          errors: [{ code: 'value_changed' }],
+        });
+        expect(await harness.document(id)).toEqual(before);
+        expect(await queued()).toEqual([]);
+      },
+    );
   });
 
   it('refuses fields for a document without a type', async () => {

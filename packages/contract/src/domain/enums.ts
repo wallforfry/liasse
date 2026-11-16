@@ -39,6 +39,26 @@ export const DOCUMENT_JOB_FAILURE_CODES = {
 export const CLASSIFICATION_OUTCOMES = ['existing', 'new', 'fallback', 'untyped'] as const;
 export type ClassificationOutcome = (typeof CLASSIFICATION_OUTCOMES)[number];
 
+// Why a settled document is flagged for review: its confidence is below the threshold,
+// or unknown until the extraction its new type owes; it got the closest type, or none;
+// its last re-extraction never succeeded; or it was flagged at settlement by a rule or a
+// threshold that no longer flags it. `rejected_values` tells that the model returned
+// values that were dropped, which weighs on the confidence.
+export const REVIEW_REASONS = [
+  'low_confidence',
+  'type_pending_extraction',
+  'type_fallback',
+  'type_untyped',
+  'reextraction_failed',
+  'flagged_at_settlement',
+  'rejected_values',
+] as const;
+export type ReviewReason = (typeof REVIEW_REASONS)[number];
+
+// Where a value of a document is: the common core, or the fields of its type.
+export const VALUE_SECTIONS = ['core', 'fields'] as const;
+export type ValueSection = (typeof VALUE_SECTIONS)[number];
+
 // Where the text of one page comes from: the file itself, or the vision model.
 export const PAGE_TEXT_METHODS = ['native', 'vision'] as const;
 export type PageTextMethod = (typeof PAGE_TEXT_METHODS)[number];

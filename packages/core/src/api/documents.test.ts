@@ -6,6 +6,7 @@ import { documents } from '../db/schema/documents.ts';
 import { type DocumentEventInput, recordDocumentEvent } from '../processing-log/record.ts';
 import { CORPUS } from '../search/corpus.fixture.ts';
 import { parseStorageKey } from '../storage/key.ts';
+import { insertSyntheticDocument } from '../testing/fixtures.ts';
 import { syntheticPdf } from '../testing/synthetic-files.ts';
 import { listDocumentEvents } from './document-events.ts';
 import { openDocumentFile, removeDocument } from './document-file.ts';
@@ -96,7 +97,16 @@ describe('documents of the API', () => {
         private: false,
         source: 'api',
       });
-      const parts = ['fields', 'extra', 'manual_fields', 'provenance', 'text', 'pages', 'file_url'];
+      const parts = [
+        'fields',
+        'extra',
+        'manual_fields',
+        'provenance',
+        'text',
+        'pages',
+        'file_url',
+        'review',
+      ];
       expect(parts.filter((part) => Object.hasOwn(document, part))).toEqual([]);
       const [row] = await harness.database.db.select().from(documents).where(eq(documents.id, id));
       const serialised = JSON.stringify(
@@ -118,6 +128,45 @@ describe('documents of the API', () => {
       expect(document.manual_fields).toEqual([]);
       expect(document.provenance).toHaveProperty('issuer.entity_id');
       expect(document.text).toBeUndefined();
+    });
+
+    it('adds the review of the document, by the threshold of the context', async () => {
+      // Private, so the lists of the corpus below do not count it.
+      const { id } = await insertSyntheticDocument(harness.database.db, {
+        status: 'needs_review',
+        private: true,
+        confidence: 0.5,
+        core: { issuer: 'Synthetic Power' },
+        provenance: { issuer: { entity_id: 'ent_01SYNTHETIC', match: 'alias', confidence: 0.5 } },
+      });
+      const read = async (confidenceThreshold: number) =>
+        (
+          await getDocument({ ...harness.context, confidenceThreshold }, id, {
+            include: ['review'],
+          })
+        ).review;
+      expect(await read(0.7)).toEqual({
+        threshold: 0.7,
+        reasons: ['low_confidence'],
+        rejected_values: 0,
+        type: { confidence: null, outcome: null, manual: false, doubtful: false },
+        values: [
+          {
+            section: 'core',
+            name: 'issuer',
+            confidence: 0.5,
+            page: null,
+            quote: null,
+            manual: false,
+            doubtful: true,
+            confirmable: true,
+          },
+        ],
+      });
+      expect(await read(0.4)).toMatchObject({
+        reasons: ['flagged_at_settlement'],
+        values: [{ doubtful: false }],
+      });
     });
 
     it('returns the text by slices of characters', async () => {

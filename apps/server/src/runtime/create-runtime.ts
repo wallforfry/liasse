@@ -122,6 +122,7 @@ export const createRuntime = async (
       fullText: fullTextRanking.ranker,
       schemaLanguage: config.pipeline.schemaLanguage,
       maxFileSize: config.pipeline.maxFileSize,
+      confidenceThreshold: config.pipeline.confidenceThreshold,
       fileUrls: createFileUrls({
         secret: config.auth.fileUrlSecret,
         publicUrl: config.server.publicUrl,

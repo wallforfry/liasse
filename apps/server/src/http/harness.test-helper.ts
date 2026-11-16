@@ -84,6 +84,7 @@ export const createHttpHarness = async (): Promise<HttpHarness> => {
     fullText: rankByFullText,
     schemaLanguage: 'en',
     maxFileSize: TEST_MAX_FILE_SIZE,
+    confidenceThreshold: 0.7,
     fileUrls: createFileUrls({
       secret: TEST_FILE_URL_SECRET,
       publicUrl: TEST_PUBLIC_URL,

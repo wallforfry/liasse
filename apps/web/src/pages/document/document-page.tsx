@@ -15,13 +15,14 @@ import { DocumentDetails, DocumentText, OriginalFile, ValueTable } from './docum
 import { EditTab } from './edit-tab.tsx';
 import { ProcessingLog } from './processing-log.tsx';
 import { RetryDocument } from './retry-document.tsx';
+import { ReviewPanel } from './review-panel.tsx';
 
 export const DocumentPage = () => {
   const client = useClient();
   const { id = '' } = useParams();
   const document = useQuery({
     queryKey: ['document', id],
-    queryFn: async () => client.getDocument(id, { include: ['fields', 'text'] }),
+    queryFn: async () => client.getDocument(id, { include: ['fields', 'text', 'review'] }),
     refetchInterval: (query) =>
       pollWhileProcessing(query.state.data === undefined ? undefined : [query.state.data]),
   });
@@ -59,6 +60,9 @@ export const DocumentPage = () => {
         }
       />
       {view.summary === null ? null : <p className="text-sm leading-relaxed">{view.summary}</p>}
+      {view.status === 'needs_review' && view.review !== undefined ? (
+        <ReviewPanel key={view.updated_at} document={view} review={view.review} />
+      ) : null}
       <Tabs defaultValue="details">
         <TabsList>
           <TabsTrigger value="details">Details</TabsTrigger>

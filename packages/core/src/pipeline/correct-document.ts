@@ -8,8 +8,15 @@ import { findTypeById, type RegisteredType } from '../registry/type-store.ts';
 import { entitiesOf, maskOf } from './bindings.ts';
 import { applyCorrection, type Correction } from './correction/apply.ts';
 import {
+  changedConfirmations,
+  type Confirmations,
+  planConfirm,
+  valueChanged,
+} from './correction/confirm.ts';
+import {
   type CorrectionError,
   correctionInputSchema,
+  type CorrectionRequest,
   EMPTY_PATCH,
   planCore,
   planFields,
@@ -64,7 +71,13 @@ const planFieldsFor = (
 const entityNames = (...patches: readonly SectionPatch[]): readonly string[] =>
   patches.flatMap(({ entityNames: names }) => Object.values(names).flat());
 
-type Applied = PipelineDocument | 'stale' | undefined;
+// A confirmation of a value that changed since it was read is refused, never retried: the
+// person vouched for the value they saw, not for the one stored now.
+interface Changed {
+  readonly changed: readonly string[];
+}
+
+type Applied = PipelineDocument | 'stale' | Changed | undefined;
 
 // A settled document is indexed again, since its chunks carry its title and its type
 // and obey its `private` flag; after a change of type its fields are extracted again
@@ -78,6 +91,8 @@ const apply = (
     const outcome = await writeIfLive(locked, read.id, async (tx): Promise<Applied> => {
       const stored = await loadDocument(tx, read.id);
       if (stored === undefined) return undefined;
+      const changed = changedConfirmations(stored, correction.confirm);
+      if (changed.length > 0) return { changed };
       const { type } = correction;
       if (stored.typeId !== read.typeId) return 'stale';
       if (type !== undefined && !(await isCurrentType(tx, type))) return 'stale';
@@ -103,6 +118,32 @@ const apply = (
     return outcome.written ? outcome.result : undefined;
   });
 
+interface PlannedSections {
+  readonly core: SectionPatch;
+  readonly fields: SectionPatch;
+  readonly confirm: Confirmations;
+}
+
+// Every refusal at once, so the person fixes the whole request in one go.
+const planSections = (
+  { core: corePatch, fields: fieldsPatch, confirm = {} }: CorrectionRequest,
+  document: PipelineDocument,
+  type: RegisteredType | undefined,
+): Planned<PlannedSections> => {
+  const core =
+    corePatch === undefined ? { ok: true as const, value: EMPTY_PATCH } : planCore(corePatch);
+  const fields = planFieldsFor(fieldsPatch, type);
+  const corrected = [...Object.keys(corePatch ?? {}), ...Object.keys(fieldsPatch ?? {})];
+  const confirmed = planConfirm(confirm, corrected, document);
+  return core.ok && fields.ok && confirmed.ok
+    ? { ok: true, value: { core: core.value, fields: fields.value, confirm: confirmed.value } }
+    : refused(
+        ...(core.ok ? [] : core.errors),
+        ...(fields.ok ? [] : fields.errors),
+        ...(confirmed.ok ? [] : confirmed.errors),
+      );
+};
+
 const NOT_FOUND = (id: string): CorrectionError => ({
   code: 'document_not_found',
   message: `No document has the id "${id}".`,
@@ -121,7 +162,7 @@ export const correctDocument = async (
   const input = correctionInputSchema.safeParse(rawInput);
   if (!input.success)
     return refused({ code: 'invalid_input', message: z.prettifyError(input.error) });
-  const { id, type: slug, core: corePatch, fields: fieldsPatch } = input.data;
+  const { id, type: slug } = input.data;
   for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt += 1) {
     const document = await loadDocument(deps.db, id);
     if (document === undefined) return refused(NOT_FOUND(id));
@@ -132,13 +173,10 @@ export const correctDocument = async (
         message: `No type has the slug or alias "${slug ?? ''}".`,
       });
     }
-    const core =
-      corePatch === undefined ? { ok: true as const, value: EMPTY_PATCH } : planCore(corePatch);
-    const fields = planFieldsFor(fieldsPatch, target.type);
-    if (!core.ok || !fields.ok) {
-      return refused(...(core.ok ? [] : core.errors), ...(fields.ok ? [] : fields.errors));
-    }
-    const names = entityNames(core.value, fields.value);
+    const planned = planSections(input.data, document, target.type);
+    if (!planned.ok) return planned;
+    const { core, fields, confirm } = planned.value;
+    const names = entityNames(core, fields);
     const bound = { entities: entitiesOf(deps), maskSensitive: maskOf(deps) };
     const { resolutions } = await resolveMentions(bound, names, {
       details: [],
@@ -156,14 +194,17 @@ export const correctDocument = async (
       type: target.type,
       typeGiven: slug !== undefined,
       typeChanged: target.changed,
-      core: core.value,
-      fields: fields.value,
+      core,
+      fields,
+      confirm,
       private: input.data.private,
       resolutions,
       maskSensitive: maskOf(deps),
     });
     if (applied === undefined) return refused(NOT_FOUND(id));
-    if (applied !== 'stale') return { ok: true, value: applied };
+    if (applied === 'stale') continue;
+    if ('changed' in applied) return refused(valueChanged(applied.changed));
+    return { ok: true, value: applied };
   }
   throw new PipelineConflictError(id);
 };
