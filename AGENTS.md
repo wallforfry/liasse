@@ -10,7 +10,7 @@ Guidance for AI coding agents working in this repository.
 
 ## Commands
 
-Node 22 or later and pnpm (version pinned in `package.json`). Run everything from the repository root.
+Node 22.12 or later on the 22 line, 24.22.3 or later on the 24 line, or 26.5.1 or later (the `engines` range of `package.json`: earlier Node 24, 25 and 26 releases bundle an undici that can end the process on a reset connection, nodejs/undici#5547, and `apps/server/src/main.ts` refuses to start on them), and pnpm (version pinned in `package.json`). Run everything from the repository root.
 
 | Command                            | Purpose                                                          |
 | ---------------------------------- | ---------------------------------------------------------------- |

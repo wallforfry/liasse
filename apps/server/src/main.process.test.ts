@@ -2,7 +2,7 @@ import { type ChildProcess, spawn } from 'node:child_process';
 import { once } from 'node:events';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { createServer as createHttpServer, type ServerResponse } from 'node:http';
-import { createServer } from 'node:net';
+import { connect, createServer } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -38,6 +38,34 @@ const freePort = async (): Promise<number> => {
   return address.port;
 };
 
+const codeOf = (error: unknown): unknown =>
+  error instanceof Error && 'code' in error ? error.code : undefined;
+
+/**
+ * Whether the listener on `port` is closed, probed with a bare TCP connection.
+ *
+ * Not with `fetch`: a connection still queued when the listener closes is reset by the
+ * kernel, and on macOS the undici of Node 24 (before 7.30.2, nodejs/undici#5547) then
+ * calls `setTypeOfService` on it, which throws EINVAL from a socket callback, out of
+ * reach of the request, as an uncaught exception.
+ */
+const refusesConnections = async (port: number): Promise<boolean> => {
+  const socket = connect(port, '127.0.0.1');
+  try {
+    await once(socket, 'connect', { signal: AbortSignal.timeout(STEP_TIMEOUT_MS) });
+    return false;
+  } catch (error) {
+    if (codeOf(error) === 'ECONNREFUSED') return true;
+    // Queued as the listener closed: the next probe is refused.
+    if (codeOf(error) === 'ECONNRESET') return false;
+    // A probe that hangs is abandoned; the next one tries again.
+    if (codeOf(error) === 'ABORT_ERR') return false;
+    throw error;
+  } finally {
+    socket.destroy();
+  }
+};
+
 const hasExited = (child: ChildProcess): boolean =>
   child.exitCode !== null || child.signalCode !== null;
 
@@ -45,6 +73,7 @@ type Call = (path: string, init?: RequestInit) => Promise<Response>;
 
 interface RunningServer {
   readonly child: ChildProcess;
+  readonly port: number;
   readonly url: string;
   /** An API key of the bootstrap account, created over HTTP once the server listens. */
   readonly token: string;
@@ -64,10 +93,14 @@ interface Launched {
 }
 
 // The real binary and the real entry point: a shim would not prove the signal wiring.
-const launch = (env: Readonly<Record<string, string>>): Launched => {
+const launch = (
+  env: Readonly<Record<string, string>>,
+  nodeOptions: readonly string[] = [],
+): Launched => {
   const child = spawn(
     process.execPath,
     [
+      ...nodeOptions,
       '--conditions=@liasse/source',
       '--experimental-strip-types',
       fileURLToPath(new URL('./main.ts', import.meta.url)),
@@ -116,6 +149,7 @@ const withServer = async (
     });
     await use({
       child,
+      port,
       url,
       token,
       call: (path, init = {}) =>
@@ -283,7 +317,7 @@ describe('server process', () => {
         S3_SECRET_ACCESS_KEY: 'synthetic-secret-key',
       };
       try {
-        await withServer(env, async ({ child, url, call, database, stdout, terminate }) => {
+        await withServer(env, async ({ child, port, call, database, stdout, terminate }) => {
           const id = await upload(call, 'deleted during shutdown');
           expect((await call(`/documents/${id}`, { method: 'DELETE' })).status).toBe(204);
           await waitUntil(() => s3.holding() === 1);
@@ -291,12 +325,7 @@ describe('server process', () => {
           const exit = terminate();
           // The listener is closed first: once it refuses connections the shutdown has
           // reached the workers, and the process must still be there for its job.
-          await waitUntil(async () =>
-            fetch(`${url}/health`, { signal: AbortSignal.timeout(STEP_TIMEOUT_MS) }).then(
-              () => false,
-              () => true,
-            ),
-          );
+          await waitUntil(() => refusesConnections(port));
           expect(hasExited(child)).toBe(false);
           const running = await database.db.select({ status: jobs.status }).from(jobs);
           expect(running.map((job) => job.status)).toContain('running');
@@ -337,6 +366,26 @@ describe('server process', () => {
       );
       expect(stderr()).not.toContain(password);
       expect(stderr()).not.toContain('    at ');
+      expect(stdout()).toBe('');
+    },
+    4 * STEP_TIMEOUT_MS,
+  );
+
+  it(
+    'refuses to start on a Node whose undici can end the process',
+    async () => {
+      const { child, stdout, stderr } = launch({ PORT: String(await freePort()) }, [
+        `--import=${fileURLToPath(new URL('./affected-undici.test-helper.ts', import.meta.url))}`,
+      ]);
+      const closed: readonly unknown[] = await once(child, 'close', {
+        signal: AbortSignal.timeout(STEP_TIMEOUT_MS),
+      }).finally(() => child.kill());
+      expect(closed[0]).toBe(1);
+      expect(stderr()).toBe(
+        'Liasse does not run on Node 24.18.0: its undici 7.28.0 can end the process on a reset ' +
+          'connection (nodejs/undici#5547). Use Node 22.12 or later on the 22 line, 24.22.3 or ' +
+          'later on the 24 line, or 26.5.1 or later.\n',
+      );
       expect(stdout()).toBe('');
     },
     4 * STEP_TIMEOUT_MS,
