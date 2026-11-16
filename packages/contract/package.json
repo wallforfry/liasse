@@ -1,6 +1,6 @@
 {
   "name": "@liasse/contract",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "description": "Liasse contract: the Zod schemas and types of every request and answer, and the domain they use",
   "license": "AGPL-3.0-only",
   "repository": {
