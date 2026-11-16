@@ -1,6 +1,8 @@
 import { eq, sql } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { z } from 'zod';
+import { decideChange } from '../consolidation/apply-change.ts';
+import { seedChange, seedType } from '../consolidation/consolidation.test-helper.ts';
 import { documents } from '../db/schema/documents.ts';
 import { ID_PREFIXES, newId } from '../domain/ids.ts';
 import { mergeEntities } from '../entities/merge.ts';
@@ -19,14 +21,36 @@ const waitingSchema = z.tuple([z.object({ waiting: z.number() })]);
 describe('the lock order of a merge', () => {
   let database: TestDatabase;
 
-  const someoneWaits = async (): Promise<boolean> => {
+  const lockWaiters = async (): Promise<number> => {
     const [{ waiting }] = waitingSchema.parse(
       await database.db.execute(sql`
         SELECT count(*)::int AS waiting FROM pg_stat_activity
         WHERE wait_event_type = 'Lock' AND datname = current_database()
       `),
     );
-    return waiting > 0;
+    return waiting;
+  };
+
+  const someoneWaits = async (): Promise<boolean> => (await lockWaiters()) > 0;
+
+  // Holds the row of one document until the returned release is called.
+  const holdRow = async (id: string): Promise<() => Promise<void>> => {
+    const holding = createGate();
+    const release = createGate();
+    const holder = database.db.transaction(async (tx) => {
+      await tx
+        .select({ id: documents.id })
+        .from(documents)
+        .where(eq(documents.id, id))
+        .for('no key update');
+      holding.open();
+      await release.opened;
+    });
+    await holding.opened;
+    return async () => {
+      release.open();
+      await holder;
+    };
   };
 
   // Two documents whose ids sort one way and whose rows lie the other way on disk: a
@@ -97,5 +121,42 @@ describe('the lock order of a merge', () => {
       mergeEntities({ db: database.db }, { sourceId: source, targetId: target }),
     );
     expect(merged).toMatchObject({ ok: true });
+  });
+
+  // A type change takes every document of the type in id order (`moveDocuments`). The
+  // second row is held while the merge, then the change, queue up; once it is released,
+  // a merge that rewrote in scan order would hold the second row and wait for the first,
+  // which the change holds while it waits for the second.
+  it('takes the rows of the documents of a merged entity in the order of a type change', async () => {
+    const target = await seedEntity(database.db, { name: 'Type change order target entity' });
+    const source = await seedEntity(database.db, { name: 'Type change order source entity' });
+    const type = await seedType(database.db, {
+      slug: 'lock_order_bill',
+      fields: { meter: { type: 'identifier' }, rate: { type: 'text' } },
+    });
+    const pair = await pairAgainstTheScan({
+      status: 'indexed',
+      typeId: type.id,
+      schemaVersion: 1,
+      fields: { meter: 'LO-1', rate: 'flat' },
+      provenance: { issuer: { entity_id: source, match: 'name', confidence: 0.99 } },
+    });
+    const change = await seedChange(database.db, 'remove_field', {
+      type_id: type.id,
+      field: 'rate',
+    });
+
+    const release = await holdRow(pair[1]);
+    const merged = mergeEntities({ db: database.db }, { sourceId: source, targetId: target });
+    await waitUntil(async () => (await lockWaiters()) === 1);
+    const decided = decideChange(database.db, change, 'apply', null);
+    await waitUntil(async () => (await lockWaiters()) === 2);
+    await release();
+
+    expect(await merged).toMatchObject({ ok: true });
+    expect(await decided).toMatchObject({
+      outcome: 'decided',
+      decided: { change: { status: 'applied' }, reextractions: 2 },
+    });
   });
 });
