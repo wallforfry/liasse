@@ -1,5 +1,5 @@
 import { IN_PROGRESS_STATUSES, SETTLED_STATUSES } from '@liasse/contract/domain';
-import type { DocumentSummary } from '@liasse/sdk';
+import type { DocumentSummary, DocumentView } from '@liasse/sdk';
 
 const IN_PROGRESS: ReadonlySet<string> = new Set(IN_PROGRESS_STATUSES);
 
@@ -11,6 +11,23 @@ export const pollWhileProcessing = (
 ): number | false =>
   documents?.some(({ status }) => IN_PROGRESS.has(status)) === true ? POLL_MILLISECONDS : false;
 
-/** Indexed, or waiting for a review: what can have its type analysed again. */
-export const isSettled = ({ status }: Pick<DocumentSummary, 'status'>): boolean =>
-  SETTLED_STATUSES.includes(status);
+/**
+ * How often to read one document again: while it is processed, and while a job is about
+ * to rewrite its type or values, which leaves its status as it is.
+ */
+export const pollDocument = (
+  document: Pick<DocumentView, 'status' | 'analysis_pending'> | undefined,
+): number | false =>
+  document?.analysis_pending === true
+    ? POLL_MILLISECONDS
+    : pollWhileProcessing(document === undefined ? undefined : [document]);
+
+/**
+ * Indexed, or waiting for a review, with a job about to rewrite its type or values: an
+ * analysis asked for again, not the first processing of the document.
+ */
+export const isAnalysedAgain = ({
+  status,
+  analysis_pending: pending,
+}: Pick<DocumentView, 'status' | 'analysis_pending'>): boolean =>
+  pending && SETTLED_STATUSES.includes(status);

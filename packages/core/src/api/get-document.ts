@@ -9,6 +9,7 @@ import type { z } from 'zod';
 import type { Database } from '../db/client.ts';
 import { documentPages, documents, isLiveDocument } from '../db/schema/documents.ts';
 import { docTypes } from '../db/schema/registry.ts';
+import { hasPendingWrite } from '../pipeline/pending-write.ts';
 import type { ApiContext } from './context.ts';
 import { reviewDocument } from './document-review.ts';
 import { SUMMARY_COLUMNS, toDocumentSummary } from './document-view.ts';
@@ -93,6 +94,7 @@ export const getDocument = async (
     ...toDocumentSummary(summary),
     schema_version: schemaVersion,
     hint,
+    analysis_pending: await hasPendingWrite(db, id),
     ...(wants('fields') ? { fields, extra, manual_fields: [...manualFields] } : {}),
     ...(wants('provenance') ? { provenance } : {}),
     ...(wants('text') ? { text: await readText(db, id, options) } : {}),
