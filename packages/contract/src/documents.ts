@@ -4,6 +4,7 @@ import {
   documentStateSchema,
   liveDocumentStatusSchema,
 } from './domain/schemas.ts';
+import { MAX_HINT_LENGTH } from './domain/limits.ts';
 
 const jsonObjectSchema = z.record(z.string(), z.unknown());
 
@@ -143,3 +144,18 @@ export const documentCorrectionSchema = z.strictObject({
   private: z.boolean().optional(),
 });
 export type DocumentCorrection = z.output<typeof documentCorrectionSchema>;
+
+// A request to decide the type of a settled document again, the type it has being wrong.
+export const documentReclassificationSchema = z.strictObject({
+  hint: z
+    .string()
+    .optional()
+    .describe(
+      `What the caller knows about the right type; free text, cut to ${String(MAX_HINT_LENGTH)} characters.`,
+    ),
+  new_type: z
+    .boolean()
+    .optional()
+    .describe('Only a new type will do: no existing type is chosen. False by default.'),
+});
+export type DocumentReclassification = z.output<typeof documentReclassificationSchema>;

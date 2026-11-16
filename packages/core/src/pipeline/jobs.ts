@@ -52,3 +52,24 @@ export const reindexDocumentJob = defineJobKind({
   schema: payload,
   maxAttempts: PROCESS_DOCUMENT_MAX_ATTEMPTS,
 });
+
+const reclassifyPayload = z.object({
+  documentId: z.string().min(1),
+  rejectedTypeId: z.string().min(1).nullable(),
+  hint: z.string().nullable(),
+  newType: z.boolean(),
+});
+export type ReclassifyPayload = z.output<typeof reclassifyPayload>;
+
+/**
+ * Decides the type of a settled document again, because a person said the one it has
+ * is wrong: `rejectedTypeId` is that type (null for a document without one), `hint` what
+ * the person added, `newType` whether only a new type will do. A document whose type is
+ * no longer the rejected one, a correction or a merge having come in between, is left
+ * alone. A reclassification that fails for good leaves the document as it was.
+ */
+export const reclassifyDocumentJob = defineJobKind({
+  name: 'reclassify_document',
+  schema: reclassifyPayload,
+  maxAttempts: PROCESS_DOCUMENT_MAX_ATTEMPTS,
+});

@@ -22,6 +22,8 @@ export {
   documentCorrectionSchema,
   type DocumentList,
   documentListSchema,
+  type DocumentReclassification,
+  documentReclassificationSchema,
   DOCUMENT_PARTS,
   type IngestRequest,
   ingestRequestSchema,

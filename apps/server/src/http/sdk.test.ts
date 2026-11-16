@@ -187,6 +187,33 @@ describe('the TypeScript SDK', () => {
     expect(await client.retryDocument(id)).toMatchObject({ id, status: 'received', error: null });
   });
 
+  it('reclassifies a settled document, and refuses one still on its way', async () => {
+    const { id } = await client.uploadDocument({
+      file: new File([syntheticPdf('sdk reclassify')], 'reclassify.pdf'),
+    });
+    expect(await refusal(client.reclassifyDocument(id))).toMatchObject({
+      status: 400,
+      code: 'document_not_settled',
+    });
+    await harness.database.db
+      .update(documents)
+      .set({ status: 'indexed' })
+      .where(eq(documents.id, id));
+    await harness.database.db
+      .update(jobs)
+      .set({ status: 'succeeded' })
+      .where(eq(jobs.kind, 'process_document'));
+    expect(await client.reclassifyDocument(id, { hint: 'a payslip' })).toMatchObject({
+      id,
+      status: 'indexed',
+    });
+    const [queued] = await harness.database.db
+      .select()
+      .from(jobs)
+      .where(eq(jobs.kind, 'reclassify_document'));
+    expect(queued?.payload).toMatchObject({ documentId: id, hint: 'a payslip', newType: false });
+  });
+
   it('deletes a document, after which it is not found', async () => {
     const { id } = await client.uploadDocument({
       file: new File([syntheticPdf('sdk deletion')], 'gone.pdf'),
