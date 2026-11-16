@@ -13,7 +13,7 @@ import { NotFoundPage } from './pages/not-found-page.tsx';
 import { SearchPage } from './pages/search/search-page.tsx';
 import { TypePage } from './pages/types/type-page.tsx';
 import { TypesPage } from './pages/types/types-page.tsx';
-import { UploadPage } from './pages/upload-page.tsx';
+import { UploadPage } from './pages/upload/upload-page.tsx';
 
 /** Where the server serves the application. */
 export const BASENAME = '/ui';
