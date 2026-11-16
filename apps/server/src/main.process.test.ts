@@ -52,12 +52,14 @@ const codeOf = (error: unknown): unknown =>
 const refusesConnections = async (port: number): Promise<boolean> => {
   const socket = connect(port, '127.0.0.1');
   try {
-    await once(socket, 'connect');
+    await once(socket, 'connect', { signal: AbortSignal.timeout(STEP_TIMEOUT_MS) });
     return false;
   } catch (error) {
     if (codeOf(error) === 'ECONNREFUSED') return true;
     // Queued as the listener closed: the next probe is refused.
     if (codeOf(error) === 'ECONNRESET') return false;
+    // A probe that hangs is abandoned; the next one tries again.
+    if (codeOf(error) === 'ABORT_ERR') return false;
     throw error;
   } finally {
     socket.destroy();
