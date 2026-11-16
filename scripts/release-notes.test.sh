@@ -32,6 +32,15 @@ cat >"$workdir/sdk.md" <<'EOF'
 - 0123456: A fix.
 EOF
 
+# A first release: no older section follows the newest one.
+cat >"$workdir/web.md" <<'EOF'
+# @liasse/web
+
+## 0.1.0
+
+- 89abcde: A first release.
+EOF
+
 expected='## @liasse/server 0.2.0
 
 ### Minor Changes
@@ -42,9 +51,13 @@ expected='## @liasse/server 0.2.0
 
 ### Patch Changes
 
-- 0123456: A fix.'
+- 0123456: A fix.
 
-actual="$("$notes" "$workdir/server.md" "$workdir/sdk.md")"
+## @liasse/web 0.1.0
+
+- 89abcde: A first release.'
+
+actual="$("$notes" "$workdir/server.md" "$workdir/sdk.md" "$workdir/web.md")"
 if [ "$actual" = "$expected" ]; then
   echo "ok   keeps the newest section of each changelog under its package"
 else
