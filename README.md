@@ -63,7 +63,7 @@ More ways in: [`examples/`](examples/) has MCP client configurations and REST ca
 
 ## Stack
 
-TypeScript on Node (22 in the image; 24 and 26 supported, see `engines` in [`package.json`](package.json)), Hono, Drizzle, Zod, Postgres with pgvector, the MCP TypeScript SDK, the Vercel AI SDK, React with Vite for the web UI.
+TypeScript on Node (26 in the image and in development; 22 and 24 supported, see `engines` in [`package.json`](package.json)), Hono, Drizzle, Zod, Postgres with pgvector, the MCP TypeScript SDK, the Vercel AI SDK, React with Vite for the web UI.
 
 ## Contributing
 

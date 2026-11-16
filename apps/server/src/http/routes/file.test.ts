@@ -20,7 +20,7 @@ describe('GET /documents/:id/file', () => {
     await harness.dispose();
   });
 
-  const upload = async (bytes: Uint8Array, filename: string, isPrivate = false) => {
+  const upload = async (bytes: Uint8Array<ArrayBuffer>, filename: string, isPrivate = false) => {
     const data = new FormData();
     data.append('file', new File([bytes], filename));
     data.append('private', String(isPrivate));

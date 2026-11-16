@@ -176,7 +176,7 @@ const offsetsOf = (header: Uint8Array, bodies: readonly Uint8Array[]): readonly 
 export const buildSyntheticPdf = (
   pages: readonly SyntheticPdfPage[],
   options: SyntheticPdfOptions = {},
-): Uint8Array => {
+): Uint8Array<ArrayBuffer> => {
   const kids = pages
     .map((_, index) => `${String(FIRST_PAGE_ID + index * OBJECTS_PER_PAGE)} 0 R`)
     .join(' ');

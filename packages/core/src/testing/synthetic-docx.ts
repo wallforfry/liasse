@@ -38,7 +38,7 @@ export interface SyntheticDocxOptions {
 export const buildSyntheticDocx = (
   bodyXml: string,
   { stored = false }: SyntheticDocxOptions = {},
-): Uint8Array =>
+): Uint8Array<ArrayBuffer> =>
   buildSyntheticZip(
     [
       { name: '[Content_Types].xml', data: utf8(CONTENT_TYPES) },

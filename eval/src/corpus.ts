@@ -32,7 +32,7 @@ export const loadQuestions = async (directory = CORPUS_DIRECTORY): Promise<Quest
 export const readDocumentFile = async (
   { source }: Pick<GroundTruth, 'source'>,
   directory = CORPUS_DIRECTORY,
-): Promise<Uint8Array | undefined> =>
+): Promise<Uint8Array<ArrayBuffer> | undefined> =>
   source.kind === 'file'
     ? Uint8Array.from(await readFile(join(directory, ...source.path.split('/'))))
     : undefined;

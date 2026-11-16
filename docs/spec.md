@@ -493,7 +493,7 @@ Users, sessions, API keys and the OAuth authorization server of MCP rest on [bet
 
 **Tech stack**
 
-- TypeScript, Node 22, Hono (HTTP), Drizzle (ORM and migrations), Zod (validation, JSON Schema generation).
+- TypeScript, Node 26, Hono (HTTP), Drizzle (ORM and migrations), Zod (validation, JSON Schema generation).
 - Web UI: Vite, React, Tailwind CSS and shadcn components (Radix), React Router, TanStack Query and Table.
 - Official MCP TypeScript SDK.
 - Vercel AI SDK for LLM provider abstraction, with structured outputs.
