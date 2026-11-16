@@ -1,4 +1,4 @@
-import type { DocumentStatus } from '@liasse/contract/domain';
+import { type DocumentStatus, SETTLED_STATUSES } from '@liasse/contract/domain';
 import { eq } from 'drizzle-orm';
 import { documents } from '../db/schema/documents.ts';
 import { readPipelineProvenance } from '../domain/provenance.ts';
@@ -10,7 +10,7 @@ import { indexerOf } from './bindings.ts';
 import { runClassificationStage } from './classification-stage.ts';
 import { settledStatus } from './confidence.ts';
 import type { PipelineDeps } from './deps.ts';
-import { loadDocument, SETTLED_STATUSES, writeFromStatus } from './document.ts';
+import { loadDocument, writeFromStatus } from './document.ts';
 import { PipelineConflictError } from './errors.ts';
 import { extractDocument } from './extraction-stage.ts';
 import { runTextStage } from './text-stage.ts';

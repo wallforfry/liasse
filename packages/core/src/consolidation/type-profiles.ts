@@ -3,7 +3,7 @@ import { z } from 'zod';
 import type { Database } from '../db/client.ts';
 import { documents, isLiveDocument } from '../db/schema/documents.ts';
 import { docTypes } from '../db/schema/registry.ts';
-import { SETTLED_STATUSES } from '../pipeline/document.ts';
+import { SETTLED_STATUSES } from '@liasse/contract/domain';
 import { type RegisteredType, toRegisteredType, TYPE_COLUMNS } from '../registry/type-store.ts';
 
 /** What consolidation counts of a type, over its settled live documents. */

@@ -3,6 +3,7 @@ import {
   type DocumentStatus,
   IN_PROGRESS_STATUSES,
   type ProcessingStage,
+  SETTLED_STATUSES,
 } from '@liasse/contract/domain';
 import { type FailureTrace, flagDocument, logFailedAttempt } from '../ingest/document-failure.ts';
 import {
@@ -13,7 +14,6 @@ import { PermanentJobError } from '../jobs/errors.ts';
 import { handle, type JobContext, type RegisteredHandler } from '../jobs/handlers.ts';
 import { ModelProviderError } from '../models/errors.ts';
 import type { PipelineDeps } from './deps.ts';
-import { SETTLED_STATUSES } from './document.ts';
 import { DocumentProcessingError, documentErrorCode, isPermanentFailure } from './errors.ts';
 import { reextractDocumentJob, reindexDocumentJob } from './jobs.ts';
 import { processDocument, reextractDocument, reindexDocument } from './process-document.ts';

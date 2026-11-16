@@ -1,7 +1,6 @@
 import { MAX_FIELDS_PER_TYPE, type SchemaLanguage } from '@liasse/contract/domain';
-import { FIELD_PRIMITIVES } from '@liasse/contract/registry';
+import { CORE_FIELD_NAMES, FIELD_PRIMITIVES } from '@liasse/contract/registry';
 import { wrapUntrusted } from '../../prompt/untrusted.ts';
-import { CORE_FIELD_NAMES } from '../../registry/core-fields.ts';
 
 export const SCHEMA_LANGUAGE_NAMES = {
   en: 'English',

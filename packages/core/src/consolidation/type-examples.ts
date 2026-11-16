@@ -2,7 +2,7 @@ import { and, desc, eq, inArray } from 'drizzle-orm';
 import type { Database } from '../db/client.ts';
 import type { JsonObject } from '../db/columns.ts';
 import { documents, isLiveDocument } from '../db/schema/documents.ts';
-import { SETTLED_STATUSES } from '../pipeline/document.ts';
+import { SETTLED_STATUSES } from '@liasse/contract/domain';
 
 export interface TypeExample {
   readonly title: string | null;

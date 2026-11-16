@@ -1,9 +1,8 @@
-import { DOCUMENT_JOB_FAILURE_CODES } from '@liasse/contract/domain';
+import { DOCUMENT_JOB_FAILURE_CODES, SETTLED_STATUSES } from '@liasse/contract/domain';
 import { z } from 'zod';
 import { documentOfPayload, flagDocument } from '../ingest/document-failure.ts';
 import { PROCESS_DOCUMENT_MAX_ATTEMPTS } from '../ingest/process-document-job.ts';
 import { defineJobKind } from '../jobs/kinds.ts';
-import { SETTLED_STATUSES } from './document.ts';
 
 const payload = z.object({ documentId: z.string().min(1) });
 

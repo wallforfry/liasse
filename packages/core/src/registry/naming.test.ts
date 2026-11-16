@@ -1,6 +1,6 @@
 import { MAX_FIELD_NAME_LENGTH, MAX_SLUG_LENGTH, SCHEMA_LANGUAGES } from '@liasse/contract/domain';
 import { describe, expect, it } from 'vitest';
-import { CORE_FIELD_NAMES } from './core-fields.ts';
+import { CORE_FIELD_NAMES } from '@liasse/contract/registry';
 import {
   aliasViolations,
   fieldNameViolations,

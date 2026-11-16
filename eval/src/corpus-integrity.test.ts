@@ -1,6 +1,7 @@
 import { KEY_DATE_KINDS, LINK_KINDS, SUPPORTED_MIMES } from '@liasse/contract/domain';
 import { entityNameKey } from '@liasse/core/domain';
-import { CORE_FIELDS, fieldNameViolations, slugViolations } from '@liasse/core/registry';
+import { CORE_FIELDS } from '@liasse/contract/registry';
+import { fieldNameViolations, slugViolations } from '@liasse/core/registry';
 import { beforeAll, describe, expect, it } from 'vitest';
 import { noticeDeadline } from './calendar.ts';
 import { loadCorpus, loadQuestions } from './corpus.ts';
