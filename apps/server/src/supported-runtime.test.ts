@@ -52,18 +52,29 @@ describe('assertSupportedRuntime', () => {
     );
   });
 
-  it('reads a prerelease undici by its release numbers', () => {
-    expect(() => {
-      assertSupportedRuntime({ node: '24.18.0', undici: '7.28.0-pre' });
-    }).toThrow(StartupError);
-  });
+  it.each(['7.30.1-pre', '7.30.1+x', '7.30.1-rc.1+build.5'])(
+    'reads undici %s by its release numbers',
+    (undici) => {
+      expect(() => {
+        assertSupportedRuntime({ node: '24.22.2', undici });
+      }).toThrow('its undici 7.30.1 can end the process');
+    },
+  );
 
-  it('refuses a Node whose undici it cannot read', () => {
-    expect(() => {
-      assertSupportedRuntime({ node: '24.18.0' });
-    }).toThrow(StartupError);
-    expect(() => {
-      assertSupportedRuntime({ node: '24.18.0', undici: 'unknown' });
-    }).toThrow(StartupError);
-  });
+  it.each([undefined, 'unknown', '7.30', '7.30.2x', ' 7.30.2', 'v7.30.2'])(
+    'refuses a Node whose undici reads %j',
+    (undici) => {
+      expect(() => {
+        assertSupportedRuntime(
+          undici === undefined ? { node: '24.18.0' } : { node: '24.18.0', undici },
+        );
+      }).toThrow(
+        new StartupError(
+          'Liasse cannot tell which undici this Node bundles, so it cannot rule out ' +
+            'nodejs/undici#5547. Use Node 22.12 or later on the 22 line, 24.22.3 or later on ' +
+            'the 24 line, or 26.5.1 or later.',
+        ),
+      );
+    },
+  );
 });

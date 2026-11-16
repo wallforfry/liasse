@@ -20,13 +20,16 @@ const AFFECTED_UNDICI: readonly AffectedRange[] = [
   { from: [8, 0, 0], fixedIn: [8, 8, 0] },
 ];
 
-const versionSchema = z
-  .string()
-  .regex(/^\d+\.\d+\.\d+/)
-  .transform((text): Version => {
-    const [major = 0, minor = 0, patch = 0] = text.split(/[.-]/, 3).map(Number);
-    return [major, minor, patch];
-  });
+const VERSION = /^(\d+)\.(\d+)\.(\d+)(?:[-+].*)?$/;
+
+const versionSchema = z.string().transform((text, context): Version => {
+  const match = VERSION.exec(text);
+  if (match === null) {
+    context.addIssue({ code: 'custom', message: 'not a semantic version' });
+    return z.NEVER;
+  }
+  return [Number(match[1]), Number(match[2]), Number(match[3])];
+});
 
 const compare = (left: Version, right: Version): number =>
   left[0] - right[0] || left[1] - right[1] || left[2] - right[2];

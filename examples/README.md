@@ -38,4 +38,4 @@ LIASSE_API_KEY=... examples/rest.sh path/to/a-bill.pdf
 
 ## TypeScript
 
-[`@liasse/sdk`](../packages/sdk/README.md) is the typed client of the REST API, for Node 22.12 or later on the 22 line, 24.22.3 or later on the 24 line, or 26.5.1 or later.
+[`@liasse/sdk`](../packages/sdk/README.md) is the typed client of the REST API, for Node 22 or later.
