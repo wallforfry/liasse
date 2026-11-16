@@ -353,6 +353,43 @@ describe('document routes', () => {
     });
   });
 
+  describe('POST /documents/:id/reclassify', () => {
+    const reclassify = (id: string, body: unknown) =>
+      harness.call(`/documents/${id}/reclassify`, jsonRequest('POST', body));
+
+    it('queues the type of a settled document again and answers 202 with it', async () => {
+      const id = await harness.addDocument([]);
+      const response = await reclassify(id, { hint: 'a payslip', new_type: true });
+      expect(response.status).toBe(202);
+      expect(await response.json()).toMatchObject({ id, status: 'indexed' });
+      const queued = await harness.database.db
+        .select()
+        .from(jobs)
+        .where(eq(jobs.kind, 'reclassify_document'));
+      expect(queued.map(({ payload }) => payload)).toContainEqual({
+        documentId: id,
+        rejectedTypeId: null,
+        newType: true,
+      });
+      const [document] = await harness.database.db
+        .select({ hint: documents.reclassificationHint })
+        .from(documents)
+        .where(eq(documents.id, id));
+      expect(document).toEqual({ hint: 'a payslip' });
+    });
+
+    it('refuses a document that is not settled, an unknown one, and other options', async () => {
+      const id = await harness.addDocument([], { status: 'classified' });
+      const notSettled = await reclassify(id, {});
+      expect(notSettled.status).toBe(400);
+      expect(await codeOf(notSettled)).toBe('document_not_settled');
+      const unknown = await reclassify('doc_01JC0000000000000000000000', {});
+      expect(unknown.status).toBe(404);
+      expect(await codeOf(unknown)).toBe('document_not_found');
+      expect((await reclassify(id, { type: 'payslip' })).status).toBe(400);
+    });
+  });
+
   describe('PATCH /documents/:id', () => {
     it('answers 501 while the pipeline is not bound', async () => {
       const id = await harness.addDocument([]);

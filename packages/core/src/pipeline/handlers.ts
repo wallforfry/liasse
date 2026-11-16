@@ -15,10 +15,9 @@ import { handle, type JobContext, type RegisteredHandler } from '../jobs/handler
 import { ModelProviderError } from '../models/errors.ts';
 import type { PipelineDeps } from './deps.ts';
 import { DocumentProcessingError, documentErrorCode, isPermanentFailure } from './errors.ts';
-import { reextractDocumentJob, reindexDocumentJob } from './jobs.ts';
+import { reclassifyDocumentJob, reextractDocumentJob, reindexDocumentJob } from './jobs.ts';
 import { processDocument, reextractDocument, reindexDocument } from './process-document.ts';
-
-type DocumentJob = JobContext<{ readonly documentId: string }>;
+import { reclassifyDocument } from './reclassify-document.ts';
 
 // The class of an error says which defect an `internal_error` is; its message stays out,
 // since it may quote the document.
@@ -74,8 +73,12 @@ const traceOf = (error: unknown, attempt: number, policy: FailurePolicy): Failur
 // the same transaction. An interrupted job is given back to the queue without counting,
 // so it logs nothing. A failure another attempt cannot fix ends the job at once.
 const loggingFailures =
-  (deps: PipelineDeps, policy: FailurePolicy, run: (job: DocumentJob) => Promise<void>) =>
-  async (job: DocumentJob): Promise<void> => {
+  <Payload extends { readonly documentId: string }>(
+    deps: PipelineDeps,
+    policy: FailurePolicy,
+    run: (job: JobContext<Payload>) => Promise<void>,
+  ) =>
+  async (job: JobContext<Payload>): Promise<void> => {
     const { payload, signal, attempt } = job;
     try {
       await run(job);
@@ -125,6 +128,13 @@ const flaggingForReview: FailurePolicy = {
   },
 };
 
+// A reclassification that never succeeds leaves the document as it was: the type a
+// person rejected stays until they correct it or ask again.
+const reclassifying: FailurePolicy = {
+  maxAttempts: reclassifyDocumentJob.maxAttempts ?? PROCESS_DOCUMENT_MAX_ATTEMPTS,
+  stage: 'classification',
+};
+
 // A re-indexing that never succeeds leaves the document as it was.
 const reindexing: FailurePolicy = {
   maxAttempts: reindexDocumentJob.maxAttempts ?? PROCESS_DOCUMENT_MAX_ATTEMPTS,
@@ -133,8 +143,8 @@ const reindexing: FailurePolicy = {
 
 /**
  * The job handlers of the pipeline, for `startWorkers`. Only `process_document` fails a
- * document; a re-extraction that fails for good flags it for review, and a re-indexing
- * leaves it as it was.
+ * document; a re-extraction that fails for good flags it for review, and a
+ * reclassification or a re-indexing leaves it as it was.
  */
 export const createPipelineHandlers = (deps: PipelineDeps): readonly RegisteredHandler[] => [
   handle(
@@ -147,6 +157,12 @@ export const createPipelineHandlers = (deps: PipelineDeps): readonly RegisteredH
     reextractDocumentJob,
     loggingFailures(deps, flaggingForReview, ({ payload, signal }) =>
       reextractDocument(deps, payload.documentId, signal),
+    ),
+  ),
+  handle(
+    reclassifyDocumentJob,
+    loggingFailures(deps, reclassifying, ({ payload, signal }) =>
+      reclassifyDocument(deps, payload, signal),
     ),
   ),
   handle(

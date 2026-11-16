@@ -19,6 +19,7 @@ const DOCUMENT_COLUMNS = {
   source: documents.source,
   originalName: documents.originalName,
   hint: documents.hint,
+  reclassificationHint: documents.reclassificationHint,
   private: documents.private,
   typeId: documents.typeId,
   schemaVersion: documents.schemaVersion,

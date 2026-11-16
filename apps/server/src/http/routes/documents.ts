@@ -2,6 +2,7 @@ import {
   documentCorrectionSchema,
   documentEventListSchema,
   documentListSchema,
+  documentReclassificationSchema,
   documentSchema,
   getDocumentOptionsSchema,
   listDocumentsOptionsSchema,
@@ -12,6 +13,7 @@ import {
   getDocument,
   listDocumentEvents,
   listDocuments,
+  reclassifyDocument,
   removeDocument,
   retryDocument,
 } from '@liasse/core/api';
@@ -125,6 +127,26 @@ export const documentRoutes = ({ api, authenticated }: RouteDeps): Hono<AppEnv> 
       async (context) => {
         const { id } = context.req.valid('param');
         await retryDocument(api, id);
+        return context.json(await getDocument(api, id), 202);
+      },
+    )
+    .post(
+      '/documents/:id/reclassify',
+      operation({
+        summary: 'Decide the type of a settled document again, without the one it has',
+        tag: TAG,
+        responses: {
+          202: jsonResponse('The document, queued for its type.', documentSchema),
+          ...failures(400, 404, 413, 415),
+        },
+      }),
+      authenticated,
+      jsonBody,
+      valid('param', idParam),
+      valid('json', documentReclassificationSchema),
+      async (context) => {
+        const { id } = context.req.valid('param');
+        await reclassifyDocument(api, id, context.req.valid('json'));
         return context.json(await getDocument(api, id), 202);
       },
     )

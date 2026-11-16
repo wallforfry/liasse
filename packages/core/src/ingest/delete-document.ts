@@ -37,6 +37,7 @@ const BLANK_CONTENT = {
   state: 'current',
   originalName: '',
   hint: null,
+  reclassificationHint: null,
   typeId: null,
   schemaVersion: null,
   core: {},

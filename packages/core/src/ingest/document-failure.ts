@@ -78,7 +78,7 @@ export const failDocumentInProgress = (
  * for a document that is gone, failed, or not waiting on any stage.
  */
 export const logFailedAttempt = async (
-  db: Database,
+  db: Database | Transaction,
   documentId: string,
   outcome: Exclude<ProcessingOutcome, 'succeeded'>,
   { stage, ...trace }: FailureTrace,

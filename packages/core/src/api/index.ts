@@ -34,6 +34,7 @@ export { getSubject, type KnowledgeFeatures, recall, timeline } from './knowledg
 export { listDocuments } from './list-documents.ts';
 export { listEntities } from './list-entities.ts';
 export { queryDocuments } from './query-documents.ts';
+export { reclassifyDocument } from './reclassify-document.ts';
 export { searchDocuments } from './search-documents.ts';
 export { retryDocument } from './retry-document.ts';
 export { readStats, type Stats } from './stats.ts';

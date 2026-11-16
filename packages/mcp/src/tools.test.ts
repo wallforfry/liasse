@@ -21,6 +21,7 @@ const TOOLS = [
   'list_pending_changes',
   'query',
   'recall',
+  'reclassify_document',
   'retry_document',
   'search',
   'timeline',
@@ -30,7 +31,10 @@ const TOOLS = [
 
 // The tools whose answer is read from documents.
 const UNTRUSTED_TOOLS = TOOLS.filter(
-  (name) => !['apply_change', 'get_status', 'ingest', 'retry_document'].includes(name),
+  (name) =>
+    !['apply_change', 'get_status', 'ingest', 'reclassify_document', 'retry_document'].includes(
+      name,
+    ),
 );
 
 const hits = z.object({ results: z.array(z.object({ id: z.string() })) });
@@ -241,6 +245,23 @@ describe('the tools', () => {
       expect((await failureOf('retry_document', { id: publicId })).code).toBe(
         'document_not_failed',
       );
+    });
+
+    it('queues the type of a settled document again and answers its status', async () => {
+      const id = await harness.addDocument([], { status: 'needs_review' });
+      const { isError, body } = await callTool(client, 'reclassify_document', {
+        id,
+        hint: 'a payslip',
+        new_type: true,
+      });
+      expect(isError).toBe(false);
+      expect(body).toEqual({ id, status: 'needs_review', state: 'current', error: null });
+      expect((await failureOf('reclassify_document', { id })).code).toBe('document_not_settled');
+    });
+
+    it('refuses to reclassify a document that is not settled', async () => {
+      const id = await harness.addDocument([], { status: 'failed', error: 'no_text' });
+      expect((await failureOf('reclassify_document', { id })).code).toBe('document_not_settled');
     });
   });
 

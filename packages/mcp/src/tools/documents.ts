@@ -1,5 +1,6 @@
 import {
   documentCorrectionSchema,
+  documentReclassificationSchema,
   getDocumentOptionsSchema,
   idSchema,
   ingestRequestSchema,
@@ -10,6 +11,7 @@ import {
   CORRECTED_PARTS,
   getDocument,
   listDocumentEvents,
+  reclassifyDocument,
   retryDocument,
   uploadDocument,
 } from '@liasse/core/api';
@@ -24,6 +26,10 @@ const READ_ONLY = { readOnlyHint: true, openWorldHint: false } as const;
 const getDocumentInputSchema = z.strictObject({ id: idSchema, ...getDocumentOptionsSchema.shape });
 const statusInputSchema = z.strictObject({ id: idSchema });
 const correctionInputSchema = z.strictObject({ id: idSchema, ...documentCorrectionSchema.shape });
+const reclassificationInputSchema = z.strictObject({
+  id: idSchema,
+  ...documentReclassificationSchema.shape,
+});
 
 const GET_DOCUMENT_DESCRIPTION =
   'Details of one document by its id, private documents included. `include` adds parts: ' +
@@ -57,6 +63,13 @@ const UPDATE_DESCRIPTION =
 const RETRY_DESCRIPTION =
   'Processes a `failed` document again from its stored file, for instance after a provider ' +
   'outage. Refused for any other status. Returns its id and new status; then call `get_status`.';
+
+const RECLASSIFY_DESCRIPTION =
+  'Decides the type of an `indexed` or `needs_review` document again, because the one it ' +
+  'has is wrong: that type is not offered. `hint` says what the right type is, `new_type` ' +
+  'asks for a new type only. Its fields are then extracted again for the type chosen. ' +
+  'Refused while the document is processed. Returns its id and status; then call ' +
+  '`get_status`. To set a type you know, use `update_document`.';
 
 export const registerDocumentTools = (server: McpServer, { api, report }: McpDeps): void => {
   server.registerTool(
@@ -98,6 +111,20 @@ export const registerDocumentTools = (server: McpServer, { api, report }: McpDep
     async ({ id }) =>
       toolAnswer('retry_document', report, async () => {
         await retryDocument(api, id);
+        const { status, state, error } = await getDocument(api, id);
+        return { id, status, state, error };
+      }),
+  );
+  server.registerTool(
+    'reclassify_document',
+    {
+      description: RECLASSIFY_DESCRIPTION,
+      inputSchema: reclassificationInputSchema,
+      annotations: { readOnlyHint: false, idempotentHint: false, openWorldHint: false },
+    },
+    async ({ id, ...reclassification }) =>
+      toolAnswer('reclassify_document', report, async () => {
+        await reclassifyDocument(api, id, reclassification);
         const { status, state, error } = await getDocument(api, id);
         return { id, status, state, error };
       }),
