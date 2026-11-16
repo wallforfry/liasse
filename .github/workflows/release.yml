@@ -1,0 +1,78 @@
+name: Release
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  # With changesets pending on main, opens or updates the "version packages" pull request, which
+  # bumps the versions and writes the changelogs. Once that pull request is merged, no changeset
+  # is pending and the version of @liasse/server, not yet tagged, becomes a GitHub release.
+  release:
+    name: Version or release
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    outputs:
+      tag: ${{ steps.tag.outputs.tag }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - id: changesets
+        uses: changesets/action@v2
+        with:
+          version-script: pnpm exec changeset version
+          # The commit goes through the GitHub API, authored by github-actions[bot]: the DCO check
+          # wants its sign-off.
+          commit-message: |
+            chore(release): version packages
+
+            Signed-off-by: github-actions[bot] <41898282+github-actions[bot]@users.noreply.github.com>
+          pr-title: 'chore(release): version packages'
+      - id: tag
+        if: steps.changesets.outputs.has-changesets == 'false'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          version="$(node -p "require('./apps/server/package.json').version")"
+          tag="v$version"
+          if [ "$version" = 0.0.0 ] || git rev-parse -q --verify "refs/tags/$tag" >/dev/null; then
+            echo "Nothing to release: $tag is already tagged or no version was ever cut."
+            exit 0
+          fi
+          mapfile -t changelogs < <(git diff --name-only HEAD^ HEAD -- '*CHANGELOG.md')
+          if [ "${#changelogs[@]}" -eq 0 ]; then
+            echo "No changelog changed in $GITHUB_SHA, yet $tag is not tagged." >&2
+            exit 1
+          fi
+          scripts/release-notes.sh "${changelogs[@]}" >"$RUNNER_TEMP/notes.md"
+          gh release create "$tag" --target "$GITHUB_SHA" --title "$tag" --notes-file "$RUNNER_TEMP/notes.md"
+          echo "tag=$tag" >>"$GITHUB_OUTPUT"
+
+  # A tag pushed with the workflow token starts no workflow, so the release publishes its image
+  # itself.
+  image:
+    name: Release image
+    needs: release
+    if: needs.release.outputs.tag != ''
+    permissions:
+      contents: read
+      packages: write
+    uses: ./.github/workflows/image.yml
+    with:
+      tag: ${{ needs.release.outputs.tag }}

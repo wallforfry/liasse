@@ -36,6 +36,8 @@ jobs:
         run: |
           scripts/check-dco.test.sh
           scripts/check-dco.sh "$BASE_SHA" "$HEAD_SHA"
+      - name: Release notes script
+        run: scripts/release-notes.test.sh
 
   check:
     name: Lint, typecheck, test, build
