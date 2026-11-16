@@ -5,6 +5,13 @@ on:
   push:
     branches: [main]
     tags: ['v*']
+  # The Release workflow, whose tag pushed with the workflow token starts no workflow.
+  workflow_call:
+    inputs:
+      tag:
+        description: The release tag (`v<version>`) to publish the image of
+        type: string
+        required: true
 
 permissions:
   contents: read
@@ -14,8 +21,9 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  # A pull request only proves the image builds, on amd64: arm64 runs under emulation and takes
-  # several times longer, so it is built when the image is published.
+  # A pull request only proves the image builds, on amd64, and stays under the idle memory target:
+  # arm64 runs under emulation and takes several times longer, so it is built when the image is
+  # published.
   build:
     name: Docker image
     if: github.event_name == 'pull_request'
@@ -28,12 +36,16 @@ jobs:
           context: .
           platforms: linux/amd64
           push: false
+          load: true
+          tags: liasse:pull-request
           cache-from: type=gha
           cache-to: type=gha,mode=max
+      - name: Idle memory
+        run: scripts/check-idle-memory.sh liasse:pull-request
 
   publish:
     name: Publish Docker image
-    if: github.event_name == 'push'
+    if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -51,10 +63,11 @@ jobs:
         uses: docker/metadata-action@v6
         with:
           images: ghcr.io/${{ github.repository }}
+          # A release passes its tag; a pushed tag is read from the ref.
           tags: |
-            type=semver,pattern={{version}}
-            type=semver,pattern={{major}}.{{minor}}
-            type=edge,branch=main
+            type=semver,pattern={{version}},value=${{ inputs.tag }}
+            type=semver,pattern={{major}}.{{minor}},value=${{ inputs.tag }}
+            type=edge,branch=main,enable=${{ !inputs.tag }}
             type=sha,format=long
       - uses: docker/build-push-action@v7
         with:
