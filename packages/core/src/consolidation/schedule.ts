@@ -1,6 +1,7 @@
 import {
   CONSOLIDATION_BATCH_DOCUMENTS,
   CONSOLIDATION_NIGHTLY_HOUR_UTC,
+  SETTLED_STATUSES,
 } from '@liasse/contract/domain';
 import { and, desc, eq, gt, inArray, ne, sql } from 'drizzle-orm';
 import { z } from 'zod';
@@ -9,7 +10,6 @@ import { documents, isLiveDocument } from '../db/schema/documents.ts';
 import { jobs } from '../db/schema/jobs.ts';
 import { enqueue } from '../jobs/enqueue.ts';
 import { defineJobKind } from '../jobs/kinds.ts';
-import { SETTLED_STATUSES } from '../pipeline/document.ts';
 
 export const CONSOLIDATION_TRIGGERS = ['nightly', 'batch'] as const;
 export type ConsolidationTrigger = (typeof CONSOLIDATION_TRIGGERS)[number];

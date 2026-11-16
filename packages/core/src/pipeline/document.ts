@@ -13,15 +13,13 @@ import { writeIfLive } from '../ingest/live-write.ts';
 
 export type Reader = Database | Transaction;
 
-/** Indexed and queryable; `needs_review` is also flagged for a person to look at. */
-export const SETTLED_STATUSES: readonly DocumentStatus[] = ['indexed', 'needs_review'];
-
 const DOCUMENT_COLUMNS = {
   id: documents.id,
   status: documents.status,
   source: documents.source,
   originalName: documents.originalName,
   hint: documents.hint,
+  reclassificationHint: documents.reclassificationHint,
   private: documents.private,
   typeId: documents.typeId,
   schemaVersion: documents.schemaVersion,

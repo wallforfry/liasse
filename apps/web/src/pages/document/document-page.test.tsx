@@ -53,8 +53,8 @@ const answerDocument: Answer = (request) =>
   request.path.startsWith('/documents/doc_01HOSTILE') ? json(HOSTILE_DOCUMENT) : undefined;
 
 const openTypePicker = async (user: UserEvent): Promise<HTMLElement> => {
-  await user.click(await screen.findByRole('tab', { name: 'Correct' }));
-  await user.click(screen.getByRole('combobox', { name: 'Type' }));
+  await user.click(await screen.findByRole('tab', { name: 'Edit' }));
+  await user.click(screen.getByRole('combobox', { name: 'Choose the type by hand' }));
   return screen.getByPlaceholderText('Search the types...');
 };
 
@@ -89,8 +89,10 @@ describe('the document page', () => {
     await user.type(search, 'bill');
     expect(screen.queryByRole('option', { name: /^note/ })).toBeNull();
     await user.click(await screen.findByRole('option', { name: /^invoice/ }));
-    expect(screen.getByRole('combobox', { name: 'Type' })).toHaveTextContent('invoice');
-    await user.click(screen.getByRole('button', { name: 'Save the correction' }));
+    expect(screen.getByRole('combobox', { name: 'Choose the type by hand' })).toHaveTextContent(
+      'invoice',
+    );
+    await user.click(screen.getByRole('button', { name: 'Save the type' }));
     await waitFor(() => {
       expect(server.requests.find(({ method }) => method === 'PATCH')?.body).toBe(
         JSON.stringify({ type: 'invoice' }),

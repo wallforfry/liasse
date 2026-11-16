@@ -11,9 +11,13 @@ import {
   noticePeriodUnitSchema,
   subjectKindSchema,
 } from '@liasse/contract/domain';
-import { isPlainRecord, untypedValueSchema, type ValueWrapper } from '@liasse/contract/registry';
+import {
+  CORE_FIELD_NAMES,
+  isPlainRecord,
+  untypedValueSchema,
+  type ValueWrapper,
+} from '@liasse/contract/registry';
 import { z } from 'zod';
-import { CORE_FIELD_NAMES } from '../../registry/core-fields.ts';
 import type { TypeFields } from '../../registry/fields.ts';
 import { coreValueSchema, valueSchemaForFields } from '../../registry/values.ts';
 

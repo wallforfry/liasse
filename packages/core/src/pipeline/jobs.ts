@@ -1,9 +1,8 @@
-import { DOCUMENT_JOB_FAILURE_CODES } from '@liasse/contract/domain';
+import { DOCUMENT_JOB_FAILURE_CODES, SETTLED_STATUSES } from '@liasse/contract/domain';
 import { z } from 'zod';
-import { documentOfPayload, flagDocument } from '../ingest/document-failure.ts';
+import { documentOfPayload, flagDocument, logFailedAttempt } from '../ingest/document-failure.ts';
 import { PROCESS_DOCUMENT_MAX_ATTEMPTS } from '../ingest/process-document-job.ts';
 import { defineJobKind } from '../jobs/kinds.ts';
-import { SETTLED_STATUSES } from './document.ts';
 
 const payload = z.object({ documentId: z.string().min(1) });
 
@@ -51,4 +50,38 @@ export const reindexDocumentJob = defineJobKind({
   name: 'reindex_document',
   schema: payload,
   maxAttempts: PROCESS_DOCUMENT_MAX_ATTEMPTS,
+});
+
+const reclassifyPayload = z.object({
+  documentId: z.string().min(1),
+  rejectedTypeId: z.string().min(1).nullable(),
+  newType: z.boolean(),
+});
+export type ReclassifyPayload = z.output<typeof reclassifyPayload>;
+
+/**
+ * Decides the type of a settled document again, because a person said the one it has
+ * is wrong: `rejectedTypeId` is that type (null for a document without one), `newType`
+ * whether only a new type will do. What the person added is free text: it waits on the
+ * document, in `documents.reclassification_hint`, which a deletion blanks, while a job
+ * row outlives its document. A document whose type is no longer the rejected one, a
+ * correction or a merge having come in between, is left alone. A reclassification that
+ * fails for good leaves the document as it was.
+ */
+export const reclassifyDocumentJob = defineJobKind({
+  name: 'reclassify_document',
+  schema: reclassifyPayload,
+  maxAttempts: PROCESS_DOCUMENT_MAX_ATTEMPTS,
+  // The handler logs the attempt that failed. This logs the one a dead worker could not,
+  // so that whoever follows the log sees the reclassification end.
+  onTerminalFailure: async (tx, { payload, cause, attempt }) => {
+    const documentId = documentOfPayload(payload);
+    if (cause !== 'stale' || documentId === undefined) return;
+    await logFailedAttempt(tx, documentId, 'failed', {
+      stage: 'classification',
+      attempt,
+      maxAttempts: PROCESS_DOCUMENT_MAX_ATTEMPTS,
+      errorCode: DOCUMENT_JOB_FAILURE_CODES.stale,
+    });
+  },
 });

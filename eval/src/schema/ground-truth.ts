@@ -9,11 +9,11 @@ import {
   supportedMimeSchema,
 } from '@liasse/contract/domain';
 import {
+  type CORE_FIELDS,
   fieldDefinitionSchema,
   type FieldPrimitive,
   fieldValueSchema,
 } from '@liasse/contract/registry';
-import type { CORE_FIELDS } from '@liasse/core/registry';
 import { z } from 'zod';
 import { expectationSchema, keySchema, requirementSchema } from './expectation.ts';
 
