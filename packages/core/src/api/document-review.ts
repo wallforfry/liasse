@@ -114,7 +114,7 @@ const reviewedType = (type: TypeProvenance | undefined) =>
       };
 
 // A document flagged by a rule or a threshold that no longer flags it, the threshold
-// having been raised since, still says it was flagged.
+// having been changed since, still says it was flagged.
 const flagReasons = (
   document: ReviewedDocument,
   type: TypeProvenance | undefined,

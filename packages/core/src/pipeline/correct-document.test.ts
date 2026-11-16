@@ -290,6 +290,18 @@ describe('correctDocument', () => {
       expect(await queued()).toEqual([]);
     });
 
+    it('refuses a stale confirmation before resolving the names of the correction', async () => {
+      const type = await bill();
+      const id = await settled(type.id);
+      const result = await correctDocument(harness.deps(), {
+        id,
+        core: { issuer: 'Brand New Synthetic Co' },
+        confirm: { reference: 'SYN-9' },
+      });
+      expect(result).toMatchObject({ ok: false, errors: [{ code: 'value_changed' }] });
+      expect(await harness.db.select().from(entities)).toEqual([]);
+    });
+
     // Between the read the confirmation is planned on and the write, another writer (a
     // re-extraction) changes the value: the person never saw the new one.
     it.each([
