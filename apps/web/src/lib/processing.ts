@@ -10,3 +10,7 @@ export const pollWhileProcessing = (
   documents: readonly Pick<DocumentSummary, 'status'>[] | undefined,
 ): number | false =>
   documents?.some(({ status }) => IN_PROGRESS.has(status)) === true ? POLL_MILLISECONDS : false;
+
+/** Neither on its way through the pipeline nor failed: indexed, or waiting for a review. */
+export const isSettled = ({ status }: Pick<DocumentSummary, 'status'>): boolean =>
+  !IN_PROGRESS.has(status) && status !== 'failed';

@@ -1,6 +1,6 @@
 import type { DocumentView } from '@liasse/sdk';
 import { describe, expect, it } from 'vitest';
-import { draftOf, readCorrection } from './correction.ts';
+import { readCorrection, valueRowsOf } from './correction.ts';
 
 const DOCUMENT: DocumentView = {
   id: 'doc_01SYNTHETIC',
@@ -15,41 +15,82 @@ const DOCUMENT: DocumentView = {
   private: false,
   confidence: 0.4,
   error: null,
-  core: { issuer: 'Synthetic Power', iban: 'FR76 **** 1234' },
+  core: {
+    issuer: 'Synthetic Power',
+    iban: 'FR76 **** 1234',
+    amount: { value: 12.5, currency: 'EUR' },
+  },
   ingested_at: '2026-11-15T10:00:00.000Z',
   updated_at: '2026-11-15T10:00:00.000Z',
   schema_version: 1,
   hint: null,
-  fields: { amount: 12.5 },
+  fields: { pages: 2, tags: ['a'] },
+  manual_fields: ['issuer'],
 };
+
+const DEFINITIONS = {
+  pages: { type: 'number' },
+  plan: { type: 'enum', values: ['basic', 'peak'] },
+  tags: { type: 'list', items: { type: 'text' } },
+} as const;
+
+const ROWS = valueRowsOf(DOCUMENT, DEFINITIONS);
+
+describe('valueRowsOf', () => {
+  it('lists the core values, then every field of the type and every field with a value', () => {
+    expect(ROWS.map(({ key, editor, manual }) => [key, editor.kind, manual])).toEqual([
+      ['core.issuer', 'text', true],
+      ['core.iban', 'text', false],
+      ['core.amount', 'money', false],
+      ['fields.pages', 'number', false],
+      ['fields.plan', 'enum', false],
+      ['fields.tags', 'json', false],
+    ]);
+  });
+
+  it('guesses the editor of a field the type does not describe from its value', () => {
+    const rows = valueRowsOf({ ...DOCUMENT, fields: { due: '2026-12-01' } }, undefined);
+    expect(rows.find(({ name }) => name === 'due')?.editor).toEqual({ kind: 'date' });
+  });
+});
 
 describe('readCorrection', () => {
   it('sends only what the person changed, never a masked value sent back', () => {
-    const draft = draftOf(DOCUMENT);
-    const core = JSON.stringify({ issuer: 'Synthetic Energy', iban: 'FR76 **** 1234' });
-    expect(readCorrection({ ...draft, core, private: true }, DOCUMENT)).toEqual({
+    const drafts = {
+      'core.issuer': { kind: 'single', text: 'Synthetic Energy' },
+      'core.iban': { kind: 'single', text: 'FR76 **** 1234' },
+      'fields.pages': { kind: 'single', text: '3' },
+    } as const;
+    expect(readCorrection(ROWS, drafts)).toEqual({
       ok: true,
-      correction: { private: true, core: { issuer: 'Synthetic Energy' } },
+      correction: { core: { issuer: 'Synthetic Energy' }, fields: { pages: 3 } },
     });
   });
 
-  it('clears a value removed from the text', () => {
-    const reading = readCorrection({ ...draftOf(DOCUMENT), fields: '{}' }, DOCUMENT);
-    expect(reading).toEqual({ ok: true, correction: { fields: { amount: null } } });
+  it('clears an emptied value, and fills a field the document had no value for', () => {
+    const drafts = {
+      'core.amount': { kind: 'money', amount: '', currency: '' },
+      'fields.plan': { kind: 'single', text: 'peak' },
+    } as const;
+    expect(readCorrection(ROWS, drafts)).toEqual({
+      ok: true,
+      correction: { core: { amount: null }, fields: { plan: 'peak' } },
+    });
   });
 
-  it('refuses a draft that changes nothing or is not a JSON object', () => {
-    expect(readCorrection(draftOf(DOCUMENT), DOCUMENT)).toEqual({
+  it('refuses drafts that change nothing, and names each value it cannot read', () => {
+    const back = { 'fields.pages': { kind: 'single', text: '2' } } as const;
+    expect(readCorrection(ROWS, back)).toEqual({
       ok: false,
-      problem: 'Nothing differs from the values shown.',
+      problems: ['Nothing differs from the values shown.'],
     });
-    expect(readCorrection({ ...draftOf(DOCUMENT), core: '[1]' }, DOCUMENT)).toEqual({
+    const wrong = {
+      'fields.pages': { kind: 'single', text: 'two' },
+      'fields.tags': { kind: 'single', text: '[' },
+    } as const;
+    expect(readCorrection(ROWS, wrong)).toEqual({
       ok: false,
-      problem: 'Core values must be a JSON object.',
-    });
-    expect(readCorrection({ ...draftOf(DOCUMENT), fields: '{' }, DOCUMENT)).toEqual({
-      ok: false,
-      problem: 'Fields are not valid JSON.',
+      problems: ['pages: expected a number', 'tags: expected valid JSON'],
     });
   });
 });

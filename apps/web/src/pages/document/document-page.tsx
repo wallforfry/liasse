@@ -10,9 +10,9 @@ import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/ca
 import { Skeleton } from '../../components/ui/skeleton.tsx';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../../components/ui/tabs.tsx';
 import { pollWhileProcessing } from '../../lib/processing.ts';
-import { CorrectionForm } from './correction-form.tsx';
 import { DeleteDocument } from './delete-document.tsx';
 import { DocumentDetails, DocumentText, OriginalFile, ValueTable } from './document-parts.tsx';
+import { EditTab } from './edit-tab.tsx';
 import { ProcessingLog } from './processing-log.tsx';
 import { RetryDocument } from './retry-document.tsx';
 
@@ -65,7 +65,7 @@ export const DocumentPage = () => {
           <TabsTrigger value="text">Text</TabsTrigger>
           <TabsTrigger value="file">File</TabsTrigger>
           <TabsTrigger value="processing">Processing</TabsTrigger>
-          <TabsTrigger value="correct">Correct</TabsTrigger>
+          <TabsTrigger value="edit">Edit</TabsTrigger>
         </TabsList>
         <TabsContent value="details" className="grid gap-4 lg:grid-cols-2">
           <Card className="lg:col-span-2">
@@ -103,8 +103,9 @@ export const DocumentPage = () => {
             </CardContent>
           </Card>
         </TabsContent>
-        <TabsContent value="correct">
-          <CorrectionForm key={view.updated_at} document={view} />
+        {/* Kept mounted: leaving the tab must not end the follow-up of a type analysis. */}
+        <TabsContent value="edit" forceMount className="data-[state=inactive]:hidden">
+          <EditTab document={view} />
         </TabsContent>
       </Tabs>
     </>
