@@ -2,7 +2,7 @@
 
 **Lightweight, agent-first document management.** Hand Liasse your documents; it reads them, files them into types it evolves on its own, tracks key dates and links between documents, and exposes everything to your agents over MCP.
 
-> **Status:** pre-release. Ingestion, classification and extraction, the evolving type registry, consolidation, the knowledge layer, hybrid search, the REST API, MCP, the TypeScript SDK and the web UI are in place; no version is tagged yet. The design is in [`docs/spec.md`](docs/spec.md).
+> **Status:** early, before 1.0; the first release is [v0.1.0](https://github.com/wallforfry/liasse/releases/tag/v0.1.0). Ingestion, classification and extraction, the evolving type registry, consolidation, the knowledge layer, hybrid search, the REST API, MCP, the TypeScript SDK and the web UI are in place. The design is in [`docs/spec.md`](docs/spec.md).
 
 ## Why
 
@@ -16,7 +16,7 @@ Self-hosted document managers rely on classic OCR, manual tags and a UI built fo
 
 ## Start in 5 minutes
 
-You need Docker with Compose, and either an API key of a model provider (Anthropic, OpenAI, Mistral, Gemini) or an [Ollama](https://ollama.com) server with a text model and a vision model.
+You need Docker with Compose, and either an API key of a model provider (Anthropic, OpenAI, Mistral, Gemini), an [Ollama](https://ollama.com) server, or any OpenAI-compatible server, with a text model and a vision model.
 
 1. Get the compose file and the configuration template:
 
@@ -27,7 +27,7 @@ You need Docker with Compose, and either an API key of a model provider (Anthrop
    ```
 
 2. Edit `.env`:
-   - `LLM_PROVIDER`, `TEXT_MODEL`, `VISION_MODEL`, and `LLM_API_KEY` for a cloud provider. For Ollama on the same machine, set `LLM_BASE_URL=http://host.docker.internal:11434` (inside the container, `127.0.0.1` is the container itself; on Linux, see [Ollama on the host](docs/deployment.md#ollama-on-the-host)).
+   - `LLM_PROVIDER`, `TEXT_MODEL`, `VISION_MODEL`, and `LLM_API_KEY` for a cloud provider, or `LLM_BASE_URL` (the URL that ends in `/v1`) for an OpenAI-compatible server. For Ollama on the same machine, set `LLM_BASE_URL=http://host.docker.internal:11434` (inside the container, `127.0.0.1` is the container itself; on Linux, see [Ollama on the host](docs/deployment.md#ollama-on-the-host)).
    - `AUTH_SECRET` and `FILE_URL_SECRET`: two different values from `openssl rand -hex 32`.
    - `AUTH_BOOTSTRAP_EMAIL` and `AUTH_BOOTSTRAP_PASSWORD` (12 characters or more): the first account.
    - Add `POSTGRES_PASSWORD=` with a value from `openssl rand -hex 24` (letters and digits only, since it goes into a URL).
@@ -38,7 +38,7 @@ You need Docker with Compose, and either an API key of a model provider (Anthrop
    docker compose up -d
    ```
 
-   The server applies its migrations at startup, and `docker compose ps` shows it healthy within a minute. Until the first version is tagged, set `LIASSE_VERSION=edge` in `.env`, or let Compose build the image from the checkout.
+   The server applies its migrations at startup, and `docker compose ps` shows it healthy within a minute. Compose pulls the `latest` image; set `LIASSE_VERSION` in `.env` to pin a version (see [the image and its tags](docs/deployment.md#image)). While the repository is private, so is the image: run `docker login ghcr.io` with a token that can read it first.
 
 4. Open <http://localhost:8080>, sign in with the bootstrap account, and create an API key on the API keys screen.
 
@@ -61,7 +61,7 @@ More ways in: [`examples/`](examples/) has MCP client configurations and REST ca
 
 ## Stack
 
-TypeScript on Node 22, Hono, Drizzle, Zod, Postgres with pgvector, the MCP TypeScript SDK, the Vercel AI SDK, React with Vite for the web UI.
+TypeScript on Node (22 in the image; 24 and 26 supported, see `engines` in [`package.json`](package.json)), Hono, Drizzle, Zod, Postgres with pgvector, the MCP TypeScript SDK, the Vercel AI SDK, React with Vite for the web UI.
 
 ## Contributing
 
