@@ -1,0 +1,1 @@
+CREATE INDEX "jobs_unfinished_document_idx" ON "jobs" USING btree (("payload"->>'documentId')) WHERE "jobs"."status" in ('queued', 'running');

@@ -1,8 +1,8 @@
-import { and, eq, sql } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import type { Database } from '../db/client.ts';
 import { documentEvents } from '../db/schema/document-events.ts';
 import { chunks, documentPages, documents, isLiveDocument } from '../db/schema/documents.ts';
-import { jobs } from '../db/schema/jobs.ts';
+import { jobs, unfinishedJobOfDocument } from '../db/schema/jobs.ts';
 import { documentDates, documentLinks, facts } from '../db/schema/knowledge.ts';
 import { enqueue } from '../jobs/enqueue.ts';
 import { lockLinkedDocuments, recomputeDocumentStates } from '../knowledge/document-state.ts';
@@ -37,6 +37,7 @@ const BLANK_CONTENT = {
   state: 'current',
   originalName: '',
   hint: null,
+  reclassificationHint: null,
   typeId: null,
   schemaVersion: null,
   core: {},
@@ -84,7 +85,7 @@ const cancelQueuedProcessing = async (tx: Transaction, id: string): Promise<void
       and(
         eq(jobs.kind, processDocumentJob.name),
         eq(jobs.status, 'queued'),
-        sql`${jobs.payload}->>'documentId' = ${id}`,
+        unfinishedJobOfDocument(id),
       ),
     );
 };

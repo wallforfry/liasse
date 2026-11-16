@@ -1,6 +1,5 @@
 import type { AggregateFunction, Operator } from '@liasse/contract/query';
-import type { FieldPrimitive } from '@liasse/contract/registry';
-import type { KEY_DATES_FIELD } from '../registry/core-fields.ts';
+import type { FieldPrimitive, KEY_DATES_FIELD } from '@liasse/contract/registry';
 
 export type QueryPrimitive = FieldPrimitive | typeof KEY_DATES_FIELD;
 

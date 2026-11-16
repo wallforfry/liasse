@@ -2,7 +2,7 @@ import { and, asc, eq } from 'drizzle-orm';
 import { documents, isLiveDocument } from '../db/schema/documents.ts';
 import { enqueue } from '../jobs/enqueue.ts';
 import { reextractDocumentJob } from '../pipeline/jobs.ts';
-import { SETTLED_STATUSES } from '../pipeline/document.ts';
+import { SETTLED_STATUSES } from '@liasse/contract/domain';
 import type { ChangeTransaction } from './change-store.ts';
 import { ChangeRefusedError } from './refusal.ts';
 import { type Rehoming, rehomeValues } from './rehome-values.ts';

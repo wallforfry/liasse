@@ -4,9 +4,8 @@ import {
   MAX_KEY_DATES_PER_DOCUMENT,
   MAX_SUBJECTS_PER_DOCUMENT,
 } from '@liasse/contract/domain';
-import { ownValue } from '@liasse/contract/registry';
+import { KEY_DATES_FIELD, ownValue } from '@liasse/contract/registry';
 import { type KnowledgeInput, knowledgeKeyDateSchema } from '../../knowledge/input.ts';
-import { KEY_DATES_FIELD } from '../../registry/core-fields.ts';
 import type { ExtractionTrace } from './assemble.ts';
 import { type EntityResolutions, mentionKey } from './entities.ts';
 import {

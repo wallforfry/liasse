@@ -10,7 +10,7 @@ import {
   subjects,
 } from '@liasse/core/db';
 import { readPipelineProvenance } from '@liasse/core/domain';
-import { CORE_FIELDS } from '@liasse/core/registry';
+import { CORE_FIELDS } from '@liasse/contract/registry';
 import { asc, eq, inArray } from 'drizzle-orm';
 import type { SystemDocument } from '../schema/index.ts';
 import type { CorpusIds } from './ingest.ts';

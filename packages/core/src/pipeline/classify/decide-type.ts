@@ -6,7 +6,11 @@ import type { RegisteredType } from '../../registry/type-store.ts';
 import { maskOf } from '../bindings.ts';
 import type { PipelineDeps } from '../deps.ts';
 import { maskDeep } from '../extract/masking.ts';
-import { classificationPrompt, classificationSystemPrompt } from '../prompts/classification.ts';
+import {
+  classificationPrompt,
+  classificationSystemPrompt,
+  type ReclassificationLine,
+} from '../prompts/classification.ts';
 import type { Candidate } from './candidates.ts';
 import {
   type Classification,
@@ -29,6 +33,17 @@ export interface TypeQuestion {
    * description of a new type is embedded, and it was written from the document.
    */
   readonly mayCreate: boolean;
+  /** Set when a person asked for the type again: the reclassification they asked for. */
+  readonly reclassification?: Reclassification;
+}
+
+/** What a person said when asking for the type of a document to be decided again. */
+export interface Reclassification {
+  /** The type they said is wrong for the document, never chosen; absent for an untyped one. */
+  readonly rejected: RegisteredType | undefined;
+  readonly hint: string | null;
+  /** Only a new type will do: the candidates are listed as parents and to avoid duplicates. */
+  readonly requireNew: boolean;
 }
 
 interface Answer {
@@ -41,16 +56,29 @@ interface Assigned {
   readonly outcome: 'existing' | 'new';
 }
 
-type Settled = Assigned | { readonly refused: RegistryError };
+interface Refusal {
+  readonly code: RegistryError['code'] | 'rejected_type';
+  readonly message: string;
+}
+
+type Settled = Assigned | { readonly refused: Refusal };
+
+const promptOf = ({ rejected, hint, requireNew }: Reclassification): ReclassificationLine => ({
+  rejected:
+    rejected === undefined ? null : { slug: rejected.slug, description: rejected.description },
+  hint,
+  requireNew,
+});
 
 const ask = async (
   { textModel, settings }: PipelineDeps,
-  { opening, candidates, hint }: TypeQuestion,
+  { opening, candidates, hint, reclassification }: TypeQuestion,
   signal: AbortSignal,
   refusal?: { readonly proposal: unknown; readonly reason: string },
 ): Promise<Answer> => {
+  const requireNew = reclassification?.requireNew ?? false;
   const { object, model } = await textModel.generateObject({
-    schema: classificationSchema(candidates.map(({ type }) => type.slug)),
+    schema: classificationSchema(requireNew ? [] : candidates.map(({ type }) => type.slug)),
     system: classificationSystemPrompt(settings.schemaLanguage),
     prompt: classificationPrompt({
       opening,
@@ -60,6 +88,7 @@ const ask = async (
         description: type.description,
         exampleTitle,
       })),
+      ...(reclassification === undefined ? {} : { reclassification: promptOf(reclassification) }),
       ...(refusal === undefined ? {} : { refusal }),
     }),
     signal,
@@ -103,7 +132,7 @@ const create = async (
   return holder === undefined ? { refused: created.error } : { type: holder, outcome: 'existing' };
 };
 
-const settle = async (
+const chosenOf = async (
   deps: PipelineDeps,
   candidates: readonly Candidate[],
   decision: Classification,
@@ -112,6 +141,24 @@ const settle = async (
   const chosen = candidates.find(({ type }) => type.slug === decision.slug);
   if (chosen === undefined) throw new Error('The model chose a type that was not offered');
   return { type: chosen.type, outcome: 'existing' };
+};
+
+// A new slug can name the rejected type, under its name or an alias: that is no answer.
+const settle = async (
+  deps: PipelineDeps,
+  { candidates, reclassification }: TypeQuestion,
+  decision: Classification,
+): Promise<Settled> => {
+  const settled = await chosenOf(deps, candidates, decision);
+  const rejected = reclassification?.rejected;
+  return 'type' in settled && settled.type.id === rejected?.id
+    ? {
+        refused: {
+          code: 'rejected_type',
+          message: `The slug names the type "${rejected.slug}", which a person said is wrong for this document.`,
+        },
+      }
+    : settled;
 };
 
 const assignment = ({ type, outcome }: Assigned, { decision, model }: Answer): TypeDecision => ({
@@ -143,14 +190,14 @@ export const decideType = async (
   if (first.decision.decision === 'new' && !question.mayCreate) {
     return fallback(question.candidates, first.model);
   }
-  const settled = await settle(deps, question.candidates, first.decision);
+  const settled = await settle(deps, question, first.decision);
   if ('type' in settled) return assignment(settled, first);
   if (settled.refused.code === 'quota_exceeded') return fallback(question.candidates, first.model);
   const second = await ask(deps, question, signal, {
     proposal: first.decision,
     reason: settled.refused.message,
   });
-  const corrected = await settle(deps, question.candidates, second.decision);
+  const corrected = await settle(deps, question, second.decision);
   return 'type' in corrected
     ? assignment(corrected, second)
     : fallback(question.candidates, second.model);

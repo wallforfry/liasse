@@ -1,14 +1,15 @@
 import { keyDateSchema, languageCodeSchema } from '@liasse/contract/domain';
 import {
+  CORE_FIELDS,
   fieldValueSchema,
   isPlainRecord,
+  KEY_DATES_FIELD,
   ownProperties,
   untypedValueSchema,
   unwrapped,
   type ValueWrapper,
 } from '@liasse/contract/registry';
 import { z } from 'zod';
-import { CORE_FIELDS, KEY_DATES_FIELD } from './core-fields.ts';
 import type { TypeFields } from './fields.ts';
 
 type Shape = Readonly<Record<string, z.ZodType>>;

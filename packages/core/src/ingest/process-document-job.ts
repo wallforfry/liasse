@@ -1,8 +1,8 @@
 import { DOCUMENT_JOB_FAILURE_CODES } from '@liasse/contract/domain';
-import { and, eq, inArray, sql, type SQLWrapper } from 'drizzle-orm';
+import { and, eq, type SQLWrapper } from 'drizzle-orm';
 import { z } from 'zod';
 import type { Database } from '../db/client.ts';
-import { jobs } from '../db/schema/jobs.ts';
+import { jobs, unfinishedJobOfDocument } from '../db/schema/jobs.ts';
 import { defineJobKind } from '../jobs/kinds.ts';
 import { documentOfPayload, failDocumentInProgress } from './document-failure.ts';
 import type { Transaction } from './existing-document.ts';
@@ -50,10 +50,4 @@ export const pendingProcessingOf = (
   executor
     .select({ id: jobs.id })
     .from(jobs)
-    .where(
-      and(
-        eq(jobs.kind, processDocumentJob.name),
-        inArray(jobs.status, ['queued', 'running']),
-        sql`${jobs.payload}->>'documentId' = ${documentId}`,
-      ),
-    );
+    .where(and(eq(jobs.kind, processDocumentJob.name), unfinishedJobOfDocument(documentId)));

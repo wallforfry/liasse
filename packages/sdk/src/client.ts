@@ -11,6 +11,7 @@ import {
   type DocumentCorrection,
   type DocumentList,
   type DocumentEventList,
+  type DocumentReclassification,
   documentEventListSchema,
   documentListSchema,
   documentSchema,
@@ -76,6 +77,14 @@ export interface LiasseClient {
   readonly correctDocument: (id: string, correction: DocumentCorrection) => Promise<DocumentView>;
   /** Queues a failed document for processing again; refused for any other status. */
   readonly retryDocument: (id: string) => Promise<DocumentView>;
+  /**
+   * Queues the type of an indexed or flagged document to be decided again, without the
+   * one it has; refused while it is processed.
+   */
+  readonly reclassifyDocument: (
+    id: string,
+    input?: DocumentReclassification,
+  ) => Promise<DocumentView>;
   readonly deleteDocument: (id: string) => Promise<void>;
   readonly search: (request: SearchRequest) => Promise<SearchResults>;
   readonly query: (request: QueryRequest) => Promise<QueryResultEnvelope>;
@@ -130,6 +139,8 @@ export const createLiasseClient = (options: ClientOptions): LiasseClient => {
       ),
     retryDocument: async (id) =>
       parseJson(documentSchema, await send({ method: 'POST', path: `${documentPath(id)}/retry` })),
+    reclassifyDocument: async (id, input = {}) =>
+      post(documentSchema, `${documentPath(id)}/reclassify`, input),
     deleteDocument: async (id) => {
       await send({ method: 'DELETE', path: documentPath(id) });
     },

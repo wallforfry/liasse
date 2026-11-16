@@ -5,12 +5,12 @@ import {
   FIELD_PROMOTION_SHARE,
   MAX_FIELDS_PER_TYPE,
   MIN_FIELD_PROMOTION_DOCUMENTS,
+  SETTLED_STATUSES,
 } from '@liasse/contract/domain';
 import { ownValue } from '@liasse/contract/registry';
 import { and, desc, eq, inArray, sql } from 'drizzle-orm';
 import type { Database } from '../db/client.ts';
 import { documents, isLiveDocument } from '../db/schema/documents.ts';
-import { SETTLED_STATUSES } from '../pipeline/document.ts';
 import { checkField } from '../registry/fields.ts';
 import { hasChange, insertChange, type StoredChange } from './change-store.ts';
 import type { ConsolidationContext } from './context.ts';

@@ -5,7 +5,7 @@ import {
   type SchemaLanguage,
 } from '@liasse/contract/domain';
 import { normalizeEntityName, significantWords } from '../domain/entity-name.ts';
-import { CORE_FIELD_NAMES } from './core-fields.ts';
+import { CORE_FIELD_NAMES } from '@liasse/contract/registry';
 
 export const NAMING_RULES = [
   'snake_case',

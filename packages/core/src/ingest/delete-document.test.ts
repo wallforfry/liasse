@@ -103,6 +103,7 @@ describe('deleteDocument and the delete_file job', () => {
       state: 'current',
       originalName: '',
       hint: null,
+      reclassificationHint: null,
       typeId: null,
       schemaVersion: null,
       core: {},

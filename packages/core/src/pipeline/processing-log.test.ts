@@ -18,7 +18,7 @@ import {
   type PipelineHarness,
   scriptedModel,
 } from './harness.test-helper.ts';
-import { reextractDocumentJob, reindexDocumentJob } from './jobs.ts';
+import { reclassifyDocumentJob, reextractDocumentJob, reindexDocumentJob } from './jobs.ts';
 
 const SECRET = 'text of the document that must not leak';
 
@@ -220,6 +220,35 @@ describe('the processing log of a document', () => {
         attempt: 3,
       },
     ]);
+  });
+
+  it('logs the end of a reclassification whose worker died, not of one its handler logged', async () => {
+    const { id } = await insertSyntheticDocument(harness.db, { status: 'indexed' });
+    const hook = reclassifyDocumentJob.onTerminalFailure;
+    if (hook === undefined) throw new Error('reclassify_document has no terminal hook');
+    const fail = (cause: 'error' | 'stale') =>
+      harness.db.transaction((tx) =>
+        hook(tx, {
+          jobId: 'job_X',
+          payload: { documentId: id, rejectedTypeId: null, newType: false },
+          cause,
+          attempt: 3,
+        }),
+      );
+    await fail('error');
+    expect(await eventsOf(id)).toEqual([]);
+    await fail('stale');
+    expect(await eventsOf(id)).toMatchObject([
+      {
+        stage: 'classification',
+        outcome: 'failed',
+        status: 'indexed',
+        errorCode: 'processing_abandoned',
+        attempt: 3,
+        maxAttempts: 3,
+      },
+    ]);
+    expect(await harness.document(id)).toMatchObject({ status: 'indexed', error: null });
   });
 
   it('logs the failure of a document whose worker died during its last attempt', async () => {
