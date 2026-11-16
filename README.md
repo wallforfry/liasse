@@ -40,13 +40,15 @@ You need Docker with Compose, and either an API key of a model provider (Anthrop
 
    The server applies its migrations at startup, and `docker compose ps` shows it healthy within a minute. Compose pulls the `latest` image; set `LIASSE_VERSION` in `.env` to pin a version (see [the image and its tags](docs/deployment.md#image)). While the repository is private, so is the image: run `docker login ghcr.io` with a token that can read it first.
 
-4. Open <http://localhost:8080>, sign in with the bootstrap account, and create an API key on the API keys screen.
+4. Open <http://localhost:8080> and sign in with the bootstrap account.
 
-5. Connect your agent to `http://localhost:8080/mcp` with that key. With Claude Code:
+5. Connect your agent to `http://localhost:8080/mcp`. It signs in over OAuth: the login and consent pages of Liasse open in the browser, with no key to copy. With Claude Code:
 
    ```bash
-   claude mcp add --transport http liasse http://localhost:8080/mcp --header "Authorization: Bearer $LIASSE_API_KEY"
+   claude mcp add --transport http liasse http://localhost:8080/mcp
    ```
+
+   then run `/mcp` in Claude Code and authenticate `liasse`. OAuth needs `PUBLIC_URL` on https or a loopback address, such as this one; elsewhere, or for a client that does not speak OAuth, create an API key on the API keys screen and pass it as `--header "Authorization: Bearer $LIASSE_API_KEY"`.
 
    Upload a document from the web UI, or ask the agent to ingest one, then ask it about your documents. The first document takes longer: the local embedding model (about 120 MB) is downloaded on first use.
 
