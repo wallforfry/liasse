@@ -2,6 +2,7 @@ name: Image
 
 on:
   pull_request:
+    paths-ignore: ['**/*.md']
   push:
     branches: [main]
     tags: ['v*']

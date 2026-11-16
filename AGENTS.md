@@ -33,7 +33,7 @@ Node 22.12 or later on the 22 line, 24.22.3 or later on the 24 line, or 26.5.1 o
 | `pnpm --filter @liasse/server dev` | Run the server from source (copy `.env.example` to `.env` first) |
 | `pnpm changeset`                   | Describe a user-facing change for the changelog                  |
 
-Before pushing, `pnpm lint`, `pnpm typecheck`, `pnpm test` and `pnpm build` must all pass. CI runs the same four, plus commitlint and a `Signed-off-by` check on every commit of the pull request.
+Before pushing, `pnpm lint`, `pnpm typecheck`, `pnpm test` and `pnpm build` must all pass. CI runs the same four, plus commitlint and a `Signed-off-by` check on every commit of the pull request. A pull request that changes Markdown files only runs commitlint, the sign-off check and `prettier --check .`, and builds no Docker image.
 
 ## Layout
 
