@@ -4,6 +4,8 @@ import {
   type changeDecisionSchema,
   type ChangeList,
   changeListSchema,
+  type ConsolidationRun,
+  consolidationRunSchema,
   type CreatedType,
   createdTypeSchema,
   type CreateTypeRequest,
@@ -102,6 +104,8 @@ export interface LiasseClient {
     id: string,
     decision: ChangeDecisionRequest,
   ) => Promise<ChangeDecisionResult>;
+  /** Queues a consolidation run now, unless one due at once already waits. */
+  readonly requestConsolidationRun: () => Promise<ConsolidationRun>;
 }
 
 const documentPath = (id: string): string => `/documents/${encodeURIComponent(id)}`;
@@ -154,5 +158,10 @@ export const createLiasseClient = (options: ClientOptions): LiasseClient => {
     listChanges: async (query = {}) => get(changeListSchema, '/changes', query),
     decideChange: async (id, decision) =>
       post(changeDecisionResultSchema, `/changes/${encodeURIComponent(id)}`, decision),
+    requestConsolidationRun: async () =>
+      parseJson(
+        consolidationRunSchema,
+        await send({ method: 'POST', path: '/consolidation/runs' }),
+      ),
   };
 };

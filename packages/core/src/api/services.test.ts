@@ -10,7 +10,14 @@ import { QueryExecutionError } from '../query/execute.ts';
 import { CORPUS } from '../search/corpus.fixture.ts';
 import { describeTypes } from './describe-types.ts';
 import { ApiError } from './errors.ts';
-import { applyChange, correctDocument, listChanges, listSubjects, upcoming } from './features.ts';
+import {
+  applyChange,
+  correctDocument,
+  listChanges,
+  listSubjects,
+  requestConsolidationRun,
+  upcoming,
+} from './features.ts';
 import { type ApiHarness, createApiHarness } from './harness.test-helper.ts';
 import { listEntities } from './list-entities.ts';
 import { executionFailure, queryDocuments } from './query-documents.ts';
@@ -256,6 +263,7 @@ describe('use cases of the API', () => {
         upcoming(context, { from: '2026-01-01', to: '2026-03-31', current_only: true }),
         listChanges(context, {}),
         applyChange(context, 'chg_01JC0000000000000000000000', { decision: 'apply' }),
+        requestConsolidationRun(context),
       ];
       for (const call of calls) expect(await failureOf(call)).toMatchObject(NOT_IMPLEMENTED);
     });
