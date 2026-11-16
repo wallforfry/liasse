@@ -71,7 +71,7 @@ describe('the tools', () => {
     return failure.parse(body).error;
   };
 
-  it('lists the fifteen tools, flagging document content as untrusted', async () => {
+  it('lists the sixteen tools, flagging document content as untrusted', async () => {
     const { tools } = await client.listTools();
     expect(tools.map(({ name }) => name).toSorted()).toEqual(TOOLS);
     const flagged = tools

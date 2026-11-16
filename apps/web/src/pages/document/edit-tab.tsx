@@ -35,7 +35,7 @@ export const EditTab = ({ document }: { readonly document: DocumentView }) => (
         <ReclassifyType document={document} />
       </CardContent>
     </Card>
-    <ValuesCard key={document.updated_at} document={document} />
-    <PrivacySection key={document.updated_at} document={document} />
+    <ValuesCard key={`values-${document.updated_at}`} document={document} />
+    <PrivacySection key={`privacy-${document.updated_at}`} document={document} />
   </div>
 );

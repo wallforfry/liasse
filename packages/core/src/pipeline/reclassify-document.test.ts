@@ -224,10 +224,10 @@ describe('reclassifying a document', () => {
         schemaVersion: null,
         confidence: null,
         core: { reference: 'SYN-2026-001' },
-        fields: {},
         extra: { usage: 350, meter_id: 'PDL-1' },
         manualFields: ['reference'],
       });
+      expect(document.fields).toEqual({});
       expect(document.provenance).toMatchObject({
         reference: MANUAL_PROVENANCE,
         meter_id: EXTRACTED,
