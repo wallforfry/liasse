@@ -61,3 +61,4 @@ export {
   type TestDatabaseOptions,
 } from './test-database.ts';
 export { DEFAULT_TEST_DATABASE_URL } from './test-server.ts';
+export { privateTemplateName } from './test-template.ts';
