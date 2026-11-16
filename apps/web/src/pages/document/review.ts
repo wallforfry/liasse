@@ -1,4 +1,10 @@
-import type { DocumentCorrection, DocumentReview, DocumentView, ReviewedValue } from '@liasse/sdk';
+import type {
+  DocumentCorrection,
+  DocumentReclassification,
+  DocumentReview,
+  DocumentView,
+  ReviewedValue,
+} from '@liasse/sdk';
 import { plural } from '../../lib/format.ts';
 
 /** What the person decided of a doubtful value: as it is, cleared, or another value. */
@@ -10,6 +16,11 @@ export type ValueDecision =
 export interface ReviewDraft {
   /** The slug of the type, the current one unless the person changed it. */
   readonly type: string;
+  /**
+   * What the person knows about the document, when they ask the model for its type
+   * again instead of choosing one; null otherwise.
+   */
+  readonly reanalysis: string | null;
   /** By `valueKey`. A value without a decision is accepted. */
   readonly decisions: Readonly<Record<string, ValueDecision>>;
 }
@@ -38,10 +49,23 @@ export const editTextOf = (value: unknown): string =>
 
 export const draftOfReview = (document: DocumentView): ReviewDraft => ({
   type: document.type ?? '',
+  reanalysis: null,
   decisions: {},
 });
 
+/** The request a review that asks for the type again sends, or null for a correction. */
+export const reclassificationOf = ({
+  reanalysis,
+}: ReviewDraft): DocumentReclassification | null => {
+  if (reanalysis === null) return null;
+  const hint = reanalysis.trim();
+  return hint === '' ? {} : { hint };
+};
+
 export const percent = (confidence: number): string => `${String(Math.round(confidence * 100))}%`;
+
+export const confidenceLabel = (confidence: number | null): string =>
+  confidence === null ? 'confidence unknown' : `confidence ${percent(confidence)}`;
 
 /** Why the document is flagged, one sentence per reason. */
 export const reasonSentences = (
@@ -90,6 +114,18 @@ export const extractedAgain = (
   draft: ReviewDraft,
   document: DocumentView,
 ): boolean => value.section === 'fields' && draft.type.trim() !== (document.type ?? '');
+
+/** Why a value is read again rather than decided in this review; null when it is decided. */
+export const readAgainOf = (
+  value: ReviewedValue,
+  draft: ReviewDraft,
+  document: DocumentView,
+): string | null => {
+  if (draft.reanalysis !== null) return 'Will be read again once the type is analysed.';
+  return extractedAgain(value, draft, document)
+    ? 'Will be extracted again for the new type.'
+    : null;
+};
 
 interface Outcome {
   readonly confirm: Readonly<Record<string, unknown>>;

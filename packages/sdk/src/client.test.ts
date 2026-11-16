@@ -84,6 +84,7 @@ describe('createLiasseClient', () => {
       '/types': { types: [] },
       '/changes': { changes: [], truncated: false },
       '/changes/chg_01': { change: REJECTED_CHANGE, documents_to_reextract: 0 },
+      '/consolidation/runs': { queued: false },
     };
     const server = answering((url) => json(answers[new URL(url).pathname] ?? {}));
     const client = createLiasseClient({
@@ -98,13 +99,16 @@ describe('createLiasseClient', () => {
     expect(
       await client.decideChange('chg_01', { decision: 'reject', note: 'Not the same type.' }),
     ).toEqual({ change: REJECTED_CHANGE, documents_to_reextract: 0 });
+    expect(await client.requestConsolidationRun()).toEqual({ queued: false });
     expect(server.sent.map(({ url }) => url)).toEqual([
       'http://x.test/subjects?query=home&kind=contract',
       'http://x.test/entities?query=zirc&kind=org&limit=5&include_private=true',
       'http://x.test/types?status=stable&include_examples=true&include_private=false',
       'http://x.test/changes?kind=merge',
       'http://x.test/changes/chg_01',
+      'http://x.test/consolidation/runs',
     ]);
+    expect(server.sent[5]?.init?.method).toBe('POST');
     const decision = server.sent[4]?.init;
     expect(decision?.method).toBe('POST');
     expect(new Headers(decision?.headers).get('Content-Type')).toBe('application/json');
@@ -240,6 +244,7 @@ describe('createLiasseClient', () => {
     await expect(client.decideChange('chg_01', { decision: 'apply' })).rejects.toBeInstanceOf(
       LiasseResponseError,
     );
+    await expect(client.requestConsolidationRun()).rejects.toBeInstanceOf(LiasseResponseError);
   });
 
   it('rejects a body that is not JSON as a LiasseResponseError', async () => {

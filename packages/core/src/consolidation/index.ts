@@ -7,7 +7,7 @@ export {
   type PolicyResult,
 } from './apply-change.ts';
 export type { ConsolidationContext, ConsolidationReadContext } from './context.ts';
-export { applyChange, listChanges } from './features.ts';
+export { applyChange, listChanges, requestConsolidationRun } from './features.ts';
 export { CONSOLIDATION_CONCURRENCY, createConsolidationHandlers } from './handlers.ts';
 export {
   type ConsolidationChange,
@@ -28,5 +28,6 @@ export {
   type ConsolidationTrigger,
   nextNightlyRun,
   queueBatchRunIfDue,
+  queueManualRun,
   scheduleNightlyRun,
 } from './schedule.ts';

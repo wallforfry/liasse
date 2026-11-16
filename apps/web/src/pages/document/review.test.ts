@@ -3,8 +3,10 @@ import { describe, expect, it } from 'vitest';
 import {
   draftOfReview,
   otherValues,
+  readAgainOf,
   readReview,
   reasonSentences,
+  reclassificationOf,
   reviewedValues,
 } from './review.ts';
 
@@ -26,6 +28,7 @@ const DOCUMENT: DocumentView = {
   updated_at: '2026-11-15T10:00:00.000Z',
   schema_version: 1,
   hint: null,
+  analysis_pending: false,
   fields: { amount: 12.5, note: 'Synthetic note' },
 };
 
@@ -78,6 +81,7 @@ describe('the review of a document', () => {
   it('clears a rejected value and sets an edited one', () => {
     const draft = {
       type: 'invoice',
+      reanalysis: null,
       decisions: {
         'core.reference': { kind: 'edit', text: 'SYN-2' },
         'fields.amount': { kind: 'edit', text: '13.5' },
@@ -97,6 +101,7 @@ describe('the review of a document', () => {
   it('leaves the fields out when the type changes: they are extracted again for it', () => {
     const draft = {
       type: 'receipt',
+      reanalysis: null,
       decisions: { 'fields.amount': { kind: 'reject' }, 'core.iban': { kind: 'reject' } },
     } as const;
     expect(readReview(draft, DOCUMENT, REVIEW)).toEqual({
@@ -113,6 +118,7 @@ describe('the review of a document', () => {
     });
     const badJson = {
       type: 'invoice',
+      reanalysis: null,
       decisions: { 'fields.amount': { kind: 'edit', text: '{' } },
     } as const;
     expect(readReview(badJson, DOCUMENT, REVIEW)).toEqual({
@@ -121,6 +127,7 @@ describe('the review of a document', () => {
     });
     const emptyText = {
       type: 'invoice',
+      reanalysis: null,
       decisions: { 'core.reference': { kind: 'edit', text: ' ' } },
     } as const;
     expect(readReview(emptyText, DOCUMENT, REVIEW)).toEqual({
@@ -134,5 +141,35 @@ describe('the review of a document', () => {
       'Its confidence, 42%, is below the threshold of 70%.',
       '1 value the model read could not be checked against the text and was left out.',
     ]);
+  });
+
+  describe('asking for the type again', () => {
+    const asking = (reanalysis: string) => ({ ...draftOfReview(DOCUMENT), reanalysis });
+
+    it('sends the hint trimmed, none when it is blank, and no reclassification otherwise', () => {
+      expect(reclassificationOf(asking('  A water bill '))).toEqual({ hint: 'A water bill' });
+      expect(reclassificationOf(asking('  '))).toEqual({});
+      expect(reclassificationOf(draftOfReview(DOCUMENT))).toBeNull();
+    });
+
+    it('reads every value again, core and fields, instead of deciding it', () => {
+      const draft = asking('');
+      expect(readAgainOf(value('core', 'reference', true), draft, DOCUMENT)).toBe(
+        'Will be read again once the type is analysed.',
+      );
+      expect(readAgainOf(value('fields', 'amount', true), draft, DOCUMENT)).toBe(
+        'Will be read again once the type is analysed.',
+      );
+      expect(
+        readAgainOf(value('core', 'reference', true), draftOfReview(DOCUMENT), DOCUMENT),
+      ).toBeNull();
+      expect(
+        readAgainOf(
+          value('fields', 'amount', true),
+          { ...draftOfReview(DOCUMENT), type: 'receipt' },
+          DOCUMENT,
+        ),
+      ).toBe('Will be extracted again for the new type.');
+    });
   });
 });

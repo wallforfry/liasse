@@ -1,7 +1,7 @@
 import { changeDecisionResultSchema, changeListSchema } from '@liasse/contract';
 import { documents, jobs, typeChanges } from '@liasse/core/db';
 import { waitUntil } from '@liasse/core/testing';
-import { eq } from 'drizzle-orm';
+import { and, eq, sql } from 'drizzle-orm';
 import { describe, expect, it } from 'vitest';
 import { z } from 'zod';
 import { LETTER, NEW_CONTRACT, OLD_CONTRACT } from '../synthetic-documents.fixture.ts';
@@ -213,6 +213,26 @@ describe('the features the runtime binds', () => {
       changes: [],
       truncated: false,
     });
+  });
+
+  it('runs consolidation when a person asks for it', async () => {
+    const runtime = await start();
+    const manualRuns = () =>
+      harness
+        .database()
+        .db.select({ status: jobs.status })
+        .from(jobs)
+        .where(and(eq(jobs.kind, 'consolidate'), sql`${jobs.payload} ->> 'trigger' = 'manual'`));
+    const ask = async () => {
+      const response = await call(runtime, '/consolidation/runs', { method: 'POST' });
+      expect(response.status).toBe(202);
+      return response.json();
+    };
+    expect(await ask()).toEqual({ queued: true });
+    await waitUntil(async () => (await manualRuns()).every(({ status }) => status === 'succeeded'));
+    expect(await ask()).toEqual({ queued: true });
+    await waitUntil(async () => (await manualRuns()).every(({ status }) => status === 'succeeded'));
+    expect(await manualRuns()).toEqual([{ status: 'succeeded' }, { status: 'succeeded' }]);
   });
 
   it('lists and decides consolidation changes over MCP, as the routes answer', async () => {

@@ -5,6 +5,8 @@ export {
   changeListSchema,
   type ChangeView,
   changeViewSchema,
+  type ConsolidationRun,
+  consolidationRunSchema,
 } from './consolidation.ts';
 export {
   type DocumentEvent,

@@ -24,6 +24,7 @@ const DOCUMENT: DocumentView = {
   updated_at: '2026-11-15T10:00:00.000Z',
   schema_version: 1,
   hint: null,
+  analysis_pending: false,
   fields: { pages: 2, tags: ['a'] },
   manual_fields: ['issuer'],
 };
