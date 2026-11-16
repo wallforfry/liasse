@@ -84,9 +84,15 @@ export const renderApp = (
   };
 };
 
-/** Resolves once the text is in the page, however long rendering takes. */
-const untilShown = (text: string): Promise<void> =>
-  new Promise((resolve) => {
+const WARM_UP_TEXT = 'Most recent first.';
+// Only ends a warm-up that will never see its page, with a message that names it; the
+// hook is given more, so that this message, not the hook timeout, reports the failure.
+const WARM_UP_LIMIT_MILLISECONDS = 10_000;
+const WARM_UP_HOOK_TIMEOUT_MILLISECONDS = WARM_UP_LIMIT_MILLISECONDS + 5_000;
+
+/** Resolves once the text is in the page; rejects if it is still missing at the limit. */
+const untilShown = (text: string, limitMilliseconds: number): Promise<void> =>
+  new Promise((resolve, reject) => {
     const check = (): boolean => document.body.textContent.includes(text);
     if (check()) {
       resolve();
@@ -95,8 +101,17 @@ const untilShown = (text: string): Promise<void> =>
     const observer = new MutationObserver(() => {
       if (!check()) return;
       observer.disconnect();
+      clearTimeout(deadline);
       resolve();
     });
+    const deadline = setTimeout(() => {
+      observer.disconnect();
+      reject(
+        new Error(
+          `The warm-up render of the test helper never showed "${text}" within ${String(limitMilliseconds)} ms.`,
+        ),
+      );
+    }, limitMilliseconds);
     observer.observe(document.body, { childList: true, subtree: true, characterData: true });
   });
 
@@ -105,7 +120,7 @@ const untilShown = (text: string): Promise<void> =>
  * process and jsdom: without this, its first test pays inside its first `findBy*` for code
  * V8 has not compiled yet (React DOM, the router, the shell) and for jsdom loading and
  * parsing its default stylesheet on the first `getComputedStyle`, which a role query calls.
- * Waiting here is not bounded by Testing Library's 1 s, only by the hook timeout.
+ * Waiting here is not bounded by Testing Library's 1 s.
  */
 const warmUp = async (): Promise<void> => {
   const library = fakeServer((request) => {
@@ -116,9 +131,12 @@ const warmUp = async (): Promise<void> => {
     return undefined;
   });
   const { unmount } = renderApp('/documents', library.fetch);
-  await getConfig().asyncWrapper(() => untilShown('Most recent first.'));
-  screen.getByRole('heading', { name: 'Documents' });
-  unmount();
+  try {
+    await getConfig().asyncWrapper(() => untilShown(WARM_UP_TEXT, WARM_UP_LIMIT_MILLISECONDS));
+    screen.getByRole('heading', { name: 'Documents' });
+  } finally {
+    unmount();
+  }
 };
 
-beforeAll(warmUp);
+beforeAll(warmUp, WARM_UP_HOOK_TIMEOUT_MILLISECONDS);
