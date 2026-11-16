@@ -39,6 +39,10 @@ const TYPE_OUTCOME_REASONS: Readonly<Partial<Record<ClassificationOutcome, Settl
   untyped: 'type_untyped',
 };
 
+/** The reason the type alone flags a document: it got the closest type, or none. */
+export const typeReason = (type: TypeProvenance | undefined): SettlementReason | undefined =>
+  type === undefined || 'manual' in type ? undefined : TYPE_OUTCOME_REASONS[type.outcome];
+
 /**
  * Spec: below the threshold a document is flagged for review, and so is one that got
  * the closest type, or none, because a new type was refused or over quota. A confidence
@@ -49,12 +53,11 @@ export const settlementReasons = (
   type: TypeProvenance | undefined,
   threshold: number,
 ): readonly SettlementReason[] => {
-  const outcome = type === undefined || 'manual' in type ? undefined : type.outcome;
-  const typeReason = outcome === undefined ? undefined : TYPE_OUTCOME_REASONS[outcome];
+  const ofType = typeReason(type);
   return [
     ...(confidence === null ? ['type_pending_extraction' as const] : []),
     ...(confidence !== null && confidence < threshold ? ['low_confidence' as const] : []),
-    ...(typeReason === undefined ? [] : [typeReason]),
+    ...(ofType === undefined ? [] : [ofType]),
   ];
 };
 

@@ -149,7 +149,7 @@ describe('documents of the API', () => {
         threshold: 0.7,
         reasons: ['low_confidence'],
         rejected_values: 0,
-        type: { confidence: null, outcome: null, manual: false, doubtful: true },
+        type: { confidence: null, outcome: null, manual: false, doubtful: false },
         values: [
           {
             section: 'core',
@@ -163,7 +163,10 @@ describe('documents of the API', () => {
           },
         ],
       });
-      expect(await read(0.4)).toMatchObject({ reasons: [], values: [{ doubtful: false }] });
+      expect(await read(0.4)).toMatchObject({
+        reasons: ['flagged_at_settlement'],
+        values: [{ doubtful: false }],
+      });
     });
 
     it('returns the text by slices of characters', async () => {

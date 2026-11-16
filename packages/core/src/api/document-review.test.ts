@@ -109,7 +109,10 @@ describe('reviewDocument', () => {
       rejected_values: 2,
       type: { confidence: 0.95, outcome: 'existing', manual: false, doubtful: false },
     });
-    expect(reviewDocument(DOCUMENT, 0.4).reasons).toEqual(['rejected_values']);
+    expect(reviewDocument(DOCUMENT, 0.4).reasons).toEqual([
+      'flagged_at_settlement',
+      'rejected_values',
+    ]);
   });
 
   it.each([
@@ -138,9 +141,18 @@ describe('reviewDocument', () => {
     expect(review.type).toEqual({ confidence: null, outcome: null, manual: true, doubtful: false });
   });
 
-  it('gives no settlement reason for a document still on its way', () => {
-    const review = reviewDocument({ ...DOCUMENT, status: 'classified', confidence: null }, 0.7);
-    expect(review.reasons).toEqual(['rejected_values']);
+  it.each(['classified', 'indexed'] as const)('gives no reason for a %s document', (status) => {
+    const review = reviewDocument({ ...DOCUMENT, status, confidence: null }, 0.7);
+    expect(review.reasons).toEqual([]);
+    expect(review.rejected_values).toBe(2);
+  });
+
+  it('doubts a type by its outcome only, as the settlement does', () => {
+    const document = {
+      ...DOCUMENT,
+      provenance: { '@pipeline': { type: { ...EXISTING, confidence: 0.2 } } },
+    };
+    expect(reviewDocument(document, 0.7).type.doubtful).toBe(false);
   });
 
   it('marks a list manual only when every item is, and weighs a manual item at 1', () => {

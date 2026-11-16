@@ -1,7 +1,6 @@
 import type { DocumentReview, ReviewedValue } from '@liasse/contract';
 import {
   DOCUMENT_JOB_FAILURE_CODES,
-  SETTLED_STATUSES,
   type DocumentStatus,
   type ReviewReason,
   type ValueSection,
@@ -16,7 +15,7 @@ import {
   readPipelineProvenance,
   type TypeProvenance,
 } from '../domain/provenance.ts';
-import { meanConfidence, settlementReasons } from '../pipeline/confidence.ts';
+import { meanConfidence, settlementReasons, typeReason } from '../pipeline/confidence.ts';
 
 type Values = Readonly<Record<string, unknown>>;
 
@@ -102,42 +101,54 @@ const reviewedValues = (
     };
   });
 
-const reviewedType = (type: TypeProvenance | undefined, threshold: number) => {
-  if (type !== undefined && 'manual' in type) {
-    return { confidence: null, outcome: null, manual: true, doubtful: false };
-  }
-  const confidence = type?.confidence ?? null;
-  const outcome = type?.outcome ?? null;
-  return {
-    confidence,
-    outcome,
-    manual: false,
-    doubtful:
-      outcome === 'fallback' || outcome === 'untyped' || belowThreshold(confidence, threshold),
-  };
+// The type is in doubt by the rule that settles a document, nothing else: the confidence
+// of the classification already weighs on the confidence of the document.
+const reviewedType = (type: TypeProvenance | undefined) =>
+  type !== undefined && 'manual' in type
+    ? { confidence: null, outcome: null, manual: true, doubtful: false }
+    : {
+        confidence: type?.confidence ?? null,
+        outcome: type?.outcome ?? null,
+        manual: false,
+        doubtful: typeReason(type) !== undefined,
+      };
+
+// A document flagged by a rule or a threshold that no longer flags it, the threshold
+// having been raised since, still says it was flagged.
+const flagReasons = (
+  document: ReviewedDocument,
+  type: TypeProvenance | undefined,
+  threshold: number,
+): readonly ReviewReason[] => {
+  const reasons: readonly ReviewReason[] = [
+    ...settlementReasons(document.confidence, type, threshold),
+    ...(document.error === DOCUMENT_JOB_FAILURE_CODES.reextraction
+      ? ['reextraction_failed' as const]
+      : []),
+  ];
+  return reasons.length > 0 ? reasons : ['flagged_at_settlement'];
 };
 
 /**
  * Why a document is flagged, and how sure the pipeline is of its type and its values,
- * by the rule that settled it. A document still on its way has no reason yet.
+ * by the rule that settles a document and the current threshold. Only a document in
+ * `needs_review` has reasons: on any other, the flag is not, or no longer, raised.
  */
 export const reviewDocument = (document: ReviewedDocument, threshold: number): DocumentReview => {
   const pipeline = readPipelineProvenance(document.provenance);
   const rejected = pipeline.extraction?.rejected_values ?? 0;
-  const reasons: readonly ReviewReason[] = [
-    ...(SETTLED_STATUSES.includes(document.status)
-      ? settlementReasons(document.confidence, pipeline.type, threshold)
-      : []),
-    ...(document.error === DOCUMENT_JOB_FAILURE_CODES.reextraction
-      ? ['reextraction_failed' as const]
-      : []),
-    ...(rejected > 0 ? ['rejected_values' as const] : []),
-  ];
+  const reasons: readonly ReviewReason[] =
+    document.status === 'needs_review'
+      ? [
+          ...flagReasons(document, pipeline.type, threshold),
+          ...(rejected > 0 ? ['rejected_values' as const] : []),
+        ]
+      : [];
   return {
     threshold,
     reasons: [...reasons],
     rejected_values: rejected,
-    type: reviewedType(pipeline.type, threshold),
+    type: reviewedType(pipeline.type),
     values: [
       ...reviewedValues('core', document.core, document.provenance, threshold),
       ...reviewedValues('fields', document.fields, document.provenance, threshold),

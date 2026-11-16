@@ -41,7 +41,8 @@ export type ClassificationOutcome = (typeof CLASSIFICATION_OUTCOMES)[number];
 
 // Why a settled document is flagged for review: its confidence is below the threshold,
 // or unknown until the extraction its new type owes; it got the closest type, or none;
-// its last re-extraction never succeeded. `rejected_values` tells that the model returned
+// its last re-extraction never succeeded; or it was flagged at settlement by a rule or a
+// threshold that no longer flags it. `rejected_values` tells that the model returned
 // values that were dropped, which weighs on the confidence.
 export const REVIEW_REASONS = [
   'low_confidence',
@@ -49,6 +50,7 @@ export const REVIEW_REASONS = [
   'type_fallback',
   'type_untyped',
   'reextraction_failed',
+  'flagged_at_settlement',
   'rejected_values',
 ] as const;
 export type ReviewReason = (typeof REVIEW_REASONS)[number];

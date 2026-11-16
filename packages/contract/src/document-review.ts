@@ -7,7 +7,7 @@ const reviewedTypeSchema = z.object({
   confidence: confidenceSchema.nullable().describe('Of the classification; null when unknown.'),
   outcome: z.enum(CLASSIFICATION_OUTCOMES).nullable(),
   manual: z.boolean().describe('The type was chosen by a person.'),
-  doubtful: z.boolean(),
+  doubtful: z.boolean().describe('The closest type, or none: a fallback or untyped outcome.'),
 });
 
 const reviewedValueSchema = z.object({
@@ -28,11 +28,15 @@ const reviewedValueSchema = z.object({
 export type ReviewedValue = z.output<typeof reviewedValueSchema>;
 
 // What a person needs to review a document: why it is flagged, and how sure the pipeline
-// is of its type and of each value. The rule is the server's: the threshold is the one
-// the document was settled with.
+// is of its type and of each value. The rule is the server's, with its current threshold.
 export const documentReviewSchema = z.object({
-  threshold: confidenceSchema.describe('`CONFIDENCE_THRESHOLD` of the server.'),
-  reasons: z.array(z.enum(REVIEW_REASONS)),
+  threshold: confidenceSchema.describe(
+    'The current `CONFIDENCE_THRESHOLD` of the server, which may differ from the one the ' +
+      'document was settled with.',
+  ),
+  reasons: z
+    .array(z.enum(REVIEW_REASONS))
+    .describe('Why the document is flagged; empty unless it is `needs_review`.'),
   rejected_values: z
     .int()
     .min(0)
