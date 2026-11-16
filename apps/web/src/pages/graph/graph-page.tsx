@@ -19,7 +19,7 @@ import {
 import { Skeleton } from '../../components/ui/skeleton.tsx';
 import { plural } from '../../lib/format.ts';
 import { GraphCanvas } from './graph-canvas.tsx';
-import { layoutGraph } from './graph-layout.ts';
+import { keptLayout, layoutGraph } from './graph-layout.ts';
 import { ALL_NODE_KINDS, neighborsOf, NODE_KIND_STYLES, visibleGraph } from './graph-model.ts';
 import { useGraph } from './graph-query.ts';
 import { NodeDetails } from './node-details.tsx';
@@ -65,8 +65,13 @@ const KindFilters = ({
 const GraphView = ({ graph }: { readonly graph: Graph }) => {
   const [kinds, setKinds] = useState<ReadonlySet<GraphNodeKind>>(ALL_NODE_KINDS);
   const [selectedId, setSelectedId] = useState<string | undefined>(undefined);
+  // Laid out once with every kind, so hiding one leaves the others where they are.
+  const fullLayout = useMemo(() => layoutGraph(graph.nodes, graph.edges), [graph]);
   const visible = useMemo(() => visibleGraph(graph, kinds), [graph, kinds]);
-  const layout = useMemo(() => layoutGraph(visible.nodes, visible.edges), [visible]);
+  const layout = useMemo(
+    () => keptLayout(fullLayout, ({ kind }) => kinds.has(kind)),
+    [fullLayout, kinds],
+  );
   const selected = visible.nodes.find(({ id }) => id === selectedId);
   const shown = graph.nodes.filter(({ kind }) => kind === 'document').length;
 

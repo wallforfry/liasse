@@ -50,6 +50,8 @@ const toViewBox = (svg: SVGSVGElement, clientX: number, clientY: number) => {
 export const usePanZoom = (svgRef: RefObject<SVGSVGElement | null>) => {
   const [viewport, setViewport] = useState<Viewport>(IDENTITY);
   const drag = useRef<{ readonly x: number; readonly y: number } | undefined>(undefined);
+  // Whether the last press on the background moved the view: its click is no selection.
+  const moved = useRef(false);
 
   useEffect(() => {
     const svg = svgRef.current;
@@ -70,6 +72,7 @@ export const usePanZoom = (svgRef: RefObject<SVGSVGElement | null>) => {
     onPointerDown: (event: PointerEvent<SVGSVGElement>) => {
       if (event.target !== event.currentTarget || svgRef.current === null) return;
       drag.current = toViewBox(svgRef.current, event.clientX, event.clientY);
+      moved.current = false;
       event.currentTarget.setPointerCapture(event.pointerId);
     },
     onPointerMove: (event: PointerEvent<SVGSVGElement>) => {
@@ -78,6 +81,7 @@ export const usePanZoom = (svgRef: RefObject<SVGSVGElement | null>) => {
       const point = toViewBox(svgRef.current, event.clientX, event.clientY);
       if (point === undefined) return;
       drag.current = point;
+      moved.current ||= point.x !== start.x || point.y !== start.y;
       setViewport((current) => ({
         ...current,
         x: current.x + point.x - start.x,
@@ -92,6 +96,7 @@ export const usePanZoom = (svgRef: RefObject<SVGSVGElement | null>) => {
   return {
     viewport,
     handlers,
+    panned: () => moved.current,
     zoomBy: (factor: number, center: { readonly x: number; readonly y: number }) => {
       setViewport((current) => zoomedAt(current, center, factor));
     },

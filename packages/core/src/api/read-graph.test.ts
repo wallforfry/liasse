@@ -23,6 +23,7 @@ describe('readGraph', () => {
       | 'parent'
       | 'type'
       | 'vendor'
+      | 'insider'
       | 'home'
       | 'hidden'
       | 'contract'
@@ -64,6 +65,9 @@ describe('readGraph', () => {
         .values({ kind: 'vehicle', canonicalName: 'Synthetic van', private: true })
         .returning(),
     );
+    const insider = inserted(
+      await db.insert(entities).values({ kind: 'person', canonicalName: 'Jane Doe' }).returning(),
+    );
     const by = { entity_id: vendor.id, match: 'name', confidence: 0.99 };
     const contract = await insertSyntheticDocument(db, {
       title: 'Synthetic contract',
@@ -75,7 +79,11 @@ describe('readGraph', () => {
       typeId: type.id,
       subjectIds: [home.id, hidden.id],
     });
-    const secret = await insertSyntheticDocument(db, { private: true, subjectIds: [hidden.id] });
+    const secret = await insertSyntheticDocument(db, {
+      private: true,
+      subjectIds: [hidden.id],
+      provenance: { recipient: { entity_id: insider.id, match: 'name', confidence: 0.99 } },
+    });
     const tombstone = await insertSyntheticDocument(db, { status: TOMBSTONE_STATUS });
     await db.insert(documentLinks).values([
       { fromDocumentId: amendment.id, toDocumentId: contract.id, kind: 'amends' },
@@ -85,6 +93,7 @@ describe('readGraph', () => {
       parent: parent.id,
       type: type.id,
       vendor: vendor.id,
+      insider: insider.id,
       home: home.id,
       hidden: hidden.id,
       contract: contract.id,
@@ -133,12 +142,13 @@ describe('readGraph', () => {
     const graph = await readGraph({ db: database.db }, { include_private: true });
     const nodeIds = graph.nodes.map(({ id }) => id);
     expect(graph.document_total).toBe(3);
-    expect(nodeIds).toEqual(expect.arrayContaining([ids.secret, ids.hidden]));
+    expect(nodeIds).toEqual(expect.arrayContaining([ids.secret, ids.hidden, ids.insider]));
     expect(nodeIds).not.toContain(ids.tombstone);
     expect(graph.edges).toEqual(
       expect.arrayContaining([
         { source: ids.secret, target: ids.contract, kind: 'replies_to' },
         { source: ids.secret, target: ids.hidden, kind: 'about' },
+        { source: ids.secret, target: ids.insider, kind: 'names' },
       ]),
     );
   });

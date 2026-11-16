@@ -86,7 +86,7 @@ const NodeMark = ({
 
 export const GraphCanvas = ({ layout, selectedId, onSelect }: GraphCanvasProps) => {
   const svgRef = useRef<SVGSVGElement>(null);
-  const { viewport, handlers, zoomBy, reset } = usePanZoom(svgRef);
+  const { viewport, handlers, panned, zoomBy, reset } = usePanZoom(svgRef);
   const focus = useMemo(() => focusOf(layout, selectedId), [layout, selectedId]);
   const { bounds } = layout;
   const center = { x: bounds.x + bounds.width / 2, y: bounds.y + bounds.height / 2 };
@@ -100,7 +100,7 @@ export const GraphCanvas = ({ layout, selectedId, onSelect }: GraphCanvasProps) 
         viewBox={`${String(bounds.x)} ${String(bounds.y)} ${String(bounds.width)} ${String(bounds.height)}`}
         className="h-[70vh] w-full cursor-grab touch-none active:cursor-grabbing"
         onClick={(event) => {
-          if (event.target === event.currentTarget) onSelect(undefined);
+          if (event.target === event.currentTarget && !panned()) onSelect(undefined);
         }}
         {...handlers}
       >

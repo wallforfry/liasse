@@ -50,16 +50,6 @@ const PADDING = 40;
 export const nodeRadius = (kind: GraphNode['kind'], degree: number): number =>
   kind === 'document' ? 5 : 7 + Math.min(12, Math.sqrt(degree) * 1.5);
 
-// d3-force places a node it finds on another one with its random source: a seeded one
-// gives the same graph the same layout at every render.
-const seededRandom = (seed: number): (() => number) => {
-  let state = seed;
-  return () => {
-    state = (Math.imul(state, 1664525) + 1013904223) >>> 0;
-    return state / 2 ** 32;
-  };
-};
-
 const degrees = (edges: readonly GraphEdge[]): ReadonlyMap<string, number> => {
   const counts = new Map<string, number>();
   for (const id of edges.flatMap(({ source, target }) => [source, target])) {
@@ -78,7 +68,10 @@ const boundsOf = (nodes: readonly PlacedNode[]): Bounds => {
   return { x, y, width: Math.max(...xs) + PADDING - x, height: Math.max(...ys) + PADDING - y };
 };
 
-/** Positions computed once, before the first paint: the graph does not move under the cursor. */
+/**
+ * Positions computed once, before the first paint: the graph does not move under the
+ * cursor. d3-force starts from a fixed spiral, so the same graph gets the same layout.
+ */
 export const layoutGraph = (
   nodes: readonly GraphNode[],
   allEdges: readonly GraphEdge[],
@@ -96,7 +89,6 @@ export const layoutGraph = (
     target,
   }));
   forceSimulation(bodies)
-    .randomSource(seededRandom(1))
     .force('charge', forceManyBody<Body>().strength(-60))
     .force(
       'link',
@@ -130,3 +122,13 @@ export const layoutGraph = (
   });
   return { nodes: placed, edges: placedEdges, bounds: boundsOf(placed) };
 };
+
+/** The nodes of the layout that `shown` keeps, and the edges between two of them, in place. */
+export const keptLayout = (
+  layout: GraphLayout,
+  shown: (node: GraphNode) => boolean,
+): GraphLayout => ({
+  ...layout,
+  nodes: layout.nodes.filter(({ node }) => shown(node)),
+  edges: layout.edges.filter(({ source, target }) => shown(source.node) && shown(target.node)),
+});
