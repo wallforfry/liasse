@@ -5,7 +5,8 @@ ARG NODE_VERSION=26
 FROM node:${NODE_VERSION}-bookworm-slim AS base
 ENV PNPM_HOME=/pnpm
 ENV PATH=$PNPM_HOME:$PATH
-RUN corepack enable
+# Node 25 stopped bundling corepack; it still reads the pnpm version of `packageManager`.
+RUN npm install --global corepack@0.36.0 && corepack enable
 WORKDIR /repo
 
 FROM base AS build
