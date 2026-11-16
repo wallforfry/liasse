@@ -7,6 +7,7 @@ const root = new URL('../../../', import.meta.url);
 // These run in the process of whoever installs them, so the runtime of the server does not
 // bind them: they keep a floor of their own.
 const CLIENT_PACKAGES: readonly string[] = ['@liasse/contract', '@liasse/sdk'];
+const CLIENT_NODE_RANGE = '>=22.12.0';
 
 const manifestSchema = z.object({
   name: z.string(),
@@ -39,11 +40,13 @@ describe('the Node range', () => {
     expect(serverSide.filter((manifest) => manifest.engines.node !== engines.node)).toEqual([]);
   });
 
-  it('is one floor shared by the client packages', async () => {
+  it('is the client floor in every client package', async () => {
     const clients = (await workspaceManifests()).filter((manifest) =>
       CLIENT_PACKAGES.includes(manifest.name),
     );
     expect(clients.map((manifest) => manifest.name).toSorted()).toEqual(CLIENT_PACKAGES);
-    expect(new Set(clients.map((manifest) => manifest.engines.node)).size).toBe(1);
+    expect(clients.map((manifest) => manifest.engines.node)).toEqual(
+      clients.map(() => CLIENT_NODE_RANGE),
+    );
   });
 });
