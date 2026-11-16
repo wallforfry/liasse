@@ -71,7 +71,7 @@ jobs:
             type=semver,pattern={{version}},value=${{ inputs.tag }}
             type=semver,pattern={{major}}.{{minor}},value=${{ inputs.tag }}
             type=edge,branch=main,enable=${{ !inputs.tag }}
-            type=sha,format=long
+            type=sha,format=long,enable=${{ !inputs.tag }}
       - uses: docker/build-push-action@v7
         with:
           context: .

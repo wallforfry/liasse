@@ -33,6 +33,15 @@ jobs:
           node-version-file: .nvmrc
           cache: pnpm
       - run: pnpm install --frozen-lockfile
+      # Before changesets/action, whose version script leaves the bumped versions uncommitted in
+      # the working tree; the script reads every file from commits anyway. It runs whether or not
+      # changesets are pending: GitHub cancels a pending run of the concurrency group when a newer
+      # one arrives, so the run of a version merge may never happen, and a later run must still
+      # release that version.
+      - id: tag
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: scripts/release-tag.sh >>"$GITHUB_OUTPUT"
       - id: changesets
         uses: changesets/action@v2.1.2
         with:
@@ -44,37 +53,6 @@ jobs:
 
             Signed-off-by: github-actions[bot] <41898282+github-actions[bot]@users.noreply.github.com>
           pr-title: 'chore(release): version packages'
-      # Runs whether or not changesets are pending: GitHub cancels a pending run of the
-      # concurrency group when a newer one arrives, so the run of the version merge may never
-      # happen, and the next run, with a new changeset, must still release that version.
-      - id: tag
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          version="$(node -p "require('./apps/server/package.json').version")"
-          tag="v$version"
-          if [ "$version" = 0.0.0 ] || git rev-parse -q --verify "refs/tags/$tag" >/dev/null; then
-            echo "Nothing to release: $tag is already tagged or no version was ever cut."
-            exit 0
-          fi
-          # The release is the commit that cut the version, never a later commit of main.
-          released="$(git log -1 --format=%H -G '"version":' -- apps/server/package.json)"
-          previous="$(git describe --tags --abbrev=0 --match 'v*' "$released" 2>/dev/null || git hash-object -t tree /dev/null)"
-          mapfile -t changelogs < <(git diff --name-only "$previous" "$released" -- '*CHANGELOG.md')
-          if [ "${#changelogs[@]}" -eq 0 ]; then
-            echo "No changelog changed up to $released, yet $tag is not tagged." >&2
-            exit 1
-          fi
-          mkdir "$RUNNER_TEMP/changelogs"
-          files=()
-          for changelog in "${changelogs[@]}"; do
-            file="$RUNNER_TEMP/changelogs/${changelog//\//_}"
-            git show "$released:$changelog" >"$file"
-            files+=("$file")
-          done
-          scripts/release-notes.sh "${files[@]}" >"$RUNNER_TEMP/notes.md"
-          gh release create "$tag" --target "$released" --title "$tag" --notes-file "$RUNNER_TEMP/notes.md"
-          echo "tag=$tag" >>"$GITHUB_OUTPUT"
 
   # A tag pushed with the workflow token starts no workflow, so the release publishes its image
   # itself.
