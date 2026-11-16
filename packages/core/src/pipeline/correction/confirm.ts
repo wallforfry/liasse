@@ -75,7 +75,11 @@ const confirmError = (
   return isDeepStrictEqual(stored, shown) ? [] : [{ ...valueChanged([field]), field }];
 };
 
-/** The values a person vouches for, each one the document holds as it was shown. */
+/**
+ * The values a person vouches for, each one the document holds as it was shown. The
+ * write checks the values again; checking them here as well refuses a stale request
+ * before the names of the correction are resolved, which can create entities.
+ */
 export const planConfirm = (
   confirm: Confirmations,
   corrected: readonly string[],

@@ -181,5 +181,54 @@ describe('the review panel', () => {
     await userEvent.setup().click(await screen.findByRole('button', { name: 'Submit review' }));
     expect(await screen.findByText('The correction was not saved')).toBeInTheDocument();
     expect(screen.getByText('There is no value "issuer" to confirm.')).toBeInTheDocument();
+    // Any other refusal leaves the document as it was read, and the card as it is.
+    const documentReads = server.requests.filter(
+      ({ method, path }) => method === 'GET' && path.startsWith('/documents/doc_01FLAGGED'),
+    );
+    expect(documentReads).toHaveLength(1);
+    expect(screen.queryByText(/The document changed since it was read/)).not.toBeInTheDocument();
+  });
+
+  it('reads the document again when a confirmed value changed since it was read', async () => {
+    const reads = { count: 0 };
+    const server = fakeServer((request) => {
+      if (request.method === 'PATCH') {
+        return json(
+          {
+            error: {
+              code: 'invalid_correction',
+              message: 'The correction was refused.',
+              request_id: 'req_synthetic',
+              errors: [
+                {
+                  code: 'value_changed',
+                  message: 'The value of "issuer" is no longer the one confirmed.',
+                },
+              ],
+            },
+          },
+          422,
+        );
+      }
+      if (!request.path.startsWith('/documents/doc_01FLAGGED')) return undefined;
+      reads.count += 1;
+      return json(
+        reads.count === 1
+          ? FLAGGED_DOCUMENT
+          : {
+              ...FLAGGED_DOCUMENT,
+              core: { ...FLAGGED_DOCUMENT.core, issuer: 'Issuer read again' },
+              updated_at: '2026-11-15T11:00:00.000Z',
+            },
+      );
+    });
+    renderApp('/documents/doc_01FLAGGED', server.fetch);
+    await userEvent.setup().click(await screen.findByRole('button', { name: 'Submit review' }));
+    expect(
+      await screen.findByText(
+        'The document changed since it was read. Its values were read again: review them again.',
+      ),
+    ).toBeInTheDocument();
+    expect((await screen.findAllByText('Issuer read again')).length).toBeGreaterThan(0);
   });
 });
