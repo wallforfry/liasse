@@ -1,6 +1,6 @@
 # @liasse/sdk
 
-TypeScript client for the REST API of [Liasse](https://github.com/wallforfry/liasse). Requests and answers are typed from the schemas the server validates with, and every answer is parsed against them before it reaches you. It relies on the global `fetch`, `FormData` and `Blob` of Node 22 or later, and installs nothing of the server: its only dependencies are `@liasse/contract`, the Zod schemas the server validates with, and `zod`.
+TypeScript client for the REST API of [Liasse](https://github.com/wallforfry/liasse). Requests and answers are typed from the schemas the server validates with, and every answer is parsed against them before it reaches you. It relies on the global `fetch`, `FormData` and `Blob` of Node 22.12 or later on the 22 line, 24.22.3 or later on the 24 line, or 26.5.1 or later (the `fetch` of earlier Node 24, 25 and 26 releases can end the process on a reset connection, nodejs/undici#5547), and installs nothing of the server: its only dependencies are `@liasse/contract`, the Zod schemas the server validates with, and `zod`.
 
 ```ts
 import { createLiasseClient, LiasseApiError } from '@liasse/sdk';
