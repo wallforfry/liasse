@@ -1,6 +1,7 @@
 import { screen, waitFor, within } from '@testing-library/react';
 import { userEvent } from '@testing-library/user-event';
 import { describe, expect, it } from 'vitest';
+import { POLL_MILLISECONDS } from '../../lib/processing.ts';
 import { fakeServer, json, jsonBody, renderApp } from '../../test/render.test-helper.tsx';
 
 const MARKUP = '<img src=x onerror="alert(1)"><b>bold</b>';
@@ -34,6 +35,7 @@ const FLAGGED_DOCUMENT = {
   updated_at: '2026-11-15T10:00:00.000Z',
   schema_version: 1,
   hint: null,
+  analysis_pending: false,
   fields: { note: 'Synthetic note' },
   text: { content: 'Synthetic text', offset: 0, total_length: 14, has_more: false },
   core: { issuer: `Issuer ${MARKUP}`, reference: 'SYN-1', amount: { amount: 12, currency: 'EUR' } },
@@ -230,5 +232,52 @@ describe('the review panel', () => {
       ),
     ).toBeInTheDocument();
     expect((await screen.findAllByText('Issuer read again')).length).toBeGreaterThan(0);
+  });
+
+  it('asks the model for the type again from the review, then follows the analysis to its end', async () => {
+    const isReclassify = (request: { readonly method: string; readonly path: string }) =>
+      request.method === 'POST' && request.path === '/documents/doc_01FLAGGED/reclassify';
+    const stage: { now: 'flagged' | 'asked' | 'done' } = { now: 'flagged' };
+    const server = fakeServer((request) => {
+      if (isReclassify(request)) {
+        stage.now = 'asked';
+        return json({ ...FLAGGED_DOCUMENT, analysis_pending: true }, 202);
+      }
+      if (!request.path.startsWith('/documents/doc_01FLAGGED')) return undefined;
+      if (stage.now === 'flagged') return json(FLAGGED_DOCUMENT);
+      if (stage.now === 'asked') {
+        // The job ends between this read and the next one.
+        stage.now = 'done';
+        return json({ ...FLAGGED_DOCUMENT, analysis_pending: true });
+      }
+      return json({
+        ...FLAGGED_DOCUMENT,
+        status: 'indexed',
+        type: 'water_bill',
+        updated_at: '2026-11-15T11:00:00.000Z',
+      });
+    });
+    renderApp('/documents/doc_01FLAGGED', server.fetch);
+    const user = userEvent.setup();
+    const typeDecision = await screen.findByRole('group', { name: 'Decision for the type' });
+    await user.click(within(typeDecision).getByRole('button', { name: 'Analyse again' }));
+    await user.type(screen.getByLabelText('What the document is (optional)'), ' A water bill ');
+    expect(screen.getAllByText('Will be read again once the type is analysed.')).toHaveLength(3);
+    const issuer = screen.getByRole('group', { name: 'Decision for issuer' });
+    expect(within(issuer).getByRole('button', { name: 'Accept' })).toBeDisabled();
+    await user.click(screen.getByRole('button', { name: 'Analyse the type again' }));
+    expect(await screen.findByText('The document is being analysed again')).toBeInTheDocument();
+    expect(jsonBody(server.requests.find(isReclassify))).toEqual({ hint: 'A water bill' });
+    expect(server.requests.some(({ method }) => method === 'PATCH')).toBe(false);
+    expect(screen.queryByText('To review')).toBeNull();
+    // The page reads the document again every POLL_MILLISECONDS while the analysis is pending.
+    expect(
+      await screen.findByText(
+        'The document was analysed again: its type is water_bill.',
+        {},
+        { timeout: POLL_MILLISECONDS * 2 },
+      ),
+    ).toBeInTheDocument();
+    expect(screen.queryByText('The document is being analysed again')).toBeNull();
   });
 });

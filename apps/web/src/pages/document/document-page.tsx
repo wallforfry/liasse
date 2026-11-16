@@ -1,3 +1,4 @@
+import type { DocumentView } from '@liasse/sdk';
 import { useQuery } from '@tanstack/react-query';
 import { ArrowLeftIcon } from 'lucide-react';
 import { Link, useParams } from 'react-router';
@@ -9,13 +10,15 @@ import { Button } from '../../components/ui/button.tsx';
 import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/card.tsx';
 import { Skeleton } from '../../components/ui/skeleton.tsx';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../../components/ui/tabs.tsx';
-import { pollWhileProcessing } from '../../lib/processing.ts';
+import { pollDocument } from '../../lib/processing.ts';
+import { AnalysisPending } from './analysis-pending.tsx';
 import { DeleteDocument } from './delete-document.tsx';
 import { DocumentDetails, DocumentText, OriginalFile, ValueTable } from './document-parts.tsx';
 import { EditTab } from './edit-tab.tsx';
 import { ProcessingLog } from './processing-log.tsx';
 import { RetryDocument } from './retry-document.tsx';
 import { ReviewPanel } from './review-panel.tsx';
+import { useAnalysisOutcome } from './use-analysis-outcome.ts';
 
 export const DocumentPage = () => {
   const client = useClient();
@@ -23,15 +26,18 @@ export const DocumentPage = () => {
   const document = useQuery({
     queryKey: ['document', id],
     queryFn: async () => client.getDocument(id, { include: ['fields', 'text', 'review'] }),
-    refetchInterval: (query) =>
-      pollWhileProcessing(query.state.data === undefined ? undefined : [query.state.data]),
+    refetchInterval: (query) => pollDocument(query.state.data),
   });
 
   if (document.isPending) return <Skeleton className="h-96 w-full" />;
   if (document.isError) {
     return <ErrorAlert error={document.error} title="The document could not be read" />;
   }
-  const view = document.data;
+  return <LoadedDocument view={document.data} />;
+};
+
+const LoadedDocument = ({ view }: { readonly view: DocumentView }) => {
+  useAnalysisOutcome(view);
   const name = view.title ?? view.original_name;
   return (
     <>
@@ -60,7 +66,8 @@ export const DocumentPage = () => {
         }
       />
       {view.summary === null ? null : <p className="text-sm leading-relaxed">{view.summary}</p>}
-      {view.status === 'needs_review' && view.review !== undefined ? (
+      {view.analysis_pending ? <AnalysisPending /> : null}
+      {view.status === 'needs_review' && view.review !== undefined && !view.analysis_pending ? (
         <ReviewPanel key={view.updated_at} document={view} review={view.review} />
       ) : null}
       <Tabs defaultValue="details">
@@ -107,8 +114,7 @@ export const DocumentPage = () => {
             </CardContent>
           </Card>
         </TabsContent>
-        {/* Kept mounted: leaving the tab must not end the follow-up of a type analysis. */}
-        <TabsContent value="edit" forceMount className="data-[state=inactive]:hidden">
+        <TabsContent value="edit">
           <EditTab document={view} />
         </TabsContent>
       </Tabs>

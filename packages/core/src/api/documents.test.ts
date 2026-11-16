@@ -3,6 +3,10 @@ import { eq } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { documentEvents } from '../db/schema/document-events.ts';
 import { documents } from '../db/schema/documents.ts';
+import { jobs } from '../db/schema/jobs.ts';
+import { enqueue } from '../jobs/enqueue.ts';
+import { detectLinksJob } from '../knowledge/jobs.ts';
+import { reclassifyDocumentJob } from '../pipeline/jobs.ts';
 import { type DocumentEventInput, recordDocumentEvent } from '../processing-log/record.ts';
 import { CORPUS } from '../search/corpus.fixture.ts';
 import { parseStorageKey } from '../storage/key.ts';
@@ -116,6 +120,24 @@ describe('documents of the API', () => {
       );
       expect(serialised).not.toContain(row?.storageKey);
       expect(serialised).not.toContain(row?.sha256);
+    });
+
+    it('says whether a job that rewrites its type or values is queued or running', async () => {
+      const { db } = harness.database;
+      const { id } = await insertSyntheticDocument(db, { status: 'needs_review', private: true });
+      const pending = async () => (await getDocument(harness.context, id)).analysis_pending;
+      expect(await pending()).toBe(false);
+      await enqueue(db, { kind: detectLinksJob, payload: { documentId: id } });
+      expect(await pending()).toBe(false);
+      const job = await enqueue(db, {
+        kind: reclassifyDocumentJob,
+        payload: { documentId: id, rejectedTypeId: null, newType: false },
+      });
+      expect(await pending()).toBe(true);
+      await db.update(jobs).set({ status: 'running' }).where(eq(jobs.id, job));
+      expect(await pending()).toBe(true);
+      await db.update(jobs).set({ status: 'succeeded' }).where(eq(jobs.id, job));
+      expect(await pending()).toBe(false);
     });
 
     it('adds the parts asked for', async () => {
