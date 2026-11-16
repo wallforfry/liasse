@@ -12,14 +12,14 @@ import { coreValueSchema } from '../../registry/values.ts';
 
 /**
  * `update_document`: a value sets a field, `null` clears it, an absent key leaves it. A
- * name in `confirm` keeps the value it has, which a person vouches for.
+ * name in `confirm`, with the value the person was shown, keeps that value as it is.
  */
 export const correctionInputSchema = z.strictObject({
   id: z.string().min(1),
   type: z.string().min(1).optional(),
   core: z.record(z.string(), z.unknown()).optional(),
   fields: z.record(z.string(), z.unknown()).optional(),
-  confirm: z.array(z.string().min(1)).optional(),
+  confirm: z.record(z.string().min(1), z.unknown()).optional(),
   private: z.boolean().optional(),
 });
 export type CorrectionInput = z.input<typeof correctionInputSchema>;
@@ -34,6 +34,7 @@ export const CORRECTION_ERROR_CODES = [
   'unsupported_field',
   'invalid_value',
   'unresolved_entity',
+  'value_changed',
 ] as const;
 
 export interface CorrectionError {
@@ -94,7 +95,7 @@ const unknownFields = (names: readonly string[], known: readonly string[]) =>
 const KEY_DATES_UNSUPPORTED: CorrectionError = {
   code: 'unsupported_field',
   field: KEY_DATES_FIELD,
-  message: `"${KEY_DATES_FIELD}" cannot be corrected or confirmed through this operation.`,
+  message: `"${KEY_DATES_FIELD}" cannot be corrected through this operation.`,
 };
 
 export const planCore = (patch: Readonly<Record<string, unknown>>): Planned<SectionPatch> => {
@@ -144,46 +145,3 @@ export const planFields = (
 };
 
 export const EMPTY_PATCH: SectionPatch = { set: {}, clear: [], entityNames: {} };
-
-interface ConfirmRequest {
-  readonly names: readonly string[];
-  /** The names the same request sets or clears, in `core` and in `fields`. */
-  readonly corrected: readonly string[];
-  /** The names that hold a value in the document, core and fields alike. */
-  readonly present: readonly string[];
-}
-
-const confirmError = (
-  field: string,
-  { corrected, present }: ConfirmRequest,
-): readonly CorrectionError[] => {
-  if (field === KEY_DATES_FIELD) return [KEY_DATES_UNSUPPORTED];
-  if (corrected.includes(field)) {
-    return [
-      {
-        code: 'invalid_input',
-        field,
-        message: `"${field}" is both confirmed and corrected: confirm its value or give it another one, not both.`,
-      },
-    ];
-  }
-  return present.includes(field)
-    ? []
-    : [
-        {
-          code: 'unknown_field',
-          field,
-          message:
-            present.length === 0
-              ? `There is no value "${field}" to confirm: the document has no value.`
-              : `There is no value "${field}" to confirm. The values of the document are: ${present.join(', ')}.`,
-        },
-      ];
-};
-
-/** The names a person vouches for, each of a value the document holds as it is. */
-export const planConfirm = (request: ConfirmRequest): Planned<readonly string[]> => {
-  const names = [...new Set(request.names)];
-  const errors = names.flatMap((name) => confirmError(name, request));
-  return errors.length > 0 ? { ok: false, errors } : { ok: true, value: names };
-};

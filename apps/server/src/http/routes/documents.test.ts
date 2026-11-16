@@ -440,7 +440,7 @@ describe('document routes', () => {
         ...jsonRequest('PATCH', {
           private: true,
           core: { reference: 'SYN-1' },
-          confirm: ['issuer'],
+          confirm: { issuer: 'Synthetic Power' },
         }),
         headers: {
           'Content-Type': 'application/json',
@@ -449,7 +449,7 @@ describe('document routes', () => {
       });
       expect(response.status).toBe(200);
       expect(received).toEqual([
-        { id, private: true, core: { reference: 'SYN-1' }, confirm: ['issuer'] },
+        { id, private: true, core: { reference: 'SYN-1' }, confirm: { issuer: 'Synthetic Power' } },
       ]);
       expect(await response.json()).toMatchObject({
         id,

@@ -10,6 +10,7 @@ import {
 } from '../domain/provenance.ts';
 import { deleteDocument } from '../ingest/delete-document.ts';
 import { createType } from '../registry/create-type.ts';
+import { createGate } from '../testing/async.ts';
 import { createFakeEmbedder } from '../testing/fake-embedder.ts';
 import { insertSyntheticDocument } from '../testing/fixtures.ts';
 import { correctDocument } from './correct-document.ts';
@@ -215,7 +216,11 @@ describe('correctDocument', () => {
       const before = await harness.document(id);
       const result = await correctDocument(harness.deps(), {
         id,
-        confirm: ['issuer', 'meter_id', 'parties'],
+        confirm: {
+          issuer: 'Old Issuer',
+          meter_id: SYNTHETIC_IBAN_MASKED,
+          parties: ['Old Issuer', 'Jane Synthetic'],
+        },
       });
       const document = await harness.document(id);
       expect(result).toMatchObject({ ok: true, value: { status: 'indexed' } });
@@ -245,7 +250,7 @@ describe('correctDocument', () => {
         id,
         type: 'energy_bill',
         core: { reference: 'SYN-2' },
-        confirm: ['meter_id'],
+        confirm: { meter_id: 'PDL-1' },
       });
       const document = await harness.document(id);
       expect(document).toMatchObject({
@@ -262,16 +267,17 @@ describe('correctDocument', () => {
     });
 
     it.each([
-      ['a name without a value', { confirm: ['due_date'] }, 'unknown_field'],
-      ['key dates', { confirm: ['key_dates'] }, 'unsupported_field'],
+      ['a name without a value', { confirm: { due_date: '2026-10-18' } }, 'unknown_field'],
+      ['key dates', { confirm: { key_dates: [] } }, 'unsupported_field'],
+      ['a value other than the one stored', { confirm: { reference: 'SYN-9' } }, 'value_changed'],
       [
         'a name the request also sets',
-        { core: { reference: 'SYN-2' }, confirm: ['reference'] },
+        { core: { reference: 'SYN-2' }, confirm: { reference: 'SYN-1' } },
         'invalid_input',
       ],
       [
         'a name the request also clears',
-        { fields: { meter_id: null }, confirm: ['meter_id'] },
+        { fields: { meter_id: null }, confirm: { meter_id: 'PDL-1' } },
         'invalid_input',
       ],
     ])('refuses %s and writes nothing', async (_case, patch, code) => {
@@ -283,6 +289,46 @@ describe('correctDocument', () => {
       expect(await harness.document(id)).toEqual(before);
       expect(await queued()).toEqual([]);
     });
+
+    // Between the read the confirmation is planned on and the write, another writer (a
+    // re-extraction) changes the value: the person never saw the new one.
+    it.each([
+      ['changes', { reference: 'SYN-EXTRACTED-AGAIN' }],
+      ['disappears', {}],
+    ])(
+      'refuses a confirmed value that %s before the write, and writes nothing',
+      async (_case, core) => {
+        const type = await bill();
+        const id = await settled(type.id);
+        const planned = createGate();
+        const changed = createGate();
+        const interleaved: typeof harness.entities = {
+          ...harness.entities,
+          withLock: async (executor, work) => {
+            planned.open();
+            await changed.opened;
+            return harness.entities.withLock(executor, work);
+          },
+        };
+        const correcting = correctDocument(harness.deps({ entities: interleaved }), {
+          id,
+          confirm: { reference: 'SYN-1' },
+        });
+        await planned.opened;
+        await harness.db
+          .update(documents)
+          .set({ core: { ...core, issuer: 'Old Issuer' } })
+          .where(eq(documents.id, id));
+        const before = await harness.document(id);
+        changed.open();
+        expect(await correcting).toMatchObject({
+          ok: false,
+          errors: [{ code: 'value_changed' }],
+        });
+        expect(await harness.document(id)).toEqual(before);
+        expect(await queued()).toEqual([]);
+      },
+    );
   });
 
   it('refuses fields for a document without a type', async () => {

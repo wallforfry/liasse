@@ -6,13 +6,18 @@ import { enqueue } from '../jobs/enqueue.ts';
 import { resolveType } from '../registry/read-types.ts';
 import { findTypeById, type RegisteredType } from '../registry/type-store.ts';
 import { entitiesOf, maskOf } from './bindings.ts';
-import { applyCorrection, type Correction, holdsConfirmed } from './correction/apply.ts';
+import { applyCorrection, type Correction } from './correction/apply.ts';
+import {
+  changedConfirmations,
+  type Confirmations,
+  planConfirm,
+  valueChanged,
+} from './correction/confirm.ts';
 import {
   type CorrectionError,
   correctionInputSchema,
   type CorrectionRequest,
   EMPTY_PATCH,
-  planConfirm,
   planCore,
   planFields,
   type Planned,
@@ -66,7 +71,13 @@ const planFieldsFor = (
 const entityNames = (...patches: readonly SectionPatch[]): readonly string[] =>
   patches.flatMap(({ entityNames: names }) => Object.values(names).flat());
 
-type Applied = PipelineDocument | 'stale' | undefined;
+// A confirmation of a value that changed since it was read is refused, never retried: the
+// person vouched for the value they saw, not for the one stored now.
+interface Changed {
+  readonly changed: readonly string[];
+}
+
+type Applied = PipelineDocument | 'stale' | Changed | undefined;
 
 // A settled document is indexed again, since its chunks carry its title and its type
 // and obey its `private` flag; after a change of type its fields are extracted again
@@ -80,9 +91,10 @@ const apply = (
     const outcome = await writeIfLive(locked, read.id, async (tx): Promise<Applied> => {
       const stored = await loadDocument(tx, read.id);
       if (stored === undefined) return undefined;
+      const changed = changedConfirmations(stored, correction.confirm);
+      if (changed.length > 0) return { changed };
       const { type } = correction;
       if (stored.typeId !== read.typeId) return 'stale';
-      if (!holdsConfirmed(stored, correction.confirm)) return 'stale';
       if (type !== undefined && !(await isCurrentType(tx, type))) return 'stale';
       // The ids this correction brings in: those the document already holds are kept
       // true by the merges themselves.
@@ -109,23 +121,20 @@ const apply = (
 interface PlannedSections {
   readonly core: SectionPatch;
   readonly fields: SectionPatch;
-  readonly confirm: readonly string[];
+  readonly confirm: Confirmations;
 }
 
 // Every refusal at once, so the person fixes the whole request in one go.
 const planSections = (
-  { core: corePatch, fields: fieldsPatch, confirm = [] }: CorrectionRequest,
+  { core: corePatch, fields: fieldsPatch, confirm = {} }: CorrectionRequest,
   document: PipelineDocument,
   type: RegisteredType | undefined,
 ): Planned<PlannedSections> => {
   const core =
     corePatch === undefined ? { ok: true as const, value: EMPTY_PATCH } : planCore(corePatch);
   const fields = planFieldsFor(fieldsPatch, type);
-  const confirmed = planConfirm({
-    names: confirm,
-    corrected: [...Object.keys(corePatch ?? {}), ...Object.keys(fieldsPatch ?? {})],
-    present: [...Object.keys(document.core), ...Object.keys(document.fields)],
-  });
+  const corrected = [...Object.keys(corePatch ?? {}), ...Object.keys(fieldsPatch ?? {})];
+  const confirmed = planConfirm(confirm, corrected, document);
   return core.ok && fields.ok && confirmed.ok
     ? { ok: true, value: { core: core.value, fields: fields.value, confirm: confirmed.value } }
     : refused(
@@ -193,7 +202,9 @@ export const correctDocument = async (
       maskSensitive: maskOf(deps),
     });
     if (applied === undefined) return refused(NOT_FOUND(id));
-    if (applied !== 'stale') return { ok: true, value: applied };
+    if (applied === 'stale') continue;
+    if ('changed' in applied) return refused(valueChanged(applied.changed));
+    return { ok: true, value: applied };
   }
   throw new PipelineConflictError(id);
 };

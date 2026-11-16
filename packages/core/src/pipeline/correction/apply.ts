@@ -1,9 +1,7 @@
 import { DOCUMENT_JOB_FAILURE_CODES } from '@liasse/contract/domain';
 import { ownValue } from '@liasse/contract/registry';
 import {
-  entityProvenanceSchema,
   MANUAL_PROVENANCE,
-  manualEntityProvenanceSchema,
   MANUAL_TYPE_FIELD,
   PIPELINE_PROVENANCE_KEY,
   readPipelineProvenance,
@@ -14,6 +12,7 @@ import type { PipelineDocument } from '../document.ts';
 import { type EntityResolutions, mentionKey } from '../extract/entities.ts';
 import { maskDeep } from '../extract/masking.ts';
 import { moveFields } from './move-fields.ts';
+import { type Confirmations, confirmedEntries } from './confirm.ts';
 import type { SectionPatch } from './plan.ts';
 
 type Values = Readonly<Record<string, unknown>>;
@@ -25,8 +24,8 @@ export interface Correction {
   readonly typeChanged: boolean;
   readonly core: SectionPatch;
   readonly fields: SectionPatch;
-  /** Names of values a person vouches for as they are, in the core or the fields. */
-  readonly confirm: readonly string[];
+  /** Values a person vouches for as they were shown, in the core or the fields. */
+  readonly confirm: Confirmations;
   readonly private: boolean | undefined;
   readonly resolutions: EntityResolutions;
   readonly maskSensitive: MaskSensitive;
@@ -64,37 +63,6 @@ const manualEntries = (patch: SectionPatch, resolutions: EntityResolutions): Val
     ]),
   );
 
-// A confirmed value is not rewritten: its entry only gains the mark of a person, and an
-// entity name keeps the entity it was resolved to.
-const confirmedItem = (entry: unknown): unknown => {
-  if (manualEntityProvenanceSchema.safeParse(entry).success) return entry;
-  const entity = entityProvenanceSchema.safeParse(entry);
-  return entity.success ? { ...entity.data, ...MANUAL_PROVENANCE } : MANUAL_PROVENANCE;
-};
-
-const confirmedEntry = (value: unknown, entry: unknown): unknown =>
-  Array.isArray(value)
-    ? value.map((_, index) => confirmedItem(Array.isArray(entry) ? entry[index] : undefined))
-    : confirmedItem(entry);
-
-const confirmedEntries = (stored: PipelineDocument, names: readonly string[]): Values =>
-  Object.fromEntries(
-    names.map((name) => [
-      name,
-      confirmedEntry(
-        ownValue(stored.core, name) ?? ownValue(stored.fields, name),
-        ownValue(stored.provenance, name),
-      ),
-    ]),
-  );
-
-/** False when a confirmed name holds no value in the document as it is now. */
-export const holdsConfirmed = (stored: PipelineDocument, names: readonly string[]): boolean =>
-  names.every(
-    (name) =>
-      ownValue(stored.core, name) !== undefined || ownValue(stored.fields, name) !== undefined,
-  );
-
 const masked = (mask: MaskSensitive, values: Values): Values =>
   Object.fromEntries(Object.entries(values).map(([name, value]) => [name, maskDeep(mask)(value)]));
 
@@ -121,7 +89,7 @@ const reviewed = (stored: PipelineDocument, correction: Correction, touched: num
 export const applyCorrection = (stored: PipelineDocument, correction: Correction) => {
   const { type, typeGiven, typeChanged, core, fields, resolutions, maskSensitive } = correction;
   const kept = typeChanged ? moveFields(stored, type) : stored;
-  const touched = [...namesOf(core), ...namesOf(fields), ...correction.confirm];
+  const touched = [...namesOf(core), ...namesOf(fields), ...Object.keys(correction.confirm)];
   const pipeline = readPipelineProvenance(stored.provenance);
   return {
     typeId: type?.id ?? null,

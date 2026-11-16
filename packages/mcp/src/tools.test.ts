@@ -384,7 +384,7 @@ describe('the tools of a bound feature', () => {
     ]);
   });
 
-  it('hands a correction its confirmed names', async () => {
+  it('hands a correction its confirmed values', async () => {
     const received: unknown[] = [];
     const id = await harness.addDocument([]);
     const client = await harness.connect({
@@ -396,10 +396,10 @@ describe('the tools of a bound feature', () => {
     const { isError } = await callTool(client, 'update_document', {
       id,
       type: 'note',
-      confirm: ['reference'],
+      confirm: { reference: 'SYN-1' },
     });
     expect(isError).toBe(false);
-    expect(received).toEqual([{ id, type: 'note', confirm: ['reference'] }]);
+    expect(received).toEqual([{ id, type: 'note', confirm: { reference: 'SYN-1' } }]);
   });
 
   it('answers internal_error for an unexpected failure, reported and never quoted', async () => {

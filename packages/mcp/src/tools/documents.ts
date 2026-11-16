@@ -59,9 +59,11 @@ const GET_STATUS_DESCRIPTION =
 
 const UPDATE_DESCRIPTION =
   'Corrects a document: its type, core values, fields, or its `private` flag. In `core` and ' +
-  '`fields`, a value sets a field and `null` clears it. `confirm` names core values or ' +
-  'fields that are right as they are: each keeps its value untouched and becomes manual, ' +
-  'without being sent back. Naming the type, even the current one, vouches for it. ' +
+  '`fields`, a value sets a field and `null` clears it. `confirm` maps core values or ' +
+  'fields that are right as they are to the value `get_document` gave for each: each keeps ' +
+  'its value, never rewritten, and becomes manual; a value that changed since is refused ' +
+  '(`value_changed`): read the document again. Naming the type, even the current one, ' +
+  'vouches for it. ' +
   'Correcting or confirming anything of the type, core or fields clears `needs_review`. A ' +
   'manual correction takes precedence: consolidation never overwrites it. Returns the ' +
   `corrected document with its fields and provenance. ${UNTRUSTED}`;

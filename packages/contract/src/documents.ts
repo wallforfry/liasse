@@ -151,11 +151,11 @@ export const documentCorrectionSchema = z.strictObject({
   core: jsonObjectSchema.optional(),
   fields: jsonObjectSchema.optional(),
   confirm: z
-    .array(z.string().min(1))
+    .record(z.string().min(1), z.unknown())
     .optional()
     .describe(
-      'Names of core values or fields a person vouches for as they are: kept untouched, ' +
-        'marked manual.',
+      'Core values or fields a person vouches for, each with the value as it was read: kept ' +
+        'untouched and marked manual; refused when the value changed since.',
     ),
   private: z.boolean().optional(),
 });
