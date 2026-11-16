@@ -7,6 +7,8 @@ export const TEST_EMBEDDING_DIM = 384;
 export interface TestDatabaseOptions {
   readonly embeddingDim?: number;
   readonly migrate?: boolean;
+  /** The template to copy; the shared one of `embeddingDim` by default. */
+  readonly template?: string;
 }
 
 export interface TestDatabase {
@@ -21,10 +23,11 @@ export interface TestDatabase {
 export const createTestDatabase = async ({
   embeddingDim = TEST_EMBEDDING_DIM,
   migrate: shouldMigrate = true,
+  template,
 }: TestDatabaseOptions = {}): Promise<TestDatabase> => {
   const name = newTestDatabaseName();
   await withAdmin(async (sql) => {
-    if (shouldMigrate) await createMigratedDatabase(sql, name, embeddingDim);
+    if (shouldMigrate) await createMigratedDatabase(sql, name, embeddingDim, template);
     else await sql.unsafe(`CREATE DATABASE ${name}`);
   });
   const url = urlOfDatabase(name);
