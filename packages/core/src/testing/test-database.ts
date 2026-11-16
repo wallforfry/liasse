@@ -4,12 +4,15 @@ import { newTestDatabaseName, urlOfDatabase, withAdmin } from './test-server.ts'
 
 export const TEST_EMBEDDING_DIM = 384;
 
-export interface TestDatabaseOptions {
-  readonly embeddingDim?: number;
-  readonly migrate?: boolean;
-  /** The template to copy; the shared one of `embeddingDim` by default. */
-  readonly template?: string;
-}
+// A database that is not migrated copies no template, so it takes none.
+export type TestDatabaseOptions =
+  | {
+      readonly embeddingDim?: number;
+      readonly migrate?: true;
+      /** The template to copy; the shared one of `embeddingDim` by default. */
+      readonly template?: string;
+    }
+  | { readonly embeddingDim?: number; readonly migrate: false; readonly template?: never };
 
 export interface TestDatabase {
   readonly url: string;

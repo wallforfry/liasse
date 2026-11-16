@@ -2,12 +2,16 @@ import { appendFileSync, cpSync, mkdtempSync, readFileSync, rmSync, writeFileSyn
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { sql } from 'drizzle-orm';
-import { afterAll, describe, expect, it } from 'vitest';
+import { afterAll, describe, expect, expectTypeOf, it } from 'vitest';
 import { z } from 'zod';
 import { installedEmbeddingDimensions } from '../db/embedding-dimension.ts';
 import { MIGRATIONS_FOLDER } from '../db/migrate.ts';
 import { readMigrationFiles } from '../db/migration-files.ts';
-import { createTestDatabase, type TestDatabase } from './test-database.ts';
+import {
+  createTestDatabase,
+  type TestDatabase,
+  type TestDatabaseOptions,
+} from './test-database.ts';
 import { databaseExists, withAdmin } from './test-server.ts';
 import { dropIdleTemplate, privateTemplateName, templateDatabaseName } from './test-template.ts';
 
@@ -129,6 +133,16 @@ describe('createTestDatabase from a template', () => {
       await copy.dispose();
     }
     expect(await withAdmin((admin) => dropIdleTemplate(admin, template))).toBe(true);
+  });
+});
+
+// Checked by `pnpm typecheck`, which compiles the test files.
+describe('TestDatabaseOptions', () => {
+  it('takes a template only for a database it migrates', () => {
+    expectTypeOf({ template }).toExtend<TestDatabaseOptions>();
+    expectTypeOf({ migrate: true as const, template }).toExtend<TestDatabaseOptions>();
+    expectTypeOf({ migrate: false as const }).toExtend<TestDatabaseOptions>();
+    expectTypeOf({ migrate: false as const, template }).not.toExtend<TestDatabaseOptions>();
   });
 });
 
