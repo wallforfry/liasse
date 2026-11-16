@@ -52,10 +52,12 @@ export const listTestServerDatabases = async (
       ageSeconds: age_seconds,
     }));
 
+const isTemplate = (name: string): boolean => name.startsWith(TEMPLATE_DATABASE_PREFIX);
+
 /**
  * Test databases nobody uses: no session, and old enough that no suite is still setting
- * them up. Templates are a cache, dropped whatever their age; a test that needs one again
- * builds it.
+ * them up. Templates are a cache, taken whatever their age: one is dropped once no copy of it
+ * remains, and a test that needs it again builds it.
  */
 export const leakedDatabases = (
   databases: readonly TestServerDatabase[],
@@ -64,14 +66,13 @@ export const leakedDatabases = (
   databases
     .filter(
       ({ name, connections, ageSeconds }) =>
-        connections === 0 &&
-        (name.startsWith(TEMPLATE_DATABASE_PREFIX) || ageSeconds >= minAgeSeconds),
+        connections === 0 && (isTemplate(name) || ageSeconds >= minAgeSeconds),
     )
     .map(({ name }) => name);
 
 export interface CleanResult {
   readonly dropped: readonly string[];
-  /** Taken by a session or a test between the listing and the drop. */
+  /** Taken by a session or a test between the listing and the drop, or a template with a copy. */
   readonly kept: readonly string[];
 }
 
@@ -82,7 +83,7 @@ const isObjectInUse = (error: unknown): boolean =>
 
 // Never `WITH (FORCE)`: a database someone connected to since the listing is kept.
 const dropLeaked = async (sql: AdminSql, name: string): Promise<boolean> => {
-  if (name.startsWith(TEMPLATE_DATABASE_PREFIX)) return dropIdleTemplate(sql, name);
+  if (isTemplate(name)) return dropIdleTemplate(sql, name);
   try {
     await sql.unsafe(`DROP DATABASE IF EXISTS ${name}`);
     return true;
@@ -98,7 +99,9 @@ export const dropTestDatabases = async (
 ): Promise<CleanResult> => {
   const dropped: string[] = [];
   const kept: string[] = [];
-  for (const name of names) {
+  // A leaked copy keeps its template: copies go first.
+  const ordered = [...names.filter((name) => !isTemplate(name)), ...names.filter(isTemplate)];
+  for (const name of ordered) {
     if (await dropLeaked(sql, name)) dropped.push(name);
     else kept.push(name);
   }
