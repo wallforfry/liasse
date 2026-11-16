@@ -54,7 +54,11 @@ export const AppSidebar = () => {
       <SidebarHeader>
         <SidebarMenu>
           <SidebarMenuItem>
-            <SidebarMenuButton asChild className="h-12" tooltip="Liasse">
+            <SidebarMenuButton
+              asChild
+              className="h-12 group-data-[collapsible=icon]:p-0!"
+              tooltip="Liasse"
+            >
               <Link to="/documents" onClick={closeOnMobile}>
                 <span className="flex size-8 shrink-0 items-center justify-center rounded-md bg-sidebar-primary text-sidebar-primary-foreground">
                   <FolderArchiveIcon className="size-4" />
