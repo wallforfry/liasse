@@ -3,6 +3,7 @@ import { StartupError } from '@liasse/core/domain';
 import { createRuntime } from './runtime/create-runtime.ts';
 import type { Transport } from './runtime/front.ts';
 import { installShutdown } from './shutdown.ts';
+import { assertSupportedRuntime } from './supported-runtime.ts';
 
 const transportOf = (args: readonly string[]): Transport => {
   if (args.length === 0) return 'http';
@@ -13,6 +14,7 @@ const transportOf = (args: readonly string[]): Transport => {
 };
 
 try {
+  assertSupportedRuntime();
   const runtime = await createRuntime(loadConfig(), {
     transport: transportOf(process.argv.slice(2)),
   });

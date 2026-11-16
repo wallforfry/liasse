@@ -11,7 +11,7 @@
   },
   "type": "module",
   "engines": {
-    "node": ">=22.12.0"
+    "node": "^22.12.0 || ^24.22.3 || >=26.5.1"
   },
   "exports": {
     "./corpus": "./src/corpus.ts",

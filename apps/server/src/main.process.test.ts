@@ -93,10 +93,14 @@ interface Launched {
 }
 
 // The real binary and the real entry point: a shim would not prove the signal wiring.
-const launch = (env: Readonly<Record<string, string>>): Launched => {
+const launch = (
+  env: Readonly<Record<string, string>>,
+  nodeOptions: readonly string[] = [],
+): Launched => {
   const child = spawn(
     process.execPath,
     [
+      ...nodeOptions,
       '--conditions=@liasse/source',
       '--experimental-strip-types',
       fileURLToPath(new URL('./main.ts', import.meta.url)),
@@ -362,6 +366,26 @@ describe('server process', () => {
       );
       expect(stderr()).not.toContain(password);
       expect(stderr()).not.toContain('    at ');
+      expect(stdout()).toBe('');
+    },
+    4 * STEP_TIMEOUT_MS,
+  );
+
+  it(
+    'refuses to start on a Node whose undici can end the process',
+    async () => {
+      const { child, stdout, stderr } = launch({ PORT: String(await freePort()) }, [
+        `--import=${fileURLToPath(new URL('./affected-undici.test-helper.ts', import.meta.url))}`,
+      ]);
+      const closed: readonly unknown[] = await once(child, 'close', {
+        signal: AbortSignal.timeout(STEP_TIMEOUT_MS),
+      }).finally(() => child.kill());
+      expect(closed[0]).toBe(1);
+      expect(stderr()).toBe(
+        'Liasse does not run on Node 24.18.0: its undici 7.28.0 can end the process on a reset ' +
+          'connection (nodejs/undici#5547). Use Node 22.12 or later on the 22 line, 24.22.3 or ' +
+          'later on the 24 line, or 26.5.1 or later.\n',
+      );
       expect(stdout()).toBe('');
     },
     4 * STEP_TIMEOUT_MS,
