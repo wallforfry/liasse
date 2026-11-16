@@ -2,6 +2,7 @@ import {
   changeDecisionResultSchema,
   changeDecisionSchema,
   changeListSchema,
+  consolidationRunSchema,
   createdTypeSchema,
   createTypeRequestSchema,
   describeTypesOptionsSchema,
@@ -21,6 +22,7 @@ import {
   listChanges,
   listEntities,
   listSubjects,
+  requestConsolidationRun,
   upcoming,
 } from '@liasse/core/api';
 import { Hono } from 'hono';
@@ -165,4 +167,17 @@ export const registryRoutes = ({ api, authenticated }: RouteDeps): Hono<AppEnv> 
         context.json(
           await applyChange(api, context.req.valid('param').id, context.req.valid('json')),
         ),
+    )
+    .post(
+      '/consolidation/runs',
+      operation({
+        summary: 'Ask for a consolidation run now',
+        tag: 'Registry',
+        responses: {
+          202: jsonResponse('Whether a run was queued.', consolidationRunSchema),
+          ...failures(501),
+        },
+      }),
+      authenticated,
+      async (context) => context.json(await requestConsolidationRun(api), 202),
     );
