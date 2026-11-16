@@ -1,4 +1,4 @@
-import { createHash } from 'node:crypto';
+import { createHash, randomBytes } from 'node:crypto';
 import { z } from 'zod';
 import { MIGRATIONS_FOLDER, migrate } from '../db/migrate.ts';
 import { readMigrationFiles } from '../db/migration-files.ts';
@@ -83,11 +83,14 @@ export const createMigratedDatabase = async (
   sql: AdminSql,
   name: string,
   embeddingDim: number,
+  template: string = templateDatabaseName(embeddingDim),
 ): Promise<void> => {
-  const template = templateDatabaseName(embeddingDim);
   const copied = await withTemplateLock(sql, template, 'shared', async () => {
     if (!(await databaseExists(sql, template))) return false;
     await sql.unsafe(`CREATE DATABASE ${name} TEMPLATE ${template}`);
+    // Postgres records no origin of a copy. Written under the same lock as the copy, so a
+    // drop that holds the lock alone sees every copy of the template.
+    await sql.unsafe(`COMMENT ON DATABASE ${name} IS '${template}'`);
     return true;
   });
   if (copied) return;
@@ -95,18 +98,42 @@ export const createMigratedDatabase = async (
     if (!(await databaseExists(sql, template))) await buildTemplate(sql, template, embeddingDim);
   });
   // `db:clean-test` may drop the template between the build and the copy.
-  await createMigratedDatabase(sql, name, embeddingDim);
+  await createMigratedDatabase(sql, name, embeddingDim, template);
 };
+
+/**
+ * A template name no other test run shares, for a test that drops or rebuilds its template:
+ * the template of `templateDatabaseName` is copied by every suite on the server at once.
+ */
+export const privateTemplateName = (embeddingDim: number): string =>
+  `${templateDatabaseName(embeddingDim)}_${randomBytes(4).toString('hex')}`;
 
 const lockedRows = z.tuple([z.object({ locked: z.boolean() })]);
 
-/** Drops a template unless a test is copying or building it; resolves to whether it did. */
+const copyRows = z.tuple([z.object({ copied: z.boolean() })]);
+
+const hasCopy = async (sql: AdminSql, template: string): Promise<boolean> => {
+  const [{ copied }] = copyRows.parse(
+    await sql`
+      SELECT EXISTS (
+        SELECT FROM pg_database WHERE shobj_description(oid, 'pg_database') = ${template}
+      ) AS copied
+    `,
+  );
+  return copied;
+};
+
+/**
+ * Drops a template unless a test is copying or building it, or a copy of it remains: the run
+ * that made the copy may still be making others. Resolves to whether it did.
+ */
 export const dropIdleTemplate = async (sql: AdminSql, template: string): Promise<boolean> => {
   const [{ locked }] = lockedRows.parse(
     await sql`SELECT pg_try_advisory_lock(hashtext(${template})) AS locked`,
   );
   if (!locked) return false;
   try {
+    if (await hasCopy(sql, template)) return false;
     await sql.unsafe(`DROP DATABASE IF EXISTS ${template}`);
     return true;
   } finally {
