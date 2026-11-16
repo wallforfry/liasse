@@ -1,11 +1,12 @@
 # syntax=docker/dockerfile:1
 
-ARG NODE_VERSION=22
+ARG NODE_VERSION=26
 
 FROM node:${NODE_VERSION}-bookworm-slim AS base
 ENV PNPM_HOME=/pnpm
 ENV PATH=$PNPM_HOME:$PATH
-RUN corepack enable
+# Node 25 stopped bundling corepack; it still reads the pnpm version of `packageManager`.
+RUN npm install --global corepack@0.36.0 && corepack enable
 WORKDIR /repo
 
 FROM base AS build
@@ -43,4 +44,7 @@ VOLUME ["/data"]
 EXPOSE 8080
 HEALTHCHECK --interval=30s --timeout=5s --start-period=60s --retries=3 \
     CMD ["node", "-e", "fetch(`http://127.0.0.1:${process.env.PORT}/health`).then((r) => process.exit(r.ok ? 0 : 1), () => process.exit(1))"]
-ENTRYPOINT ["node", "dist/main.js"]
+# Left to size the young generation itself, V8 of Node 26 keeps the idle server at about 160 MB,
+# over the 150 MB target of docs/spec.md. Measured by scripts/check-idle-memory.sh: 88 to 164 MB
+# with a semi-space of 16 MB, 97 to 126 MB with 8 MB.
+ENTRYPOINT ["node", "--max-semi-space-size=8", "dist/main.js"]

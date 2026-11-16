@@ -62,7 +62,9 @@ const packEntry = (entry: SyntheticZipEntry, localOffset: number): PackedEntry =
 };
 
 // Writes a ZIP archive by hand so that tests can also produce the malformed ones.
-export const buildSyntheticZip = (entries: readonly SyntheticZipEntry[]): Uint8Array => {
+export const buildSyntheticZip = (
+  entries: readonly SyntheticZipEntry[],
+): Uint8Array<ArrayBuffer> => {
   const packed = entries.reduce<readonly PackedEntry[]>(
     (done, entry) => [
       ...done,

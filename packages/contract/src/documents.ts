@@ -94,6 +94,11 @@ const pagesPartSchema = z.object({
 export const documentSchema = documentSummarySchema.extend({
   schema_version: z.int().nullable(),
   hint: z.string().nullable(),
+  analysis_pending: z
+    .boolean()
+    .describe(
+      'A job that rewrites the type or the values of the document, such as a reclassification or a re-extraction, is queued or running.',
+    ),
   fields: jsonObjectSchema.optional(),
   extra: jsonObjectSchema.optional(),
   manual_fields: z.array(z.string()).optional(),

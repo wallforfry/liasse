@@ -21,7 +21,7 @@ const list = z.object({
 });
 
 const form = (
-  file: Uint8Array | undefined,
+  file: Uint8Array<ArrayBuffer> | undefined,
   fields: Readonly<Record<string, string>> = {},
   filename = 'invoice.pdf',
 ): FormData => {

@@ -1,4 +1,4 @@
-import type { DocumentEvent, DocumentSummary } from '@liasse/sdk';
+import type { DocumentEvent, DocumentView } from '@liasse/sdk';
 import { useQuery } from '@tanstack/react-query';
 import { ErrorAlert } from '../../components/error-alert.tsx';
 import { Badge } from '../../components/ui/badge.tsx';
@@ -13,7 +13,7 @@ import {
 } from '../../components/ui/table.tsx';
 import { useClient } from '../../api/session.ts';
 import { formatTime, plural } from '../../lib/format.ts';
-import { pollWhileProcessing } from '../../lib/processing.ts';
+import { pollDocument } from '../../lib/processing.ts';
 
 type Outcome = DocumentEvent['outcome'];
 
@@ -96,14 +96,14 @@ const EventRow = ({ event }: { readonly event: DocumentEvent }) => (
 
 /**
  * The processing log of a document, oldest first, read again while the document is on
- * its way. A document processed before the log existed has none.
+ * its way or analysed again. A document processed before the log existed has none.
  */
-export const ProcessingLog = ({ document }: { readonly document: DocumentSummary }) => {
+export const ProcessingLog = ({ document }: { readonly document: DocumentView }) => {
   const client = useClient();
   const log = useQuery({
     queryKey: ['document-events', document.id],
     queryFn: async () => client.listDocumentEvents(document.id),
-    refetchInterval: () => pollWhileProcessing([document]),
+    refetchInterval: () => pollDocument(document),
   });
   if (log.isPending) return <Skeleton className="h-40 w-full" />;
   if (log.isError) {

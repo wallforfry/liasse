@@ -32,3 +32,13 @@ export const changeDecisionResultSchema = z.strictObject({
     .describe('Why the change could not be applied: it is rejected with this reason.'),
 });
 export type ChangeDecisionResult = z.output<typeof changeDecisionResultSchema>;
+
+export const consolidationRunSchema = z.strictObject({
+  queued: z
+    .boolean()
+    .describe(
+      'Whether a run was queued. False when a run due at once was already waiting: that one ' +
+        'does the same work.',
+    ),
+});
+export type ConsolidationRun = z.output<typeof consolidationRunSchema>;

@@ -4,7 +4,12 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { jobs } from '../db/schema/jobs.ts';
 import { insertSyntheticDocument } from '../testing/fixtures.ts';
 import { createTestDatabase, type TestDatabase } from '../testing/test-database.ts';
-import { nextNightlyRun, queueBatchRunIfDue, scheduleNightlyRun } from './schedule.ts';
+import {
+  nextNightlyRun,
+  queueBatchRunIfDue,
+  queueManualRun,
+  scheduleNightlyRun,
+} from './schedule.ts';
 
 describe('when consolidation runs', () => {
   let database: TestDatabase;
@@ -83,5 +88,55 @@ describe('when consolidation runs', () => {
     expect(await queueBatchRunIfDue(db())).toBe(false);
     await settle(CONSOLIDATION_BATCH_DOCUMENTS);
     expect(await queueBatchRunIfDue(db())).toBe(true);
+  });
+
+  it('queues a manual run at once, beside the nightly one, and one only', async () => {
+    const now = new Date('2026-11-14T12:00:00Z');
+    await scheduleNightlyRun(db(), now);
+    expect(await Promise.all([queueManualRun(db()), queueManualRun(db())])).toEqual(
+      expect.arrayContaining([true, false]),
+    );
+    const queued = await runs();
+    expect(queued.map(({ payload }) => payload)).toEqual([
+      { trigger: 'nightly' },
+      { trigger: 'manual' },
+    ]);
+    expect(queued[1]?.runAfter.getTime()).toBeLessThanOrEqual(Date.now());
+  });
+
+  it('leaves a manual run to a batch run already queued, not to one in progress', async () => {
+    await settle(CONSOLIDATION_BATCH_DOCUMENTS);
+    expect(await queueBatchRunIfDue(db())).toBe(true);
+    expect(await queueManualRun(db())).toBe(false);
+    await db().update(jobs).set({ status: 'running' }).where(eq(jobs.kind, 'consolidate'));
+    expect(await queueManualRun(db())).toBe(true);
+    expect((await runs()).map(({ payload, status }) => [payload, status])).toEqual([
+      [{ trigger: 'batch' }, 'running'],
+      [{ trigger: 'manual' }, 'queued'],
+    ]);
+  });
+
+  it('leaves a batch run to a queued manual run, and a manual run to a deferred one', async () => {
+    await db()
+      .insert(jobs)
+      .values({
+        kind: 'consolidate',
+        payload: { trigger: 'manual' },
+        runAfter: new Date(Date.now() + 60 * 60 * 1000),
+      });
+    expect(await queueManualRun(db())).toBe(false);
+    await settle(CONSOLIDATION_BATCH_DOCUMENTS);
+    expect(await queueBatchRunIfDue(db())).toBe(false);
+  });
+
+  it('does not leave a manual run to a batch run waiting for its retry', async () => {
+    await db()
+      .insert(jobs)
+      .values({
+        kind: 'consolidate',
+        payload: { trigger: 'batch' },
+        runAfter: new Date(Date.now() + 60 * 60 * 1000),
+      });
+    expect(await queueManualRun(db())).toBe(true);
   });
 });

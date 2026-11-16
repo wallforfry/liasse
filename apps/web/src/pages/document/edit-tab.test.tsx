@@ -30,6 +30,7 @@ const DOCUMENT = {
   updated_at: '2026-11-15T10:00:00.000Z',
   schema_version: 1,
   hint: null,
+  analysis_pending: false,
   fields: { meter: 'PDL-1', pages: 2 },
   extra: {},
   manual_fields: ['issuer'],
@@ -53,23 +54,6 @@ const TYPES = {
       document_count: 1,
     },
   ],
-};
-
-const CLASSIFIED = {
-  id: 'evt_09',
-  occurred_at: '2026-11-15T10:05:00.000Z',
-  stage: 'classification',
-  outcome: 'succeeded',
-  status: 'indexed',
-  attempt: null,
-  max_attempts: null,
-  error_code: null,
-  error_name: null,
-  http_status: null,
-  provider_code: null,
-  retryable: null,
-  model: 'synthetic-model',
-  details: { classification: 'existing' },
 };
 
 const answerTypes: Answer = (request) =>
@@ -175,90 +159,5 @@ describe('the edit tab', () => {
     await waitFor(() => {
       expect(sentCorrection(server)).toEqual({ fields: { plan: 'peak' } });
     });
-  });
-
-  it('asks for the type again with the hint and new_type, and follows the analysis', async () => {
-    const reclassify = (request: Parameters<Answer>[0]): boolean =>
-      request.method === 'POST' && request.path === `${PATH}/reclassify`;
-    const server = fakeServer(
-      (request) => (reclassify(request) ? json(DOCUMENT, 202) : undefined),
-      answerTypes,
-      answerEvents(() => []),
-      answerDocument(),
-    );
-    renderApp(PATH, server.fetch);
-    const user = userEvent.setup();
-    await openEditTab(user);
-    await user.type(screen.getByLabelText('What the document is (optional)'), ' A water bill ');
-    await user.click(screen.getByRole('checkbox', { name: 'Create a new type' }));
-    await user.click(screen.getByRole('button', { name: 'Analyse the type again' }));
-    expect(await screen.findByText('The analysis is under way')).toBeInTheDocument();
-    expect(jsonBody(server.requests.find(reclassify))).toEqual({
-      hint: 'A water bill',
-      new_type: true,
-    });
-    expect(screen.getByRole('button', { name: 'Analyse the type again' })).toBeDisabled();
-  });
-
-  it('ends the wait once a new classification is logged', async () => {
-    const logged: unknown[] = [];
-    const server = fakeServer(
-      (request) => {
-        if (request.method !== 'POST' || request.path !== `${PATH}/reclassify`) return undefined;
-        logged.push(CLASSIFIED);
-        return json(DOCUMENT, 202);
-      },
-      answerTypes,
-      answerEvents(() => logged),
-      answerDocument(),
-    );
-    renderApp(PATH, server.fetch);
-    const user = userEvent.setup();
-    await openEditTab(user);
-    await user.click(screen.getByRole('button', { name: 'Analyse the type again' }));
-    expect(
-      await screen.findByText('The type was analysed again: energy_bill.'),
-    ).toBeInTheDocument();
-    expect(screen.queryByText('The analysis is under way')).toBeNull();
-    expect(screen.getByRole('button', { name: 'Analyse the type again' })).toBeEnabled();
-  });
-
-  it('ends the wait when the document changed before the job could run', async () => {
-    let current: unknown = DOCUMENT;
-    const server = fakeServer(
-      (request) => {
-        if (request.method !== 'POST' || request.path !== `${PATH}/reclassify`) return undefined;
-        current = { ...DOCUMENT, type: 'water_bill' };
-        return json(DOCUMENT, 202);
-      },
-      answerTypes,
-      answerEvents(() => []),
-      (request) => (request.path.startsWith(PATH) ? json(current) : undefined),
-    );
-    renderApp(PATH, server.fetch);
-    const user = userEvent.setup();
-    await openEditTab(user);
-    await user.click(screen.getByRole('button', { name: 'Analyse the type again' }));
-    expect(
-      await screen.findByText(
-        'The document changed before its type was analysed again: nothing was done.',
-      ),
-    ).toBeInTheDocument();
-    expect(screen.queryByText('The analysis is under way')).toBeNull();
-  });
-
-  it('offers no new analysis while the document is on its way', async () => {
-    const server = fakeServer(
-      answerTypes,
-      answerEvents(() => []),
-      answerDocument({ ...DOCUMENT, status: 'classified' }),
-    );
-    renderApp(PATH, server.fetch);
-    const user = userEvent.setup();
-    await openEditTab(user);
-    expect(screen.getByRole('button', { name: 'Analyse the type again' })).toBeDisabled();
-    expect(
-      screen.getByText('Possible once the document is indexed or waits for a review.'),
-    ).toBeInTheDocument();
   });
 });

@@ -2,6 +2,7 @@ export type {
   ChangeDecisionResult,
   ChangeList,
   ChangeView,
+  ConsolidationRun,
   CreatedType,
   CreateTypeRequest,
   DescribeTypesOptions,

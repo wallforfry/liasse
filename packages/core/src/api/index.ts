@@ -20,6 +20,7 @@ export {
   type CorrectionOutcome,
   listChanges,
   listSubjects,
+  requestConsolidationRun,
   upcoming,
 } from './features.ts';
 export {

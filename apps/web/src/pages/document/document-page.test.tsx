@@ -30,6 +30,7 @@ const HOSTILE_DOCUMENT = {
   updated_at: '2026-11-15T10:00:00.000Z',
   schema_version: 1,
   hint: null,
+  analysis_pending: false,
   fields: { note: `Field ${MARKUP}` },
   text: { content: `Text ${MARKUP}`, offset: 0, total_length: 60, has_more: false },
 };

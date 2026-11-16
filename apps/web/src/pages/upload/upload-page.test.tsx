@@ -27,6 +27,7 @@ const UPLOADED = {
   updated_at: '2026-11-15T10:00:00.000Z',
   schema_version: null,
   hint: 'electricity bill',
+  analysis_pending: false,
   fields: {},
   text: { content: '', offset: 0, total_length: 0, has_more: false },
 };
