@@ -7,7 +7,7 @@ import {
 } from '../../domain/provenance.ts';
 import { CORE_FIELD_NAMES } from '../../registry/core-fields.ts';
 import type { RegisteredType } from '../../registry/type-store.ts';
-import { documentConfidence, typeConfidence } from '../confidence.ts';
+import { documentConfidence, meanConfidence, typeConfidence } from '../confidence.ts';
 import type { PipelineDocument } from '../document.ts';
 import type { ExtractedDocument } from './interpret.ts';
 
@@ -39,8 +39,10 @@ const pick = (record: Values, names: readonly string[]): Values =>
     }),
   );
 
-const meanOf = (values: readonly number[]): readonly number[] =>
-  values.length === 0 ? [] : [values.reduce((sum, value) => sum + value, 0) / values.length];
+const meanOf = (values: readonly number[]): readonly number[] => {
+  const mean = meanConfidence(values);
+  return mean === null ? [] : [mean];
+};
 
 const omit = (record: Values, names: readonly string[]): Values =>
   Object.fromEntries(Object.entries(record).filter(([name]) => !names.includes(name)));

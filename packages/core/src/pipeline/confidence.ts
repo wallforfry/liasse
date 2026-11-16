@@ -1,4 +1,4 @@
-import type { DocumentStatus } from '@liasse/contract/domain';
+import type { ClassificationOutcome, DocumentStatus, ReviewReason } from '@liasse/contract/domain';
 import type { TypeProvenance } from '../domain/provenance.ts';
 
 // A type a person chose is certain; a document that reached extraction without any
@@ -7,6 +7,10 @@ export const typeConfidence = (type: TypeProvenance | undefined): number => {
   if (type === undefined) return 0;
   return 'manual' in type ? 1 : type.confidence;
 };
+
+/** A list value weighs by the mean of its items; null for no item. */
+export const meanConfidence = (values: readonly number[]): number | null =>
+  values.length === 0 ? null : values.reduce((sum, value) => sum + value, 0) / values.length;
 
 /**
  * Spec: the minimum of the classification confidence and the mean confidence of the
@@ -20,23 +24,39 @@ export const documentConfidence = (
   classification: number,
   coreConfidences: readonly number[],
 ): number => {
-  if (coreConfidences.length === 0) return 0;
-  const mean = coreConfidences.reduce((sum, value) => sum + value, 0) / coreConfidences.length;
-  return Math.min(classification, mean);
+  const mean = meanConfidence(coreConfidences);
+  return mean === null ? 0 : Math.min(classification, mean);
 };
 
-// Spec: below the threshold a document is flagged for review, and so is one that got
-// the closest type, or none, because a new type was refused or over quota.
-const needsReview = (
+/** The reasons of `REVIEW_REASONS` that come from the confidence and the type. */
+export type SettlementReason = Extract<
+  ReviewReason,
+  'low_confidence' | 'type_pending_extraction' | 'type_fallback' | 'type_untyped'
+>;
+
+const TYPE_OUTCOME_REASONS: Readonly<Partial<Record<ClassificationOutcome, SettlementReason>>> = {
+  fallback: 'type_fallback',
+  untyped: 'type_untyped',
+};
+
+/**
+ * Spec: below the threshold a document is flagged for review, and so is one that got
+ * the closest type, or none, because a new type was refused or over quota. A confidence
+ * that is null is owed by the extraction of a type chosen by hand.
+ */
+export const settlementReasons = (
   confidence: number | null,
   type: TypeProvenance | undefined,
   threshold: number,
-): boolean =>
-  confidence === null ||
-  confidence < threshold ||
-  (type !== undefined &&
-    !('manual' in type) &&
-    (type.outcome === 'fallback' || type.outcome === 'untyped'));
+): readonly SettlementReason[] => {
+  const outcome = type === undefined || 'manual' in type ? undefined : type.outcome;
+  const typeReason = outcome === undefined ? undefined : TYPE_OUTCOME_REASONS[outcome];
+  return [
+    ...(confidence === null ? ['type_pending_extraction' as const] : []),
+    ...(confidence !== null && confidence < threshold ? ['low_confidence' as const] : []),
+    ...(typeReason === undefined ? [] : [typeReason]),
+  ];
+};
 
 /** Either way the document is indexed and can be queried. */
 export const settledStatus = (
@@ -44,4 +64,4 @@ export const settledStatus = (
   type: TypeProvenance | undefined,
   threshold: number,
 ): Extract<DocumentStatus, 'indexed' | 'needs_review'> =>
-  needsReview(confidence, type, threshold) ? 'needs_review' : 'indexed';
+  settlementReasons(confidence, type, threshold).length > 0 ? 'needs_review' : 'indexed';
