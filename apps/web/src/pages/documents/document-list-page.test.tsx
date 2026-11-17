@@ -87,4 +87,47 @@ describe('the document list', () => {
       ]);
     });
   });
+
+  it('offers to keep only private documents in the list, not in a search', async () => {
+    const user = userEvent.setup();
+    const list = renderApp('/documents', library().fetch);
+    await screen.findByRole('link', { name: 'Listed bill' });
+    screen.getByRole('combobox', { name: 'Privacy' }).focus();
+    await user.keyboard('{Enter}');
+    expect(await screen.findByRole('option', { name: 'Private only' })).toBeInTheDocument();
+    list.unmount();
+
+    renderApp('/documents?q=power', library().fetch);
+    await screen.findByRole('link', { name: 'Found bill' });
+    screen.getByRole('combobox', { name: 'Privacy' }).focus();
+    await user.keyboard('{Enter}');
+    expect(await screen.findByRole('option', { name: 'Include private' })).toBeInTheDocument();
+    expect(screen.queryByRole('option', { name: 'Private only' })).not.toBeInTheDocument();
+  });
+
+  it('keeps the results of a search on screen while a filter changes it', async () => {
+    const user = userEvent.setup();
+    const server = library();
+    // The search with private documents never answers: what shows meanwhile stays.
+    const fetch: typeof globalThis.fetch = (input, init) =>
+      typeof init?.body === 'string' && init.body.includes('"include_private":true')
+        ? new Promise<Response>(() => undefined)
+        : server.fetch(input, init);
+    const { router } = renderApp('/documents?q=power', fetch);
+    await screen.findByRole('link', { name: 'Found bill' });
+    screen.getByRole('combobox', { name: 'Privacy' }).focus();
+    await user.keyboard('{Enter}');
+    await user.click(await screen.findByRole('option', { name: 'Include private' }));
+    expect(router.state.location.search).toBe('?q=power&private=include');
+    expect(screen.getByRole('link', { name: 'Found bill' })).toBeInTheDocument();
+  });
+});
+
+describe('the search of the documents', () => {
+  it('has no page or menu entry of its own', async () => {
+    renderApp('/search?q=power', library().fetch);
+    expect(await screen.findByRole('heading', { name: 'Not found' })).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'Search' })).not.toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Documents' })).toBeInTheDocument();
+  });
 });

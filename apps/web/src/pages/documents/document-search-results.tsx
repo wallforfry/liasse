@@ -1,4 +1,4 @@
-import { useQuery } from '@tanstack/react-query';
+import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router';
 import { useClient } from '../../api/session.ts';
 import { ErrorAlert } from '../../components/error-alert.tsx';
@@ -22,6 +22,7 @@ export const DocumentSearchResults = ({ query, filters }: DocumentSearchResultsP
   const search = useQuery({
     queryKey: ['search', request],
     queryFn: async () => client.search(request),
+    placeholderData: keepPreviousData,
   });
 
   if (search.isError) return <ErrorAlert error={search.error} title="The search failed" />;
