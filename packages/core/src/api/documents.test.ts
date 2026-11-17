@@ -422,11 +422,9 @@ describe('documents of the API', () => {
     });
 
     it('names an entity by its id, in any of its entity fields', async () => {
-      const issued = CORPUS.filter(({ issuer }) => issuer === ENTITIES.northwind).length;
+      const issued = PUBLIC.filter(({ issuer }) => issuer === ENTITIES.northwind).length;
       expect((await listed({ entity: ENTITIES.northwind })).total).toBe(issued);
-      const received = CORPUS.filter(
-        ({ recipient, private: hidden }) => recipient === ENTITIES.resident && hidden !== true,
-      ).length;
+      const received = PUBLIC.filter(({ recipient }) => recipient === ENTITIES.resident).length;
       expect((await listed({ entity: ENTITIES.resident })).total).toBe(received);
       expect((await listed({ entity: 'ent_synthetic_absent' })).total).toBe(0);
     });
