@@ -42,7 +42,10 @@ describe('the command palette', () => {
     const server = emptyLibrary();
     renderApp('/documents', server.fetch);
     await runInPalette('electricity');
-    expect(await screen.findByRole('heading', { name: 'Search' })).toBeInTheDocument();
+    expect(await screen.findByRole('searchbox', { name: 'Search the documents' })).toHaveValue(
+      'electricity',
+    );
+    expect(screen.getByRole('heading', { name: 'Documents' })).toBeInTheDocument();
     await waitFor(() => {
       expect(server.requests.some(({ path }) => path === '/search')).toBe(true);
     });
