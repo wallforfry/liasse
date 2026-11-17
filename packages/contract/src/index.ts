@@ -21,6 +21,13 @@ export {
   documentEventSchema,
 } from './document-events.ts';
 export {
+  DOCUMENT_STATUS_EVENTS,
+  type DocumentJob,
+  documentJobSchema,
+  documentStatusSchema,
+  type DocumentStatusView,
+} from './document-status.ts';
+export {
   type DocumentReview,
   documentReviewSchema,
   type ReviewedValue,

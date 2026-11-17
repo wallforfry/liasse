@@ -334,6 +334,29 @@ describe('document routes', () => {
     });
   });
 
+  describe('GET /documents/:id/status', () => {
+    it('answers a document just uploaded with the job that will process it', async () => {
+      const { id } = uploaded.parse(await (await post(form(syntheticPdf('status')))).json());
+      const response = await harness.call(`/documents/${id}/status`);
+      expect(response.status).toBe(200);
+      expect(await response.json()).toMatchObject({
+        id,
+        status: 'received',
+        state: 'current',
+        error: null,
+        events: [],
+        analysis_pending: true,
+        job: { kind: 'process_document', state: 'queued', attempts: 0, waiting_for: 'worker' },
+      });
+    });
+
+    it('answers 404 for an id no document has', async () => {
+      const missing = await harness.call('/documents/doc_01JC0000000000000000000000/status');
+      expect(missing.status).toBe(404);
+      expect(await codeOf(missing)).toBe('document_not_found');
+    });
+  });
+
   describe('DELETE /documents/:id', () => {
     it('answers 204 once, then 404: the document is gone', async () => {
       const { id } = uploaded.parse(await (await post(form(syntheticPdf('to delete')))).json());
@@ -411,6 +434,37 @@ describe('document routes', () => {
       expect(unknown.status).toBe(404);
       expect(await codeOf(unknown)).toBe('document_not_found');
       expect((await reclassify(id, { type: 'payslip' })).status).toBe(400);
+    });
+  });
+
+  describe('POST /documents/:id/reextract', () => {
+    const reextract = (id: string) =>
+      harness.call(`/documents/${id}/reextract`, { method: 'POST' });
+
+    it('queues the values of a settled document again and answers 202 with it', async () => {
+      const id = await harness.addDocument([], { status: 'needs_review' });
+      const response = await reextract(id);
+      expect(response.status).toBe(202);
+      expect(await response.json()).toMatchObject({
+        id,
+        status: 'needs_review',
+        analysis_pending: true,
+      });
+      const queued = await harness.database.db
+        .select()
+        .from(jobs)
+        .where(eq(jobs.kind, 'reextract_document'));
+      expect(queued.map(({ payload }) => payload)).toContainEqual({ documentId: id });
+    });
+
+    it('refuses a document that is not settled with 400, and an unknown one with 404', async () => {
+      const id = await harness.addDocument([], { status: 'failed', error: 'no_text' });
+      const notSettled = await reextract(id);
+      expect(notSettled.status).toBe(400);
+      expect(await codeOf(notSettled)).toBe('document_not_settled');
+      const unknown = await reextract('doc_01JC0000000000000000000000');
+      expect(unknown.status).toBe(404);
+      expect(await codeOf(unknown)).toBe('document_not_found');
     });
   });
 

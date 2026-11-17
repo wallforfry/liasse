@@ -3,6 +3,7 @@ import {
   MAX_QUERY_ENTITY_NAME_LENGTH,
   MAX_QUERY_ENTITY_NAMES,
 } from '@liasse/contract/domain';
+import { jobs } from '@liasse/core/db';
 import { recordDocumentEvent } from '@liasse/core/processing-log';
 import { syntheticPdf } from '@liasse/core/testing';
 import type { Client } from '@modelcontextprotocol/sdk/client/index.js';
@@ -17,11 +18,13 @@ const TOOLS = [
   'get_status',
   'get_subject',
   'ingest',
+  'list_documents',
   'list_entities',
   'list_pending_changes',
   'query',
   'recall',
   'reclassify_document',
+  'reextract_document',
   'retry_document',
   'search',
   'timeline',
@@ -32,9 +35,14 @@ const TOOLS = [
 // The tools whose answer is read from documents.
 const UNTRUSTED_TOOLS = TOOLS.filter(
   (name) =>
-    !['apply_change', 'get_status', 'ingest', 'reclassify_document', 'retry_document'].includes(
-      name,
-    ),
+    ![
+      'apply_change',
+      'get_status',
+      'ingest',
+      'reclassify_document',
+      'reextract_document',
+      'retry_document',
+    ].includes(name),
 );
 
 const hits = z.object({ results: z.array(z.object({ id: z.string() })) });
@@ -71,7 +79,7 @@ describe('the tools', () => {
     return failure.parse(body).error;
   };
 
-  it('lists the sixteen tools, flagging document content as untrusted', async () => {
+  it('lists the eighteen tools, flagging document content as untrusted', async () => {
     const { tools } = await client.listTools();
     expect(tools.map(({ name }) => name).toSorted()).toEqual(TOOLS);
     const flagged = tools
@@ -109,6 +117,32 @@ describe('the tools', () => {
     );
   });
 
+  // An agent took the registry proposals for the review queue of documents.
+  it('tells the review queue of documents from the proposals for the type registry', async () => {
+    const { tools } = await client.listTools();
+    const descriptionOf = (name: string) =>
+      tools.find((tool) => tool.name === name)?.description ?? '';
+    const naming = (tool: string) =>
+      ['list_pending_changes', 'apply_change', 'update_document', 'reclassify_document']
+        .filter((name) => !descriptionOf(name).includes(tool))
+        .toSorted();
+    expect(naming('`list_documents` with `status: needs_review`')).toEqual([]);
+    expect(descriptionOf('list_documents')).toContain('`list_pending_changes`');
+    expect(descriptionOf('list_pending_changes')).toContain('It lists no document');
+    expect(descriptionOf('apply_change')).toContain('It reviews no document');
+  });
+
+  it('splits retrying, re-extracting and reclassifying in their descriptions', async () => {
+    const { tools } = await client.listTools();
+    const descriptionOf = (name: string) =>
+      tools.find((tool) => tool.name === name)?.description ?? '';
+    expect(descriptionOf('retry_document')).toContain('`reextract_document`');
+    expect(descriptionOf('retry_document')).toContain('`reclassify_document`');
+    expect(descriptionOf('reclassify_document')).toContain('`reextract_document`');
+    expect(descriptionOf('reextract_document')).toContain('`retry_document`');
+    expect(descriptionOf('ingest')).toContain('set it to true for every sensitive piece');
+  });
+
   it('shows the DSL as the input schema of query, and strict schemas elsewhere', async () => {
     const { tools } = await client.listTools();
     const schemaOf = (name: string) => tools.find((tool) => tool.name === name)?.inputSchema;
@@ -118,6 +152,14 @@ describe('the tools', () => {
     });
     expect(schemaOf('search')).toMatchObject({ additionalProperties: false });
     expect(schemaOf('get_document')).toMatchObject({ required: ['id'] });
+    expect(schemaOf('reextract_document')).toMatchObject({
+      required: ['id'],
+      additionalProperties: false,
+    });
+    expect(schemaOf('list_documents')).toMatchObject({
+      properties: { status: {}, type: {}, entity: {}, private: {}, limit: {}, offset: {} },
+      additionalProperties: false,
+    });
   });
 
   describe('search', () => {
@@ -215,12 +257,18 @@ describe('the tools', () => {
 
     it('gives the status of a document, with the end of its processing log', async () => {
       const { body } = await callTool(client, 'get_status', { id: publicId });
-      expect(body).toEqual({
+      const { updated_at: updatedAt, ...rest } = z
+        .looseObject({ updated_at: z.iso.datetime() })
+        .parse(body);
+      expect(updatedAt).not.toBe('');
+      expect(rest).toEqual({
         id: publicId,
         status: 'indexed',
         state: 'current',
         error: null,
         events: [],
+        analysis_pending: false,
+        job: null,
       });
       const failing = await harness.addDocument([], { status: 'failed', error: 'no_text' });
       for (let attempt = 1; attempt <= 12; attempt += 1) {
@@ -248,6 +296,29 @@ describe('the tools', () => {
         outcome: 'failed',
         error_code: 'no_text',
         retryable: false,
+      });
+    });
+
+    it('says a document received with no event yet waits for a worker', async () => {
+      const id = await harness.addDocument([], { status: 'received' });
+      await harness.database.db
+        .insert(jobs)
+        .values({ kind: 'process_document', payload: { documentId: id } });
+      const { isError, body } = await callTool(client, 'get_status', { id });
+      expect(isError).toBe(false);
+      expect(body).toMatchObject({
+        id,
+        status: 'received',
+        events: [],
+        analysis_pending: true,
+        job: {
+          kind: 'process_document',
+          state: 'queued',
+          attempts: 0,
+          max_attempts: 3,
+          waiting_for: 'worker',
+          jobs_ahead: 0,
+        },
       });
     });
 
@@ -279,9 +350,72 @@ describe('the tools', () => {
       expect((await failureOf('reclassify_document', { id })).code).toBe('document_not_settled');
     });
 
+    it('queues the values of a settled document again and answers its status', async () => {
+      const id = await harness.addDocument([], { status: 'needs_review' });
+      const { isError, body } = await callTool(client, 'reextract_document', { id });
+      expect(isError).toBe(false);
+      expect(body).toEqual({ id, status: 'needs_review', state: 'current', error: null });
+      expect((await callTool(client, 'get_status', { id })).body).toMatchObject({
+        analysis_pending: true,
+        job: { kind: 'reextract_document', state: 'queued' },
+      });
+      expect((await failureOf('reextract_document', { id })).code).toBe('document_not_settled');
+      expect((await failureOf('reclassify_document', { id })).code).toBe('document_not_settled');
+    });
+
+    it('refuses to extract again a document that is not settled, or that no document is', async () => {
+      const id = await harness.addDocument([], { status: 'failed', error: 'no_text' });
+      expect((await failureOf('reextract_document', { id })).code).toBe('document_not_settled');
+      expect(
+        (await failureOf('reextract_document', { id: 'doc_01JC0000000000000000000000' })).code,
+      ).toBe('document_not_found');
+    });
+
     it('refuses to reclassify a document that is not settled', async () => {
       const id = await harness.addDocument([], { status: 'failed', error: 'no_text' });
       expect((await failureOf('reclassify_document', { id })).code).toBe('document_not_settled');
+    });
+  });
+
+  describe('list_documents', () => {
+    const page = z.object({
+      documents: z.array(z.object({ id: z.string(), status: z.string(), private: z.boolean() })),
+      total: z.number(),
+      has_more: z.boolean(),
+    });
+    const listOf = async (args: Readonly<Record<string, unknown>>) =>
+      page.parse((await callTool(client, 'list_documents', args)).body);
+
+    it('lists the documents flagged for review, private ones only when asked for', async () => {
+      const flagged = await harness.addDocument([], { status: 'needs_review' });
+      const hidden = await harness.addDocument([], { status: 'needs_review', private: true });
+      const queue = await listOf({ status: 'needs_review' });
+      expect(queue.documents.map(({ status }) => status)).not.toContain('indexed');
+      expect(queue.documents.map(({ id }) => id)).toContain(flagged);
+      expect(queue.documents.map(({ id }) => id)).not.toContain(hidden);
+      const all = await listOf({ status: 'needs_review', private: 'include' });
+      expect(all.documents.map(({ id }) => id)).toEqual(expect.arrayContaining([flagged, hidden]));
+      expect(all.total).toBe(queue.total + 1);
+    });
+
+    it('pages like the REST list', async () => {
+      const first = await listOf({ limit: 1 });
+      expect(first.documents).toHaveLength(1);
+      expect(first.has_more).toBe(first.total > 1);
+      const second = await listOf({ limit: 1, offset: 1 });
+      expect(second.documents[0]?.id).not.toBe(first.documents[0]?.id);
+    });
+
+    it('refuses a status that is not one, and an argument the schema does not know', async () => {
+      const deleted = await client.callTool({
+        name: 'list_documents',
+        arguments: { status: 'deleted' },
+      });
+      const unknown = await client.callTool({
+        name: 'list_documents',
+        arguments: { include_private: true },
+      });
+      expect([deleted.isError, unknown.isError]).toEqual([true, true]);
     });
   });
 

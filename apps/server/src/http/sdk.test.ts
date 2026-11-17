@@ -280,6 +280,38 @@ describe('the TypeScript SDK', () => {
     expect(document).toEqual({ hint: 'a payslip' });
   });
 
+  it('follows a document from its upload, and extracts the values of a settled one again', async () => {
+    const { id } = await client.uploadDocument({
+      file: new File([syntheticPdf('sdk reextract')], 'reextract.pdf'),
+    });
+    expect(await client.getDocumentStatus(id)).toMatchObject({
+      id,
+      status: 'received',
+      analysis_pending: true,
+      job: { kind: 'process_document', state: 'queued' },
+    });
+    expect(await refusal(client.reextractDocument(id))).toMatchObject({
+      status: 400,
+      code: 'document_not_settled',
+    });
+    await harness.database.db
+      .update(documents)
+      .set({ status: 'indexed' })
+      .where(eq(documents.id, id));
+    await harness.database.db
+      .update(jobs)
+      .set({ status: 'succeeded' })
+      .where(eq(jobs.kind, 'process_document'));
+    expect(await client.reextractDocument(id)).toMatchObject({
+      id,
+      status: 'indexed',
+      analysis_pending: true,
+    });
+    expect(await client.getDocumentStatus(id)).toMatchObject({
+      job: { kind: 'reextract_document', state: 'queued' },
+    });
+  });
+
   it('deletes a document, after which it is not found', async () => {
     const { id } = await client.uploadDocument({
       file: new File([syntheticPdf('sdk deletion')], 'gone.pdf'),

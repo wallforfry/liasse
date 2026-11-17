@@ -19,6 +19,8 @@ import {
   documentEventListSchema,
   documentListSchema,
   documentSchema,
+  documentStatusSchema,
+  type DocumentStatusView,
   type DocumentView,
   entityListSchema,
   type EntityListView,
@@ -99,6 +101,11 @@ export interface LiasseClient {
   readonly getDocument: (id: string, options?: GetDocumentOptions) => Promise<DocumentView>;
   /** The processing log of a document, oldest first: why its processing failed, if it did. */
   readonly listDocumentEvents: (id: string) => Promise<DocumentEventList>;
+  /**
+   * Where the processing of a document stands: its status, the end of its log, and the job
+   * queued or running for it, with what a queued one waits for.
+   */
+  readonly getDocumentStatus: (id: string) => Promise<DocumentStatusView>;
   readonly downloadFile: (id: string) => Promise<DownloadedFile>;
   readonly correctDocument: (id: string, correction: DocumentCorrection) => Promise<DocumentView>;
   /** Queues a failed document for processing again; refused for any other status. */
@@ -111,6 +118,11 @@ export interface LiasseClient {
     id: string,
     input?: DocumentReclassification,
   ) => Promise<DocumentView>;
+  /**
+   * Queues the values of an indexed or flagged document to be extracted again, for the type
+   * it has; refused while it is processed. Values corrected by hand are kept.
+   */
+  readonly reextractDocument: (id: string) => Promise<DocumentView>;
   readonly deleteDocument: (id: string) => Promise<void>;
   readonly search: (request: SearchRequest) => Promise<SearchResults>;
   readonly query: (request: QueryRequest) => Promise<QueryResultEnvelope>;
@@ -185,6 +197,7 @@ export const createLiasseClient = (options: ClientOptions): LiasseClient => {
     listDocuments: async (query = {}) => get(documentListSchema, '/documents', query),
     getDocument: async (id, query = {}) => get(documentSchema, documentPath(id), query),
     listDocumentEvents: async (id) => get(documentEventListSchema, `${documentPath(id)}/events`),
+    getDocumentStatus: async (id) => get(documentStatusSchema, `${documentPath(id)}/status`),
     downloadFile: async (id) => downloadedFile(await send({ path: `${documentPath(id)}/file` })),
     correctDocument: async (id, correction) =>
       parseJson(
@@ -195,6 +208,11 @@ export const createLiasseClient = (options: ClientOptions): LiasseClient => {
       parseJson(documentSchema, await send({ method: 'POST', path: `${documentPath(id)}/retry` })),
     reclassifyDocument: async (id, input = {}) =>
       post(documentSchema, `${documentPath(id)}/reclassify`, input),
+    reextractDocument: async (id) =>
+      parseJson(
+        documentSchema,
+        await send({ method: 'POST', path: `${documentPath(id)}/reextract` }),
+      ),
     deleteDocument: async (id) => {
       await send({ method: 'DELETE', path: documentPath(id) });
     },

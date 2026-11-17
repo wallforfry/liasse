@@ -38,6 +38,7 @@ export {
   type ReclassificationRequest,
   requestReclassification,
 } from './request-reclassification.ts';
+export { type ReextractionOutcome, requestReextraction } from './request-reextraction.ts';
 export {
   DEFAULT_TEXT_PROCESS_LIMITS,
   extractTextInChild,

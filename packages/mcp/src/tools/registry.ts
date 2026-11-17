@@ -31,11 +31,17 @@ const LIST_ENTITIES_DESCRIPTION =
 
 const LIST_CHANGES_DESCRIPTION =
   'The changes of the type registry that consolidation proposes and that wait for ' +
-  `approval, each with its rationale. ${UNTRUSTED}`;
+  'approval, each with its rationale: merges, splits, renames and stabilization of types, ' +
+  'promotion and removal of fields, merges of entities and of subjects. It lists no ' +
+  'document: the documents flagged for a person to review are `list_documents` with ' +
+  '`status: needs_review`, each corrected or confirmed with `update_document`. ' +
+  UNTRUSTED;
 
 const APPLY_CHANGE_DESCRIPTION =
-  'Applies or rejects a proposed change of the type registry. Returns the outcome and the ' +
-  'number of documents to extract again.';
+  'Applies or rejects a proposed change of the type registry, by the id ' +
+  '`list_pending_changes` gave. Returns the outcome and the number of documents to extract ' +
+  'again. It reviews no document and clears no `needs_review` flag: that is ' +
+  '`update_document`, on the documents of `list_documents` with `status: needs_review`.';
 
 export const registerRegistryTools = (server: McpServer, { api, report }: McpDeps): void => {
   server.registerTool(

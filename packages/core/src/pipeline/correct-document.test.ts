@@ -116,6 +116,16 @@ describe('correctDocument', () => {
     expect(await queued()).toEqual([{ kind: 'reindex_document', payload: { documentId: id } }]);
   });
 
+  // `get_status` and the document answer `updated_at`: a correction is a change a
+  // caller polling the status sees there.
+  it('moves the update time of the document', async () => {
+    const type = await bill();
+    const before = new Date('2026-01-01T00:00:00.000Z');
+    const id = await settled(type.id, { updatedAt: before });
+    await correctDocument(harness.deps(), { id, core: { reference: 'SYN-2' } });
+    expect((await harness.document(id)).updatedAt.getTime()).toBeGreaterThan(before.getTime());
+  });
+
   it('clears a field given as null and remembers it was cleared', async () => {
     const type = await bill();
     const id = await settled(type.id);
