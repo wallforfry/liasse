@@ -2,6 +2,16 @@
 
 Date: 2026-11-15. Status: approved approach (A), autonomous delivery.
 
+> **Superseded in part.** The move to better-auth replaced the authentication described here:
+> the `/v1` prefix, `/ui/session`, `csrfToken` and `X-CSRF-Token`, the `liasse_session` cookie,
+> `UI_SESSION_TTL`, `UI_PASSWORD` and the session machinery (`password.ts`, `sessions.ts`,
+> `login-limit.ts`, argon2id) are gone. The current design is in [`docs/spec.md`](../../spec.md),
+> "API, configuration and deployment" (Web UI) and "Accounts and authentication": routes without
+> a prefix, database sessions of better-auth whose lifetime is `AUTH_SESSION_TTL`, and an
+> `Origin` check on every request that changes something. The contract schemas are in
+> `@liasse/contract`. Search has no sidebar entry or screen of its own: it lives in the
+> document list.
+
 ## Intent
 
 Replace the server-rendered `/ui` (Hono `hono/html`, no script) with a modern single-page
@@ -33,7 +43,7 @@ components; the UI stays a convenience over the same use cases MCP and REST use.
 - `'unsafe-inline'` or `'unsafe-eval'` anywhere in the CSP.
 - Rendering document content as HTML (`dangerouslySetInnerHTML` is forbidden).
 - A second copy of a contract schema in the web app: types come from `@liasse/sdk` /
-  `@liasse/core/contract`.
+  `@liasse/contract`.
 - Keeping the old server-rendered UI alongside (remove, do not layer).
 
 ## Approaches considered

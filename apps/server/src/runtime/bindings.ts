@@ -115,8 +115,8 @@ const featuresOf = (deps: PipelineDeps, hindsight: HindsightIntegration): ApiFea
   correctDocument: (input) => correctDocument(deps, input),
   suggestType: (request) => suggestType(deps, request),
   listSubjects: (options) => listSubjects({ db: deps.db }, options),
-  upcoming: ({ current_only: currentOnly, ...window }) =>
-    upcoming({ db: deps.db }, { ...window, currentOnly }),
+  upcoming: ({ current_only: currentOnly, include_private: includePrivate, ...window }) =>
+    upcoming({ db: deps.db }, { ...window, currentOnly, includePrivate }),
   timeline: (input) => timeline({ db: deps.db }, input),
   recall: (input) => recall({ db: deps.db, embedder: deps.embedder }, input),
   getSubject: (input) => getSubject({ db: deps.db }, input),

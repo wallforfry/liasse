@@ -54,6 +54,8 @@ with a `settings.json` such as:
 
 Earlier versions read these settings from the environment. The server now refuses to start while one of their variables is set, and names it: `LLM_PROVIDER`, `LLM_API_KEY`, `LLM_BASE_URL`, `LLM_TIMEOUT`, `TEXT_MODEL`, `VISION_MODEL`, `EMBEDDING_PROVIDER`, `EMBEDDING_MODEL`, `EMBEDDING_API_KEY`, `EMBEDDING_BASE_URL`, `EMBEDDING_TIMEOUT`, `EMBEDDING_MAX_INPUT_TOKENS`, `MAX_FILE_SIZE`, `AUTO_APPLY`, `CONFIDENCE_THRESHOLD`, `MAX_NEW_TYPES_PER_DAY`, `SCHEMA_LANGUAGE`, `MAX_VISION_PAGES`, `ENTITY_ATTACH_SIMILARITY`, `ENTITY_ARBITRATION_SIMILARITY`, `HINDSIGHT_URL`, `HINDSIGHT_BANK` and `HINDSIGHT_API_KEY`. Note their values, remove them from `.env`, start the server and save them as above, a duration such as `5m` becoming milliseconds (`timeout_ms: 300000`). Save the embedder the documents were indexed with: the first save of a database that holds documents is the one that can still name it.
 
+The server refuses to start, too, while `AUTH_BOOTSTRAP_EMAIL` or `AUTH_BOOTSTRAP_PASSWORD` is set: the first account is now created by the onboarding, with the setup token the server prints at startup while no account exists. Remove them; an existing account is kept.
+
 ## Image
 
 The image (`linux/amd64`, `linux/arm64`) carries the server, the build of the web UI, poppler (`pdfinfo` and `pdftoppm`, for scanned PDFs) and the runtime of the local embedder. It runs as the `node` user, keeps its data under `/data` and has a health check on `GET /health`.
@@ -106,4 +108,4 @@ Files stay in the `liasse-data` volume unless `STORAGE_DRIVER` is `s3`: set it i
 
 ## Resources
 
-The target is under 150 MB of RAM for the idle container, Postgres excluded. `scripts/check-idle-memory.sh <image>` starts an image with Postgres, waits for its health check and measures it; CI runs it on every pull request. The local embedding model runs in a child process only while it works, between 0.8 and 1.35 GB at its peak, and ends after 10 minutes without a request.
+The target is under 150 MB of RAM for the idle container, Postgres excluded. `scripts/check-idle-memory.sh <image>` starts an image with Postgres, waits for its health check and measures it; CI runs it on every pull request that changes more than Markdown. The local embedding model runs in a child process only while it works, between 0.8 and 1.35 GB at its peak, and ends after 10 minutes without a request.

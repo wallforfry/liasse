@@ -285,7 +285,13 @@ describe('search, query, registry and metrics routes', () => {
       expect(listed.status).toBe(200);
       expect(await listed.json()).toEqual({ runs: [] });
       expect(received).toEqual([
-        { from: '2026-01-01', to: '2026-03-31', kinds: ['expiry', 'renewal'], current_only: false },
+        {
+          from: '2026-01-01',
+          to: '2026-03-31',
+          kinds: ['expiry', 'renewal'],
+          current_only: false,
+          include_private: false,
+        },
         ['chg_missing', { decision: 'reject', note: 'not the same type' }],
         'run',
         'runs',

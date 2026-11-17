@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { INCLUDE_PRIVATE_DESCRIPTION } from './domain/schemas.ts';
 import { searchFiltersSchema, searchInputSchema } from './search/input.ts';
 
 const { query, limit, includePrivate } = searchInputSchema.shape;
@@ -10,7 +11,7 @@ export const searchRequestSchema = z.strictObject({
   query,
   filters: z.strictObject({ ...sameNameFilters, date_from: dateFrom, date_to: dateTo }).default({}),
   limit,
-  include_private: includePrivate.describe('Private documents are left out unless this is true.'),
+  include_private: includePrivate.describe(INCLUDE_PRIVATE_DESCRIPTION),
 });
 export type SearchRequest = z.input<typeof searchRequestSchema>;
 

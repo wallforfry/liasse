@@ -141,6 +141,7 @@ describe('the tools', () => {
     expect(naming('`list_documents` with `status: needs_review`')).toEqual([]);
     expect(descriptionOf('list_documents')).toContain('`list_pending_changes`');
     expect(descriptionOf('list_pending_changes')).toContain('It lists no document');
+    expect(descriptionOf('list_pending_changes')).not.toMatch(/split|rename/);
     expect(descriptionOf('apply_change')).toContain('It reviews no document');
   });
 

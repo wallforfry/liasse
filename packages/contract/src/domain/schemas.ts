@@ -75,3 +75,6 @@ export const httpBaseUrlSchema = z.string().refine((value) => {
     !/[?#]/.test(value)
   );
 }, 'expected an http or https URL without credentials, query string or fragment');
+
+// The description of every `include_private` flag of a read.
+export const INCLUDE_PRIVATE_DESCRIPTION = 'Private documents are left out unless this is true.';

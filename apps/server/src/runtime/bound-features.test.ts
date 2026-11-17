@@ -87,6 +87,7 @@ describe('the features the runtime binds', () => {
     expect(await corrected.json()).toMatchObject({ id, private: true, status: 'indexed' });
     expect(await documentOf(id)).toEqual({ status: 'indexed', private: true });
     expect(await datesOf(runtime, '')).toEqual([]);
+    expect(await datesOf(runtime, '&include_private=true')).toEqual(['2027-03-15 due']);
   });
 
   it('answers the knowledge tools of MCP from what the pipeline stored', async () => {
@@ -168,6 +169,15 @@ describe('the features the runtime binds', () => {
     expect(ofEntity.shown).toMatchObject({
       items: [{ kind: 'document', document: { id: contract } }],
     });
+
+    const dates = await both('upcoming', { from: '2027-01-01', to: '2027-12-31' });
+    expect(dates.hidden).toMatchObject({ dates: [] });
+    const shownDates = z
+      .object({ dates: z.array(z.object({ document: z.object({ id: z.string() }) })) })
+      .parse(dates.shown).dates;
+    expect(shownDates.map(({ document }) => document.id).toSorted()).toEqual(
+      [letter, contract].toSorted(),
+    );
 
     const facts = await both('recall', { query: 'next review' });
     expect(facts.hidden).toEqual({ facts: [] });

@@ -71,6 +71,7 @@ const upcomingQuery = z
     types: listParam.optional(),
     subject: text,
     current_only: flagParam.optional(),
+    include_private: flagParam.optional(),
   })
   .pipe(upcomingOptionsSchema);
 

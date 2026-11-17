@@ -43,7 +43,7 @@ const LIST_ENTITIES_DESCRIPTION =
 
 const LIST_CHANGES_DESCRIPTION =
   'The changes of the type registry that consolidation proposes and that wait for ' +
-  'approval, each with its rationale: merges, splits, renames and stabilization of types, ' +
+  'approval, each with its rationale: merges and stabilization of types, ' +
   'promotion and removal of fields, merges of entities and of subjects. It lists no ' +
   'document: the documents flagged for a person to review are `list_documents` with ' +
   '`status: needs_review`, each corrected or confirmed with `update_document`. ' +
