@@ -304,7 +304,7 @@ describe('the review panel', () => {
     expect(jsonBody(server.requests.find(isReclassify))).toEqual({ hint: 'A water bill' });
     expect(server.requests.some(({ method }) => method === 'PATCH')).toBe(false);
     expect(screen.queryByText('To review')).toBeNull();
-    // The page reads the document again every POLL_MILLISECONDS while the analysis is pending.
+    // The page reads the document again every 2 s (POLL_MILLISECONDS) while the analysis is pending.
     expect(
       await screen.findByText('The document was analysed again: its type is water_bill.'),
     ).toBeInTheDocument();
