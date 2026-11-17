@@ -68,6 +68,9 @@ describe('the settings page', () => {
     const input = llm.getByLabelText('language model API key');
     expect(input).toHaveAttribute('type', 'password');
     expect(input).toHaveAttribute('autocomplete', 'off');
+    // The visible label is the label of the input, not only of its group.
+    const label = llm.getByText('API key');
+    expect(label instanceof HTMLLabelElement ? label.control : null).toBe(input);
     expect(input).toHaveValue('');
   });
 

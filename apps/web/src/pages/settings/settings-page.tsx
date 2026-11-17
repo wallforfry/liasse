@@ -22,7 +22,7 @@ import {
   NO_ISSUES,
   validate,
   validateSection,
-  type Validation,
+  withSectionIssues,
 } from './settings-validation.ts';
 import { useSaveSettings } from './use-save-settings.ts';
 
@@ -81,21 +81,17 @@ const SettingsForm = ({ state, onReload }: SettingsFormProps) => {
     (next: SettingsValues[Section]): void => {
       setValues((previous) => ({ ...previous, [name]: next }));
     };
-  /** Runs `then` on the draft when `validation` accepts it, marks the fields otherwise. */
-  const validated = (validation: Validation, then: (draft: SettingsDraft) => void): void => {
-    setIssues(validation.valid ? NO_ISSUES : validation.issues);
-    if (validation.valid) then(validation.draft);
-  };
   const submit = (event: SubmitEvent<HTMLFormElement>) => {
     event.preventDefault();
-    validated(validate(values), (draft) => {
-      save.mutate(draft);
-    });
+    const validation = validate(values);
+    setIssues(validation.valid ? NO_ISSUES : validation.issues);
+    if (validation.valid) save.mutate(validation.draft);
   };
+  // A check speaks for its own section only: the marks of the others stay as they were.
   const checkOf = (name: keyof typeof checks) => (): void => {
-    validated(validateSection(values, valuesOf(state.settings), name), (draft) => {
-      checks[name].mutate(draft);
-    });
+    const validation = validateSection(values, valuesOf(state.settings), name);
+    setIssues((previous) => withSectionIssues(previous, name, validation));
+    if (validation.valid) checks[name].mutate(validation.draft);
   };
 
   return (
@@ -123,7 +119,7 @@ const SettingsForm = ({ state, onReload }: SettingsFormProps) => {
         check={checks.hindsight}
         onCheck={checkOf('hindsight')}
       />
-      <p role="status" className="text-sm text-destructive empty:hidden">
+      <p role="status" className="text-sm text-destructive">
         {issues.size === 0 ? null : 'Some settings are not valid: see the marked fields.'}
       </p>
       {isStaleVersion(save.error) ? <StaleVersion onReload={onReload} /> : null}

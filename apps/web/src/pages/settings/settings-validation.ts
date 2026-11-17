@@ -69,3 +69,16 @@ export const validateSection = (
   const whole = validate(values);
   return whole.valid ? whole : validate({ ...stored, [section]: values[section] });
 };
+
+/** `previous` with the marks of `section` replaced by those `validation` gives it. */
+export const withSectionIssues = (
+  previous: Issues,
+  section: SettingsSection,
+  validation: Validation,
+): Issues => {
+  const inSection = (path: string): boolean => path.startsWith(`${section}.`);
+  return new Map([
+    ...[...previous].filter(([path]) => !inSection(path)),
+    ...(validation.valid ? [] : [...validation.issues]),
+  ]);
+};

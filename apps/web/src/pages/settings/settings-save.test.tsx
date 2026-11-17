@@ -180,6 +180,15 @@ describe('a save of the settings', () => {
     expect(llm.getByText('refused by this server')).toBeInTheDocument();
     expect(llm.getByLabelText('Text model')).toBeInvalid();
     expect(screen.getByText('The request is not valid.')).toBeInTheDocument();
+
+    // A check of another section that passes leaves the marks of the refused save.
+    const embedder = within(await region('Embedder'));
+    await user.click(embedder.getByRole('button', { name: 'Check the embedder' }));
+    expect(
+      await embedder.findByRole('list', { name: 'Check of the embedder' }),
+    ).toBeInTheDocument();
+    expect(hindsight.getByText('required by this server')).toBeInTheDocument();
+    expect(llm.getByLabelText('Text model')).toBeInvalid();
   });
 
   it('offers to reload settings saved elsewhere in the meantime', async () => {
