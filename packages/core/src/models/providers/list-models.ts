@@ -7,7 +7,7 @@ import { providerErrorCode } from './safe-text.ts';
 
 export const MODEL_LIST_TIMEOUT_MS = 15_000;
 // A provider that keeps answering another page is cut there, not followed for ever.
-const MAX_PAGES = 20;
+export const MAX_MODEL_LIST_PAGES = 20;
 // eslint-disable-next-line no-control-regex -- control characters are what it refuses
 const CONTROL = /[\u0000-\u001f\u007f]/;
 
@@ -15,7 +15,8 @@ export interface ModelListRequest {
   readonly provider: ModelProvider;
   readonly endpoint: ProviderEndpoint;
   readonly purpose: ModelPurpose;
-  readonly signal?: AbortSignal | undefined;
+  /** The deadline of the whole listing, every page included. */
+  readonly timeoutMs?: number | undefined;
 }
 
 const readBody = async (provider: string, response: Response): Promise<unknown> =>
@@ -61,7 +62,7 @@ const collect = async (
   const body = await fetchPage(provider, page, catalog.headers(endpoint.apiKey), signal);
   const read = catalog.read(body, purpose, page);
   if (read === undefined) throw new ModelListError(provider, 'invalid_answer');
-  if (read.next === undefined || depth + 1 >= MAX_PAGES) return read.ids;
+  if (read.next === undefined || depth + 1 >= MAX_MODEL_LIST_PAGES) return read.ids;
   return [
     ...read.ids,
     ...(await collect({ provider, endpoint, purpose }, signal, read.next, depth + 1)),
@@ -76,9 +77,7 @@ const usable = (id: string): boolean =>
  * Throws `ModelListError` when the provider cannot be reached or does not answer a list.
  */
 export const listModels = async (request: ModelListRequest): Promise<readonly string[]> => {
-  const timeout = AbortSignal.timeout(MODEL_LIST_TIMEOUT_MS);
-  const signal =
-    request.signal === undefined ? timeout : AbortSignal.any([request.signal, timeout]);
+  const signal = AbortSignal.timeout(request.timeoutMs ?? MODEL_LIST_TIMEOUT_MS);
   const first = MODEL_CATALOGS[request.provider].firstPage(request.endpoint.baseUrl);
   const ids = await collect(request, signal, first, 0);
   return [...new Set(ids.filter(usable))]

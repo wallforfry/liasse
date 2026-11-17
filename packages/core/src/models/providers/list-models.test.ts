@@ -6,7 +6,8 @@ import {
   startStubServer,
 } from '../../testing/provider-stub-server.ts';
 import { SYNTHETIC_API_KEY } from '../../testing/provider-wire.ts';
-import { listModels } from './list-models.ts';
+import { MAX_LISTED_MODELS } from '@liasse/contract/domain';
+import { listModels, MAX_MODEL_LIST_PAGES, MODEL_LIST_TIMEOUT_MS } from './list-models.ts';
 import type { ModelPurpose } from './model-catalog.ts';
 import type { ModelProvider } from './registry.ts';
 
@@ -26,8 +27,8 @@ const list = (
   provider: ModelProvider,
   baseUrl: string,
   purpose: ModelPurpose = 'language',
-  signal?: AbortSignal,
-) => listModels({ provider, endpoint: { apiKey: SYNTHETIC_API_KEY, baseUrl }, purpose, signal });
+  timeoutMs?: number,
+) => listModels({ provider, endpoint: { apiKey: SYNTHETIC_API_KEY, baseUrl }, purpose, timeoutMs });
 
 const failureOf = async (listing: Promise<unknown>): Promise<ModelListError> => {
   const error: unknown = await listing.catch((caught: unknown) => caught);
@@ -238,7 +239,39 @@ describe('listModels', () => {
     const server = await serve(() => undefined);
 
     await expect(
-      failureOf(list('openai', `${server.url}/v1`, 'language', AbortSignal.timeout(50))),
+      failureOf(list('openai', `${server.url}/v1`, 'language', 50)),
     ).resolves.toMatchObject({ failure: 'timeout' });
+  });
+
+  it('gives a listing 15 seconds unless told otherwise', () => {
+    expect(MODEL_LIST_TIMEOUT_MS).toBe(15_000);
+  });
+
+  it('stops following pages at its page limit', async () => {
+    const server = await serve((_request, index) => ({
+      body: {
+        data: [{ id: `model-${String(index).padStart(3, '0')}` }],
+        has_more: true,
+        last_id: `model-${String(index)}`,
+      },
+    }));
+
+    const ids = await list('anthropic', `${server.url}/v1`);
+    expect(server.requests).toHaveLength(MAX_MODEL_LIST_PAGES);
+    expect(ids).toHaveLength(MAX_MODEL_LIST_PAGES);
+  });
+
+  it('cuts a list longer than the contract accepts, after sorting it', async () => {
+    const count = MAX_LISTED_MODELS + 5;
+    const ids = Array.from(
+      { length: count },
+      (_, index) => `model-${String(count - index).padStart(5, '0')}`,
+    );
+    const server = await serve(() => ({ body: { data: ids.map((id) => ({ id })) } }));
+
+    const listed = await list('openai', `${server.url}/v1`);
+    expect(listed).toHaveLength(MAX_LISTED_MODELS);
+    expect(listed[0]).toBe('model-00001');
+    expect(listed.at(-1)).toBe(`model-${String(MAX_LISTED_MODELS).padStart(5, '0')}`);
   });
 });
