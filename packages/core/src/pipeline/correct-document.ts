@@ -1,8 +1,15 @@
+import { KEY_DATES_FIELD, ownValue } from '@liasse/contract/registry';
 import { eq } from 'drizzle-orm';
 import { z } from 'zod';
 import { documents } from '../db/schema/documents.ts';
 import { writeIfLive } from '../ingest/live-write.ts';
 import { enqueue } from '../jobs/enqueue.ts';
+import { typesComputedNoticeDeadline } from '../knowledge/key-dates.ts';
+import {
+  manualKeyDatesSchema,
+  readNoticePeriod,
+  storeManualKeyDates,
+} from '../knowledge/manual-key-dates.ts';
 import { resolveType } from '../registry/read-types.ts';
 import { findTypeById, type RegisteredType } from '../registry/type-store.ts';
 import { entitiesOf, maskOf } from './bindings.ts';
@@ -79,6 +86,9 @@ interface Changed {
 
 type Applied = PipelineDocument | 'stale' | Changed | undefined;
 
+const correctsKeyDates = ({ set, clear }: SectionPatch): boolean =>
+  Object.hasOwn(set, KEY_DATES_FIELD) || clear.includes(KEY_DATES_FIELD);
+
 // A settled document is indexed again, since its chunks carry its title and its type
 // and obey its `private` flag; after a change of type its fields are extracted again
 // first. A document still on its way gets both from the pipeline.
@@ -104,6 +114,7 @@ const apply = (
         .update(documents)
         .set(applyCorrection(stored, correction))
         .where(eq(documents.id, read.id));
+      if (correctsKeyDates(correction.core)) await storeManualKeyDates(tx, read.id);
       if (correction.private !== undefined && correction.private !== stored.private) {
         await deps.onPrivacyChanged?.(tx, read.id);
       }
@@ -144,6 +155,29 @@ const planSections = (
       );
 };
 
+// The notice period is read outside the transaction: one an extraction stores meanwhile
+// leaves the typed deadline standing, as `planManualKeyDates` keeps it.
+const typedNoticeDeadline = async (
+  { db }: PipelineDeps,
+  id: string,
+  { set }: SectionPatch,
+): Promise<readonly CorrectionError[]> => {
+  const keyDates = manualKeyDatesSchema.safeParse(ownValue(set, KEY_DATES_FIELD)).data;
+  if (keyDates === undefined) return [];
+  return typesComputedNoticeDeadline(keyDates, await readNoticePeriod(db, id))
+    ? [
+        {
+          code: 'invalid_value',
+          field: KEY_DATES_FIELD,
+          message:
+            `core.${KEY_DATES_FIELD}: the notice deadline of this document is computed from ` +
+            'its renewal date and the notice period it states: give the renewal date and ' +
+            'leave the notice deadline out.',
+        },
+      ]
+    : [];
+};
+
 const NOT_FOUND = (id: string): CorrectionError => ({
   code: 'document_not_found',
   message: `No document has the id "${id}".`,
@@ -176,6 +210,8 @@ export const correctDocument = async (
     const planned = planSections(input.data, document, target.type);
     if (!planned.ok) return planned;
     const { core, fields, confirm } = planned.value;
+    const contradicted = await typedNoticeDeadline(deps, id, core);
+    if (contradicted.length > 0) return refused(...contradicted);
     const names = entityNames(core, fields);
     const bound = { entities: entitiesOf(deps), maskSensitive: maskOf(deps) };
     const { resolutions } = await resolveMentions(bound, names, {

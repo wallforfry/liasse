@@ -1,6 +1,7 @@
 import { eq } from 'drizzle-orm';
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 import { documentPages, documents } from '../db/schema/documents.ts';
+import { documentDates } from '../db/schema/knowledge.ts';
 import { jobs } from '../db/schema/jobs.ts';
 import { entities } from '../db/schema/registry.ts';
 import {
@@ -9,6 +10,7 @@ import {
   PIPELINE_PROVENANCE_KEY,
 } from '../domain/provenance.ts';
 import { deleteDocument } from '../ingest/delete-document.ts';
+import { upcoming } from '../knowledge/upcoming.ts';
 import { createType } from '../registry/create-type.ts';
 import { createGate } from '../testing/async.ts';
 import { createFakeEmbedder } from '../testing/fake-embedder.ts';
@@ -116,6 +118,16 @@ describe('correctDocument', () => {
     expect(await queued()).toEqual([{ kind: 'reindex_document', payload: { documentId: id } }]);
   });
 
+  // `get_status` and the document answer `updated_at`: a correction is a change a
+  // caller polling the status sees there.
+  it('moves the update time of the document', async () => {
+    const type = await bill();
+    const before = new Date('2026-01-01T00:00:00.000Z');
+    const id = await settled(type.id, { updatedAt: before });
+    await correctDocument(harness.deps(), { id, core: { reference: 'SYN-2' } });
+    expect((await harness.document(id)).updatedAt.getTime()).toBeGreaterThan(before.getTime());
+  });
+
   it('clears a field given as null and remembers it was cleared', async () => {
     const type = await bill();
     const id = await settled(type.id);
@@ -183,7 +195,28 @@ describe('correctDocument', () => {
     ['an unknown type field', { fields: { colour: 'blue' } }, 'unknown_field'],
     ['a wrong value of a type field', { fields: { tags: 'not a list' } }, 'invalid_value'],
     ['clearing a field that does not exist', { fields: { colour: null } }, 'unknown_field'],
-    ['key dates', { core: { key_dates: [] } }, 'unsupported_field'],
+    [
+      'a key date of an unknown kind',
+      { core: { key_dates: [{ kind: 'birthday', date: '2027-03-01', label: 'x' }] } },
+      'invalid_value',
+    ],
+    [
+      'a key date with a blank label',
+      { core: { key_dates: [{ kind: 'due', date: '2027-03-01', label: '  ' }] } },
+      'invalid_value',
+    ],
+    [
+      'one key date twice',
+      {
+        core: {
+          key_dates: [
+            { kind: 'due', date: '2027-03-01', label: 'Due' },
+            { kind: 'due', date: '2027-03-01', label: 'Due again' },
+          ],
+        },
+      },
+      'invalid_value',
+    ],
     ['an entity the resolver refuses', { core: { issuer: 'x'.repeat(201) } }, 'unresolved_entity'],
     ['a key the operation does not have', { title: 'New title' }, 'invalid_input'],
   ])('refuses %s and writes nothing', async (_case, patch, code) => {
@@ -194,6 +227,191 @@ describe('correctDocument', () => {
     expect(result).toMatchObject({ ok: false, errors: [{ code }] });
     expect(await harness.document(id)).toEqual(before);
     expect(await queued()).toEqual([]);
+  });
+
+  describe('key dates', () => {
+    const TWO_MONTHS = { amount: 2, unit: 'months', confidence: 0.8 };
+    const STATUTORY_END = { kind: 'due', date: '2109-06-28', label: 'Statutory end' };
+    const SITUATION = { kind: 'event', date: '2026-05-04', label: 'Situation date' };
+    const RENEWAL = { kind: 'renewal', date: '2027-03-01', label: 'Renewal' };
+
+    // A certificate whose extraction read the statutory end of a company as a due date.
+    const certificate = async (overrides = {}): Promise<string> => {
+      const type = await bill();
+      const id = await settled(type.id, {
+        core: { reference: 'SYN-1', key_dates: [STATUTORY_END] },
+        provenance: { reference: EXTRACTED, key_dates: [EXTRACTED] },
+        ...overrides,
+      });
+      await harness.db.insert(documentDates).values({
+        documentId: id,
+        ...STATUTORY_END,
+        kind: 'due',
+        model: 'm',
+        schemaVersion: 1,
+        page: 1,
+        quote: 'q',
+        confidence: 0.9,
+      });
+      return id;
+    };
+
+    const rowsOf = async (id: string) =>
+      (await harness.db.select().from(documentDates).where(eq(documentDates.documentId, id)))
+        .map(({ kind, date, label, model, quote, confidence, manual }) => ({
+          kind,
+          date,
+          label,
+          model,
+          quote,
+          confidence,
+          manual,
+        }))
+        .sort((a, b) => a.date.localeCompare(b.date));
+
+    const given = (keyDate: { kind: string; date: string; label: string }) => ({
+      ...keyDate,
+      model: null,
+      quote: null,
+      confidence: null,
+      manual: true,
+    });
+
+    it('replaces them in the core and in `document_dates`, computing the notice deadline', async () => {
+      const id = await certificate({ noticePeriod: TWO_MONTHS });
+      const result = await correctDocument(harness.deps(), {
+        id,
+        core: { key_dates: [SITUATION, { ...RENEWAL, label: '  Renewal ' }] },
+      });
+      expect(result).toMatchObject({ ok: true });
+      const document = await harness.document(id);
+      expect(document.core.key_dates).toEqual([SITUATION, RENEWAL]);
+      expect(document.provenance.key_dates).toEqual([MANUAL_PROVENANCE, MANUAL_PROVENANCE]);
+      expect(document.manualFields).toEqual(['key_dates']);
+      expect(document.status).toBe('indexed');
+      expect(await rowsOf(id)).toEqual([
+        given(SITUATION),
+        {
+          kind: 'notice_deadline',
+          date: '2027-01-01',
+          label: 'Notice deadline: 2 months before Renewal',
+          model: null,
+          quote: null,
+          confidence: 0.8,
+          manual: false,
+        },
+        given(RENEWAL),
+      ]);
+    });
+
+    it('clears them in the core and in `document_dates`', async () => {
+      const id = await certificate();
+      expect(
+        await correctDocument(harness.deps(), { id, core: { key_dates: null } }),
+      ).toMatchObject({ ok: true });
+      const document = await harness.document(id);
+      expect(document.core).toEqual({ reference: 'SYN-1' });
+      expect(document.provenance).not.toHaveProperty('key_dates');
+      expect(document.manualFields).toEqual(['key_dates']);
+      expect(await rowsOf(id)).toEqual([]);
+    });
+
+    it('leaves `document_dates` alone when the key dates are not corrected', async () => {
+      const id = await certificate();
+      const before = await rowsOf(id);
+      await correctDocument(harness.deps(), { id, core: { reference: 'SYN-2' } });
+      expect(await rowsOf(id)).toEqual(before);
+    });
+
+    it('answers `upcoming` with the dates of the core', async () => {
+      const id = await certificate({ noticePeriod: TWO_MONTHS });
+      await correctDocument(harness.deps(), { id, core: { key_dates: [SITUATION, RENEWAL] } });
+      const { dates } = await upcoming(
+        { db: harness.db },
+        { from: '2026-01-01', to: '2110-12-31', includePrivate: true },
+      );
+      expect(
+        dates.map(({ kind, date, label, computed }) => ({ kind, date, label, computed })),
+      ).toEqual([
+        { ...SITUATION, computed: false },
+        {
+          kind: 'notice_deadline',
+          date: '2027-01-01',
+          label: 'Notice deadline: 2 months before Renewal',
+          computed: true,
+        },
+        { ...RENEWAL, computed: false },
+      ]);
+      const { core } = await harness.document(id);
+      const typed = dates.filter(({ computed }) => !computed);
+      expect(typed.map(({ kind, date, label }) => ({ kind, date, label }))).toEqual(core.key_dates);
+    });
+
+    it('refuses a notice deadline the renewal date and the notice period compute', async () => {
+      const id = await certificate({ noticePeriod: TWO_MONTHS });
+      const before = await harness.document(id);
+      const typed = { kind: 'notice_deadline', date: '2027-02-01', label: 'Notice' };
+      const result = await correctDocument(harness.deps(), {
+        id,
+        core: { key_dates: [RENEWAL, typed] },
+      });
+      expect(result).toMatchObject({
+        ok: false,
+        errors: [{ code: 'invalid_value', field: 'key_dates' }],
+      });
+      expect(await harness.document(id)).toEqual(before);
+    });
+
+    it('keeps a notice deadline a person gives when nothing computes one', async () => {
+      const id = await certificate();
+      const typed = { kind: 'notice_deadline', date: '2027-02-01', label: 'Notice' };
+      await correctDocument(harness.deps(), { id, core: { key_dates: [RENEWAL, typed] } });
+      expect(await rowsOf(id)).toEqual([given(typed), given(RENEWAL)]);
+    });
+
+    it('stays the same in the core and `document_dates` after a re-extraction', async () => {
+      const id = await certificate();
+      await correctDocument(harness.deps(), { id, core: { key_dates: [SITUATION, RENEWAL] } });
+      const text = 'Statutory end 28/06/2109.\nNotice period: 1 month.';
+      await harness.db.insert(documentPages).values({ documentId: id, page: 1, text });
+      const reextracting = scriptedModel({
+        extract: () => ({
+          core: {
+            key_dates: [
+              { value: STATUTORY_END, page: 1, quote: 'Statutory end 28/06/2109', confidence: 0.9 },
+            ],
+          },
+          fields: {},
+          extra: {},
+          notice_period: {
+            amount: 1,
+            unit: 'months',
+            page: 1,
+            quote: 'Notice period: 1 month',
+            confidence: 0.7,
+          },
+        }),
+      });
+      await reextractDocument(harness.deps({ textModel: reextracting }), id, live());
+      const document = await harness.document(id);
+      expect(document.core.key_dates).toEqual([SITUATION, RENEWAL]);
+      expect(document.provenance.key_dates).toEqual([MANUAL_PROVENANCE, MANUAL_PROVENANCE]);
+      expect(document.noticePeriod).toEqual({ amount: 1, unit: 'months', confidence: 0.7 });
+      // The dates a person gave stand; the notice period read again computes their deadline.
+      expect(await rowsOf(id)).toEqual([
+        given(SITUATION),
+        {
+          kind: 'notice_deadline',
+          date: '2027-02-01',
+          label: 'Notice deadline: 1 month before Renewal',
+          model: null,
+          quote: null,
+          confidence: 0.7,
+          manual: false,
+        },
+        given(RENEWAL),
+      ]);
+    });
   });
 
   describe('confirm', () => {

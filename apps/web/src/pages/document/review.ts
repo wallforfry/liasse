@@ -67,6 +67,20 @@ export const percent = (confidence: number): string => `${String(Math.round(conf
 export const confidenceLabel = (confidence: number | null): string =>
   confidence === null ? 'confidence unknown' : `confidence ${percent(confidence)}`;
 
+const untypedBecause = (refusal: DocumentReview['type']['refusal']): string => {
+  switch (refusal) {
+    case 'quota_exceeded':
+      return ': the daily quota of new types is reached, create the type by hand';
+    case 'private_document':
+      return ': a new type for a private document needs a local embedder';
+    case 'invalid_proposal':
+    case 'rejected_type':
+      return ': the new type the model proposed was refused';
+    case null:
+      return '';
+  }
+};
+
 /** Why the document is flagged, one sentence per reason. */
 export const reasonSentences = (
   document: DocumentView,
@@ -81,7 +95,7 @@ export const reasonSentences = (
       case 'type_fallback':
         return 'No type fitted and no new one could be created: it got the closest type.';
       case 'type_untyped':
-        return 'No type could be given to it.';
+        return `No type could be given to it${untypedBecause(review.type.refusal)}.`;
       case 'reextraction_failed':
         return 'Its last re-extraction failed: its values are the ones read before.';
       case 'flagged_at_settlement':

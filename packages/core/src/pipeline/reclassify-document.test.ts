@@ -277,8 +277,31 @@ describe('reclassifying a document', () => {
       expect((await eventsOf(id))[0]).toMatchObject({ details: { classification: 'new' } });
     });
 
-    it('never lands on the rejected type through a new slug, and falls back to another', async () => {
-      const { energy, water } = await seedTypes();
+    // The document as `settled` wrote it, and the one failed event that says why.
+    const expectUnchanged = async (id: string, typeId: string, refusal: string) => {
+      expect(await harness.document(id)).toMatchObject({
+        typeId,
+        status: 'indexed',
+        confidence: 0.9,
+        fields: { meter_id: 'PDL-1' },
+        extra: { usage: 350 },
+        provenance: { [PIPELINE_PROVENANCE_KEY]: { type: MANUAL_PROVENANCE } },
+      });
+      expect(await queued()).toEqual([]);
+      expect(await eventsOf(id)).toEqual([
+        expect.objectContaining({
+          stage: 'classification',
+          outcome: 'failed',
+          status: 'indexed',
+          errorCode: refusal,
+          retryable: false,
+          details: { classification: 'untyped', type_refusal: refusal },
+        }),
+      ]);
+    };
+
+    it('never lands on the rejected type through a new slug, nor on another type', async () => {
+      const { energy } = await seedTypes();
       const id = await settled(energy.id);
       const textModel = scriptedModel({
         classify: () => ({ ...NEW_TYPE, new_type: { ...NEW_TYPE.new_type, slug: 'energy_bill' } }),
@@ -286,28 +309,53 @@ describe('reclassifying a document', () => {
       await reclassifyDocument(harness.deps({ textModel }), payloadOf(id, energy.id), live());
       expect(textModel.calls.filter(isClassification)).toHaveLength(2);
       expect(textModel.calls[1]?.prompt).toContain('which a person said is wrong');
-      expect(await harness.document(id)).toMatchObject({
-        typeId: water.id,
-        provenance: { [PIPELINE_PROVENANCE_KEY]: { type: { confidence: 0, outcome: 'fallback' } } },
-      });
+      await expectUnchanged(id, energy.id, 'rejected_type');
     });
 
-    it('leaves the document untyped when no other type exists and none may be created', async () => {
+    it('keeps the document as it was when a new type may not be created', async () => {
       const { energy } = await seedTypes();
-      await harness.db.delete(docTypes).where(eq(docTypes.slug, 'water_bill'));
       const id = await settled(energy.id, { private: true });
       const deps = harness.deps({
         textModel: scriptedModel({}),
         embedder: createFakeEmbedder({ isLocal: false }),
       });
       await reclassifyDocument(deps, payloadOf(id, energy.id), live());
-      expect(await harness.document(id)).toMatchObject({
-        typeId: null,
-        fields: {},
-        extra: { usage: 350, meter_id: 'PDL-1' },
-        provenance: { [PIPELINE_PROVENANCE_KEY]: { type: { outcome: 'untyped' } } },
+      await expectUnchanged(id, energy.id, 'private_document');
+    });
+
+    // Real use: a receipt that only a new type fits, asked with `new_type`, was filed under
+    // the closest other type once the quota was reached, and its re-extraction dropped
+    // values that were right.
+    it('assigns no other existing type when a new type is required and the quota is reached', async () => {
+      const { energy } = await seedTypes();
+      const id = await settled(energy.id);
+      const deps = harness.deps({
+        textModel: scriptedModel({
+          classify: () => ({ ...NEW_TYPE, new_type: { ...NEW_TYPE.new_type, slug: 'gas_bill' } }),
+        }),
       });
-      expect(await queued()).toEqual([{ kind: 'reextract_document', payload: { documentId: id } }]);
+      await reclassifyDocument(
+        { ...deps, settings: { ...deps.settings, maxNewTypesPerDay: 2 } },
+        payloadOf(id, energy.id, { newType: true }),
+        live(),
+      );
+      await expectUnchanged(id, energy.id, 'quota_exceeded');
+    });
+
+    it('takes no existing type that a new slug names when a new type is required', async () => {
+      const { energy } = await seedTypes();
+      const id = await settled(energy.id);
+      const textModel = scriptedModel({
+        classify: () => ({ ...NEW_TYPE, new_type: { ...NEW_TYPE.new_type, slug: 'water_bill' } }),
+      });
+      await reclassifyDocument(
+        harness.deps({ textModel }),
+        payloadOf(id, energy.id, { newType: true }),
+        live(),
+      );
+      expect(textModel.calls.filter(isClassification)).toHaveLength(2);
+      expect(textModel.calls[1]?.prompt).toContain('A type with the slug "water_bill"');
+      await expectUnchanged(id, energy.id, 'invalid_proposal');
     });
 
     it('writes nothing when the type changed after the request', async () => {

@@ -1,5 +1,6 @@
 import {
   keyDateSchema,
+  type RejectionReason,
   MAX_FACTS_PER_DOCUMENT,
   MAX_KEY_DATES_PER_DOCUMENT,
   MAX_SUBJECTS_PER_DOCUMENT,
@@ -24,7 +25,7 @@ export type ReadFact = SupportedFact<ExtractedFact>;
 
 export interface FactsReading {
   readonly facts: readonly ReadFact[];
-  readonly rejected: number;
+  readonly rejected: readonly RejectionReason[];
 }
 
 // The table refuses a validity that ends before it starts: such a fact is dropped
@@ -34,21 +35,36 @@ const holdsTogether = ({ valid_from: from, valid_to: to }: ExtractedFact): boole
 
 // A fact is sourced like a value: its quote must stand in the text and state what the
 // fact asserts, and the page kept is the one the quote stands on.
-export const readFacts = (
-  output: ExtractionOutput,
-  { quotes, language }: Evidence,
-): FactsReading => {
-  const returned = output.facts ?? [];
-  const facts = returned
-    .flatMap((raw) => factSchema.safeParse(raw).data ?? [])
-    .filter(holdsTogether)
-    .flatMap((fact) => {
-      const page = quotes.locate(fact.quote, fact.page);
-      const supported = page === undefined ? undefined : factSupport(fact, language);
-      return supported === undefined || page === undefined ? [] : [{ ...supported, page }];
-    })
-    .slice(0, MAX_FACTS_PER_DOCUMENT);
-  return { facts, rejected: returned.length - facts.length };
+const readFact = (raw: unknown, { quotes, language }: Evidence): ReadFact | RejectionReason => {
+  const fact = factSchema.safeParse(raw).data;
+  if (fact === undefined) return 'malformed';
+  if (!holdsTogether(fact)) return 'invalid_value';
+  const page = quotes.locate(fact.quote, fact.page);
+  if (page === undefined) return 'quote_not_found';
+  const supported = factSupport(fact, language);
+  return supported === undefined ? 'quote_not_stating_value' : { ...supported, page };
+};
+
+const keptOrReasons = <Kept extends object>(
+  results: readonly (Kept | RejectionReason)[],
+  limit: number,
+): { readonly kept: readonly Kept[]; readonly rejected: readonly RejectionReason[] } => {
+  const kept = results.flatMap((result) => (typeof result === 'string' ? [] : [result]));
+  return {
+    kept: kept.slice(0, limit),
+    rejected: [
+      ...results.flatMap((result) => (typeof result === 'string' ? [result] : [])),
+      ...kept.slice(limit).map((): RejectionReason => 'over_limit'),
+    ],
+  };
+};
+
+export const readFacts = (output: ExtractionOutput, evidence: Evidence): FactsReading => {
+  const { kept, rejected } = keptOrReasons(
+    (output.facts ?? []).map((raw) => readFact(raw, evidence)),
+    MAX_FACTS_PER_DOCUMENT,
+  );
+  return { facts: kept, rejected };
 };
 
 export const factEntityNames = ({ facts }: FactsReading): readonly string[] =>
@@ -62,32 +78,34 @@ type TraceInput = Pick<KeyDateInput, 'model' | 'schemaVersion' | 'page' | 'quote
 
 export interface NoticePeriodReading {
   readonly noticePeriod: NoticePeriodInput | undefined;
-  readonly rejected: number;
+  readonly rejected: readonly RejectionReason[];
 }
+
+const readPeriod = (raw: unknown, { quotes }: Evidence): NoticePeriodInput | RejectionReason => {
+  const period = noticePeriodOutputSchema.safeParse(raw).data;
+  if (period === undefined) return 'malformed';
+  if (quotes.locate(period.quote, period.page) === undefined) return 'quote_not_found';
+  return statesDuration(period.quote, period.amount, period.unit)
+    ? { amount: period.amount, unit: period.unit, confidence: period.confidence }
+    : 'quote_not_stating_value';
+};
 
 // The notice deadline is computed from the period: its quote must stand in the text and
 // write its amount and its unit, or the deadline would be one the document never gave.
 export const readNoticePeriod = (
   { notice_period: raw }: ExtractionOutput,
-  { quotes }: Evidence,
+  evidence: Evidence,
 ): NoticePeriodReading => {
-  if (raw === undefined) return { noticePeriod: undefined, rejected: 0 };
-  const period = noticePeriodOutputSchema.safeParse(raw).data;
-  const supported =
-    period !== undefined &&
-    quotes.locate(period.quote, period.page) !== undefined &&
-    statesDuration(period.quote, period.amount, period.unit);
-  return supported
-    ? {
-        noticePeriod: { amount: period.amount, unit: period.unit, confidence: period.confidence },
-        rejected: 0,
-      }
-    : { noticePeriod: undefined, rejected: 1 };
+  if (raw === undefined) return { noticePeriod: undefined, rejected: [] };
+  const period = readPeriod(raw, evidence);
+  return typeof period === 'string'
+    ? { noticePeriod: undefined, rejected: [period] }
+    : { noticePeriod: period, rejected: [] };
 };
 
 export interface SubjectsReading {
   readonly subjects: readonly SubjectInput[];
-  readonly rejected: number;
+  readonly rejected: readonly RejectionReason[];
 }
 
 // A subject is named in its quote. Its identifier links it to the same subject in other
@@ -106,25 +124,33 @@ const toSubject = (
   };
 };
 
+const readCandidate = (raw: unknown, { quotes }: Evidence): SubjectCandidate | RejectionReason => {
+  const candidate = subjectCandidateSchema.safeParse(raw).data;
+  if (candidate === undefined) return 'malformed';
+  const { name, quote, page } = candidate;
+  if (quotes.locate(quote, page) === undefined) return 'quote_not_found';
+  return quoteSupports('text', name, quote, undefined) ? candidate : 'quote_not_stating_value';
+};
+
 export const readSubjects = (
   output: ExtractionOutput,
-  { quotes }: Evidence,
+  evidence: Evidence,
   documentText: string,
 ): SubjectsReading => {
-  const returned = output.subjects ?? [];
   const compactText = compactIdentifier(documentText);
-  const quoted = returned
-    .flatMap((raw) => subjectCandidateSchema.safeParse(raw).data ?? [])
-    .filter(
-      ({ name, quote, page }) =>
-        quotes.locate(quote, page) !== undefined && quoteSupports('text', name, quote, undefined),
-    )
-    .slice(0, MAX_SUBJECTS_PER_DOCUMENT);
+  const { kept: quoted, rejected } = keptOrReasons(
+    (output.subjects ?? []).map((raw) => readCandidate(raw, evidence)),
+    MAX_SUBJECTS_PER_DOCUMENT,
+  );
   const subjects = quoted.map((candidate) => toSubject(candidate, compactText));
-  const identified = (list: readonly { readonly identifier?: string | undefined }[]) =>
-    list.filter(({ identifier }) => identifier !== undefined).length;
-  const unwritten = identified(quoted) - identified(subjects);
-  return { subjects, rejected: returned.length - subjects.length + unwritten };
+  const unwritten = quoted.filter(
+    ({ identifier }, index) =>
+      identifier !== undefined && subjects[index]?.identifier === undefined,
+  );
+  return {
+    subjects,
+    rejected: [...rejected, ...unwritten.map((): RejectionReason => 'identifier_not_in_text')],
+  };
 };
 
 const traceOf = (

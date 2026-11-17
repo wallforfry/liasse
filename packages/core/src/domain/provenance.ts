@@ -1,4 +1,9 @@
-import { CLASSIFICATION_OUTCOMES, entityMatchRuleSchema } from '@liasse/contract/domain';
+import { rejectionSchema } from '@liasse/contract';
+import {
+  CLASSIFICATION_OUTCOMES,
+  entityMatchRuleSchema,
+  TYPE_REFUSALS,
+} from '@liasse/contract/domain';
 import { z } from 'zod';
 
 // `documents.provenance` is keyed by the bare name of the field it describes, for a core
@@ -72,7 +77,13 @@ const textProvenanceSchema = z.object({
 
 const typeProvenanceSchema = z.union([
   manualProvenanceSchema,
-  z.object({ model: z.string(), confidence, outcome: z.enum(CLASSIFICATION_OUTCOMES) }),
+  z.object({
+    model: z.string(),
+    confidence,
+    outcome: z.enum(CLASSIFICATION_OUTCOMES),
+    // Set with the outcome `untyped`: why the new type the model proposed was not created.
+    refusal: z.enum(TYPE_REFUSALS).optional(),
+  }),
 ]);
 export type TypeProvenance = Readonly<z.output<typeof typeProvenanceSchema>>;
 
@@ -84,6 +95,9 @@ const extractionProvenanceSchema = z.object({
   truncated: z.boolean(),
   // Values the model returned that were dropped: no verifiable quote, or not valid.
   rejected_values: z.number().int().min(0),
+  // The same, by section, name and reason; absent from an extraction stored before it was
+  // recorded. Never the value or its quote.
+  rejections: z.array(rejectionSchema).optional(),
   // Identifiers the model gave for an entity that were not used: absent from the text,
   // empty or malformed.
   dropped_identifiers: z.number().int().min(0).optional(),

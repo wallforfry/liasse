@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { CLASSIFICATION_OUTCOMES } from './domain/enums.ts';
+import { CLASSIFICATION_OUTCOMES, TYPE_REFUSALS } from './domain/enums.ts';
 import {
   liveDocumentStatusSchema,
   processingOutcomeSchema,
@@ -17,6 +17,10 @@ export const documentEventDetailsSchema = z.strictObject({
   attachments_ingested: count.optional(),
   attachments_skipped: count.optional(),
   classification: z.enum(CLASSIFICATION_OUTCOMES).optional(),
+  type_refusal: z
+    .enum(TYPE_REFUSALS)
+    .optional()
+    .describe('Why the new type the model proposed was not created.'),
   rejected_values: count
     .optional()
     .describe('Values the model returned that failed validation and were dropped.'),

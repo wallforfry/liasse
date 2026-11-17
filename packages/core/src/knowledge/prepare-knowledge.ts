@@ -3,7 +3,12 @@ import { ENTITY_SIMILARITY, type SimilarityThresholds } from '../entities/simila
 import type { Embedder, Embedding } from '../models/ports.ts';
 import type { KnowledgeContext } from './context.ts';
 import { type PreparedFact, prepareFact } from './facts.ts';
-import { type KnowledgeDocument, type KnowledgeInput, parseKnowledge } from './input.ts';
+import {
+  type KnowledgeDocument,
+  type KnowledgeInput,
+  type NoticePeriod,
+  parseKnowledge,
+} from './input.ts';
 import { type KeyDateRow, planKeyDates } from './key-dates.ts';
 import { arbitrateOutsideLock, type ResolvableSubject } from './resolve-subject.ts';
 import { prepareSubjectMentions } from './subject-mention.ts';
@@ -14,6 +19,9 @@ import { prepareSubjectMentions } from './subject-mention.ts';
 export interface PreparedKnowledge {
   readonly prepared: true;
   readonly keyDates: readonly KeyDateRow[];
+  // Stored with the document: the key dates a person gives later get their notice
+  // deadline from it.
+  readonly noticePeriod: NoticePeriod | undefined;
   readonly facts: readonly PreparedFact[];
   // One embedding per fact, in order. Undefined when none was computed.
   readonly factEmbeddings: readonly Embedding[] | undefined;
@@ -43,6 +51,7 @@ export const prepareWithoutModels = (
   return {
     prepared: true,
     keyDates: planKeyDates(knowledge.keyDates, knowledge.noticePeriod),
+    noticePeriod: knowledge.noticePeriod,
     facts: knowledge.facts.map(prepareFact),
     factEmbeddings: undefined,
     subjects: prepareSubjectMentions(identifierKey, knowledge.subjects).map((mention) => ({

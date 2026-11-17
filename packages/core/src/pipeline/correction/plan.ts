@@ -7,6 +7,7 @@ import {
 } from '@liasse/contract/registry';
 import { z } from 'zod';
 import type { TypeFields } from '../../registry/fields.ts';
+import { manualKeyDatesSchema } from '../../knowledge/manual-key-dates.ts';
 import { validateDocumentFields } from '../../registry/validate-document-fields.ts';
 import { coreValueSchema } from '../../registry/values.ts';
 
@@ -90,37 +91,41 @@ const unknownFields = (names: readonly string[], known: readonly string[]) =>
       message: `There is no field "${field}" to clear. The fields are: ${known.join(', ')}.`,
     }));
 
-// Key dates also live in `document_dates`, which the knowledge layer owns: correcting
-// them here would leave the two apart.
-const KEY_DATES_UNSUPPORTED: CorrectionError = {
-  code: 'unsupported_field',
-  field: KEY_DATES_FIELD,
-  message: `"${KEY_DATES_FIELD}" cannot be corrected through this operation.`,
+const invalidValues = (
+  issues: readonly z.core.$ZodIssue[],
+  prefix: readonly PropertyKey[],
+): readonly CorrectionError[] =>
+  issues.map(({ path, message }): CorrectionError => {
+    const field = [...prefix, ...path].map(String).join('.');
+    return {
+      code: 'invalid_value',
+      message: `core${field === '' ? '' : `.${field}`}: ${message}`,
+      ...(field === '' ? {} : { field }),
+    };
+  });
+
+// Key dates are also rows of `document_dates`: they are held to the bounds of those rows
+// here, so that the correction writes the same dates to both.
+const parseKeyDates = (set: Readonly<Record<string, unknown>>) => {
+  const keyDates = ownValue(set, KEY_DATES_FIELD);
+  return keyDates === undefined ? undefined : manualKeyDatesSchema.safeParse(keyDates);
 };
 
 export const planCore = (patch: Readonly<Record<string, unknown>>): Planned<SectionPatch> => {
-  if (Object.hasOwn(patch, KEY_DATES_FIELD)) return { ok: false, errors: [KEY_DATES_UNSUPPORTED] };
   const { set, clear } = split(patch);
   const parsed = coreValueSchema().safeParse(set);
+  const keyDates = parseKeyDates(set);
   const errors: readonly CorrectionError[] = [
     ...unknownFields(clear, CORE_FIELD_NAMES),
-    ...(parsed.success
-      ? []
-      : parsed.error.issues.map(({ path, message }): CorrectionError => {
-          const field = path.map(String).join('.');
-          return {
-            code: 'invalid_value',
-            message: `core${field === '' ? '' : `.${field}`}: ${message}`,
-            ...(field === '' ? {} : { field }),
-          };
-        })),
+    ...(parsed.success ? [] : invalidValues(parsed.error.issues, [])),
+    ...(parsed.success && keyDates?.success === false
+      ? invalidValues(keyDates.error.issues, [KEY_DATES_FIELD])
+      : []),
   ];
-  return errors.length > 0 || !parsed.success
-    ? { ok: false, errors }
-    : {
-        ok: true,
-        value: { set: parsed.data, clear, entityNames: entityNamesOf(set, CORE_FIELDS) },
-      };
+  if (errors.length > 0 || !parsed.success) return { ok: false, errors };
+  const values =
+    keyDates?.success === true ? { ...parsed.data, [KEY_DATES_FIELD]: keyDates.data } : parsed.data;
+  return { ok: true, value: { set: values, clear, entityNames: entityNamesOf(set, CORE_FIELDS) } };
 };
 
 export const planFields = (

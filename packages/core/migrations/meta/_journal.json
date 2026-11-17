@@ -141,6 +141,13 @@
       "when": 1794922340746,
       "tag": "0019_job_settings_version",
       "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
+      "when": 1794937921457,
+      "tag": "0020_manual_key_dates",
+      "breakpoints": true
     }
   ]
 }

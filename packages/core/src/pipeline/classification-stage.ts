@@ -3,7 +3,7 @@ import { documents } from '../db/schema/documents.ts';
 import { MANUAL_TYPE_FIELD } from '../domain/provenance.ts';
 import { recordDocumentEvent } from '../processing-log/record.ts';
 import { findCandidates } from './classify/candidates.ts';
-import { decideType, type TypeDecision } from './classify/decide-type.ts';
+import { classificationEvent, decideType, type TypeDecision } from './classify/decide-type.ts';
 import type { PipelineDeps } from './deps.ts';
 import { type PipelineDocument, withPipelineProvenance, writeFromStatus } from './document.ts';
 import { loadPages } from './pages.ts';
@@ -36,12 +36,7 @@ const storeDecision = (
       stage: 'classification',
       outcome: 'succeeded',
       status: 'classified',
-      ...(chosen === undefined || !('model' in chosen.provenance)
-        ? {}
-        : {
-            model: chosen.provenance.model,
-            details: { classification: chosen.provenance.outcome },
-          }),
+      ...(chosen === undefined ? {} : classificationEvent(chosen)),
     });
   });
 

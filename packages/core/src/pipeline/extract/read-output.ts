@@ -1,4 +1,4 @@
-import { languageCodeSchema } from '@liasse/contract/domain';
+import { languageCodeSchema, type RejectionReason } from '@liasse/contract/domain';
 import { ownValue } from '@liasse/contract/registry';
 import type { z } from 'zod';
 import type { TypeFields } from '../../registry/fields.ts';
@@ -7,7 +7,7 @@ import { validateDocumentFields } from '../../registry/validate-document-fields.
 import { coreValueSchema, extraValueSchema } from '../../registry/values.ts';
 import { type Evidenced, evidencedSchema, type ExtractionOutput } from './extraction-schema.ts';
 import type { QuoteIndex } from './quotes.ts';
-import { addRejections, type Rejections, rejectionsOf } from './rejections.ts';
+import { dropped, type Rejections } from './rejections.ts';
 import { quoteSupports, type SupportKind } from './support.ts';
 import { coreKinds, type KindOf, kindOfShape, typeKinds } from './value-kinds.ts';
 
@@ -50,6 +50,8 @@ const supported = (
   );
 };
 
+type Verification = { readonly verified: VerifiedValue } | { readonly reason: RejectionReason };
+
 // Spec: a value without a quote verifiable in the text is rejected. The quote must stand
 // in the text, and state the value by the rule of its kind. The page kept is the one the
 // quote stands on.
@@ -57,20 +59,21 @@ const verify = (
   raw: unknown,
   kind: (value: unknown) => SupportKind,
   { quotes, language }: Evidence,
-): VerifiedValue | undefined => {
+): Verification => {
   const evidenced = evidencedSchema.safeParse(raw);
-  if (!evidenced.success) return undefined;
+  if (!evidenced.success) return { reason: 'malformed' };
   const { value, quote } = evidenced.data;
   const page = quotes.locate(quote, evidenced.data.page);
-  return page === undefined || !supported(value, quote, kind, language)
-    ? undefined
-    : { ...evidenced.data, page };
+  if (page === undefined) return { reason: 'quote_not_found' };
+  return supported(value, quote, kind, language)
+    ? { verified: { ...evidenced.data, page } }
+    : { reason: 'quote_not_stating_value' };
 };
 
 interface FieldReading {
   readonly name: string;
   readonly reading?: Reading;
-  readonly rejected: number;
+  readonly rejected: Rejections;
 }
 
 const readField = (
@@ -80,18 +83,18 @@ const readField = (
   evidence: Evidence,
 ): FieldReading => {
   const kind = (value: unknown) => kindOf(name, value);
-  if (!Array.isArray(raw)) {
-    const verified = verify(raw, kind, evidence);
-    return verified === undefined
-      ? { name, rejected: 1 }
-      : { name, reading: verified, rejected: 0 };
-  }
-  const verified = raw.flatMap((item: unknown) => verify(item, kind, evidence) ?? []);
-  return {
-    name,
-    ...(verified.length === 0 ? {} : { reading: verified }),
-    rejected: raw.length - verified.length,
-  };
+  const verifications = (Array.isArray(raw) ? raw : [raw]).map((item: unknown) =>
+    verify(item, kind, evidence),
+  );
+  const verified = verifications.flatMap((result) =>
+    'verified' in result ? [result.verified] : [],
+  );
+  const rejected = verifications.flatMap((result) =>
+    'reason' in result ? dropped(name, result.reason) : [],
+  );
+  const [first] = verified;
+  if (first === undefined) return { name, rejected };
+  return { name, reading: Array.isArray(raw) ? verified : first, rejected };
 };
 
 type InvalidNames = (values: Readonly<Record<string, unknown>>) => readonly string[] | 'all';
@@ -133,26 +136,44 @@ const readSection = (
   const isValid = (name: string): boolean => invalid !== 'all' && !invalid.includes(name);
   return {
     readings: Object.fromEntries(read.filter(([name]) => isValid(name))),
-    rejected: rejectionsOf([
-      ...fields.map(({ name, rejected }) => [name, rejected] as const),
-      ...read.flatMap(([name]) => (isValid(name) ? [] : [[name, 1] as const])),
-    ]),
+    rejected: [
+      ...fields.flatMap(({ rejected }) => rejected),
+      ...read.flatMap(([name]) => (isValid(name) ? [] : dropped(name, 'invalid_value'))),
+    ],
   };
 };
 
-// A key that names a core field or a field of the type is a value put in the wrong
-// place, and one that is not snake_case could never be promoted to a field.
+// A key that names a field of the type is a value the model put in both places (one it
+// put in `extra` only is read as the field, by the output schema), and a key that is not
+// snake_case, or names a core field, could never be promoted to a field.
+const keyRejection = (key: string, typeFields: TypeFields): RejectionReason | undefined => {
+  if (ownValue(typeFields, key) !== undefined) return 'duplicate_of_field';
+  return fieldNameViolations(key).length === 0 ? undefined : 'invalid_key';
+};
+
+interface ExtraKeys {
+  readonly accepted: Readonly<Record<string, unknown>>;
+  readonly rejected: Rejections;
+}
+
 const acceptableExtra = (
   extra: Readonly<Record<string, unknown>>,
   typeFields: TypeFields,
-): Readonly<Record<string, unknown>> =>
-  Object.fromEntries(
-    Object.entries(extra)
-      .filter(
-        ([key]) => fieldNameViolations(key).length === 0 && ownValue(typeFields, key) === undefined,
-      )
-      .slice(0, MAX_EXTRA_KEYS),
+): ExtraKeys => {
+  const judged = Object.entries(extra).map(
+    ([key, value]) => [key, value, keyRejection(key, typeFields)] as const,
   );
+  const valid = judged.filter(([, , reason]) => reason === undefined);
+  return {
+    accepted: Object.fromEntries(
+      valid.slice(0, MAX_EXTRA_KEYS).map(([key, value]) => [key, value]),
+    ),
+    rejected: [
+      ...judged.flatMap(([key, , reason]) => (reason === undefined ? [] : dropped(key, reason))),
+      ...valid.slice(MAX_EXTRA_KEYS).flatMap(([key]) => dropped(key, 'over_limit')),
+    ],
+  };
+};
 
 export interface OutputReading {
   readonly core: SectionReading;
@@ -170,20 +191,15 @@ export const readOutput = (
   evidence: Evidence,
 ): OutputReading => {
   const extra = acceptableExtra(output.extra, typeFields);
-  const read = readSection(extra, kindOfShape, evidence, invalidBySchema(extraValueSchema()));
+  const read = readSection(
+    extra.accepted,
+    kindOfShape,
+    evidence,
+    invalidBySchema(extraValueSchema()),
+  );
   return {
     core: readSection(output.core, coreKinds, evidence, invalidBySchema(coreValueSchema())),
     fields: readSection(output.fields, typeKinds(typeFields), evidence, invalidForType(typeFields)),
-    extra: {
-      ...read,
-      rejected: addRejections(
-        read.rejected,
-        rejectionsOf(
-          Object.keys(output.extra).flatMap((key) =>
-            Object.hasOwn(extra, key) ? [] : [[key, 1] as const],
-          ),
-        ),
-      ),
-    },
+    extra: { ...read, rejected: [...read.rejected, ...extra.rejected] },
   };
 };

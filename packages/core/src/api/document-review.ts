@@ -105,12 +105,13 @@ const reviewedValues = (
 // of the classification already weighs on the confidence of the document.
 const reviewedType = (type: TypeProvenance | undefined) =>
   type !== undefined && 'manual' in type
-    ? { confidence: null, outcome: null, manual: true, doubtful: false }
+    ? { confidence: null, outcome: null, manual: true, doubtful: false, refusal: null }
     : {
         confidence: type?.confidence ?? null,
         outcome: type?.outcome ?? null,
         manual: false,
         doubtful: typeReason(type) !== undefined,
+        refusal: type?.refusal ?? null,
       };
 
 // A document flagged by a rule or a threshold that no longer flags it, the threshold
@@ -137,6 +138,7 @@ const flagReasons = (
 export const reviewDocument = (document: ReviewedDocument, threshold: number): DocumentReview => {
   const pipeline = readPipelineProvenance(document.provenance);
   const rejected = pipeline.extraction?.rejected_values ?? 0;
+  const rejections = pipeline.extraction?.rejections ?? [];
   const reasons: readonly ReviewReason[] =
     document.status === 'needs_review'
       ? [
@@ -148,6 +150,7 @@ export const reviewDocument = (document: ReviewedDocument, threshold: number): D
     threshold,
     reasons: [...reasons],
     rejected_values: rejected,
+    rejections: [...rejections],
     type: reviewedType(pipeline.type),
     values: [
       ...reviewedValues('core', document.core, document.provenance, threshold),

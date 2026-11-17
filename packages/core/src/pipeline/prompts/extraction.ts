@@ -5,7 +5,7 @@ import {
   type SchemaLanguage,
   SUBJECT_KINDS,
 } from '@liasse/contract/domain';
-import type { FieldDefinition } from '@liasse/contract/registry';
+import type { CORE_FIELDS, FieldDefinition } from '@liasse/contract/registry';
 import { wrapUntrusted } from '../../prompt/untrusted.ts';
 import type { TypeFields } from '../../registry/fields.ts';
 import { MAX_QUOTE_LENGTH } from '../extract/extraction-schema.ts';
@@ -15,6 +15,32 @@ import { SCHEMA_LANGUAGE_NAMES, UNTRUSTED_RULE } from './classification.ts';
 
 export const QUOTE_RULE = `Every value comes with the number of the page it was read on, a quote and your confidence between 0 and 1. The quote is copied from that page character for character, at most ${String(MAX_QUOTE_LENGTH)} characters, and contains the value as the document writes it. A value you cannot quote is left out: never guess, never compute, never complete.`;
 
+// What each core field holds: a model given the name only reads "amount" as any figure of
+// the document, a share capital or a payroll among them.
+const CORE_FIELD_MEANINGS = {
+  document_date: 'the date the document was issued or signed',
+  issuer: 'who issued it',
+  recipient: 'whom it is addressed to',
+  amount: 'an amount the document says is due, invoiced or paid, with its currency',
+  period: 'the period it covers',
+  due_date: 'the date a payment or an action is due',
+  reference: 'its own number (invoice, contract, file or certificate number)',
+  language: 'the ISO 639-1 code of its language',
+} as const satisfies Readonly<Record<keyof typeof CORE_FIELDS, string>>;
+
+export const CORE_FIELDS_RULE = `In "core", ${Object.entries(CORE_FIELD_MEANINGS)
+  .map(([name, meaning]) => `"${name}" is ${meaning}`)
+  .join('; ')}.`;
+
+export const FIELD_TARGET_RULE =
+  'Each value goes in the field whose meaning it has, not in the first field of the same kind; a field no value of the document is meant for is left out. A value of a field of the type goes in "fields" under its name, never in "extra".';
+
+export const AMOUNT_RULE =
+  '"core.amount" is never a share capital, a payroll, a turnover, an insured sum, a coverage limit or a figure the document merely mentions: such a figure goes in the field of the type meant for it, or in "extra", and "core.amount" is left out.';
+
+export const PLACE_RULE =
+  'A field for a place of issuance, a registry or an authority holds the place, registry or authority the document gives as such, never the address of a registered office, of an establishment or of the recipient, unless the document says it is the same place; an address goes in a field meant for an address, or in "extra".';
+
 export const extractionSystemPrompt = (language: SchemaLanguage): string =>
   [
     'You extract structured data from one document.',
@@ -22,6 +48,10 @@ export const extractionSystemPrompt = (language: SchemaLanguage): string =>
     QUOTE_RULE,
     'Dates are written YYYY-MM-DD, amounts as a number with an ISO 4217 currency code, periods as a start and an end date.',
     '"core" holds the fields every document has and "fields" those of its type; fill only what the document states.',
+    CORE_FIELDS_RULE,
+    FIELD_TARGET_RULE,
+    AMOUNT_RULE,
+    PLACE_RULE,
     `"extra" holds other useful information the fields do not cover, under snake_case keys in ${SCHEMA_LANGUAGE_NAMES[language]}, as text, numbers, booleans, dates or lists of them.`,
     '"title" names the document in a few words and "summary" says what it is in two sentences, both in the language of the document.',
     '"entities" lists each organization or person given as a value or named in a fact, once: its name as written, its kind (org or person), the identifiers printed next to it (company id, VAT number, customer number, IBAN, card number) and a few words of context.',

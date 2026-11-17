@@ -1,3 +1,4 @@
+import type { Rejection } from '@liasse/contract';
 import { CORE_FIELDS } from '@liasse/contract/registry';
 import type { RegisteredType } from '../../registry/type-store.ts';
 import type { KnowledgeInput } from '../../knowledge/input.ts';
@@ -22,10 +23,10 @@ import { maskQuotes, maskValues } from './masking.ts';
 import { createQuoteIndex } from './quotes.ts';
 import { languageOf, readOutput } from './read-output.ts';
 import {
-  addRejections,
   confidencesWithRejections,
-  rejectionsOf,
-  totalRejections,
+  dropped,
+  recordKnowledgeRejections,
+  recordRejections,
 } from './rejections.ts';
 
 type Values = Readonly<Record<string, unknown>>;
@@ -42,8 +43,8 @@ export interface ExtractedDocument {
    * dropped, so that a field none of whose values was kept has only zeros.
    */
   readonly coreConfidences: Readonly<Record<string, readonly number[]>>;
-  /** Every value and fact the model returned that was dropped. */
-  readonly rejected: number;
+  /** Every value and fact the model returned that was dropped, by section, name and reason. */
+  readonly rejections: readonly Rejection[];
   /** Identifiers the model gave for an entity that were not used. */
   readonly droppedIdentifiers: number;
   readonly title: string | null;
@@ -75,17 +76,20 @@ const maskEntries = (mask: MaskSensitive, record: Values): Values =>
   );
 
 interface MaskedSection extends AssembledSection {
-  readonly dropped: readonly string[];
+  readonly masked: readonly string[];
 }
 
 const maskSection = (mask: MaskSensitive, section: AssembledSection): MaskedSection => {
-  const { values, dropped } = maskValues(mask, section.values);
+  const { values, dropped: masked } = maskValues(mask, section.values);
   return {
     values,
-    provenance: maskEntries(mask, without(section.provenance, dropped)),
-    confidences: without(section.confidences, dropped),
-    rejected: addRejections(section.rejected, rejectionsOf(dropped.map((name) => [name, 1]))),
-    dropped,
+    provenance: maskEntries(mask, without(section.provenance, masked)),
+    confidences: without(section.confidences, masked),
+    rejected: [
+      ...section.rejected,
+      ...masked.flatMap((name) => dropped(name, 'sensitive_identifier')),
+    ],
+    masked,
   };
 };
 
@@ -165,18 +169,21 @@ export const interpret = async (
     extra: extra.values,
     provenance: { ...extra.provenance, ...fields.provenance, ...core.provenance },
     coreConfidences: confidencesWithRejections(core.confidences, core.rejected),
-    rejected:
-      totalRejections(addRejections(core.rejected, fields.rejected, extra.rejected)) +
-      facts.rejected +
-      subjects.rejected +
-      noticePeriod.rejected,
+    rejections: [
+      ...recordRejections('core', core.rejected),
+      ...recordRejections('fields', fields.rejected),
+      ...recordRejections('extra', extra.rejected),
+      ...recordKnowledgeRejections('facts', facts.rejected),
+      ...recordKnowledgeRejections('subjects', subjects.rejected),
+      ...recordKnowledgeRejections('notice_period', noticePeriod.rejected),
+    ],
     droppedIdentifiers,
     title: tidyText(mask, output.title, MAX_TITLE_LENGTH),
     summary: tidyText(mask, output.summary, MAX_SUMMARY_LENGTH),
     knowledge: maskKnowledge(
       mask,
       toKnowledge(
-        without(reading.core.readings, core.dropped),
+        without(reading.core.readings, core.masked),
         facts,
         subjects,
         noticePeriod,

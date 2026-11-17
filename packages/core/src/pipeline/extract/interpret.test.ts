@@ -8,6 +8,7 @@ import { extractionOutputSchema, REJECTED } from './extraction-schema.ts';
 import { interpret } from './interpret.ts';
 import { createQuoteIndex } from './quotes.ts';
 import { readOutput } from './read-output.ts';
+import { totalRejections } from './rejections.ts';
 
 const TYPE: RegisteredType = {
   id: 'typ_SYNTHETIC',
@@ -154,7 +155,10 @@ describe('interpret', () => {
         quote: '350 kWh',
       },
     });
-    expect(document.rejected).toBe(2);
+    expect(document.rejections).toEqual([
+      { section: 'core', name: 'due_date', reason: 'quote_not_found', count: 1 },
+      { section: 'fields', name: 'meter_id', reason: 'quote_not_found', count: 1 },
+    ]);
     expect(document.coreConfidences).toEqual({ reference: [0.8], due_date: [0] });
   });
 
@@ -188,7 +192,7 @@ describe('interpret', () => {
       key_dates: [{ kind: 'due', date: '2026-10-03', label: 'Issued' }],
     });
     expect(document.fields).toEqual({});
-    expect(document.rejected).toBe(2);
+    expect(totalRejections(document.rejections)).toBe(2);
     // The rejected key date weighs in the mean of its list, not as a field of its own.
     expect(document.coreConfidences).toEqual({ language: [0.8], key_dates: [0.8, 0] });
   });
@@ -206,7 +210,7 @@ describe('interpret', () => {
       extra: {},
     });
     expect(document.core).toEqual({ reference: 'SYN-1' });
-    expect(document.rejected).toBe(2);
+    expect(totalRejections(document.rejections)).toBe(2);
     expect(document.coreConfidences).toEqual({ reference: [0.8], key_dates: [0, 0] });
   });
 
@@ -222,7 +226,12 @@ describe('interpret', () => {
     expect(document.core).toEqual({});
     expect(document.fields).toEqual({ tags: ['gas', 'kWh'] });
     expect(document.provenance.tags).toMatchObject([{ quote: 'gas' }, { quote: 'kWh' }]);
-    expect(document.rejected).toBe(3);
+    // The output schema refuses a value its field does not allow before any quote is read.
+    expect(document.rejections).toEqual([
+      { section: 'core', name: 'period', reason: 'malformed', count: 1 },
+      { section: 'fields', name: 'energy', reason: 'malformed', count: 1 },
+      { section: 'fields', name: 'tags', reason: 'quote_not_found', count: 1 },
+    ]);
   });
 
   it('keeps in `extra` only primitives under keys that could become field names', async () => {
@@ -242,6 +251,34 @@ describe('interpret', () => {
     });
     expect(document.extra).toEqual({ tariff: 'gas', readings: [350, 'gas'] });
     expect(document.provenance.readings).toMatchObject({ quote: '350 kWh gas' });
+    expect(document.rejections).toEqual([
+      // Read as the field of the type it names, and checked as one.
+      { section: 'fields', name: 'meter_id', reason: 'quote_not_stating_value', count: 1 },
+      { section: 'extra', name: 'unstated', reason: 'quote_not_stating_value', count: 1 },
+      { section: 'extra', name: 'nested', reason: 'malformed', count: 1 },
+      { section: 'extra', name: 'document_date', reason: 'invalid_key', count: 1 },
+      { section: 'extra', name: 'Free Text Key', reason: 'invalid_key', count: 1 },
+    ]);
+  });
+
+  it('reads an `extra` key that names an empty field of the type as that field', async () => {
+    const { document } = await read({
+      core: {},
+      fields: { energy: at('gas', '350 kWh gas') },
+      extra: {
+        consumption_kwh: at(350, '350 kWh'),
+        energy: at('electricity', 'gas'),
+        // A core field is never filled from `extra`.
+        amount: at({ value: 84.2, currency: 'EUR' }, 'Total 84,20 EUR'),
+      },
+    });
+    expect(document.fields).toEqual({ energy: 'gas', consumption_kwh: 350 });
+    expect(document.core).toEqual({});
+    expect(document.extra).toEqual({});
+    expect(document.rejections).toEqual([
+      { section: 'extra', name: 'energy', reason: 'duplicate_of_field', count: 1 },
+      { section: 'extra', name: 'amount', reason: 'invalid_key', count: 1 },
+    ]);
   });
 
   it('drops an entity value the resolver refuses, and passes the name masked', async () => {
@@ -320,7 +357,7 @@ describe('interpret', () => {
     expect(document.fields).toEqual({});
     expect(document.extra).toEqual({ usage: 350 });
     expect(Object.keys(document.provenance)).toEqual(['usage']);
-    expect(document.rejected).toBe(2);
+    expect(totalRejections(document.rejections)).toBe(2);
   });
 
   it('never keeps a fact in which an identifier can still be detected once masked', async () => {
@@ -381,7 +418,7 @@ describe('interpret', () => {
       'Invoice SYN-1 four',
       'Invoice SYN-1 five',
     ]);
-    expect(document.rejected).toBe(3);
+    expect(totalRejections(document.rejections)).toBe(3);
   });
 
   // The output schema refuses these before the registry sees them: this reads an output
@@ -393,7 +430,7 @@ describe('interpret', () => {
         core: { amount: at('eighty', 'Total 84,20 EUR'), reference: at('SYN-1', 'Invoice SYN-1') },
         fields: {
           energy: at('coal', 'gas'),
-          no_such_field: at('x', 'gas'),
+          no_such_field: at('gas', 'gas'),
           tags: [at('gas', 'gas')],
         },
         extra: { nested: at({ deep: true }, 'gas'), usage: at(350, '350 kWh') },
@@ -405,9 +442,12 @@ describe('interpret', () => {
     expect(Object.keys(reading.fields.readings)).toEqual(['tags']);
     expect(Object.keys(reading.extra.readings)).toEqual(['usage']);
     expect([reading.core.rejected, reading.fields.rejected, reading.extra.rejected]).toEqual([
-      { amount: 1 },
-      { energy: 1, no_such_field: 1 },
-      { nested: 1 },
+      [{ name: 'amount', reason: 'quote_not_stating_value' }],
+      [
+        { name: 'energy', reason: 'quote_not_stating_value' },
+        { name: 'no_such_field', reason: 'invalid_value' },
+      ],
+      [{ name: 'nested', reason: 'quote_not_stating_value' }],
     ]);
   });
 
@@ -417,7 +457,7 @@ describe('interpret', () => {
     );
     const { document } = await read({ core: {}, fields: {}, extra });
     expect(Object.keys(document.extra)).toHaveLength(50);
-    expect(document.rejected).toBe(1);
+    expect(totalRejections(document.rejections)).toBe(1);
   });
 
   it('cuts the title and the summary to their limits, and reads no title as none', async () => {

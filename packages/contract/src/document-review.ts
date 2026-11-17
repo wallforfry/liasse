@@ -1,5 +1,12 @@
 import { z } from 'zod';
-import { CLASSIFICATION_OUTCOMES, REVIEW_REASONS, VALUE_SECTIONS } from './domain/enums.ts';
+import {
+  CLASSIFICATION_OUTCOMES,
+  REJECTION_REASONS,
+  REJECTION_SECTIONS,
+  REVIEW_REASONS,
+  TYPE_REFUSALS,
+  VALUE_SECTIONS,
+} from './domain/enums.ts';
 
 const confidenceSchema = z.number().min(0).max(1);
 
@@ -8,6 +15,10 @@ const reviewedTypeSchema = z.object({
   outcome: z.enum(CLASSIFICATION_OUTCOMES).nullable(),
   manual: z.boolean().describe('The type was chosen by a person.'),
   doubtful: z.boolean().describe('The closest type, or none: a fallback or untyped outcome.'),
+  refusal: z
+    .enum(TYPE_REFUSALS)
+    .nullable()
+    .describe('Why the new type the model proposed was not created; null when none was refused.'),
 });
 
 const reviewedValueSchema = z.object({
@@ -27,6 +38,18 @@ const reviewedValueSchema = z.object({
 });
 export type ReviewedValue = z.output<typeof reviewedValueSchema>;
 
+// Never the value or its quote: what the model read and the pipeline dropped is not kept.
+export const rejectionSchema = z.object({
+  section: z.enum(REJECTION_SECTIONS),
+  name: z
+    .string()
+    .nullable()
+    .describe('The field or `extra` key; null for a fact, a subject or the notice period.'),
+  reason: z.enum(REJECTION_REASONS),
+  count: z.int().min(1).describe('Values dropped for this name and reason: one per list item.'),
+});
+export type Rejection = z.output<typeof rejectionSchema>;
+
 // What a person needs to review a document: why it is flagged, and how sure the pipeline
 // is of its type and of each value. The rule is the server's, with its current threshold.
 export const documentReviewSchema = z.object({
@@ -41,6 +64,12 @@ export const documentReviewSchema = z.object({
     .int()
     .min(0)
     .describe('Values the model returned that were dropped at the last extraction.'),
+  rejections: z
+    .array(rejectionSchema)
+    .describe(
+      'The values of `rejected_values` by section, name and reason; empty for an extraction ' +
+        'that recorded only their count.',
+    ),
   type: reviewedTypeSchema,
   values: z.array(reviewedValueSchema),
 });

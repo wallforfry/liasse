@@ -43,11 +43,17 @@ const LIST_ENTITIES_DESCRIPTION =
 
 const LIST_CHANGES_DESCRIPTION =
   'The changes of the type registry that consolidation proposes and that wait for ' +
-  `approval, each with its rationale. ${UNTRUSTED}`;
+  'approval, each with its rationale: merges, splits, renames and stabilization of types, ' +
+  'promotion and removal of fields, merges of entities and of subjects. It lists no ' +
+  'document: the documents flagged for a person to review are `list_documents` with ' +
+  '`status: needs_review`, each corrected or confirmed with `update_document`. ' +
+  UNTRUSTED;
 
 const APPLY_CHANGE_DESCRIPTION =
-  'Applies or rejects a proposed change of the type registry. Returns the outcome and the ' +
-  'number of documents to extract again.';
+  'Applies or rejects a proposed change of the type registry, by the id ' +
+  '`list_pending_changes` gave. Returns the outcome and the number of documents to extract ' +
+  'again. It reviews no document and clears no `needs_review` flag: that is ' +
+  '`update_document`, on the documents of `list_documents` with `status: needs_review`.';
 
 const CREATE_TYPE_DESCRIPTION =
   'Creates a document type by hand, for documents no type fits: `slug` (snake_case, ' +
@@ -56,7 +62,11 @@ const CREATE_TYPE_DESCRIPTION =
   'creates, so consolidation may promote or merge it. A refusal answers the code of the ' +
   'registry (`invalid_slug`, `invalid_fields`, `name_taken`, ...) with what to correct. ' +
   'Call `describe_types` first: an existing type or alias may already fit. Documents ' +
-  'already filed keep their type: `reclassify_document` or `update_document` moves one.';
+  'already filed keep their type: `reclassify_document` or `update_document` moves one. ' +
+  'Use it too when classification could not create the type a document needs: the ' +
+  'refusal, such as `quota_exceeded`, is in `get_status` and the `review` of ' +
+  '`get_document`. The daily quota of new types bounds classification only and does not ' +
+  'refuse this call.';
 
 const SUGGEST_TYPE_DESCRIPTION =
   'Drafts a document type with the text model from `request`, free text on the documents ' +
