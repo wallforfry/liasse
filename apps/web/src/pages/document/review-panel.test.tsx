@@ -43,6 +43,7 @@ const FLAGGED_DOCUMENT = {
     threshold: 0.7,
     reasons: ['low_confidence'],
     rejected_values: 0,
+    rejections: [],
     type: { confidence: 0.9, outcome: 'existing', manual: false, doubtful: false },
     values: [
       reviewed('issuer', 'core', true),

@@ -9,6 +9,7 @@ import type { RegisteredType } from '../../registry/type-store.ts';
 import { documentConfidence, meanConfidence, typeConfidence } from '../confidence.ts';
 import type { PipelineDocument } from '../document.ts';
 import type { ExtractedDocument } from './interpret.ts';
+import { totalRejections } from './rejections.ts';
 
 type Values = Readonly<Record<string, unknown>>;
 
@@ -114,7 +115,8 @@ export const mergeWithStored = (
           model,
           schema_version: type?.version ?? null,
           truncated,
-          rejected_values: fresh.rejected,
+          rejected_values: totalRejections(fresh.rejections),
+          rejections: fresh.rejections,
           dropped_identifiers: fresh.droppedIdentifiers,
         },
       },

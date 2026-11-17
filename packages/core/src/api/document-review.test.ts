@@ -115,6 +115,30 @@ describe('reviewDocument', () => {
     ]);
   });
 
+  it('names the rejected values, and has none to name for an extraction that only counted them', () => {
+    const rejections = [
+      { section: 'core', name: 'due_date', reason: 'quote_not_found', count: 1 },
+      { section: 'facts', name: null, reason: 'over_limit', count: 1 },
+    ] as const;
+    const document = {
+      ...DOCUMENT,
+      provenance: {
+        '@pipeline': {
+          type: EXISTING,
+          extraction: {
+            model: 'm',
+            schema_version: 1,
+            truncated: false,
+            rejected_values: 2,
+            rejections,
+          },
+        },
+      },
+    };
+    expect(reviewDocument(document, 0.7).rejections).toEqual(rejections);
+    expect(reviewDocument(DOCUMENT, 0.7)).toMatchObject({ rejected_values: 2, rejections: [] });
+  });
+
   it.each([
     ['fallback', 'type_fallback'],
     ['untyped', 'type_untyped'],

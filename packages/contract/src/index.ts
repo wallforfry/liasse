@@ -23,6 +23,8 @@ export {
 export {
   type DocumentReview,
   documentReviewSchema,
+  type Rejection,
+  rejectionSchema,
   type ReviewedValue,
 } from './document-review.ts';
 export {

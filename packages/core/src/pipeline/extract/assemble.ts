@@ -9,7 +9,7 @@ import {
   type SectionReading,
   type VerifiedValue,
 } from './read-output.ts';
-import { addRejections, type Rejections, rejectionsOf } from './rejections.ts';
+import { dropped, type Rejections } from './rejections.ts';
 
 export interface ExtractionTrace {
   readonly model: string;
@@ -92,7 +92,7 @@ export const assembleSection = (
     const kept = items.flatMap((item) =>
       keep(item, isEntityField(ownValue(definitions, name)), trace, resolutions),
     );
-    return { name, list: isListReading(reading), kept, dropped: items.length - kept.length };
+    return { name, list: isListReading(reading), kept, unresolved: items.length - kept.length };
   });
   const filled = fields.filter(({ kept }) => kept.length > 0);
   const collect = (pick: (kept: Kept) => unknown) =>
@@ -105,9 +105,9 @@ export const assembleSection = (
     confidences: Object.fromEntries(
       filled.map(({ name, kept }) => [name, kept.map(({ confidence }) => confidence)]),
     ),
-    rejected: addRejections(
-      rejected,
-      rejectionsOf(fields.map(({ name, dropped }) => [name, dropped] as const)),
-    ),
+    rejected: [
+      ...rejected,
+      ...fields.flatMap(({ name, unresolved }) => dropped(name, 'unresolved_entity', unresolved)),
+    ],
   };
 };

@@ -52,6 +52,7 @@ const REVIEW: DocumentReview = {
   threshold: 0.7,
   reasons: ['low_confidence', 'rejected_values'],
   rejected_values: 1,
+  rejections: [],
   type: { confidence: 0.9, outcome: 'existing', manual: false, doubtful: false },
   values: [
     value('core', 'reference', true),

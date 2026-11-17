@@ -1,4 +1,4 @@
-import type { DocumentStatus } from '@liasse/contract/domain';
+import type { DocumentStatus, RejectionReason } from '@liasse/contract/domain';
 import { isPlainRecord } from '@liasse/contract/registry';
 import { eq } from 'drizzle-orm';
 import { documents } from '../../db/schema/documents.ts';
@@ -13,6 +13,7 @@ import type { PipelineDeps } from '../deps.ts';
 import { loadDocument, type PipelineDocument } from '../document.ts';
 import type { ExtractedDocument } from './interpret.ts';
 import { mergeWithStored } from './merge.ts';
+import { recordKnowledgeRejections, totalRejections } from './rejections.ts';
 
 export const EXTRACTION_MODES = ['process', 'reextract'] as const;
 export type ExtractionMode = (typeof EXTRACTION_MODES)[number];
@@ -79,10 +80,20 @@ const write = async (
     ]),
   ];
   if ((await entitiesOf(deps).missingIds(tx, entityIds)).length > 0) return 'stale';
+  // The knowledge store refuses a notice period out of its range, the one value it checks.
   const merge = (rejectedByKnowledge: number) =>
     mergeWithStored(
       stored,
-      { ...fresh, rejected: fresh.rejected + rejectedByKnowledge },
+      {
+        ...fresh,
+        rejections: [
+          ...fresh.rejections,
+          ...recordKnowledgeRejections(
+            'notice_period',
+            Array.from({ length: rejectedByKnowledge }, (): RejectionReason => 'invalid_value'),
+          ),
+        ],
+      },
       { type, truncated, model, keepProvenanceOfUnchanged: mode === 'reextract' },
     );
   await tx
@@ -107,7 +118,7 @@ const write = async (
     outcome: 'succeeded',
     status: stored.status,
     model,
-    details: { rejected_values: fresh.rejected + rejectedValues, truncated },
+    details: { rejected_values: totalRejections(fresh.rejections) + rejectedValues, truncated },
   });
   return 'stored';
 };
