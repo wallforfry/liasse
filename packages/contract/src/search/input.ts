@@ -6,7 +6,11 @@ export const MAX_SEARCH_LIMIT = 50;
 
 export const searchFiltersSchema = z.strictObject({
   type: z.string().min(1).optional(),
-  entity: z.string().min(1).optional(),
+  entity: z
+    .string()
+    .min(1)
+    .optional()
+    .describe('Id of an entity: the documents that name it in an entity field.'),
   subject: z.string().min(1).optional(),
   dateFrom: z.iso.date().optional(),
   dateTo: z.iso.date().optional(),

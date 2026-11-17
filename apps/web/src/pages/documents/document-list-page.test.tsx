@@ -32,9 +32,19 @@ const RESULT = {
   score: 0.03,
 };
 
+const ENTITY = {
+  id: 'ent_synthetic_volta',
+  kind: 'org',
+  canonical_name: 'Volta Énergie',
+  aliases: [],
+  identifiers: [],
+  document_count: 12,
+};
+
 const library = () =>
   fakeServer((request) => {
     if (request.path.startsWith('/types')) return json({ types: [] });
+    if (request.path.startsWith('/entities')) return json({ entities: [ENTITY], total: 1 });
     if (request.path.startsWith('/documents')) {
       return json({ documents: [SUMMARY], total: 120, has_more: true });
     }
@@ -86,6 +96,43 @@ describe('the document list', () => {
         { query: 'power', filters: { status: 'needs_review' }, limit: 50, include_private: false },
       ]);
     });
+  });
+
+  it('filters the list and its search by an entity searched by name', async () => {
+    const user = userEvent.setup();
+    const server = library();
+    const { router } = renderApp('/documents?offset=50', server.fetch);
+    await screen.findByRole('link', { name: 'Listed bill' });
+
+    await user.click(screen.getByRole('combobox', { name: 'Entity' }));
+    await user.type(screen.getByPlaceholderText('Search the entities...'), 'volta');
+    await user.click(await screen.findByRole('option', { name: /Volta Énergie/ }));
+
+    expect(router.state.location.search).toBe(
+      '?entity=ent_synthetic_volta&entity_name=Volta+%C3%89nergie',
+    );
+    expect(screen.getByRole('combobox', { name: 'Entity' })).toHaveTextContent('Volta Énergie');
+    await waitFor(() => {
+      expect(server.requests.map(({ path }) => path)).toContain(
+        '/documents?entity=ent_synthetic_volta&private=exclude&offset=0&limit=50',
+      );
+    });
+    expect(server.requests.map(({ path }) => path)).toContain('/entities?query=volta&limit=20');
+
+    await user.type(screen.getByRole('searchbox', { name: 'Search the documents' }), 'power');
+    await user.click(screen.getByRole('button', { name: 'Search' }));
+    await screen.findByRole('link', { name: 'Found bill' });
+    expect(searchBodies(server)).toEqual([
+      {
+        query: 'power',
+        filters: { entity: 'ent_synthetic_volta' },
+        limit: 50,
+        include_private: false,
+      },
+    ]);
+
+    await user.click(screen.getByRole('button', { name: 'Clear the entity' }));
+    expect(router.state.location.search).toBe('?q=power');
   });
 
   it('offers to keep only private documents in the list, not in a search', async () => {

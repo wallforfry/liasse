@@ -5,6 +5,7 @@ import {
   PAGE_SIZE,
   readFilters,
   searchRequest,
+  withEntity,
   withFilter,
   withOffset,
 } from './list-params.ts';
@@ -74,5 +75,30 @@ describe('the filters of a document list', () => {
       include_private: false,
     });
     expect(searchRequest('gas', { ...filters, private: 'include' }).include_private).toBe(true);
+  });
+
+  it('filters by the id of an entity and shows its name, or its id without one', () => {
+    const params = new URLSearchParams('q=gas&entity=ent_synthetic_volta&entity_name=Volta');
+    const filters = readFilters(params);
+    expect(filters.entity).toEqual({ id: 'ent_synthetic_volta', name: 'Volta' });
+    expect(listOptions(filters).entity).toBe('ent_synthetic_volta');
+    expect(searchRequest('gas', filters).filters).toEqual({ entity: 'ent_synthetic_volta' });
+    expect(readFilters(new URLSearchParams('entity=ent_synthetic_volta')).entity).toEqual({
+      id: 'ent_synthetic_volta',
+      name: 'ent_synthetic_volta',
+    });
+    expect(readFilters(new URLSearchParams('entity=&entity_name=Volta')).entity).toBeUndefined();
+  });
+
+  it('changes or clears the entity with its name, back on the first page', () => {
+    const params = new URLSearchParams('type=bill&offset=50');
+    const chosen = withEntity(params, { id: 'ent_synthetic_volta', name: 'Volta Énergie' });
+    expect(readFilters(chosen)).toEqual({
+      type: 'bill',
+      entity: { id: 'ent_synthetic_volta', name: 'Volta Énergie' },
+      private: 'exclude',
+      offset: 0,
+    });
+    expect(withEntity(chosen, undefined).toString()).toBe('type=bill');
   });
 });

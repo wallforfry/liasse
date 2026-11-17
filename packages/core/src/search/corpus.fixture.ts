@@ -26,7 +26,7 @@ export const ENTITY_NAMES: Readonly<Record<EntityId, string>> = {
   [ENTITIES.resident]: 'Camille Tisserand',
 };
 
-const resolvedTo = (entityId: EntityId): EntityProvenance => ({
+const resolvedTo = (entityId: string): EntityProvenance => ({
   entity_id: entityId,
   match: 'alias',
   confidence: 0.99,
@@ -46,6 +46,8 @@ export interface CorpusDocument {
   readonly date?: string;
   readonly issuer?: EntityId;
   readonly recipient?: EntityId;
+  // Entities named in a list field of the type, by id: their names do not matter here.
+  readonly parties?: readonly string[];
   readonly subjects?: readonly string[];
   readonly private?: boolean;
   readonly status?: DocumentStatus;
@@ -246,9 +248,13 @@ export const seedCorpus = async (db: Database, embedder: Embedder): Promise<Seed
           ? {}
           : { recipient: ENTITY_NAMES[document.recipient] }),
       },
+      ...(document.parties === undefined ? {} : { fields: { parties: document.parties } }),
       provenance: {
         ...(document.issuer === undefined ? {} : { issuer: resolvedTo(document.issuer) }),
         ...(document.recipient === undefined ? {} : { recipient: resolvedTo(document.recipient) }),
+        ...(document.parties === undefined
+          ? {}
+          : { parties: document.parties.map((party) => resolvedTo(party)) }),
       },
     });
     await db

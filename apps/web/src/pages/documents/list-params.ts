@@ -14,12 +14,19 @@ export type DocumentStatus = (typeof DOCUMENT_STATUSES)[number];
 
 export type ListParam = 'q' | 'status' | 'type' | 'private';
 
+/** An entity filter: its id filters, its name is only shown, as the address carries it. */
+export interface EntityFilter {
+  readonly id: string;
+  readonly name: string;
+}
+
 /** The filters of a list, as the address of the page carries them. */
 export interface ListFilters {
   /** Present, the list is the search for it, ranked by relevance. */
   readonly query?: string;
   readonly status?: DocumentStatus;
   readonly type?: string;
+  readonly entity?: EntityFilter;
   readonly private: PrivateFilter;
   readonly offset: number;
 }
@@ -40,6 +47,17 @@ const queryOf = (value: string | null): string | undefined => {
   return query === '' ? undefined : query;
 };
 
+const ENTITY = 'entity';
+const ENTITY_NAME = 'entity_name';
+
+// The name is what the picker showed: an address without one shows the id instead.
+const entityOf = (params: URLSearchParams): EntityFilter | undefined => {
+  const id = params.get(ENTITY);
+  if (id === null || id === '') return undefined;
+  const name = params.get(ENTITY_NAME)?.trim() ?? '';
+  return { id, name: name === '' ? id : name };
+};
+
 // A search can include private documents or leave them out, not keep only them.
 const privacyOf = (value: string | null, query: string | undefined): PrivateFilter => {
   const privacy = isPrivateFilter(value) ? value : 'exclude';
@@ -51,10 +69,12 @@ export const readFilters = (params: URLSearchParams): ListFilters => {
   const query = queryOf(params.get('q'));
   const status = params.get('status');
   const type = params.get('type');
+  const entity = entityOf(params);
   return {
     ...(query === undefined ? {} : { query }),
     ...(isStatus(status) ? { status } : {}),
     ...(type === null || type === '' ? {} : { type }),
+    ...(entity === undefined ? {} : { entity }),
     private: privacyOf(params.get('private'), query),
     offset: offsetOf(params.get('offset')),
   };
@@ -73,6 +93,23 @@ export const withFilter = (
   return next;
 };
 
+/** The address with the entity filter changed or cleared, back on the first page. */
+export const withEntity = (
+  params: URLSearchParams,
+  entity: EntityFilter | undefined,
+): URLSearchParams => {
+  const next = new URLSearchParams(params);
+  if (entity === undefined) {
+    next.delete(ENTITY);
+    next.delete(ENTITY_NAME);
+  } else {
+    next.set(ENTITY, entity.id);
+    next.set(ENTITY_NAME, entity.name);
+  }
+  next.delete('offset');
+  return next;
+};
+
 export const withOffset = (params: URLSearchParams, offset: number): URLSearchParams => {
   const next = new URLSearchParams(params);
   if (offset === 0) next.delete('offset');
@@ -83,11 +120,13 @@ export const withOffset = (params: URLSearchParams, offset: number): URLSearchPa
 export const listOptions = ({
   status,
   type,
+  entity,
   private: privacy,
   offset,
 }: ListFilters): ListDocumentsOptions => ({
   ...(status === undefined ? {} : { status }),
   ...(type === undefined ? {} : { type }),
+  ...(entity === undefined ? {} : { entity: entity.id }),
   private: privacy,
   offset,
   limit: PAGE_SIZE,
@@ -96,12 +135,13 @@ export const listOptions = ({
 /** The search of a query with the same filters; it ranks, so it has no pages. */
 export const searchRequest = (
   query: string,
-  { status, type, private: privacy }: ListFilters,
+  { status, type, entity, private: privacy }: ListFilters,
 ): SearchRequest => ({
   query,
   filters: {
     ...(status === undefined ? {} : { status }),
     ...(type === undefined ? {} : { type }),
+    ...(entity === undefined ? {} : { entity: entity.id }),
   },
   limit: MAX_SEARCH_LIMIT,
   include_private: privacy !== 'exclude',

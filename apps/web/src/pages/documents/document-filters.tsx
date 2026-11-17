@@ -10,7 +10,13 @@ import {
   SelectTrigger,
   SelectValue,
 } from '../../components/ui/select.tsx';
-import { DOCUMENT_STATUSES, type ListFilters, type ListParam } from './list-params.ts';
+import { EntityFilter } from './entity-filter.tsx';
+import {
+  DOCUMENT_STATUSES,
+  type EntityFilter as Entity,
+  type ListFilters,
+  type ListParam,
+} from './list-params.ts';
 
 // Radix refuses an empty value for an item: this one stands for no filter.
 const ANY = 'any';
@@ -29,6 +35,7 @@ export interface DocumentFiltersProps {
   readonly statusFilter: boolean;
   /** Undefined clears the filter. */
   readonly onChange: (name: ListParam, value: string | undefined) => void;
+  readonly onEntityChange: (entity: Entity | undefined) => void;
 }
 
 interface FilterSelectProps {
@@ -77,7 +84,12 @@ const PRIVATE_OPTIONS: readonly Option[] = PRIVATE_FILTERS.map((filter): Option 
 // A search can include private documents or leave them out, not keep only them.
 const SEARCH_PRIVATE_OPTIONS = PRIVATE_OPTIONS.filter(([filter]) => filter !== 'only');
 
-export const DocumentFilters = ({ filters, statusFilter, onChange }: DocumentFiltersProps) => {
+export const DocumentFilters = ({
+  filters,
+  statusFilter,
+  onChange,
+  onEntityChange,
+}: DocumentFiltersProps) => {
   const client = useClient();
   const types = useQuery({ queryKey: ['types'], queryFn: async () => client.listTypes() });
   const typeOptions: readonly Option[] = [
@@ -102,6 +114,7 @@ export const DocumentFilters = ({ filters, statusFilter, onChange }: DocumentFil
         options={typeOptions}
         onChange={onChange}
       />
+      <EntityFilter value={filters.entity} onChange={onEntityChange} />
       <FilterSelect
         name="private"
         label="Privacy"

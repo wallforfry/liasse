@@ -267,6 +267,10 @@ describe('document routes', () => {
         await (await harness.call('/documents?status=needs_review')).json(),
       );
       expect(hidden.documents.every((document) => !document.private)).toBe(true);
+      const named = list.parse(
+        await (await harness.call('/documents?entity=ent_synthetic_absent')).json(),
+      );
+      expect(named).toEqual({ documents: [], total: 0, has_more: false });
       expect((await harness.call('/documents?status=deleted')).status).toBe(400);
       expect((await harness.call('/documents?limit=1000')).status).toBe(400);
     });
