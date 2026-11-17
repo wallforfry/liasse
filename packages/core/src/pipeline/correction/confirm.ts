@@ -25,10 +25,15 @@ interface ConfirmRequest {
   readonly values: Values;
 }
 
+// The key dates the extraction stored in `document_dates` are not those of the core
+// value: computed notice deadlines replace the model's, and the rows are bounded. A
+// confirmation, which rewrites no value, could not make the two the same dates.
 const KEY_DATES_REFUSED: CorrectionError = {
   code: 'unsupported_field',
   field: KEY_DATES_FIELD,
-  message: `"${KEY_DATES_FIELD}" cannot be corrected or confirmed through this operation.`,
+  message:
+    `"${KEY_DATES_FIELD}" cannot be confirmed: give the key dates you vouch for in ` +
+    `core.${KEY_DATES_FIELD} instead.`,
 };
 
 const valuesOf = (document: PipelineDocument): Values => ({

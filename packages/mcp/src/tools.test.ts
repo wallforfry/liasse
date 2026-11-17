@@ -402,6 +402,24 @@ describe('the tools of a bound feature', () => {
     expect(received).toEqual([{ id, type: 'note', confirm: { reference: 'SYN-1' } }]);
   });
 
+  it('hands a correction the key dates it sets', async () => {
+    const received: unknown[] = [];
+    const id = await harness.addDocument([]);
+    const client = await harness.connect({
+      correctDocument: (input) => {
+        received.push(input);
+        return Promise.resolve({ ok: true });
+      },
+    });
+    const keyDates = [{ kind: 'event', date: '2026-05-04', label: 'Situation date' }];
+    const { isError } = await callTool(client, 'update_document', {
+      id,
+      core: { key_dates: keyDates },
+    });
+    expect(isError).toBe(false);
+    expect(received).toEqual([{ id, core: { key_dates: keyDates } }]);
+  });
+
   it('answers internal_error for an unexpected failure, reported and never quoted', async () => {
     const client = await harness.connect({
       listChanges: () => Promise.reject(new Error('synthetic secret detail')),

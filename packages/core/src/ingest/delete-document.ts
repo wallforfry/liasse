@@ -51,6 +51,7 @@ const BLANK_CONTENT = {
   confidence: null,
   manualFields: [],
   subjectIds: [],
+  noticePeriod: null,
   watchRequeues: 0,
   fileDeletedAt: null,
   hindsightSentHash: null,

@@ -105,6 +105,30 @@ describe('the features the runtime binds', () => {
     });
   });
 
+  it('answers `get_document` and `upcoming` with the key dates `update_document` set', async () => {
+    const runtime = await start();
+    const id = await upload(runtime, LETTER.lines, 'letter.pdf');
+    await waitUntil(async () => (await documentOf(id))?.status === 'indexed');
+    const keyDates = [
+      { kind: 'event', date: '2027-05-04', label: 'Situation date' },
+      { kind: 'expiry', date: '2027-06-30', label: 'End of cover' },
+    ];
+    await callTool(runtime, 'update_document', { id, core: { key_dates: keyDates } });
+
+    const document = z
+      .object({ core: z.object({ key_dates: z.array(z.unknown()) }) })
+      .parse(await callTool(runtime, 'get_document', { id }));
+    expect(document.core.key_dates).toEqual(keyDates);
+    const answered = z
+      .object({
+        dates: z.array(z.object({ kind: z.string(), date: z.string(), label: z.string() })),
+      })
+      .parse(await callTool(runtime, 'upcoming', { from: '2027-01-01', to: '2027-12-31' }));
+    expect(answered.dates.map(({ kind, date, label }) => ({ kind, date, label }))).toEqual(
+      keyDates,
+    );
+  });
+
   it('keeps private documents out of the knowledge tools unless include_private is true', async () => {
     const runtime = await start();
     const letter = await upload(runtime, LETTER.lines, 'letter.pdf');

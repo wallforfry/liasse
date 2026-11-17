@@ -1,7 +1,8 @@
+import type { KeyDate } from '@liasse/contract/domain';
 import { describe, expect, it } from 'vitest';
 import { SYNTHETIC_IBAN } from '../entities/support.test-helper.ts';
 import { InvalidKnowledgeError, parseKnowledge } from './input.ts';
-import { planKeyDates } from './key-dates.ts';
+import { planKeyDates, planManualKeyDates, typesComputedNoticeDeadline } from './key-dates.ts';
 import { keyDate, knowledge, TRACE } from './support.test-helper.ts';
 
 const TWO_MONTHS = { amount: 2, unit: 'months', confidence: 0.5 } as const;
@@ -13,8 +14,8 @@ describe('planKeyDates', () => {
       TWO_MONTHS,
     );
     expect(rows).toEqual([
-      { kind: 'renewal', date: '2027-03-01', label: 'Automatic renewal', ...TRACE },
-      { kind: 'due', date: '2026-10-18', label: 'Due', ...TRACE },
+      { kind: 'renewal', date: '2027-03-01', label: 'Automatic renewal', ...TRACE, manual: false },
+      { kind: 'due', date: '2026-10-18', label: 'Due', ...TRACE, manual: false },
       {
         kind: 'notice_deadline',
         date: '2027-01-01',
@@ -24,6 +25,7 @@ describe('planKeyDates', () => {
         page: null,
         quote: null,
         confidence: 0.5,
+        manual: false,
       },
     ]);
   });
@@ -53,9 +55,13 @@ describe('planKeyDates', () => {
 
   it('keeps what the model proposed when no computation is possible', () => {
     const proposed = keyDate('notice_deadline', '2027-02-14', 'Stated in the contract');
-    expect(planKeyDates([proposed], TWO_MONTHS)).toEqual([proposed]);
+    const extracted = { ...proposed, manual: false };
+    expect(planKeyDates([proposed], TWO_MONTHS)).toEqual([extracted]);
     const renewal = keyDate('renewal', '2027-03-01', 'Renewal');
-    expect(planKeyDates([proposed, renewal], undefined)).toEqual([proposed, renewal]);
+    expect(planKeyDates([proposed, renewal], undefined)).toEqual([
+      extracted,
+      { ...renewal, manual: false },
+    ]);
   });
 
   it('computes from the renewal date only, never from an expiry', () => {
@@ -97,6 +103,62 @@ describe('planKeyDates', () => {
     );
     expect(row?.label).toBe('Debit of ****0146');
     expect(row?.quote).toBe('to be debited from ****0146 on the 18th');
+  });
+});
+
+describe('planManualKeyDates', () => {
+  const given = (kind: KeyDate['kind'], date: string, label: string): KeyDate => ({
+    kind,
+    date,
+    label,
+  });
+  const MANUAL = {
+    model: null,
+    schemaVersion: null,
+    page: null,
+    quote: null,
+    confidence: null,
+    manual: true,
+  };
+
+  it('writes each date as given, and computes the notice deadline of a renewal date', () => {
+    const renewal = given('renewal', '2027-03-01', 'Renewal');
+    const due = given('due', '2026-10-18', 'Due');
+    expect(planManualKeyDates([renewal, due], TWO_MONTHS)).toEqual([
+      { ...renewal, ...MANUAL },
+      { ...due, ...MANUAL },
+      {
+        kind: 'notice_deadline',
+        date: '2027-01-01',
+        label: 'Notice deadline: 2 months before Renewal',
+        model: null,
+        schemaVersion: null,
+        page: null,
+        quote: null,
+        // A renewal date a person gave is sure: the period alone weighs.
+        confidence: 0.5,
+        manual: false,
+      },
+    ]);
+  });
+
+  it('computes nothing over a notice deadline a person gave, nor without a notice period', () => {
+    const renewal = given('renewal', '2027-03-01', 'Renewal');
+    const deadline = given('notice_deadline', '2027-02-14', 'Notice');
+    expect(planManualKeyDates([renewal, deadline], TWO_MONTHS)).toEqual([
+      { ...renewal, ...MANUAL },
+      { ...deadline, ...MANUAL },
+    ]);
+    expect(planManualKeyDates([renewal], undefined)).toEqual([{ ...renewal, ...MANUAL }]);
+  });
+
+  it('says when a notice deadline a person gives is one the rules compute', () => {
+    const renewal = given('renewal', '2027-03-01', 'Renewal');
+    const deadline = given('notice_deadline', '2027-02-14', 'Notice');
+    expect(typesComputedNoticeDeadline([renewal, deadline], TWO_MONTHS)).toBe(true);
+    expect(typesComputedNoticeDeadline([renewal, deadline], undefined)).toBe(false);
+    expect(typesComputedNoticeDeadline([deadline], TWO_MONTHS)).toBe(false);
+    expect(typesComputedNoticeDeadline([renewal], TWO_MONTHS)).toBe(false);
   });
 });
 

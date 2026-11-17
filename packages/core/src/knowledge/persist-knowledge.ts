@@ -1,4 +1,5 @@
 import { languageCodeSchema } from '@liasse/contract/domain';
+import { KEY_DATES_FIELD } from '@liasse/contract/registry';
 import { and, eq } from 'drizzle-orm';
 import { z } from 'zod';
 import { documents, isLiveDocument } from '../db/schema/documents.ts';
@@ -8,7 +9,8 @@ import type { IdentifierKey } from '../entities/sensitive.ts';
 import { ENTITY_SIMILARITY, type SimilarityThresholds } from '../entities/similarity.ts';
 import { type FactRow, replaceFacts } from './facts.ts';
 import type { KnowledgeDocument, KnowledgeInput } from './input.ts';
-import { replaceKeyDates } from './key-dates.ts';
+import { type KeyDateRow, planManualKeyDates, replaceKeyDates } from './key-dates.ts';
+import { manualKeyDatesOf } from './manual-key-dates.ts';
 import { type PreparedKnowledge, prepareWithoutModels } from './prepare-knowledge.ts';
 import { resolveSubjectUnderLock } from './resolve-subject.ts';
 import type { SubjectOrigin } from './subject-enrichment.ts';
@@ -24,6 +26,9 @@ interface LockedDocument {
   readonly issuerId: string | undefined;
   // The subjects the document concerned before this extraction.
   readonly subjectIds: readonly string[];
+  // Its core as just written, and whether a person gave its key dates.
+  readonly core: Readonly<Record<string, unknown>>;
+  readonly manualKeyDates: boolean;
 }
 
 const issuerIdSchema = z.object({ [PROVENANCE_ENTITY_ID_KEY]: z.string().min(1) });
@@ -40,6 +45,7 @@ const lockDocument = async (
       core: documents.core,
       provenance: documents.provenance,
       subjectIds: documents.subjectIds,
+      manualFields: documents.manualFields,
     })
     .from(documents)
     .where(and(eq(documents.id, documentId), isLiveDocument))
@@ -51,6 +57,8 @@ const lockDocument = async (
         language: languageCodeSchema.safeParse(row.core.language).data ?? null,
         issuerId: issuerIdSchema.safeParse(row.provenance.issuer).data?.[PROVENANCE_ENTITY_ID_KEY],
         subjectIds: row.subjectIds,
+        core: row.core,
+        manualKeyDates: row.manualFields.includes(KEY_DATES_FIELD),
       };
 };
 
@@ -72,6 +80,16 @@ const withoutExternalEmbeddings = (
         })),
       }
     : prepared;
+
+// The key dates a person gave stand in place of those of the extraction, whose notice
+// period still computes their notice deadlines.
+const keyDateRows = (
+  { keyDates, noticePeriod }: PreparedKnowledge,
+  document: LockedDocument,
+): readonly KeyDateRow[] =>
+  document.manualKeyDates
+    ? planManualKeyDates(manualKeyDatesOf(document.core), noticePeriod)
+    : keyDates;
 
 interface ResolvedSubjects {
   // In the order the document names them, each once.
@@ -128,9 +146,10 @@ const toFactRows = async (
 
 /**
  * Stores the prepared knowledge of a document in the transaction that writes the
- * document, in place of what a previous extraction stored: key dates, facts, and the
- * subjects it concerns. All or nothing, with the transaction; stored twice, it gives the
- * same dates, facts and subjects.
+ * document, in place of what a previous extraction stored: key dates, facts, the notice
+ * period and the subjects it concerns. All or nothing, with the transaction; stored
+ * twice, it gives the same dates, facts and subjects. Key dates a person gave
+ * (`manual_fields`) are kept: their rows are written again from the core.
  *
  * The caller has taken the subject lock (`withSubjectLock`, the lock of the entities)
  * before the row of the document. It is taken again here, which costs nothing when it is
@@ -151,9 +170,12 @@ export const persistKnowledge = (
       issuerId: document.issuerId,
       private: document.private,
     });
-    await replaceKeyDates(locked, id, usable.keyDates);
+    await replaceKeyDates(locked, id, keyDateRows(usable, document));
     await replaceFacts(locked, id, document.language, await toFactRows(locked, usable, byLabelKey));
-    await locked.update(documents).set({ subjectIds: ids }).where(eq(documents.id, id));
+    await locked
+      .update(documents)
+      .set({ subjectIds: ids, noticePeriod: usable.noticePeriod ?? null })
+      .where(eq(documents.id, id));
     await blankOrphanSubjects(
       locked,
       document.subjectIds.filter((subjectId) => !ids.includes(subjectId)),

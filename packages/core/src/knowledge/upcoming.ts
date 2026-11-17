@@ -67,6 +67,7 @@ export const upcoming = async (
       kind: documentDates.kind,
       label: documentDates.label,
       model: documentDates.model,
+      manual: documentDates.manual,
       documentId: documents.id,
       title: documents.title,
       type: docTypes.slug,
@@ -100,15 +101,17 @@ export const upcoming = async (
     page.flatMap(({ subjectIds }) => subjectIds),
   );
   return {
-    dates: page.map(({ date, kind, label, model, documentId, title, type, subjectIds, state }) => ({
-      date,
-      kind,
-      label,
-      computed: model === null,
-      document: { id: documentId, title, type },
-      subjects: subjectRefsOf(subjects, subjectIds),
-      state,
-    })),
+    dates: page.map(
+      ({ date, kind, label, model, manual, documentId, title, type, subjectIds, state }) => ({
+        date,
+        kind,
+        label,
+        computed: model === null && !manual,
+        document: { id: documentId, title, type },
+        subjects: subjectRefsOf(subjects, subjectIds),
+        state,
+      }),
+    ),
     truncated: rows.length > limit,
   };
 };

@@ -79,6 +79,7 @@ describe('deleteDocument and the delete_file job', () => {
         confidence: 0.9,
         manualFields: ['core.reference'],
         subjectIds: ['sub_synthetic'],
+        noticePeriod: { amount: 2, unit: 'months', confidence: 0.8 },
         private: true,
         watchRequeues: 1,
         fileDeletedAt: new Date('2026-01-01T00:00:00Z'),
@@ -117,6 +118,7 @@ describe('deleteDocument and the delete_file job', () => {
       confidence: null,
       manualFields: [],
       subjectIds: [],
+      noticePeriod: null,
       watchRequeues: 0,
       fileDeletedAt: null,
       // Kept: the only trace that Hindsight may still hold facts and owes a forget.
