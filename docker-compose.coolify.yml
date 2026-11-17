@@ -1,7 +1,7 @@
 # Coolify: a Docker Compose application built from this repository. Coolify generates every
 # SERVICE_* value once and keeps it across deployments; SERVICE_URL_LIASSE_8080 routes the
-# domain set on the `liasse` service to port 8080. Any variable of `.env.example` can be added
-# there too. The first account is created in the web UI with the setup token printed in the
+# domain set on the `liasse` service to port 8080. A variable of `.env.example` set in Coolify
+# reaches the server only once it is named under `environment` below. The first account is created in the web UI with the setup token printed in the
 # logs of `liasse` at startup; the models are settings saved there (docs/deployment.md#settings).
 services:
   postgres:
@@ -39,7 +39,15 @@ services:
       # (Traefik's default). Add `cloudflare` when Cloudflare proxies the domain; set it empty
       # to trust no proxy. See TRUSTED_PROXIES in .env.example.
       TRUSTED_PROXIES: ${TRUSTED_PROXIES-172.16.0.0/12}
+      # Set STORAGE_DRIVER=s3 and the S3_* variables in Coolify to keep files in a bucket;
+      # Compose passes only the variables named here. Empty ones count as unset.
+      STORAGE_DRIVER: ${STORAGE_DRIVER:-fs}
       STORAGE_PATH: /data/files
+      S3_BUCKET: ${S3_BUCKET:-}
+      S3_REGION: ${S3_REGION:-}
+      S3_ENDPOINT: ${S3_ENDPOINT:-}
+      S3_ACCESS_KEY_ID: ${S3_ACCESS_KEY_ID:-}
+      S3_SECRET_ACCESS_KEY: ${S3_SECRET_ACCESS_KEY:-}
       EMBEDDING_CACHE_DIR: /data/models
       AUTH_SECRET: ${SERVICE_BASE64_64_AUTHSECRET}
       FILE_URL_SECRET: ${SERVICE_BASE64_64_FILEURLSECRET}

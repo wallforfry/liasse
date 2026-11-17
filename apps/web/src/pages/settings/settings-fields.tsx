@@ -37,7 +37,9 @@ export const Field = ({
 interface TextFieldProps extends FieldFrame {
   readonly value: string;
   readonly onChange: (value: string) => void;
-  readonly kind?: 'text' | 'number' | 'url';
+  readonly kind?: 'text' | 'number' | 'url' | 'email' | 'password';
+  readonly autoComplete?: string;
+  readonly maxLength?: number;
   readonly disabled?: boolean;
 }
 
@@ -45,6 +47,8 @@ export const TextField = ({
   value,
   onChange,
   kind = 'text',
+  autoComplete,
+  maxLength,
   disabled,
   ...frame
 }: TextFieldProps) => (
@@ -52,6 +56,8 @@ export const TextField = ({
     <Input
       id={frame.id}
       type={kind}
+      autoComplete={autoComplete}
+      maxLength={maxLength}
       step={kind === 'number' ? 'any' : undefined}
       value={value}
       disabled={disabled}

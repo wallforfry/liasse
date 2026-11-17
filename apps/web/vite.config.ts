@@ -19,10 +19,9 @@ export default defineConfig({
     proxy: Object.fromEntries(
       // `/api` holds the auth server. Node loads this file before any workspace package is
       // built, so it cannot import `AUTH_BASE_PATH` from the contract.
-      ['/documents', '/search', '/types', '/changes', '/api', '/.well-known'].map((path) => [
-        path,
-        'http://127.0.0.1:8080',
-      ]),
+      ['/documents', '/search', '/types', '/changes', '/settings', '/api', '/.well-known'].map(
+        (path) => [path, 'http://127.0.0.1:8080'],
+      ),
     ),
   },
 });

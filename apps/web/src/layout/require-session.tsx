@@ -1,6 +1,6 @@
 import { Navigate, Outlet, useLocation } from 'react-router';
 import { useSession } from '../api/session.ts';
-import { Skeleton } from '../components/ui/skeleton.tsx';
+import { PageLoading } from './page-loading.tsx';
 
 export interface RequireSessionProps {
   /**
@@ -14,13 +14,7 @@ export interface RequireSessionProps {
 export const RequireSession = ({ keepQuery = false }: RequireSessionProps) => {
   const { status } = useSession();
   const location = useLocation();
-  if (status === 'loading') {
-    return (
-      <div className="flex min-h-svh items-center justify-center p-6" aria-busy="true">
-        <Skeleton className="h-8 w-48" />
-      </div>
-    );
-  }
+  if (status === 'loading') return <PageLoading />;
   if (status === 'signed_out') {
     return (
       <Navigate

@@ -6,6 +6,10 @@ export type SessionStatus = 'loading' | 'signed_out' | 'signed_in';
 
 export interface SessionState {
   readonly status: SessionStatus;
+  /** Whether no account exists yet, which shows the onboarding; undefined until known. */
+  readonly needsSetup: boolean | undefined;
+  /** Records that an account exists now, which ends the onboarding on every route. */
+  readonly setupDone: () => void;
   /** The REST API, called with the session cookie. */
   readonly client: LiasseClient;
   /** The auth server: password, API keys, OAuth consent. */

@@ -23,7 +23,7 @@ Changing `AUTH_SECRET` leaves the stored keys unreadable. The server still start
 
 Every process on the database follows the settings: the HTTP server, MCP over stdio and every other instance. A save notifies the channel `liasse_settings` with its version when it commits. A process that `LISTEN`s on it puts newer settings in force at once, and reads the stored version again each time its listener connects again, so a save made while it was cut off is not missed. A reading that fails is tried again with a growing delay until one succeeds. Behind a transaction pooler, which refuses `LISTEN`, the server says so at startup; another process then takes a save into account when it claims a job queued under it, or when it restarts.
 
-The routes `GET /settings`, `PUT /settings`, `POST /settings/check` and `POST /settings/models` take the session of the web UI only, never an API key, so a leaked key cannot point the models elsewhere. Until the web UI has its settings page, save them with `curl` and a session:
+The onboarding of the web UI saves the first settings, and its settings page (in the account menu) changes them. The routes `GET /settings`, `PUT /settings`, `POST /settings/check` and `POST /settings/models` take the session of the web UI only, never an API key, so a leaked key cannot point the models elsewhere. Without a browser, save them with `curl` and a session:
 
 ```bash
 curl -sS -c cookies.txt -H 'Origin: http://localhost:8080' -H 'Content-Type: application/json' \
@@ -98,9 +98,11 @@ Inside the container, `127.0.0.1` is the container itself: an Ollama server on t
 
 1. Create the application from the repository with the Docker Compose build pack and `/docker-compose.coolify.yml` as its Docker Compose location.
 2. Deploy it, and read the setup token in the logs of the `liasse` service.
-3. Open the domain, create the first account with that token, and save the [settings](#settings).
+3. Open the domain: the onboarding asks for that token, creates the first account and saves the [settings](#settings).
 
 The compose file trusts `172.16.0.0/12`, Docker's default range for the network Coolify's proxy reaches the container over; when Cloudflare proxies the domain, set `TRUSTED_PROXIES` to `172.16.0.0/12,cloudflare`. No untrusted container may share a network with `liasse`. Behind a Cloudflare Tunnel, every client counts as the `cloudflared` container unless its address is trusted too.
+
+Files stay in the `liasse-data` volume unless `STORAGE_DRIVER` is `s3`: set it in Coolify with `S3_BUCKET`, `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY` and, for a server other than AWS, `S3_ENDPOINT` (and `S3_REGION` if it checks the region). The key of a file is the same in both drivers, its path under `/data/files`, so moving to a bucket is copying that directory to the root of the bucket while the application is stopped, then deploying with the new variables. Any other variable of `.env.example` must also be named under `environment` in the compose file before Coolify passes it to the server.
 
 ## Resources
 
