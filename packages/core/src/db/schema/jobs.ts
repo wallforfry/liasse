@@ -18,6 +18,9 @@ export const jobs = pgTable(
     runAfter: instant('run_after').notNull().defaultNow(),
     lockedAt: instant('locked_at'),
     lastError: text('last_error'),
+    // The version of the stored settings when the job was queued: a worker whose settings
+    // are older puts the newer ones in force before it runs the job.
+    settingsVersion: integer('settings_version').notNull().default(0),
     createdAt: createdAt(),
   },
   (table) => [

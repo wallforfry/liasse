@@ -134,6 +134,13 @@
       "when": 1794915165725,
       "tag": "0018_settings",
       "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1794922340746,
+      "tag": "0019_job_settings_version",
+      "breakpoints": true
     }
   ]
 }

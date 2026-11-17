@@ -162,7 +162,8 @@ describe('saveSettings', () => {
   const waitingAdvisoryLocks = async (): Promise<number> => {
     const rows = await harness.database.db.$client`
       SELECT count(*)::int AS waiting FROM pg_locks
-      WHERE locktype = 'advisory' AND NOT granted`;
+      WHERE locktype = 'advisory' AND NOT granted
+        AND database = (SELECT oid FROM pg_database WHERE datname = current_database())`;
     return Number(rows[0]?.waiting ?? 0);
   };
 });

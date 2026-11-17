@@ -1,6 +1,6 @@
 import type { Database } from '@liasse/core/db';
 import { ingestFile, startWatcher } from '@liasse/core/ingest';
-import { type HandlerSet, startWorkers } from '@liasse/core/jobs';
+import { type HandlerSet, type SettingsFollower, startWorkers } from '@liasse/core/jobs';
 import type { Storage } from '@liasse/core/storage';
 import { describeError, type Logger } from '../log.ts';
 import type { ShutdownStep } from '../shutdown.ts';
@@ -9,8 +9,10 @@ interface QueueOptions {
   readonly db: Database;
   /** `WORKERS`. */
   readonly concurrency: number;
-  /** Read at every claim: the handlers of the settings in force. */
+  /** Read for every claimed job: the handlers of the settings in force. */
   readonly handlers: () => HandlerSet;
+  /** Brings the settings up to the version of a job before it runs. */
+  readonly settings: SettingsFollower;
   readonly logger: Logger;
   /** How long jobs in progress may take to finish at shutdown before they are aborted. */
   readonly graceMs: number;
@@ -21,12 +23,14 @@ export const startQueue = async ({
   db,
   concurrency,
   handlers,
+  settings,
   logger,
   graceMs,
 }: QueueOptions): Promise<ShutdownStep> => {
   const workers = await startWorkers({
     db,
     handlers,
+    settings,
     concurrency,
     onJobFailed: ({ job, error, willRetry }) => {
       logger.event('job_failed', {
