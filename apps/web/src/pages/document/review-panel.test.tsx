@@ -1,7 +1,6 @@
 import { screen, waitFor, within } from '@testing-library/react';
 import { userEvent } from '@testing-library/user-event';
 import { describe, expect, it } from 'vitest';
-import { POLL_MILLISECONDS } from '../../lib/processing.ts';
 import { fakeServer, json, jsonBody, renderApp } from '../../test/render.test-helper.tsx';
 
 const MARKUP = '<img src=x onerror="alert(1)"><b>bold</b>';
@@ -305,13 +304,9 @@ describe('the review panel', () => {
     expect(jsonBody(server.requests.find(isReclassify))).toEqual({ hint: 'A water bill' });
     expect(server.requests.some(({ method }) => method === 'PATCH')).toBe(false);
     expect(screen.queryByText('To review')).toBeNull();
-    // The page reads the document again every POLL_MILLISECONDS while the analysis is pending.
+    // The page reads the document again every 2 s (POLL_MILLISECONDS) while the analysis is pending.
     expect(
-      await screen.findByText(
-        'The document was analysed again: its type is water_bill.',
-        {},
-        { timeout: POLL_MILLISECONDS * 2 },
-      ),
+      await screen.findByText('The document was analysed again: its type is water_bill.'),
     ).toBeInTheDocument();
     expect(screen.queryByText('The document is being analysed again')).toBeNull();
   });
@@ -326,8 +321,6 @@ describe('the review panel', () => {
     expect(
       await screen.findByText(
         'The new analysis failed (model_provider_failed): the document is as it was.',
-        {},
-        { timeout: POLL_MILLISECONDS * 2 },
       ),
     ).toBeInTheDocument();
     expect(screen.queryByText('The document was analysed again: its type is note.')).toBeNull();
@@ -341,8 +334,6 @@ describe('the review panel', () => {
     expect(
       await screen.findByText(
         'The document changed before it could be analysed again: nothing was done.',
-        {},
-        { timeout: POLL_MILLISECONDS * 2 },
       ),
     ).toBeInTheDocument();
   });
