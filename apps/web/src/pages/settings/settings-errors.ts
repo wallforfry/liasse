@@ -26,3 +26,7 @@ export const serverIssuesOf = (error: unknown): Issues => {
 /** Someone saved the settings since this page read them. */
 export const isStaleVersion = (error: unknown): boolean =>
   error instanceof LiasseApiError && error.code === 'settings_conflict';
+
+/** A live document exists since the settings were read: the embedder can no longer change. */
+export const isEmbedderLocked = (error: unknown): boolean =>
+  error instanceof LiasseApiError && error.code === 'embedder_locked';

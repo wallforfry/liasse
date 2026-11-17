@@ -64,12 +64,15 @@ export const SectionCheck = ({ section, parts, check, onCheck }: SectionCheckPro
       {check.isPending ? 'Checking...' : 'Check'}
     </Button>
     {check.error === null ? null : <ErrorAlert error={check.error} title="Check not run" />}
-    {check.data === undefined ? null : (
-      <ul aria-label={`Check of the ${section}`} className="flex flex-col gap-1">
-        {parts.map((part) => (
-          <PartResult key={part} part={part} check={check.data[part]} />
-        ))}
-      </ul>
-    )}
+    {/* A live region is announced only when it changes, so it is there before any result. */}
+    <div role="status" className="empty:hidden">
+      {check.data === undefined ? null : (
+        <ul aria-label={`Check of the ${section}`} className="flex flex-col gap-1">
+          {parts.map((part) => (
+            <PartResult key={part} part={part} check={check.data[part]} />
+          ))}
+        </ul>
+      )}
+    </div>
   </div>
 );

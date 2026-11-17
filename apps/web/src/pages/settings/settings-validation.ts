@@ -1,5 +1,5 @@
 import { type SettingsDraft, settingsDraftSchema } from '@liasse/contract';
-import { draftOf, type SettingsValues } from './settings-form.ts';
+import { draftOf, type SettingsSection, type SettingsValues } from './settings-form.ts';
 
 /** Messages by dotted path, such as `llm.base_url`: the first one of each path. */
 export type Issues = ReadonlyMap<string, string>;
@@ -55,4 +55,17 @@ export const validate = (values: SettingsValues): Validation => {
   ];
   if (result.success && issues.length === 0) return { valid: true, draft: result.data };
   return { valid: false, issues: issuesFrom(issues) };
+};
+
+/**
+ * The form as a check of `section` sends it. The check takes a whole document, so the other
+ * sections are sent as stored unless the whole form is valid: only `section` must be.
+ */
+export const validateSection = (
+  values: SettingsValues,
+  stored: SettingsValues,
+  section: SettingsSection,
+): Validation => {
+  const whole = validate(values);
+  return whole.valid ? whole : validate({ ...stored, [section]: values[section] });
 };

@@ -1,9 +1,8 @@
 import type { SettingsDraft } from '@liasse/contract';
 import type { SettingsState } from '@liasse/sdk';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery } from '@tanstack/react-query';
 import { CircleAlertIcon } from 'lucide-react';
 import { type SubmitEvent, useState } from 'react';
-import { toast } from 'sonner';
 import { useClient } from '../../api/session.ts';
 import { ErrorAlert } from '../../components/error-alert.tsx';
 import { PageHeader } from '../../components/page-header.tsx';
@@ -15,10 +14,17 @@ import { EmbedderSection } from './embedder-section.tsx';
 import { HindsightSection } from './hindsight-section.tsx';
 import { LanguageModelsSection } from './language-models-section.tsx';
 import { PipelineSection } from './pipeline-section.tsx';
-import { isStaleVersion, serverIssuesOf } from './settings-errors.ts';
+import { isStaleVersion } from './settings-errors.ts';
 import { SETTINGS_QUERY_KEY } from './settings-query.ts';
 import { type SettingsSection, type SettingsValues, valuesOf } from './settings-form.ts';
-import { type Issues, NO_ISSUES, validate } from './settings-validation.ts';
+import {
+  type Issues,
+  NO_ISSUES,
+  validate,
+  validateSection,
+  type Validation,
+} from './settings-validation.ts';
+import { useSaveSettings } from './use-save-settings.ts';
 
 const useSettingsCheck = () => {
   const client = useClient();
@@ -50,19 +56,18 @@ interface SettingsFormProps {
 
 /** The form of one version of the settings: a new version gives a new form. */
 const SettingsForm = ({ state, onReload }: SettingsFormProps) => {
-  const client = useClient();
-  const queryClient = useQueryClient();
   const [values, setValues] = useState<SettingsValues>(() => valuesOf(state.settings));
   const [issues, setIssues] = useState<Issues>(NO_ISSUES);
-  const save = useMutation({
-    mutationFn: async (settings: SettingsDraft) =>
-      client.saveSettings({ version: state.version, settings }),
-    onSuccess: (saved) => {
-      queryClient.setQueryData(SETTINGS_QUERY_KEY, saved);
-      toast.success('The settings are saved and in force.');
-    },
-    onError: (error) => {
-      setIssues(serverIssuesOf(error));
+  const save = useSaveSettings({
+    state,
+    onIssues: setIssues,
+    onEmbedderLocked: (stored) => {
+      // A locked provider and model cannot be edited back: they return to the stored ones.
+      const { provider, model } = valuesOf(stored).embedding;
+      setValues((previous) => ({
+        ...previous,
+        embedding: { ...previous.embedding, provider, model },
+      }));
     },
   });
   const checks = {
@@ -76,22 +81,22 @@ const SettingsForm = ({ state, onReload }: SettingsFormProps) => {
     (next: SettingsValues[Section]): void => {
       setValues((previous) => ({ ...previous, [name]: next }));
     };
-  /** Runs `then` on the draft when the schema accepts the form, marks the fields otherwise. */
-  const validated = (then: (draft: SettingsDraft) => void) => (): void => {
-    const validation = validate(values);
+  /** Runs `then` on the draft when `validation` accepts it, marks the fields otherwise. */
+  const validated = (validation: Validation, then: (draft: SettingsDraft) => void): void => {
     setIssues(validation.valid ? NO_ISSUES : validation.issues);
     if (validation.valid) then(validation.draft);
   };
   const submit = (event: SubmitEvent<HTMLFormElement>) => {
     event.preventDefault();
-    validated((draft) => {
+    validated(validate(values), (draft) => {
       save.mutate(draft);
-    })();
+    });
   };
-  const checkOf = (name: keyof typeof checks) =>
-    validated((draft) => {
+  const checkOf = (name: keyof typeof checks) => (): void => {
+    validated(validateSection(values, valuesOf(state.settings), name), (draft) => {
       checks[name].mutate(draft);
     });
+  };
 
   return (
     <form className="flex max-w-2xl flex-col gap-6" onSubmit={submit} noValidate>
@@ -118,11 +123,9 @@ const SettingsForm = ({ state, onReload }: SettingsFormProps) => {
         check={checks.hindsight}
         onCheck={checkOf('hindsight')}
       />
-      {issues.size === 0 ? null : (
-        <p className="text-sm text-destructive">
-          Some settings are not valid: see the marked fields.
-        </p>
-      )}
+      <p role="status" className="text-sm text-destructive empty:hidden">
+        {issues.size === 0 ? null : 'Some settings are not valid: see the marked fields.'}
+      </p>
       {isStaleVersion(save.error) ? <StaleVersion onReload={onReload} /> : null}
       {save.error === null || isStaleVersion(save.error) ? null : (
         <ErrorAlert error={save.error} title="Settings not saved" />

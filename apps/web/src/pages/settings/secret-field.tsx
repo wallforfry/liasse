@@ -33,9 +33,18 @@ export const SecretField = ({ id, label, field, onChange, error }: SecretFieldPr
     onChange({ state, update: { action: 'keep' } });
   };
   return (
-    <div className="grid gap-2">
+    <div role="group" aria-labelledby={`${id}-label`} className="grid gap-2">
       <div className="flex items-center gap-2">
-        <Label htmlFor={update.action === 'replace' ? id : undefined}>API key</Label>
+        {update.action === 'replace' ? (
+          <Label id={`${id}-label`} htmlFor={id}>
+            API key
+          </Label>
+        ) : (
+          // No input to label while the key is kept or cleared: the text names the group.
+          <span id={`${id}-label`} className="text-sm leading-none font-medium">
+            API key
+          </span>
+        )}
         <Badge variant={STATE_BADGES[state]}>{STATE_LABELS[state]}</Badge>
       </div>
       {state === 'unreadable' && update.action === 'keep' ? (
