@@ -27,7 +27,6 @@ You need Docker with Compose, and either an API key of a model provider (Anthrop
    ```
 
 2. Edit `.env`:
-   - `LLM_PROVIDER`, `TEXT_MODEL`, `VISION_MODEL`, and `LLM_API_KEY` for a cloud provider, or `LLM_BASE_URL` (the URL that ends in `/v1`) for an OpenAI-compatible server. For Ollama on the same machine, set `LLM_BASE_URL=http://host.docker.internal:11434` (inside the container, `127.0.0.1` is the container itself; on Linux, see [Ollama on the host](docs/deployment.md#ollama-on-the-host)).
    - `AUTH_SECRET` and `FILE_URL_SECRET`: two different values from `openssl rand -hex 32`.
    - `AUTH_BOOTSTRAP_EMAIL` and `AUTH_BOOTSTRAP_PASSWORD` (12 characters or more): the first account.
    - Add `POSTGRES_PASSWORD=` with a value from `openssl rand -hex 24` (letters and digits only, since it goes into a URL).
@@ -41,6 +40,8 @@ You need Docker with Compose, and either an API key of a model provider (Anthrop
    The server applies its migrations at startup, and `docker compose ps` shows it healthy within a minute. Compose pulls the `latest` image; set `LIASSE_VERSION` in `.env` to pin a version (see [the image and its tags](docs/deployment.md#image)). While the repository is private, so is the image: run `docker login ghcr.io` with a token that can read it first.
 
 4. Open <http://localhost:8080> and sign in with the bootstrap account.
+
+   Then choose the models: the provider, the text and vision models and their key are settings stored in the database, not variables of `.env`. Until they are saved the server processes nothing; [Settings](docs/deployment.md#settings) shows how to save them with `PUT /settings`. For Ollama on the same machine, its base URL is `http://host.docker.internal:11434` (inside the container, `127.0.0.1` is the container itself; on Linux, see [Ollama on the host](docs/deployment.md#ollama-on-the-host)).
 
 5. Connect your agent to `http://localhost:8080/mcp`. It signs in over OAuth: the login and consent pages of Liasse open in the browser, with no key to copy. With Claude Code:
 
@@ -56,7 +57,7 @@ More ways in: [`examples/`](examples/) has MCP client configurations and REST ca
 
 ## Documentation
 
-- [`docs/deployment.md`](docs/deployment.md): the image and its tags, reverse proxies and TLS, the watched folder, Coolify, upgrades.
+- [`docs/deployment.md`](docs/deployment.md): the settings, the image and its tags, reverse proxies and TLS, the watched folder, Coolify, upgrades.
 - [`.env.example`](.env.example): every configuration variable, with its default.
 - [`docs/spec.md`](docs/spec.md): the design, the REST API, the MCP tools, the security model.
 - [`eval/README.md`](eval/README.md): the public evaluation set and how to compare models on it.

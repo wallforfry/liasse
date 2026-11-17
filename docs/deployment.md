@@ -15,6 +15,41 @@ The compose file reads `.env` next to it, written from [`.env.example`](../.env.
 
 The compose file sets `DATABASE_URL`, `HOST`, `PORT`, `STORAGE_PATH` and `EMBEDDING_CACHE_DIR` itself, over the values of `.env`, which suit a server run from source. Files and the local embedding model live in the `liasse-data` volume, the database in `postgres-data`: back up both.
 
+## Settings
+
+The models, their keys, the embedder, the pipeline and Hindsight are settings stored in the database, in one row of the `settings` table; their keys are encrypted there with a key derived from `AUTH_SECRET`, so changing `AUTH_SECRET` makes the stored keys unreadable and the server refuses to start until they are saved again. A server without settings serves the web UI and the auth server, answers `503 not_configured` on the routes of the API, and runs no worker and no watched folder. A save applies at once, without a restart: jobs in progress finish with the models they started with.
+
+The routes `GET /settings`, `PUT /settings` and `POST /settings/check` take the session of the web UI only, never an API key, so a leaked key cannot point the models elsewhere. Until the web UI has its settings page, save them with `curl` and a session:
+
+```bash
+curl -sS -c cookies.txt -H 'Origin: http://localhost:8080' -H 'Content-Type: application/json' \
+  -d '{"email":"admin@example.com","password":"..."}' http://localhost:8080/api/auth/sign-in/email
+curl -sS -b cookies.txt -H 'Origin: http://localhost:8080' -H 'Content-Type: application/json' \
+  -X PUT -d @settings.json http://localhost:8080/settings
+```
+
+with a `settings.json` such as:
+
+```json
+{
+  "version": 0,
+  "settings": {
+    "llm": {
+      "provider": "anthropic",
+      "api_key": { "action": "replace", "value": "..." },
+      "text_model": "...",
+      "vision_model": "..."
+    }
+  }
+}
+```
+
+`version` is the one `GET /settings` answers, 0 before the first save: a save of a stale version answers 409. Every section but `llm` may be left out, for its defaults: `embedding` (`local` by default; `provider`, `model`, `base_url`, `timeout_ms`, `max_input_tokens`, `api_key`), `pipeline` (`max_file_size`, `auto_apply`, `confidence_threshold`, `max_new_types_per_day`, `schema_language`, `max_vision_pages`, `entity_attach_similarity`, `entity_arbitration_similarity`) and `hindsight` (`url`, `bank`, `api_key`). A key is never answered: `GET /settings` says whether each one is set, and a save keeps it (`{"action": "keep"}`, the default), replaces it or clears it (`{"action": "clear"}`). `POST /settings/check` takes `{"settings": ...}` and tries each part with one short call, without saving. The embedder can no longer change once a document exists.
+
+### Upgrading from environment variables
+
+Earlier versions read these settings from the environment. The server now refuses to start while one of their variables is set, and names it: `LLM_PROVIDER`, `LLM_API_KEY`, `LLM_BASE_URL`, `LLM_TIMEOUT`, `TEXT_MODEL`, `VISION_MODEL`, `EMBEDDING_PROVIDER`, `EMBEDDING_MODEL`, `EMBEDDING_API_KEY`, `EMBEDDING_BASE_URL`, `EMBEDDING_TIMEOUT`, `EMBEDDING_MAX_INPUT_TOKENS`, `MAX_FILE_SIZE`, `AUTO_APPLY`, `CONFIDENCE_THRESHOLD`, `MAX_NEW_TYPES_PER_DAY`, `SCHEMA_LANGUAGE`, `MAX_VISION_PAGES`, `ENTITY_ATTACH_SIMILARITY`, `ENTITY_ARBITRATION_SIMILARITY`, `HINDSIGHT_URL`, `HINDSIGHT_BANK` and `HINDSIGHT_API_KEY`. Note their values, remove them from `.env`, start the server and save them as above, a duration such as `5m` becoming milliseconds (`timeout_ms: 300000`). Save the embedder the documents were indexed with: the first save of a database that holds documents is the one that can still name it.
+
 ## Image
 
 The image (`linux/amd64`, `linux/arm64`) carries the server, the build of the web UI, poppler (`pdfinfo` and `pdftoppm`, for scanned PDFs) and the runtime of the local embedder. It runs as the `node` user, keeps its data under `/data` and has a health check on `GET /health`.
@@ -47,7 +82,7 @@ The sign-in rate limit (5 attempts per minute) counts each client apart only whe
 
 ## Ollama on the host
 
-Inside the container, `127.0.0.1` is the container itself: an Ollama server on the host is `LLM_BASE_URL=http://host.docker.internal:11434`. Docker Desktop resolves that name; on Linux, add `extra_hosts: ['host.docker.internal:host-gateway']` to the `liasse` service, and make Ollama listen on an address the container reaches (`OLLAMA_HOST=0.0.0.0`).
+Inside the container, `127.0.0.1` is the container itself: an Ollama server on the host has the base URL `http://host.docker.internal:11434` in the settings. Docker Desktop resolves that name; on Linux, add `extra_hosts: ['host.docker.internal:host-gateway']` to the `liasse` service, and make Ollama listen on an address the container reaches (`OLLAMA_HOST=0.0.0.0`).
 
 ## Watched folder
 
@@ -58,8 +93,8 @@ Inside the container, `127.0.0.1` is the container itself: an Ollama server on t
 [`docker-compose.coolify.yml`](../docker-compose.coolify.yml) is the same stack for a Coolify Docker Compose application built from this repository. Coolify generates the database password, `AUTH_SECRET`, `FILE_URL_SECRET` and the password of the first account, and routes the domain set on the `liasse` service to port 8080.
 
 1. Create the application from the repository with the Docker Compose build pack and `/docker-compose.coolify.yml` as its Docker Compose location.
-2. Set `AUTH_BOOTSTRAP_EMAIL`, `LLM_PROVIDER`, `LLM_API_KEY`, `TEXT_MODEL` and `VISION_MODEL` among its environment variables.
-3. Read the generated `SERVICE_PASSWORD_64_ADMIN` there to sign in to the web UI, then change it there.
+2. Set `AUTH_BOOTSTRAP_EMAIL` among its environment variables.
+3. Read the generated `SERVICE_PASSWORD_64_ADMIN` there to sign in to the web UI, then change it there, and save the [settings](#settings).
 
 The compose file trusts `172.16.0.0/12`, Docker's default range for the network Coolify's proxy reaches the container over; when Cloudflare proxies the domain, set `TRUSTED_PROXIES` to `172.16.0.0/12,cloudflare`. No untrusted container may share a network with `liasse`. Behind a Cloudflare Tunnel, every client counts as the `cloudflared` container unless its address is trusted too.
 
