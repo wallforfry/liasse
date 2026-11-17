@@ -110,6 +110,9 @@ export type ChangeStatus = (typeof CHANGE_STATUSES)[number];
 export const JOB_STATUSES = ['queued', 'running', 'succeeded', 'failed'] as const;
 export type JobStatus = (typeof JOB_STATUSES)[number];
 
+export const CONSOLIDATION_TRIGGERS = ['nightly', 'batch', 'manual'] as const;
+export type ConsolidationTrigger = (typeof CONSOLIDATION_TRIGGERS)[number];
+
 export const ENTITY_KINDS = ['org', 'person'] as const;
 export type EntityKind = (typeof ENTITY_KINDS)[number];
 

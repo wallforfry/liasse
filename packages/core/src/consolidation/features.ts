@@ -3,6 +3,7 @@ import type {
   ChangeDecisionResult,
   ChangeList,
   ConsolidationRun,
+  ConsolidationRunList,
   ListChangesOptions,
 } from '@liasse/contract';
 import { MAX_LISTED_CHANGES } from '@liasse/contract/domain';
@@ -11,8 +12,9 @@ import { ApiError } from '../api/errors.ts';
 import { typeChanges } from '../db/schema/registry.ts';
 import { decideChange } from './apply-change.ts';
 import { pendingChanges } from './change-store.ts';
-import { queueManualRun } from './schedule.ts';
 import type { ConsolidationReadContext } from './context.ts';
+import { recentConsolidationRuns } from './runs.ts';
+import { queueManualRun } from './schedule.ts';
 import { viewChange, viewDecision } from './views.ts';
 
 /** The pending changes, oldest first, at most `MAX_LISTED_CHANGES`. */
@@ -60,3 +62,10 @@ export const applyChange = async (
 export const requestConsolidationRun = async ({
   db,
 }: ConsolidationReadContext): Promise<ConsolidationRun> => ({ queued: await queueManualRun(db) });
+
+/** The latest runs, the one due last first, the next nightly one left out until it is due. */
+export const listConsolidationRuns = async ({
+  db,
+}: ConsolidationReadContext): Promise<ConsolidationRunList> => ({
+  runs: [...(await recentConsolidationRuns(db))],
+});
