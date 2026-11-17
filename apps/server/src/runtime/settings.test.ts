@@ -199,7 +199,7 @@ describe('the settings of a running server', () => {
     const read = await callAsPerson(runtime, '/settings');
     const body = await read.text();
     expect(body).not.toContain('synthetic-anthropic-key-5c1d');
-    expect(settingsStateSchema.parse(JSON.parse(body)).settings?.llm.api_key_set).toBe(true);
+    expect(settingsStateSchema.parse(JSON.parse(body)).settings?.llm.api_key_state).toBe('set');
     const anthropic = { ...llmOf('model-b'), provider: 'anthropic' };
     expect((await save(runtime, { llm: anthropic })).status).toBe(200);
     const cleared = await save(runtime, { llm: { ...anthropic, api_key: { action: 'clear' } } });

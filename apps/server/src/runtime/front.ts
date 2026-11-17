@@ -42,8 +42,8 @@ const STDIO_UNCONFIGURED =
 /**
  * The HTTP server (REST, MCP on `/mcp`, the web UI on `/ui`), or MCP on the standard
  * streams. Over stdio nothing listens: the signed file URLs a tool returns open on the HTTP
- * server of `PUBLIC_URL`, when one runs, and the settings stay those of the start, since
- * nothing in the process can save others.
+ * server of `PUBLIC_URL`, when one runs. Each call reads the settings in force, which this
+ * process follows when another one saves them.
  */
 export const startFront = async ({
   transport,
@@ -56,9 +56,13 @@ export const startFront = async ({
   graceMs,
 }: FrontOptions): Promise<Front> => {
   if (transport === 'stdio') {
-    const current = api();
-    if (current === undefined) throw new StartupError(STDIO_UNCONFIGURED);
-    const session = await serveStdio({ api: current, report: reportMcpFailure(logger) });
+    const first = api();
+    if (first === undefined) throw new StartupError(STDIO_UNCONFIGURED);
+    // The settings in force only ever change for newer ones: the first stand in for none.
+    const session = await serveStdio({
+      api: () => api() ?? first,
+      report: reportMcpFailure(logger),
+    });
     logger.notice('Liasse is serving MCP on stdio');
     return { stop: { name: 'mcp', run: session.close }, ended: session.ended };
   }

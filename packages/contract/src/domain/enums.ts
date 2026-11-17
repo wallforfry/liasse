@@ -223,6 +223,11 @@ export type SchemaLanguage = (typeof SCHEMA_LANGUAGES)[number];
 export const AUTO_APPLY_MODES = ['none', 'safe', 'all'] as const;
 export type AutoApplyMode = (typeof AUTO_APPLY_MODES)[number];
 
+// What the settings say of a key they never show: stored, absent, or stored under another
+// AUTH_SECRET, so that it no longer decrypts and must be replaced or cleared.
+export const SECRET_STATES = ['set', 'unset', 'unreadable'] as const;
+export type SecretState = (typeof SECRET_STATES)[number];
+
 export const SUPPORTED_MIMES = [
   'application/pdf',
   'image/jpeg',

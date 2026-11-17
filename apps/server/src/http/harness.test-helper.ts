@@ -109,7 +109,11 @@ export const createHttpHarness = async (): Promise<HttpHarness> => {
     embedding: SYNTHETIC_EMBEDDING_ENVIRONMENT,
     factories: createFakeModelFactories(),
     prepare: () =>
-      Promise.resolve({ activate: () => Promise.resolve(), discard: () => Promise.resolve() }),
+      Promise.resolve({
+        putInForce: () => undefined,
+        settle: () => Promise.resolve(),
+        discard: () => Promise.resolve(),
+      }),
   };
   const appWith: HttpHarness['appWith'] = ({ features = {}, queryTimeoutMs, ...overrides }) => {
     const current: ApiContext = {
