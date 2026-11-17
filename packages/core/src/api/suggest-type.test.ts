@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
+import { MAX_TYPE_REQUEST_LENGTH } from '@liasse/contract/domain';
 import { ZodError } from 'zod';
+import {
+  EmbeddingOutputError,
+  LocalModelRequestError,
+  LocalModelTimeoutError,
+} from '../embeddings/errors.ts';
 import { ModelOutputError, ModelProviderError } from '../models/errors.ts';
 import { ApiError } from './errors.ts';
 import type { ApiFeatures } from './features.ts';
@@ -44,6 +50,14 @@ describe('suggestType', () => {
     expect(error).toBeInstanceOf(ZodError);
   });
 
+  it(`refuses a request longer than ${String(MAX_TYPE_REQUEST_LENGTH)} characters`, async () => {
+    const feature = withFeature(() => Promise.resolve(DRAFT));
+    const longest = 'a'.repeat(MAX_TYPE_REQUEST_LENGTH);
+    expect(await suggestType(feature, { request: longest })).toEqual(DRAFT);
+    const error = await refusalOf(suggestType(feature, { request: `${longest}a` }));
+    expect(error).toBeInstanceOf(ZodError);
+  });
+
   it('answers not_implemented without the feature', async () => {
     const error = await refusalOf(suggestType(withFeature(undefined), { request: 'payslips' }));
     expect(error).toBeInstanceOf(ApiError);
@@ -53,6 +67,9 @@ describe('suggestType', () => {
   it.each([
     new ModelProviderError({ provider: 'synthetic', model: 'm', retryable: true }),
     new ModelOutputError('m', 'no object'),
+    new EmbeddingOutputError('e', 'no vector'),
+    new LocalModelTimeoutError('no answer'),
+    new LocalModelRequestError('download failed', true),
   ])('reports a failing model as unavailable', async (failure) => {
     const error = await refusalOf(
       suggestType(

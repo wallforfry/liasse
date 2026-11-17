@@ -1,3 +1,4 @@
+import { MAX_FIELDS_PER_TYPE, MAX_TYPE_DESCRIPTION_LENGTH } from '@liasse/contract/domain';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createType } from '../registry/create-type.ts';
 import { createFakeEmbedder } from '../testing/fake-embedder.ts';
@@ -110,5 +111,24 @@ describe('suggestType', () => {
     );
 
     expect(draft.fields).toEqual({ net_pay: { type: 'money' } });
+  });
+
+  it('keeps at most the fields a type may have, and cuts a long description', async () => {
+    const draft = await suggestType(
+      depsWith({
+        slug: 'payslip',
+        description: 'd'.repeat(MAX_TYPE_DESCRIPTION_LENGTH + 10),
+        fields: Object.fromEntries(
+          Array.from({ length: MAX_FIELDS_PER_TYPE + 2 }, (_, index) => [
+            `field_${String(index)}`,
+            { type: 'text' },
+          ]),
+        ),
+      }),
+      REQUEST,
+    );
+
+    expect(Object.keys(draft.fields)).toHaveLength(MAX_FIELDS_PER_TYPE);
+    expect(draft.description).toHaveLength(MAX_TYPE_DESCRIPTION_LENGTH);
   });
 });

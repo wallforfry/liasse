@@ -1,3 +1,4 @@
+import type { FieldDefinition } from '@liasse/contract/registry';
 import type { CreateTypeRequest, TypeSuggestion } from '@liasse/sdk';
 import { type FieldDraft, fieldDraftOf, fieldsOf } from './field-drafts.ts';
 
@@ -21,14 +22,38 @@ export const requestOf = ({ slug, description, parent, fields }: TypeDraft): Cre
   fields: fieldsOf(fields),
 });
 
-export const draftOf = ({ slug, description, parent_slug, fields }: TypeSuggestion): TypeDraft => ({
+// The form separates the values of an enum with commas, so it cannot show one that holds
+// a comma: sent back, that value would come out as two.
+const fitsTheForm = (definition: FieldDefinition): boolean => {
+  const scalar = definition.type === 'list' ? definition.items : definition;
+  return scalar.type !== 'enum' || scalar.values.every((value) => !value.includes(','));
+};
+
+export interface DraftedType {
+  readonly draft: TypeDraft;
+  /** Fields of the suggestion the form cannot show, by name. */
+  readonly leftOut: readonly string[];
+}
+
+export const draftOf = ({
   slug,
   description,
-  parent: parent_slug ?? NO_PARENT,
-  fields: Object.entries(fields).map(([name, definition], key) =>
-    fieldDraftOf(key, name, definition),
-  ),
-});
+  parent_slug,
+  fields,
+}: TypeSuggestion): DraftedType => {
+  const entries = Object.entries(fields);
+  return {
+    draft: {
+      slug,
+      description,
+      parent: parent_slug ?? NO_PARENT,
+      fields: entries
+        .filter(([, definition]) => fitsTheForm(definition))
+        .map(([name, definition], key) => fieldDraftOf(key, name, definition)),
+    },
+    leftOut: entries.filter(([, definition]) => !fitsTheForm(definition)).map(([name]) => name),
+  };
+};
 
 /** A key no row of the draft holds, for the next row added. */
 export const nextKeyOf = (fields: readonly FieldDraft[]): number =>

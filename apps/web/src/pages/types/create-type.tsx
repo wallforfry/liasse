@@ -44,7 +44,7 @@ export const CreateType = ({ roots }: { readonly roots: readonly TypeView[] }) =
   const [open, setOpen] = useState(false);
   const [mode, setMode] = useState<Mode>('describe');
   const [draft, setDraft] = useState<TypeDraft>(EMPTY_DRAFT);
-  const [drafted, setDrafted] = useState(false);
+  const [drafted, setDrafted] = useState<readonly string[] | null>(null);
   const create = useMutation({
     mutationFn: async (request: CreateTypeRequest) => client.createType(request),
     onSuccess: async (created) => {
@@ -52,7 +52,7 @@ export const CreateType = ({ roots }: { readonly roots: readonly TypeView[] }) =
       setOpen(false);
       setMode('describe');
       setDraft(EMPTY_DRAFT);
-      setDrafted(false);
+      setDrafted(null);
       create.reset();
       toast.success(`The type ${created.slug} was created.`);
       await navigate(typePath(created.slug));
@@ -95,19 +95,23 @@ export const CreateType = ({ roots }: { readonly roots: readonly TypeView[] }) =
           <TabsContent value="describe" className="pt-2">
             <DescribeType
               onSuggested={(suggestion) => {
-                setDraft(draftOf(suggestion));
-                setDrafted(true);
+                const { draft: suggested, leftOut } = draftOf(suggestion);
+                setDraft(suggested);
+                setDrafted(leftOut);
                 setMode('define');
               }}
             />
           </TabsContent>
           <TabsContent value="define" className="pt-2">
             <form className="flex flex-col gap-4" onSubmit={submit}>
-              {drafted ? (
+              {drafted === null ? null : (
                 <p className="text-sm text-muted-foreground">
                   Drafted by the text model: review it, then create the type.
+                  {drafted.length === 0
+                    ? null
+                    : ` Left out, since an enum value holds a comma: ${drafted.join(', ')}.`}
                 </p>
-              ) : null}
+              )}
               {create.error === null ? null : (
                 <ErrorAlert error={create.error} title="Type not created" />
               )}
