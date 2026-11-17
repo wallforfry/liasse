@@ -16,7 +16,10 @@ const WHEEL_STEP = 0.0015;
 export const transformOf = ({ x, y, scale }: Viewport): string =>
   `translate(${String(x)} ${String(y)}) scale(${String(scale)})`;
 
-const clampScale = (scale: number): number => Math.min(MAX_SCALE, Math.max(MIN_SCALE, scale));
+// A fit may leave the scale beyond the zoom limits: from there, a zoom moves the scale in
+// its own direction up to the limit, never back past it.
+const zoomedScale = (current: number, factor: number): number =>
+  Math.min(Math.max(MAX_SCALE, current), Math.max(Math.min(MIN_SCALE, current), current * factor));
 
 /** The viewport that shows `content` whole and centred in `viewBox`. */
 export const fittedTo = (viewBox: Bounds, content: Bounds): Viewport => {
@@ -35,7 +38,7 @@ export const zoomedAt = (
   point: { readonly x: number; readonly y: number },
   factor: number,
 ): Viewport => {
-  const scale = clampScale(viewport.scale * factor);
+  const scale = zoomedScale(viewport.scale, factor);
   const ratio = scale / viewport.scale;
   return {
     scale,

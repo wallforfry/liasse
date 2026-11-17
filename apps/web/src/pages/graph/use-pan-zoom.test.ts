@@ -18,6 +18,15 @@ describe('zoomedAt', () => {
     expect(zoomedAt({ x: 0, y: 0, scale: 1 }, { x: 0, y: 0 }, 0.001).scale).toBe(0.2);
   });
 
+  it('never zooms against its factor from a scale beyond the limits', () => {
+    const far = { x: 0, y: 0, scale: 0.05 };
+    expect(zoomedAt(far, { x: 0, y: 0 }, 1 / 1.4).scale).toBe(0.05);
+    expect(zoomedAt(far, { x: 0, y: 0 }, 1.4).scale).toBeCloseTo(0.07);
+    const near = { x: 0, y: 0, scale: 12 };
+    expect(zoomedAt(near, { x: 0, y: 0 }, 1.4).scale).toBe(12);
+    expect(zoomedAt(near, { x: 0, y: 0 }, 1 / 1.4).scale).toBeCloseTo(12 / 1.4);
+  });
+
   it('writes the transform as an SVG attribute', () => {
     expect(transformOf({ x: 1, y: 2, scale: 3 })).toBe('translate(1 2) scale(3)');
   });
