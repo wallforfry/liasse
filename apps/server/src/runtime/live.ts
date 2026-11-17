@@ -8,11 +8,12 @@ import type { HandlerSet } from '@liasse/core/jobs';
 import type { ChunkRanker } from '@liasse/core/search';
 import { type ModelFactories, type ResolvedSettings, resolveSettings } from '@liasse/core/settings';
 import type { Storage } from '@liasse/core/storage';
-import { describeError, type Logger } from '../log.ts';
+import type { Logger } from '../log.ts';
 import type { ShutdownStep } from '../shutdown.ts';
 import { startFolder, startQueue } from './background.ts';
 import type { Bind, Bindings } from './bindings.ts';
 import { createLock } from './lock.ts';
+import { createTaskRunner } from './startup-tasks.ts';
 import { settingsNotices } from './notices.ts';
 import { step } from './step.ts';
 
@@ -27,6 +28,13 @@ export interface LiveRuntimeOptions {
   readonly logger: Logger;
   /** How long jobs in progress may take to finish at shutdown before they are aborted. */
   readonly graceMs: number;
+  /** Puts in force the stored settings when a job was queued under newer ones. */
+  readonly catchUp: () => Promise<void>;
+}
+
+export interface PrepareOptions {
+  /** At startup, a failing startup task stops the start; after a save, it is retried. */
+  readonly atBoot?: boolean;
 }
 
 /** The parts built from the settings in force. */
@@ -51,7 +59,11 @@ export interface LiveRuntime {
    * Builds the parts of the settings of `version`; one preparation at a time, until it is
    * settled or discarded. A version not newer than the one in force changes nothing.
    */
-  readonly prepare: (settings: Settings, version: number) => Promise<PreparedSettings>;
+  readonly prepare: (
+    settings: Settings,
+    version: number,
+    options?: PrepareOptions,
+  ) => Promise<PreparedSettings>;
   /** In the order they stop: the workers, the watcher, then the embedder. */
   readonly stopSteps: readonly ShutdownStep[];
 }
@@ -75,6 +87,7 @@ export const createLiveRuntime = (options: LiveRuntimeOptions): LiveRuntime => {
   let activeVersion = 0;
   let background: Background | undefined;
   const acquire = createLock();
+  const tasks = createTaskRunner(logger);
 
   const activeOrFail = (): Active => {
     if (active === undefined) throw new Error('No settings are in force');
@@ -87,6 +100,7 @@ export const createLiveRuntime = (options: LiveRuntimeOptions): LiveRuntime => {
         db,
         concurrency: config.resources.workers,
         handlers: () => active?.handlers ?? NO_HANDLERS,
+        settings: { applied: () => activeVersion, catchUp: options.catchUp },
         logger,
         graceMs: options.graceMs,
       }),
@@ -145,25 +159,19 @@ export const createLiveRuntime = (options: LiveRuntimeOptions): LiveRuntime => {
     return { next: { settings, embedder, handlers, api }, bindings };
   };
 
-  // A task that fails leaves the settings in force and the workers running: it is
-  // reported, and runs again the next time settings are put in force or at the next start.
-  const runTasks = async (bindings: Bindings): Promise<void> => {
-    for (const task of bindings.startupTasks) {
-      try {
-        await task.run();
-      } catch (error) {
-        logger.event('settings_task_failed', { task: task.name, ...describeError(error) });
-      }
-    }
-  };
-
-  const settle = async (next: Active, previous: Active | undefined, bindings: Bindings) => {
+  const settle = async (
+    next: Active,
+    previous: Active | undefined,
+    bindings: Bindings,
+    atBoot: boolean,
+  ) => {
     if (previous !== undefined && previous.embedder !== next.embedder) {
       await previous.embedder.close();
     }
     (await settingsNotices(config, next.settings)).forEach(logger.notice);
     bindings.notices.forEach(logger.notice);
-    await runTasks(bindings);
+    if (atBoot) await tasks.atBoot(bindings.startupTasks);
+    else await tasks.afterSave(bindings.startupTasks);
     background ??= await startBackground();
   };
 
@@ -182,7 +190,7 @@ export const createLiveRuntime = (options: LiveRuntimeOptions): LiveRuntime => {
 
   const preparedOf = (
     built: Built,
-    version: number,
+    { version, atBoot }: { readonly version: number; readonly atBoot: boolean },
     created: boolean,
     release: () => void,
   ): PreparedSettings => {
@@ -196,7 +204,7 @@ export const createLiveRuntime = (options: LiveRuntimeOptions): LiveRuntime => {
       },
       settle: async () => {
         try {
-          await settle(built.next, previous.active, built.bindings);
+          await settle(built.next, previous.active, built.bindings, atBoot);
         } finally {
           release();
         }
@@ -215,7 +223,11 @@ export const createLiveRuntime = (options: LiveRuntimeOptions): LiveRuntime => {
     };
   };
 
-  const prepare = async (document: Settings, version: number): Promise<PreparedSettings> => {
+  const prepare = async (
+    document: Settings,
+    version: number,
+    { atBoot = false }: PrepareOptions = {},
+  ): Promise<PreparedSettings> => {
     const release = await acquire();
     try {
       if (version <= activeVersion) return unchanged(release);
@@ -226,7 +238,7 @@ export const createLiveRuntime = (options: LiveRuntimeOptions): LiveRuntime => {
         if (created) await embedder.close();
         throw error;
       });
-      return preparedOf(built, version, created, release);
+      return preparedOf(built, { version, atBoot }, created, release);
     } catch (error) {
       release();
       throw error;
@@ -238,6 +250,13 @@ export const createLiveRuntime = (options: LiveRuntimeOptions): LiveRuntime => {
     version: () => activeVersion,
     prepare,
     stopSteps: [
+      {
+        name: 'startup tasks',
+        run: () => {
+          tasks.stop();
+          return Promise.resolve();
+        },
+      },
       { name: 'workers', run: async () => background?.queue.run() },
       { name: 'watcher', run: async () => background?.folder.run() },
       { name: 'embedder', run: async () => active?.embedder.close() },

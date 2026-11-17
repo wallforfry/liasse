@@ -6,7 +6,7 @@ import {
   PermanentJobError,
   WorkersStoppingError,
 } from './errors.ts';
-import type { RegisteredHandler } from './handlers.ts';
+import type { ActiveHandlers, RegisteredHandler } from './handlers.ts';
 import { describeJobError } from './last-error.ts';
 import {
   type ClaimedJob,
@@ -30,8 +30,19 @@ export interface JobDeferral {
   readonly delayMs: number;
 }
 
+/** How the workers keep the settings of their handlers up to the version of a job. */
+export interface SettingsFollower {
+  /** The version of the stored settings the handlers in force were built from. */
+  readonly applied: () => number;
+  /** Reads the stored settings and puts newer ones in force; resolves once it tried. */
+  readonly catchUp: () => Promise<void>;
+}
+
 export interface ExecutionDeps {
   readonly db: Database;
+  /** Read once a job is claimed, after any catch-up: its handler runs the job. */
+  readonly handlers: () => ActiveHandlers;
+  readonly settings?: SettingsFollower;
   readonly retry: RetryPolicy;
   readonly lockRenewalMs: number;
   readonly onJobFailed: (failure: JobFailure) => void;
@@ -68,7 +79,7 @@ const defer = async (
 const settleFailure = (
   deps: ExecutionDeps,
   job: ClaimedJob,
-  handler: RegisteredHandler | undefined,
+  handler: RegisteredHandler,
   error: unknown,
   signal: AbortSignal,
 ): Promise<boolean> => {
@@ -79,17 +90,16 @@ const settleFailure = (
   const lastError = describeJobError(error);
   return willRetry
     ? retryJob(deps.db, job, lastError, retryDelayMs(job.attempt, deps.retry))
-    : failJob(deps.db, job, lastError, handler?.onTerminalFailure);
+    : failJob(deps.db, job, lastError, handler.onTerminalFailure);
 };
 
 const runHandler = async (
   deps: ExecutionDeps,
   job: ClaimedJob,
-  handler: RegisteredHandler | undefined,
+  handler: RegisteredHandler,
   signal: AbortSignal,
 ): Promise<boolean> => {
   try {
-    if (handler === undefined) throw new PermanentJobError(`No handler for the kind ${job.kind}`);
     await handler.run(job.payload, { signal, attempt: job.attempt });
   } catch (error) {
     return settleFailure(deps, job, handler, error, signal);
@@ -97,15 +107,36 @@ const runHandler = async (
   return completeJob(deps.db, job);
 };
 
+// A job queued under newer settings, or of a kind the set in force no longer has, waits
+// this long in the queue, its attempt not counted, before a worker tries it again.
+export const NOT_READY_DELAY_MS = 1000;
+
+const settingsCaughtUp = async (deps: ExecutionDeps, job: ClaimedJob): Promise<boolean> => {
+  const { settings } = deps;
+  if (settings === undefined || job.settingsVersion <= settings.applied()) return true;
+  await settings.catchUp().catch(deps.onError);
+  return job.settingsVersion <= settings.applied();
+};
+
+// Undefined when the job must not run now: never with parts older than its settings.
+const handlerFor = async (
+  deps: ExecutionDeps,
+  job: ClaimedJob,
+): Promise<RegisteredHandler | undefined> =>
+  (await settingsCaughtUp(deps, job)) ? deps.handlers().registry.get(job.kind) : undefined;
+
 const run = async (
   deps: ExecutionDeps,
   job: ClaimedJob,
-  handler: RegisteredHandler | undefined,
   controller: AbortController,
   renewal: NodeJS.Timeout,
 ): Promise<void> => {
   try {
-    const written = await runHandler(deps, job, handler, controller.signal);
+    const handler = await handlerFor(deps, job);
+    const written =
+      handler === undefined
+        ? await deferJob(deps.db, job, NOT_READY_DELAY_MS)
+        : await runHandler(deps, job, handler, controller.signal);
     if (!written) deps.onError(new JobLockLostError());
   } catch (error) {
     // The row could not be written back. It stays `running` without renewal, so the
@@ -117,14 +148,11 @@ const run = async (
 };
 
 /**
- * Runs the job with the handler it was claimed for: one the workers are given in its place
- * meanwhile only runs the jobs claimed after it.
+ * Runs the job with the handler of the set in force once it is claimed, after the settings
+ * of this process caught up with those of the job. A set given in its place later only
+ * runs the jobs claimed after it.
  */
-export const executeJob = (
-  deps: ExecutionDeps,
-  job: ClaimedJob,
-  handler: RegisteredHandler | undefined,
-): Execution => {
+export const executeJob = (deps: ExecutionDeps, job: ClaimedJob): Execution => {
   const controller = new AbortController();
   // A handler that outlives the visibility timeout keeps its job as long as its
   // process answers: only a silent worker loses it.
@@ -135,7 +163,7 @@ export const executeJob = (
   }, deps.lockRenewalMs);
   return {
     job,
-    done: run(deps, job, handler, controller, renewal),
+    done: run(deps, job, controller, renewal),
     interrupt: () => {
       controller.abort(new WorkersStoppingError());
     },

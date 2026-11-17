@@ -9,7 +9,7 @@ import { createLogger, type Logger } from '../log.ts';
 import { runShutdown, type ShutdownStep } from '../shutdown.ts';
 import { type Bind, bindFeatures } from './bindings.ts';
 import { type Front, startFront, type Transport } from './front.ts';
-import { applyStored, followSettings } from './follow.ts';
+import { applyStored, createSettingsFollower } from './follow.ts';
 import { createLiveRuntime } from './live.ts';
 import { startupNotices, UNCONFIGURED_NOTICE } from './notices.ts';
 import { step } from './step.ts';
@@ -82,6 +82,24 @@ export const createRuntime = async (
       publicUrl: config.server.publicUrl,
     });
     const factories = models ?? providerFactories(embedderOptions);
+    // The holder, its follower and the settings use cases need one another: the workers of
+    // the holder catch up through the follower, which, like a save, puts settings in force
+    // in the holder. Each is called only once all three exist.
+    const settings: SettingsContext = {
+      db,
+      secrets: createSecretBox(config.auth.secret),
+      embedding: config.embedding,
+      factories,
+      prepare: (...args) => live.prepare(...args),
+    };
+    const follower = createSettingsFollower(
+      settings,
+      {
+        prepare: (...args) => live.prepare(...args),
+        version: () => live.version(),
+      },
+      logger,
+    );
     const live = createLiveRuntime({
       config,
       db,
@@ -92,21 +110,14 @@ export const createRuntime = async (
       bind,
       logger,
       graceMs: shutdownGraceMs,
+      catchUp: follower.catchUp,
     });
     stopsBefore(...live.stopSteps);
-    const settings: SettingsContext = {
-      db,
-      secrets: createSecretBox(config.auth.secret),
-      embedding: config.embedding,
-      factories,
-      prepare: live.prepare,
-    };
-
     const stored = await step('putting the settings in force', () =>
-      applyStored(settings, live, logger.notice),
+      applyStored(settings, live, logger.notice, { atBoot: true }),
     );
     if (stored === undefined) logger.notice(UNCONFIGURED_NOTICE);
-    stopsBefore(await followSettings(settings, live, logger));
+    stopsBefore(await follower.start());
 
     const { stop: stopFront, ...front } = await startFront({
       transport,

@@ -5,17 +5,12 @@ import type { WakeSignal } from './wake-signal.ts';
 
 export interface DispatcherOptions {
   readonly execution: ExecutionDeps;
-  /** Read at every claim: the handlers and bounds in force when a job is claimed run it. */
+  /** Read for every claim: its kinds and bounds decide what may be claimed. */
   readonly handlers: () => ActiveHandlers;
   readonly concurrency: number;
   readonly pollIntervalMs: number;
   readonly maxPollIntervalMs: number;
   readonly wake: WakeSignal;
-}
-
-interface Claim {
-  readonly job: ClaimedJob;
-  readonly active: ActiveHandlers;
 }
 
 export interface Dispatcher {
@@ -47,19 +42,19 @@ export const startDispatcher = ({
           (kind) => runningOfKind(kind) < (perKindConcurrency[kind] ?? concurrency),
         );
 
-  const claim = async (): Promise<Claim | undefined> => {
+  const claim = async (): Promise<ClaimedJob | undefined> => {
     try {
-      const active = handlers();
-      const job = await claimJob(execution.db, claimableKinds(active));
-      return job === undefined ? undefined : { job, active };
+      return await claimJob(execution.db, claimableKinds(handlers()));
     } catch (error) {
       execution.onError(error);
       return undefined;
     }
   };
 
-  const start = ({ job, active }: Claim): void => {
-    const started = executeJob(execution, job, active.registry.get(job.kind));
+  // The handler is chosen by the execution, once the job is claimed: the set read for the
+  // claim may have been replaced while the claim waited for a connection.
+  const start = (job: ClaimedJob): void => {
+    const started = executeJob(execution, job);
     // A job this process lost and claimed again runs twice at once for a while: the
     // attempt tells the two executions apart, the job id alone would merge them.
     const token = `${job.id}:${String(job.attempt)}`;
