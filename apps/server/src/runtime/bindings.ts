@@ -5,6 +5,7 @@ import {
   CONSOLIDATION_CONCURRENCY,
   createConsolidationHandlers,
   listChanges,
+  listConsolidationRuns,
   queueBatchRunIfDue,
   requestConsolidationRun,
   scheduleNightlyRun,
@@ -118,6 +119,7 @@ const featuresOf = (deps: PipelineDeps, hindsight: HindsightIntegration): ApiFea
   listChanges: (options) => listChanges({ db: deps.db }, options),
   applyChange: (id, decision) => applyChange({ db: deps.db }, id, decision),
   requestConsolidationRun: () => requestConsolidationRun({ db: deps.db }),
+  listConsolidationRuns: () => listConsolidationRuns({ db: deps.db }),
   ...(hindsight.enabled
     ? { onDocumentDeleted: (tx, { id }) => hindsight.enqueueSync(tx, id) }
     : {}),

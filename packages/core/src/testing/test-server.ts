@@ -2,7 +2,7 @@ import { randomBytes } from 'node:crypto';
 import postgres from 'postgres';
 import { z } from 'zod';
 
-export const DEFAULT_TEST_DATABASE_URL = 'postgres://liasse:liasse@127.0.0.1:54329/liasse_test';
+export const DEFAULT_TEST_DATABASE_URL = 'postgres://liasse:liasse@127.0.0.1:54332/liasse_test';
 
 /** Every throwaway database of the tests starts with it, and nothing else does. */
 export const TEST_DATABASE_PREFIX = 'liasse_test_';

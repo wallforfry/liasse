@@ -29,7 +29,7 @@ You need Node 22.12 or later on the 22 line, 24.22.3 or later on the 24 line, or
 
 ```sh
 pnpm install
-pnpm db:up            # Postgres with pgvector on 127.0.0.1:54329, S3 test server on 127.0.0.1:54330
+pnpm db:up            # Postgres with pgvector on 127.0.0.1:54329, its test server on 127.0.0.1:54332, S3 test server on 127.0.0.1:54330
 cp .env.example .env
 pnpm lint && pnpm typecheck && pnpm test && pnpm build
 pnpm --filter @liasse/server dev
