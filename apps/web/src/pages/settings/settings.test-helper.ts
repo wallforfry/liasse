@@ -43,21 +43,32 @@ export const isSave = ({ method, path }: Request) => method === 'PUT' && path ==
 export const isCheck = ({ method, path }: Request) =>
   method === 'POST' && path === '/settings/check';
 
-/** A server holding `state`, which answers a save with `saved` and a check with `check`. */
+export const isModelList = ({ method, path }: Request) =>
+  method === 'POST' && path === '/settings/models';
+
+export const LISTED_MODELS = { status: 'ok', models: ['listed-large', 'listed-small'] };
+
+/**
+ * A server holding `state`, which answers a save with `saved`, a check with `check` and a
+ * list of models with `models`.
+ */
 export const settingsServer = ({
   state = STATE,
   saved,
   check = OK_CHECK,
+  models = LISTED_MODELS,
 }: {
   readonly state?: unknown;
   readonly saved?: Answer;
   readonly check?: unknown;
+  readonly models?: unknown;
 } = {}): Answer => {
   const answerSave = saved ?? (() => json(state));
   return (request) => {
     if (isSettingsRead(request)) return json(state);
     if (isSave(request)) return answerSave(request);
     if (isCheck(request)) return json(check);
+    if (isModelList(request)) return json(models);
     return undefined;
   };
 };

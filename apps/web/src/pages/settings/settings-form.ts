@@ -3,6 +3,7 @@ import {
   type SecretUpdate,
   type SettingsDraftInput,
   settingsDraftSchema,
+  type SettingsModelsRequestInput,
   type SettingsView,
 } from '@liasse/contract';
 import type {
@@ -132,6 +133,25 @@ export const isLocalEmbedder = (provider: EmbeddingProvider): boolean => provide
 
 const localEmbedderKey = ({ state }: KeyField): SecretUpdate =>
   state === 'unreadable' ? { action: 'clear' } : KEEP;
+
+/** The endpoint of the language models as the form holds it, for the list of models. */
+export const llmModelsRequest = ({ provider, base_url, api_key }: SettingsValues['llm']) =>
+  ({
+    section: 'llm',
+    provider,
+    base_url: optionalText(base_url),
+    api_key: api_key.update,
+  }) satisfies SettingsModelsRequestInput;
+
+/** The same for a remote embedder; the local one lists nothing. */
+export const embeddingModelsRequest = ({
+  provider,
+  base_url,
+  api_key,
+}: SettingsValues['embedding']): SettingsModelsRequestInput | undefined =>
+  provider === 'local'
+    ? undefined
+    : { section: 'embedding', provider, base_url: optionalText(base_url), api_key: api_key.update };
 
 /** The document the form sends, before the schema reads it. */
 export const draftOf = ({ llm, embedding, pipeline, hindsight }: SettingsValues) => {

@@ -5,7 +5,13 @@ import { SectionCheck, type SettingsCheckMutation } from './check-results.tsx';
 import { SecretField } from './secret-field.tsx';
 import { SettingsCard } from './settings-card.tsx';
 import { ChoiceField, TextField } from './settings-fields.tsx';
-import { fieldSetter, isLocalEmbedder, type SectionProps } from './settings-form.ts';
+import { ModelField } from './model-field.tsx';
+import {
+  embeddingModelsRequest,
+  fieldSetter,
+  isLocalEmbedder,
+  type SectionProps,
+} from './settings-form.ts';
 import { issueAt } from './settings-validation.ts';
 
 interface EmbedderSectionProps extends SectionProps<'embedding'> {
@@ -36,6 +42,7 @@ export const EmbedderSection = ({
 }: EmbedderSectionProps) => {
   const set = fieldSetter(values, onChange);
   const remote = !isLocalEmbedder(values.provider);
+  const request = embeddingModelsRequest(values);
   return (
     <SettingsCard
       id="embedding"
@@ -52,15 +59,27 @@ export const EmbedderSection = ({
         disabled={locked}
         error={issueAt(issues, 'embedding.provider')}
       />
-      <TextField
-        id="embedding-model"
-        label="Model"
-        hint={remote ? undefined : 'Leave empty for the model the local embedder ships.'}
-        value={values.model}
-        onChange={set('model')}
-        disabled={locked}
-        error={issueAt(issues, 'embedding.model')}
-      />
+      {request === undefined ? (
+        <TextField
+          id="embedding-model"
+          label="Model"
+          hint="Leave empty for the model the local embedder ships."
+          value={values.model}
+          onChange={set('model')}
+          disabled={locked}
+          error={issueAt(issues, 'embedding.model')}
+        />
+      ) : (
+        <ModelField
+          id="embedding-model"
+          label="Model"
+          request={request}
+          value={values.model}
+          onChange={set('model')}
+          disabled={locked}
+          error={issueAt(issues, 'embedding.model')}
+        />
+      )}
       {remote ? (
         <>
           <TextField
