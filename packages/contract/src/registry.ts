@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { MAX_TYPE_REQUEST_LENGTH } from './domain/limits.ts';
 import {
   changeKindSchema,
+  INCLUDE_PRIVATE_DESCRIPTION,
   entityIdentifierTypeSchema,
   entityKindSchema,
   keyDateKindSchema,
@@ -121,10 +122,7 @@ export const upcomingOptionsSchema = z.strictObject({
   types: z.array(z.string().min(1)).min(1).optional(),
   subject: z.string().min(1).optional(),
   current_only: z.boolean().default(true),
-  include_private: z
-    .boolean()
-    .default(false)
-    .describe('Private documents are left out unless this is true.'),
+  include_private: z.boolean().default(false).describe(INCLUDE_PRIVATE_DESCRIPTION),
 });
 export type UpcomingOptions = z.output<typeof upcomingOptionsSchema>;
 

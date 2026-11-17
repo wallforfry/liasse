@@ -9,6 +9,7 @@ import {
 } from './domain/limits.ts';
 import {
   documentStateSchema,
+  INCLUDE_PRIVATE_DESCRIPTION,
   subjectIdentifierTypeSchema,
   subjectKindSchema,
 } from './domain/schemas.ts';
@@ -164,19 +165,17 @@ export const getSubjectOutputSchema = z.discriminatedUnion('found', [
 ]);
 export type GetSubjectOutput = z.output<typeof getSubjectOutputSchema>;
 
-const PRIVATE_DESCRIPTION = 'Private documents are left out unless this is true.';
-
 const { includePrivate: timelinePrivate, ...timelineFields } = timelineInputSchema.shape;
 export const timelineOptionsSchema = z.strictObject({
   ...timelineFields,
-  include_private: timelinePrivate.describe(PRIVATE_DESCRIPTION),
+  include_private: timelinePrivate.describe(INCLUDE_PRIVATE_DESCRIPTION),
 });
 export type TimelineOptions = z.output<typeof timelineOptionsSchema>;
 
 const { includePrivate: recallPrivate, ...recallFields } = recallInputSchema.shape;
 export const recallOptionsSchema = z.strictObject({
   ...recallFields,
-  include_private: recallPrivate.describe(PRIVATE_DESCRIPTION),
+  include_private: recallPrivate.describe(INCLUDE_PRIVATE_DESCRIPTION),
 });
 export type RecallOptions = z.output<typeof recallOptionsSchema>;
 
@@ -184,6 +183,6 @@ const { includePrivate: subjectPrivate, asOf, ...subjectFields } = getSubjectInp
 export const getSubjectOptionsSchema = z.strictObject({
   ...subjectFields,
   as_of: asOf,
-  include_private: subjectPrivate.describe(PRIVATE_DESCRIPTION),
+  include_private: subjectPrivate.describe(INCLUDE_PRIVATE_DESCRIPTION),
 });
 export type GetSubjectOptions = z.output<typeof getSubjectOptionsSchema>;
