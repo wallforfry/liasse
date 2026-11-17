@@ -17,14 +17,8 @@ import { LanguageModelsSection } from './language-models-section.tsx';
 import { PipelineSection } from './pipeline-section.tsx';
 import { isStaleVersion, serverIssuesOf } from './settings-errors.ts';
 import { SETTINGS_QUERY_KEY } from './settings-query.ts';
-import {
-  type Issues,
-  NO_ISSUES,
-  type SettingsSection,
-  type SettingsValues,
-  validate,
-  valuesOf,
-} from './settings-form.ts';
+import { type SettingsSection, type SettingsValues, valuesOf } from './settings-form.ts';
+import { type Issues, NO_ISSUES, validate } from './settings-validation.ts';
 
 const useSettingsCheck = () => {
   const client = useClient();

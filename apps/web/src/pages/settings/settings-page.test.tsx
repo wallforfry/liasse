@@ -21,9 +21,9 @@ const STATE = {
       text_model: 'synthetic-text',
       vision_model: 'synthetic-vision',
       timeout_ms: 120_000,
-      api_key_set: true,
+      api_key_state: 'set',
     },
-    embedding: { provider: 'local', timeout_ms: 60_000, api_key_set: false },
+    embedding: { provider: 'local', timeout_ms: 60_000, api_key_state: 'unset' },
     pipeline: {
       max_file_size: 52_428_800,
       auto_apply: 'safe',
@@ -34,7 +34,7 @@ const STATE = {
       entity_attach_similarity: 1,
       entity_arbitration_similarity: 0.8,
     },
-    hindsight: { url: 'http://hindsight.example.test', bank: 'documents', api_key_set: false },
+    hindsight: { url: 'http://hindsight.example.test', bank: 'documents', api_key_state: 'unset' },
   },
   embedder_locked: false,
 };
@@ -124,7 +124,7 @@ describe('the settings page', () => {
       settings: {
         ...STATE.settings,
         llm: { ...STATE.settings.llm, text_model: 'synthetic-text-2' },
-        hindsight: { ...STATE.settings.hindsight, api_key_set: true },
+        hindsight: { ...STATE.settings.hindsight, api_key_state: 'set' },
       },
     };
     const server = fakeServer(settingsServer({ saved: () => json(savedState) }));
@@ -159,6 +159,44 @@ describe('the settings page', () => {
     // The saved version gives a new form: every key kept again, none shown.
     expect(document.querySelector('input[type="password"]')).toBeNull();
     expect(within(await region('Hindsight')).getByText('Set')).toBeInTheDocument();
+  });
+
+  it('asks for a key that no longer opens to be replaced or cleared', async () => {
+    const unreadable = {
+      ...STATE,
+      settings: {
+        ...STATE.settings,
+        llm: { ...STATE.settings.llm, api_key_state: 'unreadable' },
+        embedding: { ...STATE.settings.embedding, api_key_state: 'unreadable' },
+      },
+    };
+    const server = fakeServer(settingsServer({ state: unreadable }));
+    renderApp('/account/settings', server.fetch);
+    const user = userEvent.setup();
+
+    const llm = within(await region('Language models'));
+    expect(llm.getByText('Unreadable')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Save the settings' }));
+    expect(
+      llm.getByText('This key no longer opens under the current AUTH_SECRET: replace or clear it.'),
+    ).toBeInTheDocument();
+    expect(server.requests.some(isSave)).toBe(false);
+
+    await user.click(llm.getByRole('button', { name: 'Replace the language model API key' }));
+    await user.click(llm.getByLabelText('language model API key'));
+    await user.paste('synthetic-new-key');
+    await user.click(screen.getByRole('button', { name: 'Save the settings' }));
+
+    await waitFor(() => {
+      expect(server.requests.some(isSave)).toBe(true);
+    });
+    // The local embedder reads no key: the one that no longer opens is dropped.
+    expect(jsonBody(server.requests.find(isSave))).toMatchObject({
+      settings: {
+        llm: { api_key: { action: 'replace', value: 'synthetic-new-key' } },
+        embedding: { provider: 'local', api_key: { action: 'clear' } },
+      },
+    });
   });
 
   it('marks what the schema refuses in place, and sends nothing', async () => {

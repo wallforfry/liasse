@@ -2,7 +2,8 @@ import { SectionCheck, type SettingsCheckMutation } from './check-results.tsx';
 import { SecretField } from './secret-field.tsx';
 import { SettingsCard } from './settings-card.tsx';
 import { TextField } from './settings-fields.tsx';
-import { fieldSetter, issueAt, type SectionProps } from './settings-form.ts';
+import { fieldSetter, type SectionProps } from './settings-form.ts';
+import { issueAt } from './settings-validation.ts';
 
 interface HindsightSectionProps extends SectionProps<'hindsight'> {
   readonly check: SettingsCheckMutation;

@@ -1,6 +1,6 @@
 import { LiasseApiError } from '@liasse/sdk';
 import { z } from 'zod';
-import { type Issues, issuesFrom, NO_ISSUES } from './settings-form.ts';
+import { type Issues, issuesFrom, NO_ISSUES } from './settings-validation.ts';
 
 const invalidRequestDetailsSchema = z.object({
   issues: z.array(z.object({ path: z.string(), message: z.string() })),

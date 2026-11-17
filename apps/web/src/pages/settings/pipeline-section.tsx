@@ -1,7 +1,8 @@
 import { AUTO_APPLY_MODES, SCHEMA_LANGUAGES } from '@liasse/contract/domain';
 import { SettingsCard } from './settings-card.tsx';
 import { ChoiceField, TextField } from './settings-fields.tsx';
-import { fieldSetter, issueAt, type SectionProps } from './settings-form.ts';
+import { fieldSetter, type SectionProps } from './settings-form.ts';
+import { issueAt } from './settings-validation.ts';
 
 /** Nothing of the pipeline answers a check: the section has no check button. */
 export const PipelineSection = ({ values, issues, onChange }: SectionProps<'pipeline'>) => {

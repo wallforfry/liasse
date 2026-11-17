@@ -1,14 +1,21 @@
-import { MAX_API_KEY_LENGTH } from '@liasse/contract/domain';
+import { MAX_API_KEY_LENGTH, type SecretState } from '@liasse/contract/domain';
 import { Badge } from '../../components/ui/badge.tsx';
 import { Button } from '../../components/ui/button.tsx';
 import { Input } from '../../components/ui/input.tsx';
 import { Label } from '../../components/ui/label.tsx';
-import type { KeyField, KeyState } from './settings-form.ts';
+import type { KeyField } from './settings-form.ts';
 
-const STATE_LABELS: Readonly<Record<KeyState, string>> = {
+const STATE_LABELS: Readonly<Record<SecretState, string>> = {
   set: 'Set',
-  not_set: 'Not set',
+  unset: 'Not set',
+  unreadable: 'Unreadable',
 };
+
+const STATE_BADGES = {
+  set: 'secondary',
+  unset: 'outline',
+  unreadable: 'destructive',
+} as const satisfies Readonly<Record<SecretState, string>>;
 
 interface SecretFieldProps {
   readonly id: string;
@@ -29,8 +36,13 @@ export const SecretField = ({ id, label, field, onChange, error }: SecretFieldPr
     <div className="grid gap-2">
       <div className="flex items-center gap-2">
         <Label htmlFor={update.action === 'replace' ? id : undefined}>API key</Label>
-        <Badge variant={state === 'set' ? 'secondary' : 'outline'}>{STATE_LABELS[state]}</Badge>
+        <Badge variant={STATE_BADGES[state]}>{STATE_LABELS[state]}</Badge>
       </div>
+      {state === 'unreadable' && update.action === 'keep' ? (
+        <p className="text-sm text-muted-foreground">
+          The stored key was sealed under another AUTH_SECRET: replace or clear it.
+        </p>
+      ) : null}
       {update.action === 'keep' ? (
         <div className="flex gap-2">
           <Button
@@ -44,7 +56,7 @@ export const SecretField = ({ id, label, field, onChange, error }: SecretFieldPr
           >
             Replace
           </Button>
-          {state === 'not_set' ? null : (
+          {state === 'unset' ? null : (
             <Button
               type="button"
               variant="outline"
