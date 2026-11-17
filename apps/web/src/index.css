@@ -13,6 +13,10 @@
   --card-foreground: oklch(0.145 0 0);
   --popover: oklch(1 0 0);
   --popover-foreground: oklch(0.145 0 0);
+  --graph-document: oklch(0.546 0.245 262.881);
+  --graph-type: oklch(0.646 0.222 41.116);
+  --graph-subject: oklch(0.6 0.118 184.704);
+  --graph-entity: oklch(0.558 0.288 302.321);
   --primary: oklch(0.205 0 0);
   --primary-foreground: oklch(0.985 0 0);
   --secondary: oklch(0.97 0 0);
@@ -42,6 +46,10 @@
   --card-foreground: oklch(0.985 0 0);
   --popover: oklch(0.205 0 0);
   --popover-foreground: oklch(0.985 0 0);
+  --graph-document: oklch(0.707 0.165 254.624);
+  --graph-type: oklch(0.769 0.188 70.08);
+  --graph-subject: oklch(0.777 0.152 181.912);
+  --graph-entity: oklch(0.714 0.203 305.504);
   --primary: oklch(0.922 0 0);
   --primary-foreground: oklch(0.205 0 0);
   --secondary: oklch(0.269 0 0);
@@ -95,6 +103,10 @@
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-ring: var(--sidebar-ring);
+  --color-graph-document: var(--graph-document);
+  --color-graph-type: var(--graph-type);
+  --color-graph-subject: var(--graph-subject);
+  --color-graph-entity: var(--graph-entity);
 }
 
 @layer base {

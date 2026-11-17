@@ -130,6 +130,16 @@ export {
   upcomingOutputSchema,
 } from './knowledge.ts';
 export {
+  type Graph,
+  type GraphEdge,
+  graphEdgeSchema,
+  type GraphNode,
+  graphNodeSchema,
+  type GraphRequest,
+  graphRequestSchema,
+  graphSchema,
+} from './graph.ts';
+export {
   MCP_CONNECTIONS_LIST_PATH,
   MCP_CONNECTIONS_REVOKE_PATH,
   type McpConnection,

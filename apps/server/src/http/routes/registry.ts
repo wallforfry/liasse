@@ -8,6 +8,8 @@ import {
   createTypeRequestSchema,
   describeTypesOptionsSchema,
   entityListSchema,
+  graphRequestSchema,
+  graphSchema,
   listChangesOptionsSchema,
   listEntitiesRequestSchema,
   listSubjectsOptionsSchema,
@@ -24,6 +26,7 @@ import {
   listConsolidationRuns,
   listEntities,
   listSubjects,
+  readGraph,
   requestConsolidationRun,
   upcoming,
 } from '@liasse/core/api';
@@ -67,6 +70,10 @@ const upcomingQuery = z
     current_only: flagParam.optional(),
   })
   .pipe(upcomingOptionsSchema);
+
+const graphQuery = z
+  .strictObject({ limit: integerParam.optional(), include_private: flagParam.optional() })
+  .pipe(graphRequestSchema);
 
 const changesQuery = z.strictObject({ kind: text }).pipe(listChangesOptionsSchema);
 
@@ -122,6 +129,17 @@ export const registryRoutes = ({ api, authenticated }: RouteDeps): Hono<AppEnv> 
       authenticated,
       valid('query', subjectsQuery),
       async (context) => context.json(await listSubjects(api, context.req.valid('query'))),
+    )
+    .get(
+      '/graph',
+      operation({
+        summary: 'Documents, types, subjects and entities, and the edges between them',
+        tag: 'Knowledge',
+        responses: { 200: jsonResponse('The graph.', graphSchema), ...failures(400) },
+      }),
+      authenticated,
+      valid('query', graphQuery),
+      async (context) => context.json(await readGraph(api, context.req.valid('query'))),
     )
     .get(
       '/upcoming',

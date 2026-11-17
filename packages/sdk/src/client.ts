@@ -23,6 +23,9 @@ import {
   entityListSchema,
   type EntityListView,
   type GetDocumentOptions,
+  type Graph,
+  type GraphRequest,
+  graphSchema,
   type Health,
   healthSchema,
   type listChangesOptionsSchema,
@@ -97,6 +100,8 @@ export interface LiasseClient {
   readonly createType: (request: CreateTypeRequest) => Promise<CreatedType>;
   readonly listEntities: (options?: ListEntitiesRequest) => Promise<EntityListView>;
   readonly listSubjects: (options?: ListSubjectsRequest) => Promise<SubjectList>;
+  /** The most recent documents with their types, subjects and entities, and their edges. */
+  readonly graph: (options?: GraphRequest) => Promise<Graph>;
   /** Key dates of a window, both days included, sorted by date. */
   readonly upcoming: (options: UpcomingRequest) => Promise<Upcoming>;
   /** The pending consolidation changes, oldest first. */
@@ -158,6 +163,7 @@ export const createLiasseClient = (options: ClientOptions): LiasseClient => {
     createType: async (request) => post(createdTypeSchema, '/types', request),
     listEntities: async (query = {}) => get(entityListSchema, '/entities', query),
     listSubjects: async (query = {}) => get(listSubjectsOutputSchema, '/subjects', query),
+    graph: async (query = {}) => get(graphSchema, '/graph', query),
     upcoming: async (query) => get(upcomingOutputSchema, '/upcoming', query),
     listChanges: async (query = {}) => get(changeListSchema, '/changes', query),
     decideChange: async (id, decision) =>
