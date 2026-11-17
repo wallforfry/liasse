@@ -1,11 +1,16 @@
 import {
   getSubjectOptionsSchema,
+  listSubjectsOptionsSchema,
   recallOptionsSchema,
   timelineOptionsSchema,
   upcomingOptionsSchema,
 } from '@liasse/contract';
-import { keyDateKindSchema, subjectKindSchema } from '@liasse/contract/domain';
-import { getSubject, recall, timeline, upcoming } from '@liasse/core/api';
+import {
+  DEFAULT_SUBJECT_LIST_LIMIT,
+  keyDateKindSchema,
+  subjectKindSchema,
+} from '@liasse/contract/domain';
+import { getSubject, listSubjects, recall, timeline, upcoming } from '@liasse/core/api';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { type McpDeps, UNTRUSTED } from '../deps.ts';
 import { toolAnswer } from '../outcome.ts';
@@ -33,6 +38,14 @@ const GET_SUBJECT_DESCRIPTION =
   `A subject (${subjectKindSchema.options.join(', ')}) by its \`id\`, or by words ` +
   'that name it (`query`): its linked documents, current state and next key dates. A ' +
   `query that names none or several answers with suggestions. ${PRIVATE_NOTE} ${UNTRUSTED}`;
+
+const LIST_SUBJECTS_DESCRIPTION =
+  'Lists the subjects the documents concern, oldest first, each with its kind, name, ' +
+  'aliases and number of documents, filtered by `kind` and by words that name it ' +
+  `(\`query\`, read as \`get_subject\` reads it): at most ${String(DEFAULT_SUBJECT_LIST_LIMIT)}, ` +
+  'with `truncated` when more match. A private subject, or one known only through ' +
+  'private documents, is never ' +
+  `listed. Call \`get_subject\` for the details of one. ${UNTRUSTED}`;
 
 export const registerKnowledgeTools = (server: McpServer, { api, report }: McpDeps): void => {
   server.registerTool(
@@ -66,5 +79,14 @@ export const registerKnowledgeTools = (server: McpServer, { api, report }: McpDe
       annotations: READ_ONLY,
     },
     async (options) => toolAnswer('get_subject', report, () => getSubject(api(), options)),
+  );
+  server.registerTool(
+    'list_subjects',
+    {
+      description: LIST_SUBJECTS_DESCRIPTION,
+      inputSchema: listSubjectsOptionsSchema,
+      annotations: READ_ONLY,
+    },
+    async (options) => toolAnswer('list_subjects', report, () => listSubjects(api(), options)),
   );
 };

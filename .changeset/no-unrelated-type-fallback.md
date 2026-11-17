@@ -11,4 +11,4 @@ Classification no longer files a document under an unrelated type. The model reu
 
 `reclassify_document` (`POST /documents/:id/reclassify`) whose new type cannot be created changes nothing: the document keeps its type, values and status, and a failed `classification` event carries the reason as its `error_code`. With `new_type`, a slug that names another existing type is refused instead of taken.
 
-MCP has two new tools, `create_type` and `suggest_type`, the use cases of `POST /types` and `POST /types/suggestion`: an agent can create the type a document needs, outside the daily quota of classification, and then set it with `update_document`. The web UI says why a document has no type.
+The description of the MCP tool `create_type` says it is the way to file such a document: it is outside the daily quota of classification, and `update_document` then sets the type. The web UI says why a document has no type.

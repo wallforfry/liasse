@@ -15,9 +15,11 @@ import {
   CORRECTED_PARTS,
   getDocument,
   getDocumentStatus,
+  listDocumentEvents,
   listDocuments,
   reclassifyDocument,
   reextractDocument,
+  removeDocument,
   retryDocument,
   uploadDocument,
 } from '@liasse/core/api';
@@ -83,7 +85,8 @@ const LIST_DESCRIPTION =
   'check; read one with `get_document` and `include: ["review"]` for why, then correct or ' +
   'confirm it with `update_document`. Proposals for the type registry are ' +
   '`list_pending_changes`, not documents. Private documents are left out unless ' +
-  `\`private\` is \`include\` or \`only\`. ${UNTRUSTED}`;
+  '`private` is `include` or `only`. To find documents by what they say, use `search`; ' +
+  `to filter or aggregate on values, use \`query\`. ${UNTRUSTED}`;
 
 const UPDATE_DESCRIPTION =
   'Corrects a document: its type, core values, fields, or its `private` flag. In `core` and ' +
@@ -126,6 +129,20 @@ const REEXTRACT_DESCRIPTION =
   'of it is pending. Returns its id and status, which does not move meanwhile: call ' +
   '`get_status` until `analysis_pending` is false. For a wrong type use ' +
   '`reclassify_document`, for a `failed` document `retry_document`.';
+
+const LIST_EVENTS_DESCRIPTION =
+  'The whole processing log of a document, oldest first: each stage that succeeded and ' +
+  'each attempt that failed, with its error code, whether it is retried, the model and ' +
+  'counts such as the values the model returned that were rejected. `get_status` gives ' +
+  `its last ${String(DOCUMENT_STATUS_EVENTS)} events.`;
+
+const DELETE_DESCRIPTION =
+  'Deletes a document: its text, values, links and index are removed, and its stored file ' +
+  'soon after; only a tombstone with the hash of the file is kept, so the same file in the ' +
+  'watched folder is not ingested again. It cannot be undone: the same bytes sent to ' +
+  '`ingest` bring the document back under the same id, processed again from the file. ' +
+  'Answers the id and `deleted`; an unknown or already deleted id answers ' +
+  '`document_not_found`.';
 
 export const registerDocumentTools = (server: McpServer, { api, report }: McpDeps): void => {
   server.registerTool(
@@ -215,6 +232,29 @@ export const registerDocumentTools = (server: McpServer, { api, report }: McpDep
       toolAnswer('update_document', report, async () => {
         await correctDocument(api(), id, correction);
         return getDocument(api(), id, { include: [...CORRECTED_PARTS] });
+      }),
+  );
+  server.registerTool(
+    'list_document_events',
+    {
+      description: LIST_EVENTS_DESCRIPTION,
+      inputSchema: statusInputSchema,
+      annotations: READ_ONLY,
+    },
+    async ({ id }) =>
+      toolAnswer('list_document_events', report, () => listDocumentEvents(api(), id)),
+  );
+  server.registerTool(
+    'delete_document',
+    {
+      description: DELETE_DESCRIPTION,
+      inputSchema: statusInputSchema,
+      annotations: { readOnlyHint: false, destructiveHint: true, openWorldHint: false },
+    },
+    async ({ id }) =>
+      toolAnswer('delete_document', report, async () => {
+        await removeDocument(api(), id);
+        return { id, deleted: true };
       }),
   );
 };

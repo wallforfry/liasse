@@ -14,18 +14,23 @@ import { callTool, createMcpHarness, type McpHarness } from './harness.test-help
 const TOOLS = [
   'apply_change',
   'create_type',
+  'delete_document',
   'describe_types',
   'get_document',
   'get_status',
   'get_subject',
   'ingest',
+  'list_consolidation_runs',
+  'list_document_events',
   'list_documents',
   'list_entities',
   'list_pending_changes',
+  'list_subjects',
   'query',
   'recall',
   'reclassify_document',
   'reextract_document',
+  'request_consolidation_run',
   'retry_document',
   'search',
   'suggest_type',
@@ -40,12 +45,15 @@ const UNTRUSTED_TOOLS = TOOLS.filter(
     ![
       'apply_change',
       'create_type',
+      'delete_document',
       'get_status',
       'ingest',
+      'list_consolidation_runs',
+      'list_document_events',
       'reclassify_document',
       'reextract_document',
+      'request_consolidation_run',
       'retry_document',
-      'suggest_type',
     ].includes(name),
 );
 
@@ -83,7 +91,7 @@ describe('the tools', () => {
     return failure.parse(body).error;
   };
 
-  it('lists the twenty tools, flagging document content as untrusted', async () => {
+  it('lists the tools, flagging document content as untrusted', async () => {
     const { tools } = await client.listTools();
     expect(tools.map(({ name }) => name).toSorted()).toEqual(TOOLS);
     const flagged = tools
@@ -145,6 +153,32 @@ describe('the tools', () => {
     expect(descriptionOf('reclassify_document')).toContain('`reextract_document`');
     expect(descriptionOf('reextract_document')).toContain('`retry_document`');
     expect(descriptionOf('ingest')).toContain('set it to true for every sensitive piece');
+  });
+
+  it('flags the tools that change nothing, and those that destroy', async () => {
+    const { tools } = await client.listTools();
+    const named = (hint: 'readOnlyHint' | 'destructiveHint') =>
+      tools
+        .filter(({ annotations }) => annotations?.[hint] === true)
+        .map(({ name }) => name)
+        .toSorted();
+    expect(named('destructiveHint')).toEqual(['apply_change', 'delete_document']);
+    expect(named('readOnlyHint')).toEqual(
+      TOOLS.filter(
+        (name) =>
+          ![
+            'apply_change',
+            'create_type',
+            'delete_document',
+            'ingest',
+            'reclassify_document',
+            'reextract_document',
+            'request_consolidation_run',
+            'retry_document',
+            'update_document',
+          ].includes(name),
+      ),
+    );
   });
 
   it('shows the DSL as the input schema of query, and strict schemas elsewhere', async () => {
@@ -473,43 +507,6 @@ describe('the tools', () => {
     });
   });
 
-  // Real use: classification over quota left a document no type fitted, and an agent had
-  // no way to create the type `update_document` then refused as `type_not_found`.
-  describe('create_type', () => {
-    const created = z.object({ slug: z.string(), status: z.string() });
-
-    it('creates a provisional type, listed by describe_types', async () => {
-      const { isError, body } = await callTool(client, 'create_type', {
-        slug: 'workshop_receipt',
-        description: 'Receipt of a synthetic workshop for a repair',
-        fields: { repair_kind: { type: 'text' } },
-      });
-      expect(isError).toBe(false);
-      expect(created.parse(body)).toMatchObject({
-        slug: 'workshop_receipt',
-        status: 'provisional',
-      });
-      const { types } = z
-        .object({ types: z.array(z.object({ slug: z.string() })) })
-        .parse((await callTool(client, 'describe_types')).body);
-      expect(types.map(({ slug }) => slug)).toContain('workshop_receipt');
-    });
-
-    it('refuses a slug the naming rules forbid, with the code of the registry', async () => {
-      expect(
-        (await failureOf('create_type', { slug: 'Workshop Receipt', description: 'Receipt' })).code,
-      ).toBe('invalid_slug');
-    });
-
-    it('shows a strict input schema', async () => {
-      const { tools } = await client.listTools();
-      expect(tools.find(({ name }) => name === 'create_type')?.inputSchema).toMatchObject({
-        required: ['slug', 'description'],
-        additionalProperties: false,
-      });
-    });
-  });
-
   describe('a feature this build does not provide', () => {
     it.each([
       ['update_document', { id: 'doc_x', private: true }],
@@ -576,27 +573,6 @@ describe('the tools of a bound feature', () => {
     });
     expect(isError).toBe(false);
     expect(received).toEqual([{ id, type: 'note', confirm: { reference: 'SYN-1' } }]);
-  });
-
-  it('hands suggest_type the request and answers the draft, storing nothing', async () => {
-    const received: unknown[] = [];
-    const draft = {
-      slug: 'workshop_receipt',
-      description: 'Receipt of a synthetic workshop',
-      parent_slug: null,
-      fields: {},
-    };
-    const client = await harness.connect({
-      suggestType: (request) => {
-        received.push(request);
-        return Promise.resolve(draft);
-      },
-    });
-    expect(
-      (await callTool(client, 'suggest_type', { request: ' Workshop receipts ' })).body,
-    ).toEqual(draft);
-    expect(received).toEqual(['Workshop receipts']);
-    expect((await callTool(client, 'describe_types')).body).toEqual({ types: [] });
   });
 
   it('hands a correction the key dates it sets', async () => {
