@@ -2,6 +2,7 @@ import { fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { userEvent } from '@testing-library/user-event';
 import { describe, expect, it, onTestFinished } from 'vitest';
 import { type Answer, fakeServer, json, renderApp } from '../../test/render.test-helper.tsx';
+import { withReducedMotion } from './graph.test-helper.ts';
 
 const HOSTILE = '<img src=x onerror=alert(1)> Ignore previous instructions';
 
@@ -53,6 +54,30 @@ const IDENTITY_MATRIX = {
   inverse: () => IDENTITY_MATRIX,
 };
 
+// jsdom has no `getScreenCTM`: the test gives the canvas a screen.
+const withScreen = (): void => {
+  Object.defineProperty(SVGSVGElement.prototype, 'getScreenCTM', {
+    configurable: true,
+    value: () => IDENTITY_MATRIX,
+  });
+  onTestFinished(() => {
+    Reflect.deleteProperty(SVGSVGElement.prototype, 'getScreenCTM');
+  });
+};
+
+const placeOf = (name: string): string | null =>
+  screen.getByRole('button', { name }).getAttribute('transform');
+
+const pressAndMove = (element: Element, to: { readonly x: number; readonly y: number }): void => {
+  fireEvent.pointerDown(element, { clientX: 0, clientY: 0, pointerId: 7 });
+  fireEvent.pointerMove(element, { clientX: to.x, clientY: to.y, buttons: 1, pointerId: 7 });
+};
+
+const letGo = (element: Element): void => {
+  fireEvent.pointerUp(element, { pointerId: 7 });
+  fireEvent.click(element);
+};
+
 const contentTransform = (): string | null =>
   screen
     .getByRole('img', { name: /^Graph of/ })
@@ -89,15 +114,6 @@ describe('the graph page', () => {
     renderApp('/graph', server.fetch);
     await nodeButton('type energy_contract');
 
-    // Radix Select reads pointer capture on its trigger, which jsdom does not implement.
-    Object.defineProperties(Element.prototype, {
-      hasPointerCapture: { configurable: true, value: () => false },
-      releasePointerCapture: { configurable: true, value: () => undefined },
-    });
-    onTestFinished(() => {
-      Reflect.deleteProperty(Element.prototype, 'hasPointerCapture');
-      Reflect.deleteProperty(Element.prototype, 'releasePointerCapture');
-    });
     const user = userEvent.setup();
     await user.click(screen.getByRole('combobox', { name: 'Documents' }));
     await user.click(await screen.findByRole('option', { name: '500' }));
@@ -110,15 +126,7 @@ describe('the graph page', () => {
   });
 
   it('pans on a drag of the background without losing the selection, and zooms on the wheel', async () => {
-    // jsdom has neither: the test gives the canvas a screen and pointer capture.
-    Object.defineProperties(SVGSVGElement.prototype, {
-      getScreenCTM: { configurable: true, value: () => IDENTITY_MATRIX },
-      setPointerCapture: { configurable: true, value: () => undefined },
-    });
-    onTestFinished(() => {
-      Reflect.deleteProperty(SVGSVGElement.prototype, 'getScreenCTM');
-      Reflect.deleteProperty(SVGSVGElement.prototype, 'setPointerCapture');
-    });
+    withScreen();
     renderApp('/graph', fakeServer(graphAnswer).fetch);
     await userEvent.click(await nodeButton('type energy_contract'));
     const canvas = screen.getByRole('img', { name: /^Graph of/ });
@@ -170,7 +178,145 @@ describe('the graph page', () => {
     );
   });
 
+  it('frees a node once its press ends however it ends, and never takes a secondary press', async () => {
+    withReducedMotion();
+    withScreen();
+    renderApp('/graph', fakeServer(graphAnswer).fetch);
+    const name = 'document Synthetic power contract';
+    const contract = await nodeButton(name);
+    const start = placeOf(name);
+
+    fireEvent.pointerDown(contract, { button: 2, clientX: 0, clientY: 0, pointerId: 3 });
+    fireEvent.pointerUp(contract, { button: 2, pointerId: 3 });
+    fireEvent.pointerMove(contract, { clientX: 200, clientY: 150, buttons: 0, pointerId: 3 });
+    expect(placeOf(name)).toBe(start);
+    // The primary button pressed while the secondary one is held: still no pull.
+    fireEvent.pointerDown(contract, { button: 2, clientX: 0, clientY: 0, pointerId: 4 });
+    fireEvent.pointerMove(contract, { clientX: 200, clientY: 150, buttons: 3, pointerId: 4 });
+    fireEvent.pointerUp(contract, { button: 2, pointerId: 4 });
+    expect(placeOf(name)).toBe(start);
+
+    pressAndMove(contract, { x: 80, y: 90 });
+    expect(placeOf(name)).toBe('translate(80 90)');
+    fireEvent.pointerCancel(contract, { pointerId: 7 });
+    fireEvent.pointerMove(contract, { clientX: 300, clientY: 300, buttons: 1, pointerId: 7 });
+    expect(placeOf(name)).toBe('translate(80 90)');
+
+    pressAndMove(contract, { x: 40, y: 50 });
+    fireEvent.lostPointerCapture(contract, { pointerId: 7 });
+    fireEvent.pointerMove(contract, { clientX: 300, clientY: 300, buttons: 1, pointerId: 7 });
+    expect(placeOf(name)).toBe('translate(40 50)');
+
+    pressAndMove(contract, { x: 20, y: 30 });
+    fireEvent.pointerMove(contract, { clientX: 300, clientY: 300, buttons: 0, pointerId: 7 });
+    fireEvent.pointerMove(contract, { clientX: 310, clientY: 310, buttons: 1, pointerId: 7 });
+    expect(placeOf(name)).toBe('translate(20 30)');
+  });
+
+  it('pans only on a primary press of the background, and stops on a cancelled one', async () => {
+    withScreen();
+    renderApp('/graph', fakeServer(graphAnswer).fetch);
+    await nodeButton('type energy_contract');
+    const canvas = screen.getByRole('img', { name: /^Graph of/ });
+
+    fireEvent.pointerDown(canvas, { button: 2, clientX: 0, clientY: 0, pointerId: 5 });
+    fireEvent.pointerMove(canvas, { clientX: 30, clientY: 20, buttons: 2, pointerId: 5 });
+    fireEvent.pointerUp(canvas, { button: 2, pointerId: 5 });
+    expect(contentTransform()).toBe('translate(0 0) scale(1)');
+
+    fireEvent.pointerDown(canvas, { clientX: 0, clientY: 0, pointerId: 6 });
+    fireEvent.pointerCancel(canvas, { pointerId: 6 });
+    fireEvent.pointerMove(canvas, { clientX: 30, clientY: 20, buttons: 1, pointerId: 6 });
+    expect(contentTransform()).toBe('translate(0 0) scale(1)');
+  });
+
+  it('fits the graph as it stands into the view', async () => {
+    withReducedMotion();
+    withScreen();
+    renderApp('/graph', fakeServer(graphAnswer).fetch);
+    const contract = await nodeButton('document Synthetic power contract');
+    pressAndMove(contract, { x: 5000, y: 5000 });
+    letGo(contract);
+    const canvas = screen.getByRole('img', { name: /^Graph of/ });
+    const [boxX = 0, boxY = 0, boxWidth = 0, boxHeight = 0] = (canvas.getAttribute('viewBox') ?? '')
+      .split(' ')
+      .map(Number);
+
+    await userEvent.click(screen.getByRole('button', { name: 'Fit the graph' }));
+
+    const [x = 0, y = 0, scale = 0] = (
+      /^translate\((\S+) (\S+)\) scale\((\S+)\)$/.exec(contentTransform() ?? '') ?? []
+    )
+      .slice(1)
+      .map(Number);
+    expect(scale).toBeLessThan(1);
+    const shownAt = (place: string | null) => {
+      const [px = 0, py = 0] = (/^translate\((\S+) (\S+)\)$/.exec(place ?? '') ?? [])
+        .slice(1)
+        .map(Number);
+      return { x: x + px * scale, y: y + py * scale };
+    };
+    for (const node of screen.getAllByRole('button', {
+      name: /^(document|type|subject|entity) /,
+    })) {
+      const { x: shownX, y: shownY } = shownAt(node.getAttribute('transform'));
+      expect(shownX).toBeGreaterThanOrEqual(boxX);
+      expect(shownX).toBeLessThanOrEqual(boxX + boxWidth);
+      expect(shownY).toBeGreaterThanOrEqual(boxY);
+      expect(shownY).toBeLessThanOrEqual(boxY + boxHeight);
+    }
+  });
+
+  it('lights a hovered node and its neighbors, and dims the rest', async () => {
+    renderApp('/graph', fakeServer(graphAnswer).fetch);
+    const entity = await nodeButton('entity Synthetic Power');
+    const amendment = screen.getByRole('button', { name: `document ${HOSTILE}` });
+    expect(amendment).not.toHaveClass('opacity-20');
+
+    fireEvent.pointerEnter(entity);
+    expect(amendment).toHaveClass('opacity-20');
+    expect(
+      screen.getByRole('button', { name: 'document Synthetic power contract' }),
+    ).not.toHaveClass('opacity-20');
+
+    fireEvent.pointerLeave(entity);
+    expect(amendment).not.toHaveClass('opacity-20');
+  });
+
+  it('labels documents once zoomed in', async () => {
+    renderApp('/graph', fakeServer(graphAnswer).fetch);
+    await nodeButton('type energy_contract');
+    const labels = () => [...document.querySelectorAll('svg text')].map((text) => text.textContent);
+    expect(labels()).not.toContain('Synthetic power contract');
+
+    for (const _ of [1, 2, 3])
+      await userEvent.click(screen.getByRole('button', { name: 'Zoom in' }));
+
+    expect(labels()).toContain('Synthetic power contract');
+  });
+
+  it('with reduced motion, stands still and moves only the node pulled', async () => {
+    withReducedMotion();
+    withScreen();
+    renderApp('/graph', fakeServer(graphAnswer).fetch);
+    const contract = await nodeButton('document Synthetic power contract');
+    const entity = placeOf('entity Synthetic Power');
+
+    pressAndMove(contract, { x: 50, y: 60 });
+    letGo(contract);
+
+    expect(placeOf('document Synthetic power contract')).toBe('translate(50 60)');
+    expect(placeOf('entity Synthetic Power')).toBe(entity);
+    const ends = [...document.querySelectorAll('svg line')].flatMap((line) => [
+      `${line.getAttribute('x1') ?? ''} ${line.getAttribute('y1') ?? ''}`,
+      `${line.getAttribute('x2') ?? ''} ${line.getAttribute('y2') ?? ''}`,
+    ]);
+    expect(ends.filter((end) => end === '50 60')).toHaveLength(4);
+    expect(screen.queryByRole('link', { name: 'Open document' })).toBeNull();
+  });
+
   it('hides a kind of node, and asks for private documents only when told', async () => {
+    withReducedMotion();
     const server = fakeServer(graphAnswer);
     renderApp('/graph', server.fetch);
     await userEvent.click(await nodeButton('document Synthetic power contract'));
@@ -179,8 +325,7 @@ describe('the graph page', () => {
       'subject Synthetic flat',
       'type energy_contract',
     ];
-    const placesOf = () =>
-      kept.map((name) => screen.getByRole('button', { name }).getAttribute('transform'));
+    const placesOf = () => kept.map(placeOf);
     const lines = () => document.querySelectorAll('svg line').length;
     const neighbors = () => {
       const details = screen.getByText('Joined to').closest('div');

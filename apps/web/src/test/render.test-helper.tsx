@@ -1,8 +1,8 @@
 import { AUTH_BASE_PATH } from '@liasse/contract';
-import { getConfig, render, type RenderResult, screen } from '@testing-library/react';
+import { render, type RenderResult } from '@testing-library/react';
 import { createMemoryRouter } from 'react-router';
 import { RouterProvider } from 'react-router/dom';
-import { beforeAll, type Mock, vi } from 'vitest';
+import { type Mock, vi } from 'vitest';
 import type { NavigateAway } from '../api/redirect.ts';
 import { AppProviders } from '../app.tsx';
 import { ROUTES } from '../routes.tsx';
@@ -83,60 +83,3 @@ export const renderApp = (
     router,
   };
 };
-
-const WARM_UP_TEXT = 'Most recent first.';
-// Only ends a warm-up that will never see its page, with a message that names it; the
-// hook is given more, so that this message, not the hook timeout, reports the failure.
-const WARM_UP_LIMIT_MILLISECONDS = 10_000;
-const WARM_UP_HOOK_TIMEOUT_MILLISECONDS = WARM_UP_LIMIT_MILLISECONDS + 5_000;
-
-/** Resolves once the text is in the page; rejects if it is still missing at the limit. */
-const untilShown = (text: string, limitMilliseconds: number): Promise<void> =>
-  new Promise((resolve, reject) => {
-    const check = (): boolean => document.body.textContent.includes(text);
-    if (check()) {
-      resolve();
-      return;
-    }
-    const observer = new MutationObserver(() => {
-      if (!check()) return;
-      observer.disconnect();
-      clearTimeout(deadline);
-      resolve();
-    });
-    const deadline = setTimeout(() => {
-      observer.disconnect();
-      reject(
-        new Error(
-          `The warm-up render of the test helper never showed "${text}" within ${String(limitMilliseconds)} ms.`,
-        ),
-      );
-    }, limitMilliseconds);
-    observer.observe(document.body, { childList: true, subtree: true, characterData: true });
-  });
-
-/**
- * Renders the application once before the tests of a file. Each test file runs in a fresh
- * process and jsdom: without this, its first test pays inside its first `findBy*` for code
- * V8 has not compiled yet (React DOM, the router, the shell) and for jsdom loading and
- * parsing its default stylesheet on the first `getComputedStyle`, which a role query calls.
- * Waiting here is not bounded by Testing Library's 1 s.
- */
-const warmUp = async (): Promise<void> => {
-  const library = fakeServer((request) => {
-    if (request.path.startsWith('/types')) return json({ types: [] });
-    if (request.path.startsWith('/documents')) {
-      return json({ documents: [], total: 0, has_more: false });
-    }
-    return undefined;
-  });
-  const { unmount } = renderApp('/documents', library.fetch);
-  try {
-    await getConfig().asyncWrapper(() => untilShown(WARM_UP_TEXT, WARM_UP_LIMIT_MILLISECONDS));
-    screen.getByRole('heading', { name: 'Documents' });
-  } finally {
-    unmount();
-  }
-};
-
-beforeAll(warmUp, WARM_UP_HOOK_TIMEOUT_MILLISECONDS);
