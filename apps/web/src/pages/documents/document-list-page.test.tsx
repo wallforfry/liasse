@@ -108,11 +108,17 @@ describe('the document list', () => {
   it('keeps the results of a search on screen, dimmed, while a filter changes it', async () => {
     const user = userEvent.setup();
     const server = library();
-    // The search with private documents never answers: what shows meanwhile stays.
-    const fetch: typeof globalThis.fetch = (input, init) =>
-      typeof init?.body === 'string' && init.body.includes('"include_private":true')
-        ? new Promise<Response>(() => undefined)
-        : server.fetch(input, init);
+    // The search with private documents answers only once released: what shows meanwhile stays.
+    let release = (): void => undefined;
+    const held = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const fetch: typeof globalThis.fetch = async (input, init) => {
+      if (typeof init?.body === 'string' && init.body.includes('"include_private":true')) {
+        await held;
+      }
+      return server.fetch(input, init);
+    };
     const { router } = renderApp('/documents?q=power', fetch);
     const resultsOf = (link: HTMLElement) => link.closest('[aria-busy]');
     expect(resultsOf(await screen.findByRole('link', { name: 'Found bill' }))).toHaveAttribute(
@@ -126,6 +132,12 @@ describe('the document list', () => {
     const stale = resultsOf(screen.getByRole('link', { name: 'Found bill' }));
     expect(stale).toHaveAttribute('aria-busy', 'true');
     expect(stale).toHaveClass('opacity-50');
+
+    release();
+    await waitFor(() => {
+      expect(stale).toHaveAttribute('aria-busy', 'false');
+    });
+    expect(stale).not.toHaveClass('opacity-50');
   });
 });
 
