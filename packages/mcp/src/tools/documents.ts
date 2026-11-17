@@ -88,15 +88,15 @@ export const registerDocumentTools = (server: McpServer, { api, report }: McpDep
       annotations: READ_ONLY,
     },
     async ({ id, ...options }) =>
-      toolAnswer('get_document', report, () => getDocument(api, id, options)),
+      toolAnswer('get_document', report, () => getDocument(api(), id, options)),
   );
   server.registerTool(
     'get_status',
     { description: GET_STATUS_DESCRIPTION, inputSchema: statusInputSchema, annotations: READ_ONLY },
     async ({ id }) =>
       toolAnswer('get_status', report, async () => {
-        const { status, state, error } = await getDocument(api, id);
-        const { events } = await listDocumentEvents(api, id, { last: STATUS_EVENTS });
+        const { status, state, error } = await getDocument(api(), id);
+        const { events } = await listDocumentEvents(api(), id, { last: STATUS_EVENTS });
         return { id, status, state, error, events };
       }),
   );
@@ -107,7 +107,8 @@ export const registerDocumentTools = (server: McpServer, { api, report }: McpDep
       inputSchema: ingestRequestSchema,
       annotations: { readOnlyHint: false, idempotentHint: true, openWorldHint: false },
     },
-    async (input) => toolAnswer('ingest', report, async () => uploadDocument(api, toUpload(input))),
+    async (input) =>
+      toolAnswer('ingest', report, async () => uploadDocument(api(), toUpload(input))),
   );
   server.registerTool(
     'retry_document',
@@ -118,8 +119,8 @@ export const registerDocumentTools = (server: McpServer, { api, report }: McpDep
     },
     async ({ id }) =>
       toolAnswer('retry_document', report, async () => {
-        await retryDocument(api, id);
-        const { status, state, error } = await getDocument(api, id);
+        await retryDocument(api(), id);
+        const { status, state, error } = await getDocument(api(), id);
         return { id, status, state, error };
       }),
   );
@@ -132,8 +133,8 @@ export const registerDocumentTools = (server: McpServer, { api, report }: McpDep
     },
     async ({ id, ...reclassification }) =>
       toolAnswer('reclassify_document', report, async () => {
-        await reclassifyDocument(api, id, reclassification);
-        const { status, state, error } = await getDocument(api, id);
+        await reclassifyDocument(api(), id, reclassification);
+        const { status, state, error } = await getDocument(api(), id);
         return { id, status, state, error };
       }),
   );
@@ -146,8 +147,8 @@ export const registerDocumentTools = (server: McpServer, { api, report }: McpDep
     },
     async ({ id, ...correction }) =>
       toolAnswer('update_document', report, async () => {
-        await correctDocument(api, id, correction);
-        return getDocument(api, id, { include: [...CORRECTED_PARTS] });
+        await correctDocument(api(), id, correction);
+        return getDocument(api(), id, { include: [...CORRECTED_PARTS] });
       }),
   );
 };

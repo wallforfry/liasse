@@ -45,7 +45,7 @@ export const registerRegistryTools = (server: McpServer, { api, report }: McpDep
       inputSchema: describeTypesOptionsSchema,
       annotations: READ_ONLY,
     },
-    async (options) => toolAnswer('describe_types', report, () => describeTypes(api, options)),
+    async (options) => toolAnswer('describe_types', report, () => describeTypes(api(), options)),
   );
   server.registerTool(
     'list_entities',
@@ -54,7 +54,7 @@ export const registerRegistryTools = (server: McpServer, { api, report }: McpDep
       inputSchema: listEntitiesRequestSchema,
       annotations: READ_ONLY,
     },
-    async (request) => toolAnswer('list_entities', report, () => listEntities(api, request)),
+    async (request) => toolAnswer('list_entities', report, () => listEntities(api(), request)),
   );
   server.registerTool(
     'list_pending_changes',
@@ -63,7 +63,8 @@ export const registerRegistryTools = (server: McpServer, { api, report }: McpDep
       inputSchema: listChangesOptionsSchema,
       annotations: READ_ONLY,
     },
-    async (options) => toolAnswer('list_pending_changes', report, () => listChanges(api, options)),
+    async (options) =>
+      toolAnswer('list_pending_changes', report, () => listChanges(api(), options)),
   );
   server.registerTool(
     'apply_change',
@@ -73,6 +74,6 @@ export const registerRegistryTools = (server: McpServer, { api, report }: McpDep
       annotations: { readOnlyHint: false, destructiveHint: true, openWorldHint: false },
     },
     async ({ id, ...decision }) =>
-      toolAnswer('apply_change', report, () => applyChange(api, id, decision)),
+      toolAnswer('apply_change', report, () => applyChange(api(), id, decision)),
   );
 };

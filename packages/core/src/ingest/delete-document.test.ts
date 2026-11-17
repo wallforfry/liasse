@@ -314,7 +314,9 @@ describe('deleteDocument and the delete_file job', () => {
       concurrency: 1,
       pollIntervalMs: 20,
       retry: { baseMs: 10, maxMs: 20 },
-      handlers: [createDeleteFileHandler({ db: harness.database.db, storage: flakyStorage })],
+      handlers: () => ({
+        handlers: [createDeleteFileHandler({ db: harness.database.db, storage: flakyStorage })],
+      }),
     });
     try {
       await deleteDocument(harness.deps, id);

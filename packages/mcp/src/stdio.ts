@@ -25,7 +25,7 @@ export const serveStdio = async (
 ): Promise<StdioSession> => {
   const server = createMcpServer(deps);
   const transport = new StdioServerTransport(input, output, {
-    maxBufferSize: mcpMessageSizeLimit(deps.api.maxFileSize),
+    maxBufferSize: mcpMessageSizeLimit(deps.api().maxFileSize),
   });
   const ended = new Promise<void>((resolve) => {
     server.server.onclose = resolve;

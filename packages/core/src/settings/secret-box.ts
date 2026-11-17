@@ -1,5 +1,4 @@
 import { createCipheriv, createDecipheriv, hkdfSync, randomBytes } from 'node:crypto';
-import { StartupError } from '../domain/errors.ts';
 
 const KEY_LABEL = 'liasse settings secrets v1';
 const KEY_LENGTH = 32;
@@ -16,14 +15,14 @@ export interface SecretBox {
   readonly open: (slot: string, sealed: string) => string;
 }
 
-export class SettingsSecretError extends StartupError {
+/**
+ * A sealed key that does not open: AUTH_SECRET changed since it was saved, or the row was
+ * altered. The store reports such a key as unreadable; a save replaces or clears it.
+ */
+export class SettingsSecretError extends Error {
   override readonly name = 'SettingsSecretError';
   constructor(options?: ErrorOptions) {
-    super(
-      'A key of the stored settings cannot be decrypted: AUTH_SECRET changed since it was ' +
-        'saved, or the row was altered. Restore AUTH_SECRET, or save the keys again.',
-      options,
-    );
+    super('A key of the stored settings does not decrypt under this AUTH_SECRET.', options);
   }
 }
 

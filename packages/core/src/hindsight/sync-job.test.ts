@@ -71,7 +71,7 @@ describe('the hindsight_sync job', () => {
     started.push(
       await startWorkers({
         db: database.db,
-        handlers: [handler()],
+        handlers: () => ({ handlers: [handler()] }),
         concurrency: 2,
         pollIntervalMs: 20,
         maxPollIntervalMs: 40,

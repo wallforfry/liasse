@@ -46,11 +46,11 @@ export const registerSearchTools = (server: McpServer, { api, report }: McpDeps)
       inputSchema: searchRequestSchema,
       annotations: READ_ONLY,
     },
-    async (request) => toolAnswer('search', report, () => searchDocuments(api, request)),
+    async (request) => toolAnswer('search', report, () => searchDocuments(api(), request)),
   );
   server.registerTool(
     'query',
     { description: QUERY_DESCRIPTION, inputSchema: queryInputSchema, annotations: READ_ONLY },
-    async (input) => toolAnswer('query', report, () => queryDocuments(api, input)),
+    async (input) => toolAnswer('query', report, () => queryDocuments(api(), input)),
   );
 };

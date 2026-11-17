@@ -72,7 +72,8 @@ export const createMcpHarness = async (): Promise<McpHarness> => {
     api,
     reported,
     connect: async (features = {}) => {
-      const deps = { api: { ...api, features }, report };
+      const current = { ...api, features };
+      const deps = { api: () => current, report };
       const transport = new StreamableHTTPClientTransport(new URL('http://liasse.test/mcp'), {
         fetch: async (url, init) => handleMcpRequest(deps, new Request(url, init), bodyOf(init)),
       });

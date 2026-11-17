@@ -42,7 +42,7 @@ export const registerKnowledgeTools = (server: McpServer, { api, report }: McpDe
       inputSchema: upcomingOptionsSchema,
       annotations: READ_ONLY,
     },
-    async (options) => toolAnswer('upcoming', report, () => upcoming(api, options)),
+    async (options) => toolAnswer('upcoming', report, () => upcoming(api(), options)),
   );
   server.registerTool(
     'timeline',
@@ -51,12 +51,12 @@ export const registerKnowledgeTools = (server: McpServer, { api, report }: McpDe
       inputSchema: timelineOptionsSchema,
       annotations: READ_ONLY,
     },
-    async (options) => toolAnswer('timeline', report, () => timeline(api, options)),
+    async (options) => toolAnswer('timeline', report, () => timeline(api(), options)),
   );
   server.registerTool(
     'recall',
     { description: RECALL_DESCRIPTION, inputSchema: recallOptionsSchema, annotations: READ_ONLY },
-    async (options) => toolAnswer('recall', report, () => recall(api, options)),
+    async (options) => toolAnswer('recall', report, () => recall(api(), options)),
   );
   server.registerTool(
     'get_subject',
@@ -65,6 +65,6 @@ export const registerKnowledgeTools = (server: McpServer, { api, report }: McpDe
       inputSchema: getSubjectOptionsSchema,
       annotations: READ_ONLY,
     },
-    async (options) => toolAnswer('get_subject', report, () => getSubject(api, options)),
+    async (options) => toolAnswer('get_subject', report, () => getSubject(api(), options)),
   );
 };

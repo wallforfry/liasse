@@ -3,17 +3,13 @@ import type { Config } from '@liasse/core/config';
 import { createDb, migrate } from '@liasse/core/db';
 import type { CreateEmbedderOptions } from '@liasse/core/embeddings';
 import { prepareFullTextRanking } from '@liasse/core/search';
-import {
-  createSecretBox,
-  type ModelFactories,
-  providerFactories,
-  readSettings,
-} from '@liasse/core/settings';
+import { createSecretBox, type ModelFactories, providerFactories } from '@liasse/core/settings';
 import { createStorage } from '@liasse/core/storage';
 import { createLogger, type Logger } from '../log.ts';
 import { runShutdown, type ShutdownStep } from '../shutdown.ts';
 import { type Bind, bindFeatures } from './bindings.ts';
 import { type Front, startFront, type Transport } from './front.ts';
+import { applyStored, followSettings } from './follow.ts';
 import { createLiveRuntime } from './live.ts';
 import { startupNotices, UNCONFIGURED_NOTICE } from './notices.ts';
 import { step } from './step.ts';
@@ -42,7 +38,8 @@ export interface Runtime extends Omit<Front, 'stop'> {
 /**
  * Builds the whole server from its configuration and the settings stored in its
  * database, in the order a failure is cheapest to explain, and starts it. Without stored
- * settings it serves HTTP and runs nothing else until they are saved. Whatever was
+ * settings, or while one of their keys does not decrypt, it serves HTTP and runs nothing
+ * else until they are saved. It follows the settings other processes save. Whatever was
  * started is stopped again when a later step fails. Everything it says goes to stderr
  * through the logger.
  */
@@ -105,9 +102,11 @@ export const createRuntime = async (
       prepare: live.prepare,
     };
 
-    const stored = await step('reading the settings', () => readSettings(settings));
+    const stored = await step('putting the settings in force', () =>
+      applyStored(settings, live, logger.notice),
+    );
     if (stored === undefined) logger.notice(UNCONFIGURED_NOTICE);
-    else await (await live.prepare(stored.settings)).activate();
+    stopsBefore(await followSettings(settings, live, logger));
 
     const { stop: stopFront, ...front } = await startFront({
       transport,
