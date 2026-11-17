@@ -1,4 +1,5 @@
-import { createContext, useContext, useSyncExternalStore } from 'react';
+import { createContext, useContext } from 'react';
+import { useMediaQuery } from '../../lib/use-media-query.ts';
 
 export interface SidebarState {
   readonly state: 'expanded' | 'collapsed';
@@ -20,13 +21,4 @@ export const useSidebar = (): SidebarState => {
 
 const MOBILE_QUERY = '(max-width: 767px)';
 
-const subscribe = (onChange: () => void): (() => void) => {
-  const query = window.matchMedia(MOBILE_QUERY);
-  query.addEventListener('change', onChange);
-  return () => {
-    query.removeEventListener('change', onChange);
-  };
-};
-
-export const useIsMobile = (): boolean =>
-  useSyncExternalStore(subscribe, () => window.matchMedia(MOBILE_QUERY).matches);
+export const useIsMobile = (): boolean => useMediaQuery(MOBILE_QUERY);

@@ -154,8 +154,8 @@ describe('interpret', () => {
         quote: '350 kWh',
       },
     });
-    expect(document).toMatchObject({ rejected: 2, rejectedCore: 1 });
-    expect(document.coreConfidences).toEqual({ reference: [0.8] });
+    expect(document.rejected).toBe(2);
+    expect(document.coreConfidences).toEqual({ reference: [0.8], due_date: [0] });
   });
 
   it('drops a date or an amount that its own quote does not hold', async () => {
@@ -168,7 +168,7 @@ describe('interpret', () => {
       extra: {},
     });
     expect(document.core).toEqual({});
-    expect(document.rejectedCore).toBe(2);
+    expect(document.coreConfidences).toEqual({ document_date: [0], amount: [0] });
   });
 
   it('drops a valid enum value or key date its quote does not state', async () => {
@@ -189,6 +189,25 @@ describe('interpret', () => {
     });
     expect(document.fields).toEqual({});
     expect(document.rejected).toBe(2);
+    // The rejected key date weighs in the mean of its list, not as a field of its own.
+    expect(document.coreConfidences).toEqual({ language: [0.8], key_dates: [0.8, 0] });
+  });
+
+  it('weighs a list whose every item was rejected as one field at 0', async () => {
+    const { document } = await read({
+      core: {
+        reference: at('SYN-1', 'Invoice SYN-1'),
+        key_dates: [
+          at({ kind: 'due', date: '2026-11-03', label: 'Payment' }, 'of 03/10/2026'),
+          at({ kind: 'due', date: '2026-12-03', label: 'Reminder' }, 'of 03/10/2026'),
+        ],
+      },
+      fields: {},
+      extra: {},
+    });
+    expect(document.core).toEqual({ reference: 'SYN-1' });
+    expect(document.rejected).toBe(2);
+    expect(document.coreConfidences).toEqual({ reference: [0.8], key_dates: [0, 0] });
   });
 
   it('drops a value the registry refuses, and the items of a list one by one', async () => {
@@ -244,7 +263,7 @@ describe('interpret', () => {
     expect(document.core).toEqual({ recipient: 'Bank ****6789' });
     // What the resolver did not keep of the two mentions it resolved.
     expect(document.droppedIdentifiers).toBe(4);
-    expect(document.rejectedCore).toBe(1);
+    expect(document.coreConfidences).toEqual({ recipient: [0.8], issuer: [0] });
     expect(document.provenance.broker).toEqual({
       entity_id: 'ent_Synthetic Energy SA',
       match: 'created',
@@ -386,7 +405,9 @@ describe('interpret', () => {
     expect(Object.keys(reading.fields.readings)).toEqual(['tags']);
     expect(Object.keys(reading.extra.readings)).toEqual(['usage']);
     expect([reading.core.rejected, reading.fields.rejected, reading.extra.rejected]).toEqual([
-      1, 2, 1,
+      { amount: 1 },
+      { energy: 1, no_such_field: 1 },
+      { nested: 1 },
     ]);
   });
 

@@ -13,7 +13,7 @@ export {
 export {
   type JobDeferral,
   type JobFailure,
-  NOT_READY_DELAY_MS,
+  NOT_READY_DELAY,
   type SettingsFollower,
 } from './execution.ts';
 export {

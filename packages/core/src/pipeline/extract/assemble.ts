@@ -9,6 +9,7 @@ import {
   type SectionReading,
   type VerifiedValue,
 } from './read-output.ts';
+import { addRejections, type Rejections, rejectionsOf } from './rejections.ts';
 
 export interface ExtractionTrace {
   readonly model: string;
@@ -48,7 +49,7 @@ export interface AssembledSection {
   readonly provenance: Readonly<Record<string, unknown>>;
   /** The confidence the model gave each kept value, per field. */
   readonly confidences: Readonly<Record<string, readonly number[]>>;
-  readonly rejected: number;
+  readonly rejected: Rejections;
 }
 
 interface Kept {
@@ -104,6 +105,9 @@ export const assembleSection = (
     confidences: Object.fromEntries(
       filled.map(({ name, kept }) => [name, kept.map(({ confidence }) => confidence)]),
     ),
-    rejected: rejected + fields.reduce((total, { dropped }) => total + dropped, 0),
+    rejected: addRejections(
+      rejected,
+      rejectionsOf(fields.map(({ name, dropped }) => [name, dropped] as const)),
+    ),
   };
 };

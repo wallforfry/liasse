@@ -1,6 +1,9 @@
 import '@testing-library/jest-dom/vitest';
-import { cleanup } from '@testing-library/react';
+import { cleanup, configure } from '@testing-library/react';
 import { afterEach } from 'vitest';
+import { WAIT_LIMIT_MILLISECONDS } from './time-limits.ts';
+
+configure({ asyncUtilTimeout: WAIT_LIMIT_MILLISECONDS });
 
 afterEach(() => {
   cleanup();
@@ -18,6 +21,12 @@ Object.defineProperty(window, 'ResizeObserver', { configurable: true, value: Sti
 Object.defineProperty(Element.prototype, 'scrollIntoView', {
   configurable: true,
   value: () => undefined,
+});
+// Nor pointer capture, which Radix Select and the graph's drags call on a press.
+Object.defineProperties(Element.prototype, {
+  setPointerCapture: { configurable: true, value: ignored },
+  releasePointerCapture: { configurable: true, value: ignored },
+  hasPointerCapture: { configurable: true, value: () => false },
 });
 
 // jsdom has no media queries; the application reads the theme and the width from them.

@@ -21,6 +21,12 @@ import {
 import { maskQuotes, maskValues } from './masking.ts';
 import { createQuoteIndex } from './quotes.ts';
 import { languageOf, readOutput } from './read-output.ts';
+import {
+  addRejections,
+  confidencesWithRejections,
+  rejectionsOf,
+  totalRejections,
+} from './rejections.ts';
 
 type Values = Readonly<Record<string, unknown>>;
 
@@ -31,10 +37,11 @@ export interface ExtractedDocument {
   readonly extra: Values;
   /** Entries of the values above, by field name. */
   readonly provenance: Values;
-  /** The confidence of each kept core value, by field. */
+  /**
+   * The confidence of each core value the model returned, by field: 0 for one that was
+   * dropped, so that a field none of whose values was kept has only zeros.
+   */
   readonly coreConfidences: Readonly<Record<string, readonly number[]>>;
-  /** Core values the model returned that were dropped. */
-  readonly rejectedCore: number;
   /** Every value and fact the model returned that was dropped. */
   readonly rejected: number;
   /** Identifiers the model gave for an entity that were not used. */
@@ -77,7 +84,7 @@ const maskSection = (mask: MaskSensitive, section: AssembledSection): MaskedSect
     values,
     provenance: maskEntries(mask, without(section.provenance, dropped)),
     confidences: without(section.confidences, dropped),
-    rejected: section.rejected + dropped.length,
+    rejected: addRejections(section.rejected, rejectionsOf(dropped.map((name) => [name, 1]))),
     dropped,
   };
 };
@@ -157,12 +164,9 @@ export const interpret = async (
     fields: fields.values,
     extra: extra.values,
     provenance: { ...extra.provenance, ...fields.provenance, ...core.provenance },
-    coreConfidences: core.confidences,
-    rejectedCore: core.rejected,
+    coreConfidences: confidencesWithRejections(core.confidences, core.rejected),
     rejected:
-      core.rejected +
-      fields.rejected +
-      extra.rejected +
+      totalRejections(addRejections(core.rejected, fields.rejected, extra.rejected)) +
       facts.rejected +
       subjects.rejected +
       noticePeriod.rejected,

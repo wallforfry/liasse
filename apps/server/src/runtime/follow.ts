@@ -56,13 +56,17 @@ export interface SettingsFollower {
   readonly catchUp: () => Promise<void>;
   /** Listens for saves and reconnections. Resolves to the step that stops following. */
   readonly start: () => Promise<ShutdownStep>;
+  /** Cancels the pending retry and resolves once the reading in progress ends. */
+  readonly stop: () => Promise<void>;
 }
 
 /**
  * Follows the settings other processes save: every save notifies its version, and every
  * (re)connection of the listener reads the stored version again, for a save missed while it
- * was down. One reading at a time; a failed one is reported and tried again, with a delay
- * that doubles up to `FOLLOW_RETRY.maxMs`, until one succeeds or the follower stops.
+ * was down. One reading at a time. A reading that fails is reported and tried again, with a
+ * delay that doubles up to `FOLLOW_RETRY.maxMs`, until one succeeds or the follower stops.
+ * Settings that cannot be put in force here (parts that do not build, a key that does not
+ * decrypt) are reported once, and not built again until the stored version changes.
  */
 export const createSettingsFollower = (
   settings: SettingsContext,
@@ -73,25 +77,69 @@ export const createSettingsFollower = (
   let retry: NodeJS.Timeout | undefined;
   let delayMs: number = FOLLOW_RETRY.firstMs;
   let stopped = false;
+  // The stored version this process could not put in force, and gave up on until it changes.
+  let refused = 0;
+
+  const scheduleRetry = (): void => {
+    if (stopped || retry !== undefined) return;
+    retry = setTimeout(() => {
+      retry = undefined;
+      void catchUp();
+    }, delayMs);
+    delayMs = Math.min(delayMs * 2, FOLLOW_RETRY.maxMs);
+  };
+
+  const refuse = (version: number, report: () => void): void => {
+    if (refused === version) return;
+    refused = version;
+    report();
+  };
+
+  const putInForce = async (stored: StoredSettings): Promise<void> => {
+    const document = settingsOf(stored);
+    if (document === undefined) {
+      refuse(stored.version, () => {
+        logger.notice(unreadableNotice(stored));
+      });
+      return;
+    }
+    try {
+      const parts = await live.prepare(document, stored.version);
+      parts.putInForce();
+      await parts.settle();
+    } catch (error) {
+      refuse(stored.version, () => {
+        logger.event('settings_apply_failed', {
+          version: stored.version,
+          ...describeError(error),
+        });
+      });
+    }
+  };
 
   const read = async (): Promise<void> => {
     try {
-      await applyStored(settings, live, logger.notice);
+      const stored = await readSettings(settings);
       delayMs = FOLLOW_RETRY.firstMs;
+      if (stored === undefined || stored.version <= live.version()) return;
+      if (stored.version === refused) return;
+      await putInForce(stored);
     } catch (error) {
       logger.event('settings_follow_failed', describeError(error));
-      if (stopped || retry !== undefined) return;
-      retry = setTimeout(() => {
-        retry = undefined;
-        void catchUp();
-      }, delayMs);
-      delayMs = Math.min(delayMs * 2, FOLLOW_RETRY.maxMs);
+      scheduleRetry();
     }
   };
 
   const catchUp = (): Promise<void> => {
     reading = reading.then(read);
     return reading;
+  };
+
+  const stop = async (): Promise<void> => {
+    stopped = true;
+    clearTimeout(retry);
+    retry = undefined;
+    await reading;
   };
 
   const start = async (): Promise<ShutdownStep> => {
@@ -108,13 +156,11 @@ export const createSettingsFollower = (
     return {
       name: 'settings follower',
       run: async () => {
-        stopped = true;
-        clearTimeout(retry);
         await subscription?.unlisten();
-        await reading;
+        await stop();
       },
     };
   };
 
-  return { catchUp, start };
+  return { catchUp, start, stop };
 };
