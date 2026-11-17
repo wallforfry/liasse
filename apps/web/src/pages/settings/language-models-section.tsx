@@ -3,7 +3,8 @@ import { SectionCheck, type SettingsCheckMutation } from './check-results.tsx';
 import { SecretField } from './secret-field.tsx';
 import { SettingsCard } from './settings-card.tsx';
 import { ChoiceField, TextField } from './settings-fields.tsx';
-import { fieldSetter, type SectionProps } from './settings-form.ts';
+import { ModelField } from './model-field.tsx';
+import { fieldSetter, llmModelsRequest, type SectionProps } from './settings-form.ts';
 import { issueAt } from './settings-validation.ts';
 
 interface LanguageModelsSectionProps extends SectionProps<'llm'> {
@@ -19,6 +20,7 @@ export const LanguageModelsSection = ({
   onCheck,
 }: LanguageModelsSectionProps) => {
   const set = fieldSetter(values, onChange);
+  const request = llmModelsRequest(values);
   return (
     <SettingsCard
       id="llm"
@@ -33,16 +35,18 @@ export const LanguageModelsSection = ({
         onChange={set('provider')}
         error={issueAt(issues, 'llm.provider')}
       />
-      <TextField
+      <ModelField
         id="llm-text-model"
         label="Text model"
+        request={request}
         value={values.text_model}
         onChange={set('text_model')}
         error={issueAt(issues, 'llm.text_model')}
       />
-      <TextField
+      <ModelField
         id="llm-vision-model"
         label="Vision model"
+        request={request}
         value={values.vision_model}
         onChange={set('vision_model')}
         error={issueAt(issues, 'llm.vision_model')}

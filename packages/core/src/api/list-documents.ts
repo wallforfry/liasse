@@ -13,7 +13,8 @@ import { SUMMARY_COLUMNS, toDocumentSummary } from './document-view.ts';
 /**
  * Documents, most recently ingested first. Tombstones are never listed. The filters are
  * those of search: a type is named by its slug or an alias and brings the documents of
- * the types merged into it, and a name no type bears lists nothing.
+ * the types merged into it, and a name no type bears lists nothing; an entity is named by
+ * its id and brings the documents that name it in any entity field.
  */
 export const listDocuments = async (
   { db }: Pick<ApiContext, 'db'>,
@@ -22,6 +23,7 @@ export const listDocuments = async (
   const {
     status,
     type,
+    entity,
     private: privacy,
     limit,
     offset,
@@ -29,7 +31,11 @@ export const listDocuments = async (
   const matching = and(
     isLiveDocument,
     documentFilter(
-      { ...(status === undefined ? {} : { status }), ...(type === undefined ? {} : { type }) },
+      {
+        ...(status === undefined ? {} : { status }),
+        ...(type === undefined ? {} : { type }),
+        ...(entity === undefined ? {} : { entity }),
+      },
       privacy !== 'exclude',
     ),
     privacy === 'only' ? eq(documents.private, true) : undefined,

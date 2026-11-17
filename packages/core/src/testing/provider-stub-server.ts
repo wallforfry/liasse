@@ -30,7 +30,9 @@ export const startStubServer = async (handler: StubHandler): Promise<StubServer>
     const chunks: Buffer[] = [];
     incoming.on('data', (chunk: Buffer) => chunks.push(chunk));
     incoming.on('end', () => {
-      const body: unknown = JSON.parse(Buffer.concat(chunks).toString('utf8'));
+      const raw = Buffer.concat(chunks).toString('utf8');
+      // A GET, such as the list of the models, has no body.
+      const body: unknown = raw === '' ? undefined : JSON.parse(raw);
       const request = { path: incoming.url ?? '', headers: incoming.headers, body };
       const response = handler(request, requests.push(request) - 1);
       if (response === undefined) return;

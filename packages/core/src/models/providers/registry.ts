@@ -79,11 +79,13 @@ const openAiCompatible = async (name: string, baseURL: string, apiKey: string | 
     ...(apiKey === undefined ? {} : { apiKey }),
   });
 
+/** The root of an Ollama server, whether its base URL names the root or its `/v1`. */
+export const ollamaRoot = (baseUrl: string | undefined): string =>
+  (baseUrl ?? OLLAMA_DEFAULT_BASE_URL).replace(/\/+$/, '').replace(/\/v1$/, '');
+
 // Ollama is reached through its OpenAI-compatible API, served under /v1 of the server root.
-const ollama = ({ apiKey, baseUrl }: ProviderEndpoint) => {
-  const root = (baseUrl ?? OLLAMA_DEFAULT_BASE_URL).replace(/\/+$/, '').replace(/\/v1$/, '');
-  return openAiCompatible('ollama', `${root}/v1`, apiKey);
-};
+const ollama = ({ apiKey, baseUrl }: ProviderEndpoint) =>
+  openAiCompatible('ollama', `${ollamaRoot(baseUrl)}/v1`, apiKey);
 
 const openAiCompatibleEndpoint = ({ apiKey, baseUrl }: ProviderEndpoint) => {
   if (baseUrl === undefined) throw new Error('The openai-compatible provider needs a base URL');

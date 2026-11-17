@@ -49,6 +49,9 @@ import {
   type SettingsCheck,
   type SettingsCheckRequestInput,
   settingsCheckSchema,
+  type SettingsModels,
+  type SettingsModelsRequestInput,
+  settingsModelsSchema,
   type SettingsState,
   settingsStateSchema,
   type SettingsUpdateInput,
@@ -132,7 +135,7 @@ export interface LiasseClient {
   /** Queues a consolidation run now, unless one due at once already waits. */
   readonly requestConsolidationRun: () => Promise<ConsolidationRun>;
   /**
-   * The settings, keys replaced by whether each is set. These three take the session of the
+   * The settings, keys replaced by whether each is set. These four take the session of the
    * web UI (`session: true`) and refuse an API key.
    */
   readonly getSettings: () => Promise<SettingsState>;
@@ -140,6 +143,8 @@ export interface LiasseClient {
   readonly saveSettings: (update: SettingsUpdateInput) => Promise<SettingsState>;
   /** Tries settings with one short call per part, without saving them. */
   readonly checkSettings: (request: SettingsCheckRequestInput) => Promise<SettingsCheck>;
+  /** The models the provider of one section lists, or why it listed none. */
+  readonly listSettingsModels: (request: SettingsModelsRequestInput) => Promise<SettingsModels>;
   /** The latest consolidation runs, the one due last first, the next nightly one left out. */
   readonly listConsolidationRuns: () => Promise<ConsolidationRunList>;
   /**
@@ -217,6 +222,7 @@ export const createLiasseClient = (options: ClientOptions): LiasseClient => {
         await send({ method: 'PUT', path: '/settings', json: update }),
       ),
     checkSettings: async (request) => post(settingsCheckSchema, '/settings/check', request),
+    listSettingsModels: async (request) => post(settingsModelsSchema, '/settings/models', request),
     listConsolidationRuns: async () => get(consolidationRunListSchema, '/consolidation/runs'),
     getSetupStatus: async () => get(setupStatusSchema, SETUP_BASE_PATH),
     checkSetup: async (request) => post(settingsCheckSchema, `${SETUP_BASE_PATH}/check`, request),

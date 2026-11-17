@@ -16,8 +16,8 @@ export type DraftOutcome =
   | { readonly ok: true; readonly settings: Settings }
   | { readonly ok: false; readonly issues: readonly SettingsIssue[] };
 
-// Undefined for a key that is kept but cannot be read: it must be replaced or cleared.
-const keyAfter = (
+/** The key an update leads to; undefined for a kept key that cannot be read. */
+export const keyAfter = (
   update: SecretUpdate,
   stored: StoredKey,
 ): { readonly key?: string } | undefined => {
@@ -32,7 +32,7 @@ const keyAfter = (
   }
 };
 
-const UNREADABLE_KEPT =
+export const UNREADABLE_KEPT =
   'cannot be kept: it was saved under another AUTH_SECRET and does not decrypt; replace or ' +
   'clear it';
 

@@ -46,6 +46,7 @@ export {
   saveSettings,
   type SettingsContext,
 } from './settings.ts';
+export { listSettingsModels } from './settings-models.ts';
 export { checkSetup, completeSetup, readSetupStatus, type SetupContext } from './setup.ts';
 export { retryDocument } from './retry-document.ts';
 export { readGraph } from './read-graph.ts';

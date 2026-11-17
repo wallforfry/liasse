@@ -56,6 +56,29 @@ export class OutputSchemaError extends Error {
   }
 }
 
+export type ModelListFailure = 'rejected' | 'unreachable' | 'timeout' | 'invalid_answer';
+
+/** The list of the models of a provider could not be read. Identifiers only, as above. */
+export class ModelListError extends Error {
+  override readonly name = 'ModelListError';
+  readonly provider: string;
+  readonly failure: ModelListFailure;
+  readonly statusCode: number | undefined;
+  readonly code: string | undefined;
+
+  constructor(
+    provider: string,
+    failure: ModelListFailure,
+    details: { readonly statusCode?: number | undefined; readonly code?: string | undefined } = {},
+  ) {
+    super(`Provider ${provider} did not list its models (${failure})`);
+    this.provider = provider;
+    this.failure = failure;
+    this.statusCode = details.statusCode;
+    this.code = details.code;
+  }
+}
+
 export class EmbeddingDimensionError extends Error {
   override readonly name = 'EmbeddingDimensionError';
   readonly expected: number;

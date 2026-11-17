@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react';
 import { Input } from '../../components/ui/input.tsx';
 import { Label } from '../../components/ui/label.tsx';
+import { describedBy, type FieldFrame } from './field-frame.ts';
 import {
   Select,
   SelectContent,
@@ -9,23 +10,8 @@ import {
   SelectValue,
 } from '../../components/ui/select.tsx';
 
-interface FieldFrame {
-  readonly id: string;
-  readonly label: string;
-  readonly hint?: ReactNode;
-  /** What the schema or the server refused in this field. */
-  readonly error?: string | undefined;
-}
-
-const describedBy = ({ id, hint, error }: FieldFrame): string | undefined => {
-  const ids = [
-    ...(hint === undefined ? [] : [`${id}-hint`]),
-    ...(error === undefined ? [] : [`${id}-error`]),
-  ];
-  return ids.length === 0 ? undefined : ids.join(' ');
-};
-
-const Field = ({
+/** The label, hint and error of one input of the form. */
+export const Field = ({
   frame,
   children,
 }: {

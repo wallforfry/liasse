@@ -42,6 +42,8 @@ export type {
   SettingsCheck,
   SettingsCheckRequestInput,
   SettingsDraftInput,
+  SettingsModels,
+  SettingsModelsRequestInput,
   SettingsPartCheck,
   SettingsState,
   SettingsUpdateInput,

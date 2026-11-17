@@ -36,6 +36,9 @@ export const MAX_EMBEDDING_INPUT_TOKENS = 1_000_000;
 export const DEFAULT_HINDSIGHT_BANK = 'documents';
 // A provider key is a token, never a document: anything longer is a paste gone wrong.
 export const MAX_API_KEY_LENGTH = 4096;
+// The models a provider lists for the settings form; a longer list is cut, not refused.
+export const MAX_LISTED_MODELS = 2000;
+export const MAX_MODEL_ID_LENGTH = 200;
 
 // A hint given with a file is free text from the caller; it is cut, not rejected.
 export const MAX_HINT_LENGTH = 2000;
