@@ -12,18 +12,26 @@ import { callTool, createMcpHarness, type McpHarness } from './harness.test-help
 
 const TOOLS = [
   'apply_change',
+  'create_type',
+  'delete_document',
   'describe_types',
   'get_document',
   'get_status',
   'get_subject',
   'ingest',
+  'list_consolidation_runs',
+  'list_document_events',
+  'list_documents',
   'list_entities',
   'list_pending_changes',
+  'list_subjects',
   'query',
   'recall',
   'reclassify_document',
+  'request_consolidation_run',
   'retry_document',
   'search',
+  'suggest_type',
   'timeline',
   'upcoming',
   'update_document',
@@ -32,9 +40,18 @@ const TOOLS = [
 // The tools whose answer is read from documents.
 const UNTRUSTED_TOOLS = TOOLS.filter(
   (name) =>
-    !['apply_change', 'get_status', 'ingest', 'reclassify_document', 'retry_document'].includes(
-      name,
-    ),
+    ![
+      'apply_change',
+      'create_type',
+      'delete_document',
+      'get_status',
+      'ingest',
+      'list_consolidation_runs',
+      'list_document_events',
+      'reclassify_document',
+      'request_consolidation_run',
+      'retry_document',
+    ].includes(name),
 );
 
 const hits = z.object({ results: z.array(z.object({ id: z.string() })) });
@@ -71,7 +88,7 @@ describe('the tools', () => {
     return failure.parse(body).error;
   };
 
-  it('lists the sixteen tools, flagging document content as untrusted', async () => {
+  it('lists the tools, flagging document content as untrusted', async () => {
     const { tools } = await client.listTools();
     expect(tools.map(({ name }) => name).toSorted()).toEqual(TOOLS);
     const flagged = tools
@@ -106,6 +123,31 @@ describe('the tools', () => {
     );
     expect(descriptionOf('describe_types')).toContain(
       'a type known only from private documents is still listed, with a count of 0.',
+    );
+  });
+
+  it('flags the tools that change nothing, and those that destroy', async () => {
+    const { tools } = await client.listTools();
+    const named = (hint: 'readOnlyHint' | 'destructiveHint') =>
+      tools
+        .filter(({ annotations }) => annotations?.[hint] === true)
+        .map(({ name }) => name)
+        .toSorted();
+    expect(named('destructiveHint')).toEqual(['apply_change', 'delete_document']);
+    expect(named('readOnlyHint')).toEqual(
+      TOOLS.filter(
+        (name) =>
+          ![
+            'apply_change',
+            'create_type',
+            'delete_document',
+            'ingest',
+            'reclassify_document',
+            'request_consolidation_run',
+            'retry_document',
+            'update_document',
+          ].includes(name),
+      ),
     );
   });
 
