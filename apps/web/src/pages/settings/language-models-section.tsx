@@ -3,13 +3,15 @@ import { SectionCheck, type SettingsCheckMutation } from './check-results.tsx';
 import { SecretField } from './secret-field.tsx';
 import { SettingsCard } from './settings-card.tsx';
 import { ChoiceField, TextField } from './settings-fields.tsx';
-import { ModelField } from './model-field.tsx';
+import { ModelOrTextField } from './model-field.tsx';
 import { fieldSetter, llmModelsRequest, type SectionProps } from './settings-form.ts';
 import { issueAt } from './settings-validation.ts';
 
 interface LanguageModelsSectionProps extends SectionProps<'llm'> {
   readonly check: SettingsCheckMutation;
   readonly onCheck: () => void;
+  /** Whether the model fields offer the list of the provider, which needs a session. */
+  readonly listModels?: boolean;
 }
 
 export const LanguageModelsSection = ({
@@ -18,9 +20,10 @@ export const LanguageModelsSection = ({
   onChange,
   check,
   onCheck,
+  listModels = true,
 }: LanguageModelsSectionProps) => {
   const set = fieldSetter(values, onChange);
-  const request = llmModelsRequest(values);
+  const request = listModels ? llmModelsRequest(values) : undefined;
   return (
     <SettingsCard
       id="llm"
@@ -35,7 +38,7 @@ export const LanguageModelsSection = ({
         onChange={set('provider')}
         error={issueAt(issues, 'llm.provider')}
       />
-      <ModelField
+      <ModelOrTextField
         id="llm-text-model"
         label="Text model"
         request={request}
@@ -43,7 +46,7 @@ export const LanguageModelsSection = ({
         onChange={set('text_model')}
         error={issueAt(issues, 'llm.text_model')}
       />
-      <ModelField
+      <ModelOrTextField
         id="llm-vision-model"
         label="Vision model"
         request={request}

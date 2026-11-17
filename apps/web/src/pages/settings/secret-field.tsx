@@ -29,6 +29,7 @@ interface SecretFieldProps {
 /** A stored key is never shown: it is kept, replaced by a new value, or cleared. */
 export const SecretField = ({ id, label, field, onChange, error }: SecretFieldProps) => {
   const { state, update } = field;
+  const replaceVerb = state === 'unset' ? 'Set' : 'Replace';
   const keep = () => {
     onChange({ state, update: { action: 'keep' } });
   };
@@ -58,12 +59,12 @@ export const SecretField = ({ id, label, field, onChange, error }: SecretFieldPr
             type="button"
             variant="outline"
             size="sm"
-            aria-label={`Replace the ${label}`}
+            aria-label={`${replaceVerb} the ${label}`}
             onClick={() => {
               onChange({ state, update: { action: 'replace', value: '' } });
             }}
           >
-            Replace
+            {replaceVerb}
           </Button>
           {state === 'unset' ? null : (
             <Button

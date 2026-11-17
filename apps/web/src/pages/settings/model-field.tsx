@@ -16,7 +16,7 @@ import {
 import { Input } from '../../components/ui/input.tsx';
 import { Popover, PopoverContent, PopoverTrigger } from '../../components/ui/popover.tsx';
 import { describedBy, type FieldFrame } from './field-frame.ts';
-import { Field } from './settings-fields.tsx';
+import { Field, TextField } from './settings-fields.tsx';
 
 type ModelListing = UseMutationResult<SettingsModels, Error, SettingsModelsRequestInput>;
 
@@ -75,7 +75,7 @@ interface ModelFieldProps extends FieldFrame {
 }
 
 /** A model id, typed or picked from the models the provider lists. */
-export const ModelField = ({ value, onChange, request, disabled, ...frame }: ModelFieldProps) => {
+const ModelField = ({ value, onChange, request, disabled, ...frame }: ModelFieldProps) => {
   const client = useClient();
   const [open, setOpen] = useState(false);
   const listing = useMutation({
@@ -128,3 +128,12 @@ export const ModelField = ({ value, onChange, request, disabled, ...frame }: Mod
     </Field>
   );
 };
+
+/** A model field with the list of the provider when `request` says where to read it. */
+export const ModelOrTextField = ({
+  request,
+  ...field
+}: Omit<ModelFieldProps, 'request'> & {
+  readonly request: SettingsModelsRequestInput | undefined;
+}) =>
+  request === undefined ? <TextField {...field} /> : <ModelField request={request} {...field} />;

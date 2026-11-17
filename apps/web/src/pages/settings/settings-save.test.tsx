@@ -67,7 +67,7 @@ describe('a save of the settings', () => {
     await user.paste('synthetic-text-2');
     await user.click(llm.getByRole('button', { name: 'Clear the language model API key' }));
     const hindsight = within(await region('Hindsight'));
-    await user.click(hindsight.getByRole('button', { name: 'Replace the Hindsight API key' }));
+    await user.click(hindsight.getByRole('button', { name: 'Set the Hindsight API key' }));
     await user.click(hindsight.getByLabelText('Hindsight API key'));
     await user.paste('synthetic-hindsight-key');
     await user.click(screen.getByRole('button', { name: 'Save the settings' }));

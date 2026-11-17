@@ -1,6 +1,7 @@
 import { Navigate, type RouteObject } from 'react-router';
 import { AppLayout } from './layout/app-layout.tsx';
 import { RequireSession } from './layout/require-session.tsx';
+import { SetupGate } from './layout/setup-gate.tsx';
 import { ApiKeysPage } from './pages/account/api-keys-page.tsx';
 import { McpConnectionsPage } from './pages/account/mcp-connections-page.tsx';
 import { ChangePasswordPage } from './pages/account/change-password-page.tsx';
@@ -19,7 +20,8 @@ import { UploadPage } from './pages/upload/upload-page.tsx';
 /** Where the server serves the application. */
 export const BASENAME = '/ui';
 
-export const ROUTES: RouteObject[] = [
+// The pages of an application that has an account: before the first one, the onboarding.
+const APPLICATION_ROUTES: RouteObject[] = [
   { path: '/login', element: <LoginPage /> },
   {
     element: <RequireSession keepQuery />,
@@ -69,3 +71,5 @@ export const ROUTES: RouteObject[] = [
     ],
   },
 ];
+
+export const ROUTES: RouteObject[] = [{ element: <SetupGate />, children: APPLICATION_ROUTES }];
