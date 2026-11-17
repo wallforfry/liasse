@@ -48,7 +48,8 @@ export interface SettingsContext {
   readonly prepare: (settings: Settings, version: number) => Promise<PreparedSettings>;
 }
 
-const hasLiveDocument = async (db: SettingsExecutor): Promise<boolean> =>
+/** Whether a live document exists: its vectors are those of the embedder in force. */
+export const hasLiveDocument = async (db: SettingsExecutor): Promise<boolean> =>
   (await db.select({ id: documents.id }).from(documents).where(isLiveDocument).limit(1)).length > 0;
 
 const stateOf = (stored: StoredSettings | undefined, embedderLocked: boolean): SettingsState => ({
@@ -69,7 +70,7 @@ const staleVersion = (): ApiError =>
     'The settings changed since they were read. Read them again, then save.',
   );
 
-const embedderLocked = (): ApiError =>
+export const embedderLocked = (): ApiError =>
   new ApiError(
     'conflict',
     'embedder_locked',

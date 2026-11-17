@@ -1,4 +1,5 @@
 import type {
+  Settings,
   SetupCheckRequest,
   SetupRequest,
   SetupResult,
@@ -11,9 +12,14 @@ import { checkSettings } from '../settings/check.ts';
 import { NO_KEYS } from '../settings/keys.ts';
 import { resolveSettings } from '../settings/resolve.ts';
 import type { SetupToken } from '../setup/token.ts';
-import { storedSettingsVersion, writeSettings } from '../settings/store.ts';
+import type { Transaction } from '../db/isolation.ts';
+import { sameEmbedder } from '../settings/draft.ts';
+import { holdEmbedderExclusive } from '../settings/embedder-lock.ts';
+import { readSettings, storedSettingsVersion, writeSettings } from '../settings/store.ts';
 import { ApiError } from './errors.ts';
 import {
+  embedderLocked,
+  hasLiveDocument,
   prepareSettings,
   readSettingsState,
   settingsCandidate,
@@ -69,6 +75,18 @@ export const checkSetup = async (
   return checkSettings(factories, resolveSettings(settingsCandidate(settings, NO_KEYS), embedding));
 };
 
+// As a save does: settings left by an earlier run may embed the documents of the database.
+const refuseEmbedderChange = async (
+  tx: Transaction,
+  context: SettingsContext,
+  settings: Settings,
+): Promise<void> => {
+  const stored = await readSettings({ db: tx, secrets: context.secrets });
+  if (stored === undefined || sameEmbedder(stored.document, settings)) return;
+  await holdEmbedderExclusive(tx);
+  if (await hasLiveDocument(tx)) throw embedderLocked();
+};
+
 const settingsMoved = (): ApiError =>
   new ApiError(
     'conflict',
@@ -80,7 +98,7 @@ const settingsMoved = (): ApiError =>
  * Creates the first account and saves the settings in one transaction, under the lock of
  * the first account, and puts them in force in it. Of concurrent setups one creates the
  * account; the others are refused and save nothing. Settings left by an earlier run are
- * replaced, and no key of theirs is kept.
+ * replaced, and no key of theirs is kept; their embedder stays while a document is live.
  */
 export const completeSetup = async (
   context: SetupContext,
@@ -93,6 +111,7 @@ export const completeSetup = async (
   const parts = await prepareSettings(settingsContext, settings, expectedVersion + 1);
   const outcome = await createFirstAccount(auth, settingsContext.db, account, {
     alongside: async (tx) => {
+      await refuseEmbedderChange(tx, settingsContext, settings);
       const store = { db: tx, secrets: settingsContext.secrets };
       if ((await writeSettings(store, { expectedVersion, settings })) === undefined) {
         throw settingsMoved();
