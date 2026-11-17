@@ -261,7 +261,12 @@ describe('use cases of the API', () => {
       const calls = [
         correctDocument(context, 'doc_01JC0000000000000000000000', { private: true }),
         listSubjects(context, {}),
-        upcoming(context, { from: '2026-01-01', to: '2026-03-31', current_only: true }),
+        upcoming(context, {
+          from: '2026-01-01',
+          to: '2026-03-31',
+          current_only: true,
+          include_private: false,
+        }),
         listChanges(context, {}),
         applyChange(context, 'chg_01JC0000000000000000000000', { decision: 'apply' }),
         requestConsolidationRun(context),
