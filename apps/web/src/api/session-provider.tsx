@@ -34,6 +34,8 @@ export const SessionProvider = ({
   navigateAway = leavePage,
 }: SessionProviderProps) => {
   const [status, setStatus] = useState<SessionStatus>('loading');
+  // Held here rather than in the query cache, which the end of a session clears.
+  const [needsSetup, setNeedsSetup] = useState<boolean | undefined>(undefined);
   const auth = useMemo(
     () => createWebAuthClient({ baseUrl, ...(fetch === undefined ? {} : { fetch }) }),
     [baseUrl, fetch],
@@ -70,6 +72,22 @@ export const SessionProvider = ({
   }, [auth]);
 
   useEffect(() => {
+    let current = true;
+    void client.getSetupStatus().then(
+      ({ needs_setup }) => {
+        if (current) setNeedsSetup(needs_setup);
+      },
+      // A server that cannot say is not held up by the onboarding: its login page tells why.
+      () => {
+        if (current) setNeedsSetup(false);
+      },
+    );
+    return () => {
+      current = false;
+    };
+  }, [client]);
+
+  useEffect(() => {
     if (status === 'signed_out') queryClient.clear();
   }, [status, queryClient]);
 
@@ -79,6 +97,10 @@ export const SessionProvider = ({
     };
     return {
       status,
+      needsSetup,
+      setupDone: () => {
+        setNeedsSetup(false);
+      },
       client,
       auth,
       followRedirect,
@@ -96,7 +118,7 @@ export const SessionProvider = ({
         setStatus('signed_out');
       },
     };
-  }, [status, client, auth, navigateAway]);
+  }, [status, needsSetup, client, auth, navigateAway]);
 
   return (
     <SessionContext value={state}>

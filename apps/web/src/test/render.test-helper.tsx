@@ -1,4 +1,4 @@
-import { AUTH_BASE_PATH } from '@liasse/contract';
+import { AUTH_BASE_PATH, SETUP_BASE_PATH } from '@liasse/contract';
 import { render, type RenderResult } from '@testing-library/react';
 import { createMemoryRouter } from 'react-router';
 import { RouterProvider } from 'react-router/dom';
@@ -41,7 +41,7 @@ export const jsonBody = (request: Request | undefined): unknown =>
 
 /**
  * A server that answers each request with the first answer that knows it, and remembers
- * every request. The session is live unless an answer says otherwise.
+ * every request. The session is live and an account exists unless an answer says otherwise.
  */
 export const fakeServer = (...answers: readonly Answer[]) => {
   const requests: Request[] = [];
@@ -58,6 +58,7 @@ export const fakeServer = (...answers: readonly Answer[]) => {
     const answered = answers.map((answer) => answer(request)).find((value) => value !== undefined);
     if (answered !== undefined) return Promise.resolve(answered);
     if (url.pathname === authPath('/get-session')) return Promise.resolve(json(LIVE_SESSION));
+    if (url.pathname === SETUP_BASE_PATH) return Promise.resolve(json({ needs_setup: false }));
     return Promise.resolve(errorBody(404, 'not_found', 'No such route.'));
   };
   return { fetch, requests };
