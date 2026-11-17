@@ -16,7 +16,7 @@ You will get an acknowledgement within 7 days. We will agree on a disclosure dat
 
 ## Supported versions
 
-Only the latest release gets security fixes. Before the first release, fixes land on `main` and in the `edge` image.
+Only the latest release gets security fixes. A fix lands on `main` and in the `edge` image first, then in the next release.
 
 ## Scope
 

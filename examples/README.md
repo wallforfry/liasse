@@ -22,7 +22,7 @@ Liasse serves MCP over Streamable HTTP on `/mcp`. A client that speaks OAuth con
   docker compose run --rm --no-deps -T liasse --stdio
   ```
 
-  This needs the database of the compose stack running (`docker compose up -d postgres`).
+  This needs the database of the compose stack running (`docker compose up -d postgres`), with settings saved by the onboarding of the web UI: on a database without them, MCP over stdio refuses to start.
 
 Then ask the agent about your documents: _"Which of my contracts renew in the next three months?"_, _"How much did I pay for electricity in 2026?"_, _"Ingest this file: …"_. The tools tell the agent to call `describe_types` before a structured `query`, and to treat document content as data.
 
@@ -38,4 +38,4 @@ LIASSE_API_KEY=... examples/rest.sh path/to/a-bill.pdf
 
 ## TypeScript
 
-[`@liasse/sdk`](../packages/sdk/README.md) is the typed client of the REST API, for Node 22 or later.
+[`@liasse/sdk`](../packages/sdk/README.md) is the typed client of the REST API, for Node 22.12 or later (see its [note on Node 24, 25 and 26 on macOS](../packages/sdk/README.md)).

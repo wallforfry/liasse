@@ -31,7 +31,7 @@ You need Node 22.12 or later on the 22 line, 24.22.3 or later on the 24 line, or
 pnpm install
 pnpm db:up            # Postgres with pgvector on 127.0.0.1:54329, its test server on 127.0.0.1:54332, S3 test server on 127.0.0.1:54330
 cp .env.example .env
-pnpm lint && pnpm typecheck && pnpm test && pnpm build
+pnpm lint && pnpm typecheck && pnpm build && pnpm test   # the tests start the server, which needs the build
 pnpm --filter @liasse/server dev
 ```
 
@@ -39,6 +39,7 @@ BM25 ranking is optional and has tests of its own, which need Postgres with Para
 
 ```sh
 pnpm db:up:paradedb   # Postgres with pg_search on 127.0.0.1:54331
+pnpm --filter @liasse/web build   # the server these tests start needs the web UI build (`pnpm build` does it)
 pnpm test:paradedb
 ```
 

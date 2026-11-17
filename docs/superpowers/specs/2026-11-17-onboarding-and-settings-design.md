@@ -70,8 +70,8 @@ ignored.
   current API context per request. Feature code keeps taking plain values.
 - **Check before save.** An endpoint tries a configuration without saving it: one short call to
   the text model, one to the vision model, one embedding whose length is compared with
-  `EMBEDDING_DIM`, and a Hindsight ping when a URL is set. Errors are reported per part, without
-  the provider's message when it could quote a key.
+  `EMBEDDING_DIM`, and, when a URL is set, the forget of a document Hindsight does not hold.
+  Errors are reported per part, without the provider's message when it could quote a key.
 - **Embedder lock.** A save that changes the embedding provider or model is refused (409) once a
   live document exists.
 - **Who may change them.** There are no roles: any signed-in account may. The settings routes
@@ -93,9 +93,10 @@ ignored.
 
 ## Web UI
 
-- **Onboarding**, shown instead of `/login` while `needs_setup` is true: token, account, language
-  models (provider, text and vision models, key or base URL, with a check), embedder (local by
-  default, with a check of the dimension), a summary, finish and sign in.
+- **Onboarding**, shown instead of every route, `/login` included, while `needs_setup` is true
+  (a `SetupGate` wraps the routes): token, account, language models (provider, text and vision
+  models, key or base URL, with a check), embedder (local by default, with a check of the
+  dimension), a summary, finish and sign in.
 - **Settings**, one page in the account area with sections for language models, embedder
   (read-only once locked, with the reason), pipeline (auto-apply, thresholds, limits, schema
   language) and Hindsight. Keys show as set or not set, with replace and clear. A check button per
@@ -104,8 +105,8 @@ ignored.
 ## Delivery
 
 1. **Settings store and hot runtime** (`@liasse/contract`, `@liasse/core`, `apps/server`, `eval`):
-   schema, table and migration, encryption, holder and rebind, `GET`/`PUT /v1/settings` and
-   `POST /v1/settings/check`, the refusal of removed variables, `.env.example`, compose files,
+   schema, table and migration, encryption, holder and rebind, `GET`/`PUT /settings` and
+   `POST /settings/check`, the refusal of removed variables, `.env.example`, compose files,
    README, `docs/spec.md` and `docs/deployment.md`. Until the second pull request the first
    account still comes from the bootstrap variables. The evaluation harness reads its model
    settings from a JSON file given on its command line, parsed with the same schema.

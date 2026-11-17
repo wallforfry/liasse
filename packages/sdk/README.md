@@ -3,11 +3,12 @@
 TypeScript client for the REST API of [Liasse](https://github.com/wallforfry/liasse). Requests and answers are typed from the schemas the server validates with, and every answer is parsed against them before it reaches you. It relies on the global `fetch`, `FormData` and `Blob` of Node 22.12 or later, and installs nothing of the server: its only dependencies are `@liasse/contract`, the Zod schemas the server validates with, and `zod`.
 
 ```ts
+import { readFile } from 'node:fs/promises';
 import { createLiasseClient, LiasseApiError } from '@liasse/sdk';
 
 const liasse = createLiasseClient({
   baseUrl: 'http://127.0.0.1:8080',
-  token: process.env.LIASSE_TOKEN ?? '', // an API key, created in the web UI
+  token: process.env.LIASSE_API_KEY ?? '', // an API key, created in the web UI
   timeoutMs: 30_000, // optional, 60 s by default
 });
 
@@ -27,7 +28,7 @@ try {
 }
 ```
 
-Every route has its method: `health`, `metrics`, `openApi`, `uploadDocument`, `listDocuments`, `getDocument`, `downloadFile`, `correctDocument`, `retryDocument`, `reclassifyDocument`, `deleteDocument`, `search`, `query`, `listTypes`, `listEntities`, `listSubjects`, `upcoming`, `listChanges` and `decideChange`.
+Every route has its method: `health`, `metrics`, `openApi`, `uploadDocument`, `listDocuments`, `getDocument`, `listDocumentEvents`, `getDocumentStatus`, `downloadFile`, `correctDocument`, `retryDocument`, `reclassifyDocument`, `reextractDocument`, `deleteDocument`, `search`, `query`, `listTypes`, `createType`, `suggestType`, `listEntities`, `listSubjects`, `graph`, `upcoming`, `listChanges`, `decideChange`, `requestConsolidationRun`, `listConsolidationRuns`, `getSettings`, `saveSettings`, `checkSettings`, `listSettingsModels`, `getSetupStatus`, `checkSetup` and `completeSetup`. The settings routes take the session of the web UI only, never an API key.
 
 - **Private documents** stay out of lists, search and queries unless asked for (`private: 'include'` or `'only'` on a list, `include_private: true` elsewhere). `getDocument` returns one by its id.
 - **Errors.** A refusal of the API rejects with `LiasseApiError`, which carries the HTTP `status`, the stable `code`, the `requestId` and the `details` of the code. An answer that does not follow the contract (a proxy error page, a server of another version) rejects with `LiasseResponseError`. A network failure or the timeout rejects as `fetch` does.

@@ -20,7 +20,7 @@ This package holds the corpus, its generator, the scoring functions and the regr
 | `src/calibrate/`           | The measure of the entity similarity thresholds on the corpus         |
 | `src/corpus.ts`            | `loadCorpus`, `loadQuestions`, `readDocumentFile`                     |
 
-The corpus is committed (1.4 MB: 1.1 MB of documents, 0.3 MB of JSON), so it can be used without running anything. The JSON files are validated by the schemas of `src/schema/`, which derive from the schemas of `@liasse/core/domain`, `@liasse/core/registry` and `@liasse/core/query`.
+The corpus is committed (1.4 MB: 1.1 MB of documents, 0.3 MB of JSON), so it can be used without running anything. The JSON files are validated by the schemas of `src/schema/`, which derive from the schemas of `@liasse/contract/domain`, `@liasse/contract/registry` and `@liasse/contract/query`.
 
 ## The scenario
 
@@ -178,7 +178,7 @@ The tool calls document the intended route: an agent is free to answer another w
 
 ```sh
 pnpm db:up
-pnpm eval:run --settings <settings.json> --label <name> [--out <file>]
+pnpm eval:run --settings <settings.json> [--label <name>] [--out <file>]
 pnpm eval:compare <report.json> <report.json> [...]
 ```
 
@@ -202,7 +202,7 @@ A path is read from the folder the command is called from. The file holds keys: 
 2. Uploads the fifty files through the API, in corpus order, and waits until no job is queued or running. The attached bill is found as the document linked `attachment_of` to the email.
 3. Reads what the instance stored for each document, names the documents it links to by their corpus id, and scores it with `scoreDocument`.
 4. Has an agent answer each question with the read-only tools of the MCP endpoint. The agent is the text model of the settings behind the `TextModel` port: each turn it calls one tool or answers, and sees every call made so far, the results delimited as untrusted data. It is shown the keys and labels of the question's slots, and its answer schema offers those keys and nothing else, so no value can land under a key the question does not have; a verdict is offered only for a yes-or-no question. The documents it cites are translated to corpus ids and the answer is scored with `scoreAnswer`.
-5. Writes the report (`eval-<label>.json` unless `--out` says otherwise) and prints its summary. The instance is dropped, also when the run is interrupted by SIGINT or SIGTERM.
+5. Writes the report (`eval-<label>.json` unless `--out` says otherwise, the label being `run` without `--label`) and prints its summary. The instance is dropped, also when the run is interrupted by SIGINT or SIGTERM.
 
 The report holds the models of the run, the documents the instance did not find or left failed or waiting for review, every document result (each judgement with its outcome), the totals of `aggregateReport` (per section, per core field and per type field), and each question with its answer, its tool calls, whether it passed and why not. `pnpm eval:compare` puts several reports side by side, one column each, in Markdown: two models, or two versions of a prompt, under two labels.
 

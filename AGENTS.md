@@ -12,26 +12,27 @@ Guidance for AI coding agents working in this repository.
 
 Node 22.12 or later on the 22 line, 24.22.3 or later on the 24 line, or 26.5.1 or later (the `engines` range of `package.json`: earlier Node 24, 25 and 26 releases bundle an undici that can end the process on a reset connection, nodejs/undici#5547, and `apps/server/src/main.ts` refuses to start on them), and pnpm (version pinned in `package.json`). Run everything from the repository root.
 
-| Command                            | Purpose                                                          |
-| ---------------------------------- | ---------------------------------------------------------------- |
-| `pnpm install`                     | Install the workspace                                            |
-| `pnpm db:up`                       | Start Postgres `:54329`, test Postgres `:54332`, S3 `:54330`     |
-| `pnpm db:migrate`                  | Apply migrations to `DATABASE_URL` (reads `.env`)                |
-| `pnpm db:clean-test`               | Drop the test databases and templates left by killed test runs   |
-| `pnpm db:generate`                 | Generate a migration from the Drizzle schema                     |
-| `pnpm lint`                        | ESLint with zero warnings allowed, then Prettier check           |
-| `pnpm format`                      | Format with Prettier                                             |
-| `pnpm typecheck`                   | `tsc --noEmit` on every package                                  |
-| `pnpm test`                        | Vitest, all packages (needs `pnpm db:up` and `pnpm build`)       |
-| `pnpm test:models`                 | Tests that download and run the real local embedding model       |
-| `pnpm db:up:paradedb`              | Start Postgres with ParadeDB `pg_search` (`:54331`), for BM25    |
-| `pnpm test:paradedb`               | BM25 tests, on the ParadeDB server of `pnpm db:up:paradedb`      |
-| `pnpm eval:run --label <name>`     | Evaluation run with the configured models (calls them; not CI)   |
-| `pnpm eval:compare <reports...>`   | Evaluation reports side by side, as Markdown                     |
-| `pnpm eval:calibrate`              | Entity similarity thresholds measured with the configured model  |
-| `pnpm build`                       | Compile every package with `tsc`, and the web UI with Vite       |
-| `pnpm --filter @liasse/server dev` | Run the server from source (copy `.env.example` to `.env` first) |
-| `pnpm changeset`                   | Describe a user-facing change for the changelog                  |
+| Command                                            | Purpose                                                          |
+| -------------------------------------------------- | ---------------------------------------------------------------- |
+| `pnpm install`                                     | Install the workspace                                            |
+| `pnpm db:up`                                       | Start Postgres `:54329`, test Postgres `:54332`, S3 `:54330`     |
+| `pnpm db:down`                                     | Stop the services of `pnpm db:up` and `pnpm db:up:paradedb`      |
+| `pnpm db:migrate`                                  | Apply migrations to `DATABASE_URL` (reads `.env`)                |
+| `pnpm db:clean-test`                               | Drop the test databases and templates left by killed test runs   |
+| `pnpm db:generate`                                 | Generate a migration from the Drizzle schema                     |
+| `pnpm lint`                                        | ESLint with zero warnings allowed, then Prettier check           |
+| `pnpm format`                                      | Format with Prettier                                             |
+| `pnpm typecheck`                                   | `tsc --noEmit` on every package                                  |
+| `pnpm test`                                        | Vitest, all packages (needs `pnpm db:up` and `pnpm build`)       |
+| `pnpm test:models`                                 | Tests that download and run the real local embedding model       |
+| `pnpm db:up:paradedb`                              | Start Postgres with ParadeDB `pg_search` (`:54331`), for BM25    |
+| `pnpm test:paradedb`                               | BM25 tests, on the ParadeDB server of `pnpm db:up:paradedb`      |
+| `pnpm eval:run --settings <file> [--label <name>]` | Evaluation run with the configured models (calls them; not CI)   |
+| `pnpm eval:compare <reports...>`                   | Evaluation reports side by side, as Markdown                     |
+| `pnpm eval:calibrate`                              | Entity similarity thresholds measured with the configured model  |
+| `pnpm build`                                       | Compile every package with `tsc`, and the web UI with Vite       |
+| `pnpm --filter @liasse/server dev`                 | Run the server from source (copy `.env.example` to `.env` first) |
+| `pnpm changeset`                                   | Describe a user-facing change for the changelog                  |
 
 Before pushing, `pnpm lint`, `pnpm typecheck`, `pnpm test` and `pnpm build` must all pass. CI runs the same four, plus commitlint and a `Signed-off-by` check on every commit of the pull request. A pull request that changes Markdown files only runs commitlint, the sign-off check, the tests of the release scripts and `prettier --check .`, and builds no Docker image.
 
@@ -48,33 +49,34 @@ Before pushing, `pnpm lint`, `pnpm typecheck`, `pnpm test` and `pnpm build` must
 
 Inside `packages/core/src`, one directory per concern. A new concern gets its own directory and its own subpath export.
 
-| Directory        | Content                                                                                             |
-| ---------------- | --------------------------------------------------------------------------------------------------- |
-| `api/`           | The use cases REST and MCP share, their schemas, `ApiError`, signed file URLs; knows no transport   |
-| `auth/`          | The auth server (better-auth): accounts, sessions, API keys, the OAuth server of MCP, first account |
-| `config/`        | The Zod schema that turns `process.env` into the typed, frozen configuration                        |
-| `consolidation/` | Type merges, field promotion, stabilization, cleanup, applying changes, `consolidate` job           |
-| `db/`            | Drizzle schema, `createDb`, the migration runner; SQL migrations are in `migrations/`               |
-| `domain/`        | Ids, entity names, provenance, `StartupError`; enumerations and limits are in `@liasse/contract`    |
-| `embeddings/`    | `createEmbedder`; the local embedder runs an ONNX model in a child process, ended when idle         |
-| `entities/`      | Entity resolution, sensitive identifier masking, entity listing and merges                          |
-| `formats/`       | What a PDF, an image, a DOCX and an email are, from their bytes: one rule for ingestion and text    |
-| `hindsight/`     | The optional sync of document facts to a Hindsight bank: client, `hindsight_sync` job, forget sweep |
-| `ingest/`        | `ingestFile`, deletion with tombstones, the watched folder                                          |
-| `jobs/`          | The job queue on the `jobs` table: kinds, `enqueue`, workers                                        |
-| `knowledge/`     | Key dates, subjects, facts and links of a document, derived state, and the four knowledge tools     |
-| `models/`        | Ports for the text model, the vision model and the embedder; `providers/` adapts them               |
-| `network/`       | Client address behind trusted proxies: subnets, `X-Forwarded-For`, Cloudflare's bundled ranges      |
-| `pipeline/`      | The `process_document` job: text, classification, extraction, manual corrections                    |
-| `prompt/`        | Prompt helpers, starting with the untrusted-content wrapper                                         |
-| `query/`         | The structured query DSL: its schema, field typing and compilation to bound SQL                     |
-| `registry/`      | Field primitives, naming rules and the operations on the evolving type registry                     |
-| `search/`        | Chunking sized to the embedder's window, `indexDocument`, hybrid `search` (full text + vector, RRF) |
-| `settings/`      | The settings of the database: their resolution, the secret box of their keys, the store, the check  |
-| `setup/`         | The setup token of the onboarding, and the count of attempts at it per client address               |
-| `storage/`       | The file storage port and its `fs` and `s3` drivers                                                 |
-| `testing/`       | Test database and bucket helpers, model fakes and synthetic document builders                       |
-| `text/`          | `extractText`: native text of PDF, DOCX and email, vision transcription otherwise                   |
+| Directory         | Content                                                                                                           |
+| ----------------- | ----------------------------------------------------------------------------------------------------------------- |
+| `api/`            | The use cases REST and MCP share, their schemas, `ApiError`, signed file URLs; knows no transport                 |
+| `auth/`           | The auth server (better-auth): accounts, sessions, API keys, the OAuth server of MCP, first account               |
+| `config/`         | The Zod schema that turns `process.env` into the typed, frozen configuration                                      |
+| `consolidation/`  | Type merges, field promotion, stabilization, cleanup, applying changes, `consolidate` job                         |
+| `db/`             | Drizzle schema, `createDb`, the migration runner; SQL migrations are in `packages/core/migrations/`               |
+| `domain/`         | Ids, entity names, provenance, `StartupError`; enumerations and limits are in `@liasse/contract`                  |
+| `embeddings/`     | `createEmbedder`; the local embedder runs an ONNX model in a child process, ended when idle                       |
+| `entities/`       | Entity resolution, sensitive identifier masking, entity listing and merges                                        |
+| `formats/`        | What a PDF, an image, a DOCX and an email are, from their bytes: one rule for ingestion and text                  |
+| `hindsight/`      | The optional sync of document facts to a Hindsight bank: client, `hindsight_sync` job, forget sweep               |
+| `ingest/`         | `ingestFile`, deletion with tombstones, the watched folder                                                        |
+| `jobs/`           | The job queue on the `jobs` table: kinds, `enqueue`, workers                                                      |
+| `knowledge/`      | Key dates, subjects, facts and links of a document, derived state, and the four knowledge tools                   |
+| `models/`         | Ports for the text model, the vision model and the embedder; `providers/` adapts them                             |
+| `network/`        | Client address behind trusted proxies: subnets, `X-Forwarded-For`, Cloudflare's bundled ranges                    |
+| `pipeline/`       | Handlers of `process_document` (kind in `ingest/`) and its re-runs: text, classification, extraction, corrections |
+| `processing-log/` | The event log of a document's processing, capped at `MAX_DOCUMENT_EVENTS`, and the stage a status waits on        |
+| `prompt/`         | Prompt helpers, starting with the untrusted-content wrapper                                                       |
+| `query/`          | The structured query DSL: its schema, field typing and compilation to bound SQL                                   |
+| `registry/`       | Field primitives, naming rules and the operations on the evolving type registry                                   |
+| `search/`         | Chunking sized to the embedder's window, `indexDocument`, hybrid `search` (full text + vector, RRF)               |
+| `settings/`       | The settings of the database: their resolution, the secret box of their keys, the store, the check                |
+| `setup/`          | The setup token of the onboarding, and the count of attempts at it per client address                             |
+| `storage/`        | The file storage port and its `fs` and `s3` drivers                                                               |
+| `testing/`        | Test database and bucket helpers, model fakes and synthetic document builders                                     |
+| `text/`           | `extractText`: native text of PDF, DOCX and email, vision transcription otherwise                                 |
 
 Tests sit next to the code they cover, as `*.test.ts`. A helper that only the tests of one directory use is a `*.test-helper.ts` beside them; neither is compiled into `dist`. Three more suffixes are kept out of the build: `*.fixture.ts` for data shared by several test files, `*.modeltest.ts` for the tests of `pnpm test:models`, and `*.paradedbtest.ts` for the tests of `pnpm test:paradedb`.
 
