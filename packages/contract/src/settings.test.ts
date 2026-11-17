@@ -80,6 +80,12 @@ describe('the settings schema', () => {
     ]);
   });
 
+  it('refuses a section it does not know, so a misnamed one is never ignored', () => {
+    expect(issuesOf({ llm: LOCAL_LLM, piepline: { auto_apply: 'none' } })).toEqual([
+      ': Unrecognized key: "piepline"',
+    ]);
+  });
+
   it('refuses a key it does not know, so a typo is never ignored', () => {
     expect(issuesOf({ llm: LOCAL_LLM, pipeline: { confidence_treshold: 0.5 } })).toHaveLength(1);
   });
