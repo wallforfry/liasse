@@ -8,10 +8,11 @@ import type { HandlerSet } from '@liasse/core/jobs';
 import type { ChunkRanker } from '@liasse/core/search';
 import { type ModelFactories, type ResolvedSettings, resolveSettings } from '@liasse/core/settings';
 import type { Storage } from '@liasse/core/storage';
-import type { Logger } from '../log.ts';
+import { describeError, type Logger } from '../log.ts';
 import type { ShutdownStep } from '../shutdown.ts';
 import { startFolder, startQueue } from './background.ts';
 import type { Bind, Bindings } from './bindings.ts';
+import { createLock } from './lock.ts';
 import { settingsNotices } from './notices.ts';
 import { step } from './step.ts';
 
@@ -44,37 +45,34 @@ interface Active {
 export interface LiveRuntime {
   /** The context of the settings in force, undefined while none are. */
   readonly api: () => ApiContext | undefined;
-  /** Builds the parts of these settings; one preparation at a time, until activated or dropped. */
-  readonly prepare: (settings: Settings) => Promise<PreparedSettings>;
+  /** The stored version of the settings in force, 0 while none are. */
+  readonly version: () => number;
+  /**
+   * Builds the parts of the settings of `version`; one preparation at a time, until it is
+   * settled or discarded. A version not newer than the one in force changes nothing.
+   */
+  readonly prepare: (settings: Settings, version: number) => Promise<PreparedSettings>;
   /** In the order they stop: the workers, the watcher, then the embedder. */
   readonly stopSteps: readonly ShutdownStep[];
 }
 
 const NO_HANDLERS: HandlerSet = { handlers: [] };
 
+interface Built {
+  readonly next: Active;
+  readonly bindings: Bindings;
+}
+
 interface Background {
   readonly queue: ShutdownStep;
   readonly folder: ShutdownStep;
 }
 
-// A chain of holders: each waits for the one before it to let go.
-const createLock = (): (() => Promise<() => void>) => {
-  let tail: Promise<void> = Promise.resolve();
-  return async () => {
-    const previous = tail;
-    let release: () => void = () => undefined;
-    const held = new Promise<void>((resolve) => {
-      release = resolve;
-    });
-    tail = previous.then(() => held);
-    await previous;
-    return release;
-  };
-};
-
 export const createLiveRuntime = (options: LiveRuntimeOptions): LiveRuntime => {
   const { config, db, storage, factories, bind, logger } = options;
   let active: Active | undefined;
+  // The version of the stored settings `active` was built from; 0 before any.
+  let activeVersion = 0;
   let background: Background | undefined;
   const acquire = createLock();
 
@@ -109,7 +107,10 @@ export const createLiveRuntime = (options: LiveRuntimeOptions): LiveRuntime => {
       ? active.embedder
       : step('creating the embedder', () => factories.embedder(settings.embedding));
 
-  const build = async (settings: ResolvedSettings, embedder: ConfiguredEmbedder) => {
+  const build = async (
+    settings: ResolvedSettings,
+    embedder: ConfiguredEmbedder,
+  ): Promise<Built> => {
     const textModel = await step('creating the text model', () =>
       factories.textModel(settings.llm),
     );
@@ -144,21 +145,80 @@ export const createLiveRuntime = (options: LiveRuntimeOptions): LiveRuntime => {
     return { next: { settings, embedder, handlers, api }, bindings };
   };
 
-  const activate = async (next: Active, bindings: Bindings): Promise<void> => {
-    const previous = active;
-    active = next;
+  // A task that fails leaves the settings in force and the workers running: it is
+  // reported, and runs again the next time settings are put in force or at the next start.
+  const runTasks = async (bindings: Bindings): Promise<void> => {
+    for (const task of bindings.startupTasks) {
+      try {
+        await task.run();
+      } catch (error) {
+        logger.event('settings_task_failed', { task: task.name, ...describeError(error) });
+      }
+    }
+  };
+
+  const settle = async (next: Active, previous: Active | undefined, bindings: Bindings) => {
     if (previous !== undefined && previous.embedder !== next.embedder) {
       await previous.embedder.close();
     }
     (await settingsNotices(config, next.settings)).forEach(logger.notice);
     bindings.notices.forEach(logger.notice);
-    for (const task of bindings.startupTasks) await step(task.name, task.run);
+    await runTasks(bindings);
     background ??= await startBackground();
   };
 
-  const prepare = async (document: Settings): Promise<PreparedSettings> => {
+  // Settings of a version this process already runs, or older, change nothing.
+  const unchanged = (release: () => void): PreparedSettings => ({
+    putInForce: () => undefined,
+    settle: () => {
+      release();
+      return Promise.resolve();
+    },
+    discard: () => {
+      release();
+      return Promise.resolve();
+    },
+  });
+
+  const preparedOf = (
+    built: Built,
+    version: number,
+    created: boolean,
+    release: () => void,
+  ): PreparedSettings => {
+    const previous = { active, version: activeVersion };
+    let inForce = false;
+    return {
+      putInForce: () => {
+        active = built.next;
+        activeVersion = version;
+        inForce = true;
+      },
+      settle: async () => {
+        try {
+          await settle(built.next, previous.active, built.bindings);
+        } finally {
+          release();
+        }
+      },
+      discard: async () => {
+        try {
+          if (inForce) {
+            active = previous.active;
+            activeVersion = previous.version;
+          }
+          if (created) await built.next.embedder.close();
+        } finally {
+          release();
+        }
+      },
+    };
+  };
+
+  const prepare = async (document: Settings, version: number): Promise<PreparedSettings> => {
     const release = await acquire();
     try {
+      if (version <= activeVersion) return unchanged(release);
       const settings = resolveSettings(document, config.embedding);
       const embedder = await embedderFor(settings);
       const created = embedder !== active?.embedder;
@@ -166,22 +226,7 @@ export const createLiveRuntime = (options: LiveRuntimeOptions): LiveRuntime => {
         if (created) await embedder.close();
         throw error;
       });
-      return {
-        activate: async () => {
-          try {
-            await activate(built.next, built.bindings);
-          } finally {
-            release();
-          }
-        },
-        discard: async () => {
-          try {
-            if (created) await embedder.close();
-          } finally {
-            release();
-          }
-        },
-      };
+      return preparedOf(built, version, created, release);
     } catch (error) {
       release();
       throw error;
@@ -190,6 +235,7 @@ export const createLiveRuntime = (options: LiveRuntimeOptions): LiveRuntime => {
 
   return {
     api: () => active?.api,
+    version: () => activeVersion,
     prepare,
     stopSteps: [
       { name: 'workers', run: async () => background?.queue.run() },

@@ -65,7 +65,7 @@ export const mcpRoutes = ({ authenticated, report }: McpRouteDeps): Hono<AppEnv>
         const body: unknown = await context.req.json().catch(() => {
           throw new HttpFailure(failure(400, 'invalid_body', 'The request body is not JSON.'));
         });
-        return handleMcpRequest({ api: context.var.api, report }, context.req.raw, body);
+        return handleMcpRequest({ api: () => context.var.api, report }, context.req.raw, body);
       },
     )
     .get(PATH, NOT_ALLOWED_OPERATION, authenticated, notAllowed)

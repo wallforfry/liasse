@@ -24,6 +24,7 @@ import {
   httpBaseUrlSchema,
   llmProviderSchema,
   schemaLanguageSchema,
+  secretStateSchema,
 } from './domain/schemas.ts';
 
 const text = z.string().trim().min(1);
@@ -210,13 +211,16 @@ export const settingsDraftSchema = z
 export type SettingsDraft = z.output<typeof settingsDraftSchema>;
 export type SettingsDraftInput = z.input<typeof settingsDraftSchema>;
 
-const keySet = z.boolean().describe('Whether a key is stored. The key itself is never answered.');
+const keyState = secretStateSchema.describe(
+  'Whether a key is stored; `unreadable` when it was sealed under another AUTH_SECRET and ' +
+    'must be replaced or cleared. The key itself is never answered.',
+);
 
-/** The settings as the API answers them: every key replaced by whether it is set. */
+/** The settings as the API answers them: every key replaced by its state. */
 export const settingsViewSchema = z.object({
-  llm: z.object({ ...llmFields, api_key_set: keySet }),
-  embedding: z.object({ ...embeddingFields, api_key_set: keySet }),
+  llm: z.object({ ...llmFields, api_key_state: keyState }),
+  embedding: z.object({ ...embeddingFields, api_key_state: keyState }),
   pipeline: pipelineSettingsSchema,
-  hindsight: z.object({ ...hindsightFields, api_key_set: keySet }),
+  hindsight: z.object({ ...hindsightFields, api_key_state: keyState }),
 });
 export type SettingsView = z.output<typeof settingsViewSchema>;
