@@ -121,6 +121,10 @@ export const upcomingOptionsSchema = z.strictObject({
   types: z.array(z.string().min(1)).min(1).optional(),
   subject: z.string().min(1).optional(),
   current_only: z.boolean().default(true),
+  include_private: z
+    .boolean()
+    .default(false)
+    .describe('Private documents are left out unless this is true.'),
 });
 export type UpcomingOptions = z.output<typeof upcomingOptionsSchema>;
 
