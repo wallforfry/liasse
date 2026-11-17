@@ -46,7 +46,7 @@ export const upcomingDateSchema = z.strictObject({
   date: isoDateSchema,
   kind: keyDateKindSchema,
   label: untrustedText,
-  // True for a date Liasse computed, such as a notice deadline: no model wrote it.
+  // True for a date Liasse computed, such as a notice deadline: no model or person gave it.
   computed: z.boolean(),
   document: documentRefSchema,
   subjects: z.array(subjectRefSchema).readonly(),

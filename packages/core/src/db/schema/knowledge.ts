@@ -27,6 +27,9 @@ export const documentDates = pgTable(
     date: date('date', { mode: 'string' }).notNull(),
     label: text('label').notNull(),
     ...traceColumns(),
+    // A date a person gave through `update_document`. It has no model, no page and no
+    // quote either, which alone would mark a computed date.
+    manual: boolean('manual').notNull().default(false),
     createdAt: createdAt(),
   },
   (table) => [

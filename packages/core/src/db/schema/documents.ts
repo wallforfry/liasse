@@ -5,6 +5,7 @@ import {
   check,
   index,
   integer,
+  jsonb,
   pgTable,
   primaryKey,
   real,
@@ -54,6 +55,9 @@ export const documents = pgTable(
     confidence: real('confidence'),
     manualFields: textArray('manual_fields'),
     subjectIds: textArray('subject_ids'),
+    // The notice period the last extraction read, `{ amount, unit, confidence }`, or null:
+    // the notice deadline of the key dates a person gives is computed from it.
+    noticePeriod: jsonb('notice_period'),
     // How many times the watched folder queued this document again after a failure
     // without a person asking: bounded, so a restart loop cannot spend on it forever.
     watchRequeues: integer('watch_requeues').notNull().default(0),

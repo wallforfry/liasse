@@ -87,7 +87,11 @@ const LIST_DESCRIPTION =
 
 const UPDATE_DESCRIPTION =
   'Corrects a document: its type, core values, fields, or its `private` flag. In `core` and ' +
-  '`fields`, a value sets a field and `null` clears it. `confirm` maps core values or ' +
+  '`fields`, a value sets a field and `null` clears it. `core.key_dates` sets the whole ' +
+  'list of key dates (`kind`, `date`, `label`), each kind once per date, which `upcoming` ' +
+  'then answers; a notice deadline is computed from a renewal date and the notice period ' +
+  'of the document, so give the renewal date, not that deadline. `key_dates` cannot be ' +
+  'confirmed. `confirm` maps core values or ' +
   'fields that are right as they are to the value `get_document` gave for each: each keeps ' +
   'its value, never rewritten, and becomes manual; a value that changed since is refused ' +
   '(`value_changed`): read the document again. Naming the type, even the current one, ' +
