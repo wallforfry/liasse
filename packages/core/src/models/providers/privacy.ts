@@ -9,8 +9,9 @@ export interface ModelPrivacy {
     readonly vision: boolean;
     readonly embeddings: boolean;
   };
-  // The hosts of self-hosted endpoints whose name did not resolve at startup. Such an
-  // endpoint counts as external until the process restarts, even on a private network.
+  // The hosts of self-hosted endpoints whose name did not resolve when the settings were
+  // put in force. Such an endpoint counts as external until they are put in force again,
+  // even on a private network.
   readonly unresolvedHosts: readonly string[];
   // One line for the operator, present when at least one kind of content is external.
   readonly warning: string | undefined;
