@@ -7,6 +7,7 @@ import {
   type LucideIcon,
   NetworkIcon,
   PlugIcon,
+  SettingsIcon,
   ShapesIcon,
   UploadIcon,
 } from 'lucide-react';
@@ -31,6 +32,7 @@ export const ACCOUNT_NAVIGATION: readonly NavigationItem[] = [
   { label: 'API keys', path: '/account/api-keys', icon: KeyRoundIcon },
   { label: 'MCP connections', path: '/account/mcp-connections', icon: PlugIcon },
   { label: 'Change password', path: '/account/password', icon: LockKeyholeIcon },
+  { label: 'Settings', path: '/account/settings', icon: SettingsIcon },
 ];
 
 export const documentPath = (id: string): string => `/documents/${encodeURIComponent(id)}`;
