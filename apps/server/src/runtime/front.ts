@@ -1,5 +1,6 @@
-import type { ApiContext } from '@liasse/core/api';
+import type { ApiContext, SettingsContext } from '@liasse/core/api';
 import type { Config } from '@liasse/core/config';
+import { StartupError } from '@liasse/core/domain';
 import { serveStdio } from '@liasse/mcp';
 import { createApp } from '../http/app.ts';
 import { loadWebAssets, resolveWebAssetsDirectory } from '../http/ui/web-assets.ts';
@@ -14,7 +15,10 @@ export type Transport = (typeof TRANSPORTS)[number];
 
 export interface FrontOptions {
   readonly transport: Transport;
-  readonly api: ApiContext;
+  /** The context of the settings in force, undefined while none are saved. */
+  readonly api: () => ApiContext | undefined;
+  readonly base: Pick<ApiContext, 'db' | 'storage' | 'fileUrls'>;
+  readonly settings: SettingsContext;
   readonly config: Config;
   readonly ping: () => Promise<void>;
   readonly logger: Logger;
@@ -31,28 +35,39 @@ export interface Front {
   readonly ended?: Promise<void>;
 }
 
+const STDIO_UNCONFIGURED =
+  'Liasse has no settings yet, and MCP on stdio cannot save them: start the server over ' +
+  'HTTP once, sign in to the web UI and save them with PUT /settings.';
+
 /**
- * The HTTP server (REST, MCP on `/mcp`, the web UI on `/ui`), or MCP on the standard streams. Over stdio
- * nothing listens: the signed file URLs a tool returns open on the HTTP server of
- * `PUBLIC_URL`, when one runs.
+ * The HTTP server (REST, MCP on `/mcp`, the web UI on `/ui`), or MCP on the standard
+ * streams. Over stdio nothing listens: the signed file URLs a tool returns open on the HTTP
+ * server of `PUBLIC_URL`, when one runs, and the settings stay those of the start, since
+ * nothing in the process can save others.
  */
 export const startFront = async ({
   transport,
   api,
+  base,
+  settings,
   config,
   ping,
   logger,
   graceMs,
 }: FrontOptions): Promise<Front> => {
   if (transport === 'stdio') {
-    const session = await serveStdio({ api, report: reportMcpFailure(logger) });
+    const current = api();
+    if (current === undefined) throw new StartupError(STDIO_UNCONFIGURED);
+    const session = await serveStdio({ api: current, report: reportMcpFailure(logger) });
     logger.notice('Liasse is serving MCP on stdio');
     return { stop: { name: 'mcp', run: session.close }, ended: session.ended };
   }
   const assets = await loadWebAssets(resolveWebAssetsDirectory());
   const app = createApp({
     api,
-    auth: await startAuth({ db: api.db, config, logger }),
+    base,
+    settings,
+    auth: await startAuth({ db: base.db, config, logger }),
     publicUrl: config.server.publicUrl,
     trustedProxies: config.server.trustedProxies,
     assets,

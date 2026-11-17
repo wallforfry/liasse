@@ -1,16 +1,16 @@
-import type { Config } from '@liasse/core/config';
 import type { Database } from '@liasse/core/db';
 import { ingestFile, startWatcher } from '@liasse/core/ingest';
-import { startWorkers } from '@liasse/core/jobs';
+import { type HandlerSet, startWorkers } from '@liasse/core/jobs';
 import type { Storage } from '@liasse/core/storage';
 import { describeError, type Logger } from '../log.ts';
 import type { ShutdownStep } from '../shutdown.ts';
-import type { Bindings } from './bindings.ts';
 
 interface QueueOptions {
   readonly db: Database;
-  readonly config: Config;
-  readonly bindings: Pick<Bindings, 'handlers' | 'perKindConcurrency'>;
+  /** `WORKERS`. */
+  readonly concurrency: number;
+  /** Read at every claim: the handlers of the settings in force. */
+  readonly handlers: () => HandlerSet;
   readonly logger: Logger;
   /** How long jobs in progress may take to finish at shutdown before they are aborted. */
   readonly graceMs: number;
@@ -19,16 +19,15 @@ interface QueueOptions {
 /** Starts the workers of the job queue. Resolves to the step that drains them. */
 export const startQueue = async ({
   db,
-  config,
-  bindings,
+  concurrency,
+  handlers,
   logger,
   graceMs,
 }: QueueOptions): Promise<ShutdownStep> => {
   const workers = await startWorkers({
     db,
-    handlers: bindings.handlers,
-    concurrency: config.pipeline.workers,
-    perKindConcurrency: bindings.perKindConcurrency,
+    handlers,
+    concurrency,
     onJobFailed: ({ job, error, willRetry }) => {
       logger.event('job_failed', {
         job_id: job.id,
@@ -67,16 +66,25 @@ export const startQueue = async ({
 interface FolderOptions {
   readonly db: Database;
   readonly storage: Storage;
-  readonly config: Config;
+  /** `WATCH_DIR`; nothing is watched when it is undefined. */
+  readonly dir: string | undefined;
+  /** Read for every file: the limit of the settings in force. */
+  readonly maxFileSize: () => number;
   readonly logger: Logger;
 }
 
 /** Watches `WATCH_DIR` when it is set. The step stops the scan in progress. */
-export const startFolder = ({ db, storage, config, logger }: FolderOptions): ShutdownStep => {
-  const ingest = { db, storage, maxFileSize: config.pipeline.maxFileSize };
+export const startFolder = ({
+  db,
+  storage,
+  dir,
+  maxFileSize,
+  logger,
+}: FolderOptions): ShutdownStep => {
   const watcher = startWatcher({
-    dir: config.pipeline.watchDir,
-    ingest: (file) => ingestFile(ingest, { ...file, source: 'watch' }),
+    dir,
+    ingest: (file) =>
+      ingestFile({ db, storage, maxFileSize: maxFileSize() }, { ...file, source: 'watch' }),
     // The path is left out: the name of a file may say what the document is.
     onError: (error, path) => {
       logger.event('watch_problem', {

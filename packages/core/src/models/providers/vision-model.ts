@@ -1,9 +1,10 @@
 import type { VisionModel } from '../ports.ts';
-import { languageCall, type LlmConfig, runLanguageCall } from './language-call.ts';
+import type { LlmSettings } from '../../settings/resolve.ts';
+import { languageCall, runLanguageCall } from './language-call.ts';
 
 // The transcription prompt of the request goes in the system message, the page image alone
 // in the user message.
-export const createVisionModel = (config: LlmConfig): VisionModel => {
+export const createVisionModel = (config: LlmSettings): VisionModel => {
   const call = languageCall(config, config.visionModel);
   return {
     transcribePage: async ({ image, mime, prompt, signal }) => {

@@ -18,7 +18,7 @@ export type MergePayload = z.output<typeof mergePayloadSchema>;
 
 // `variants` are the keys of `extra` whose values become the field. `retype` says the
 // type already has a field of that name with another definition, which the change
-// replaces: a retyping, never applied without approval under `AUTO_APPLY=safe`.
+// replaces: a retyping, never applied without approval under `auto_apply` safe.
 export const promoteFieldPayloadSchema = z.strictObject({
   type_id: id,
   field: name,

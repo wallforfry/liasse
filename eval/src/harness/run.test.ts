@@ -6,7 +6,12 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { loadCorpus, loadQuestions } from '../corpus.ts';
 import type { Corpus, QuestionSet } from '../schema/index.ts';
 import { createCorpusIndex } from '../score/index.ts';
-import { deterministicEnv, oracleAgent, startModelStub } from './deterministic.test-helper.ts';
+import {
+  deterministicEnv,
+  deterministicSettings,
+  oracleAgent,
+  startModelStub,
+} from './deterministic.test-helper.ts';
 import type { RunReport } from './report.ts';
 import { runEvaluation } from './run.ts';
 
@@ -30,7 +35,8 @@ describe('a deterministic run of the harness', () => {
     const index = createCorpusIndex(corpus);
     report = await runEvaluation({
       label: 'deterministic',
-      env: deterministicEnv(stub.url, folder),
+      env: deterministicEnv(folder),
+      settings: deterministicSettings(stub.url),
       agentModel: (ids) => oracleAgent(questionSet.questions, index, ids),
       logger: quiet,
     });

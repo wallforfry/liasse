@@ -35,7 +35,7 @@ type QueryValue = string | number | boolean | readonly string[] | undefined;
 export type QueryParams = Readonly<Record<string, QueryValue>>;
 
 export interface RequestSpec {
-  readonly method?: 'GET' | 'POST' | 'PATCH' | 'DELETE';
+  readonly method?: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
   /** From the root of the API, starting with `/`. */
   readonly path: string;
   readonly query?: QueryParams;

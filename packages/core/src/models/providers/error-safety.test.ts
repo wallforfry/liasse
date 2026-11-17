@@ -12,9 +12,9 @@ import { createTextModel } from './text-model.ts';
 import { createVisionModel } from './vision-model.ts';
 import {
   chatCompletion,
-  embeddingConfig,
+  remoteEmbeddingSettings,
   failure,
-  llmConfig,
+  llmSettings,
   SYNTHETIC_API_KEY,
 } from '../../testing/provider-wire.ts';
 
@@ -46,16 +46,16 @@ afterEach(async () => {
 const start = async (handler: StubHandler) => {
   const server = await startStubServer(handler);
   servers.push(server);
-  const llm = llmConfig({
-    LLM_PROVIDER: 'openai-compatible',
-    LLM_BASE_URL: `${server.url}/v1`,
-    LLM_API_KEY: SYNTHETIC_API_KEY,
+  const llm = llmSettings({
+    provider: 'openai-compatible',
+    base_url: `${server.url}/v1`,
+    api_key: SYNTHETIC_API_KEY,
   });
   const embedder = await createProviderEmbedder(
-    embeddingConfig({
-      EMBEDDING_PROVIDER: 'openai-compatible',
-      EMBEDDING_BASE_URL: `${server.url}/v1`,
-      EMBEDDING_API_KEY: SYNTHETIC_API_KEY,
+    remoteEmbeddingSettings({
+      provider: 'openai-compatible',
+      base_url: `${server.url}/v1`,
+      api_key: SYNTHETIC_API_KEY,
     }),
   );
   return { text: createTextModel(llm), vision: createVisionModel(llm), embedder };

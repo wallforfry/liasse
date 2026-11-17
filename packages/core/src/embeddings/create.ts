@@ -1,4 +1,4 @@
-import type { Config } from '../config/schema.ts';
+import type { EmbeddingSettings } from '../settings/resolve.ts';
 import type { Embedder } from '../models/ports.ts';
 import {
   createProviderEmbedder,
@@ -21,10 +21,10 @@ const unsupported = (config: never): never => {
   throw new Error(`No embedder is implemented for ${JSON.stringify(config)}`);
 };
 
-// The one place that turns EMBEDDING_PROVIDER into an embedder. Every provider is named: a new
+// The one place that turns the embedding provider of the settings into an embedder. Every provider is named: a new
 // member of the enumeration does not compile until it has a branch here.
 export const createEmbedder = async (
-  config: Config['embedding'],
+  config: EmbeddingSettings,
   { local, ...options }: CreateEmbedderOptions = {},
 ): Promise<ConfiguredEmbedder> => {
   switch (config.provider) {

@@ -10,7 +10,11 @@ import {
   createFakeTextModel,
   createFakeVisionModel,
   createTestDatabase,
+  seedSettings,
+  signInOverHttp,
   SYNTHETIC_ENV,
+  type SettingsOverrides,
+  syntheticSettings,
   TEST_ACCOUNT,
   type TestDatabase,
 } from '@liasse/core/testing';
@@ -50,11 +54,21 @@ export interface RuntimeHarness {
   /** What the runtimes of the current test said on their logger. */
   readonly lines: () => readonly string[];
   readonly configOf: (env?: Env) => Config;
-  /** Starts a runtime bound with fake models, stopped after the test. */
-  readonly start: (env?: Env, options?: RuntimeOptions) => Promise<Runtime>;
+  /** Saves the synthetic settings with these sections changed, as a person would. */
+  readonly saveSettings: (settings?: SettingsOverrides) => Promise<void>;
+  /** Starts a runtime bound with fake models on saved settings, stopped after the test. */
+  readonly start: (
+    env?: Env,
+    options?: RuntimeOptions,
+    settings?: SettingsOverrides,
+  ) => Promise<Runtime>;
+  /** Starts a runtime on a database that holds no settings. */
+  readonly startUnconfigured: (env?: Env, options?: RuntimeOptions) => Promise<Runtime>;
   /** An API key of the test account on that runtime, made once per runtime. */
   readonly apiKey: (runtime: Runtime) => Promise<string>;
   readonly call: (runtime: Runtime, path: string, init?: RequestInit) => Promise<Response>;
+  /** A request of the web UI: the session of the test account, from `PUBLIC_URL`. */
+  readonly callAsPerson: (runtime: Runtime, path: string, init?: RequestInit) => Promise<Response>;
   /** Uploads a PDF of these lines and returns the id of its document. */
   readonly upload: (runtime: Runtime, lines: readonly string[], name: string) => Promise<string>;
   readonly documentOf: (
@@ -73,6 +87,7 @@ export const useRuntimeHarness = (): RuntimeHarness => {
   const lines: string[] = [];
   const started: Runtime[] = [];
   const keys = new Map<Runtime, Promise<string>>();
+  const sessions = new Map<Runtime, Promise<string>>();
 
   beforeEach(async () => {
     database = await createTestDatabase({ migrate: false });
@@ -83,6 +98,7 @@ export const useRuntimeHarness = (): RuntimeHarness => {
   afterEach(async () => {
     await Promise.all(started.splice(0).map((runtime) => runtime.stop()));
     keys.clear();
+    sessions.clear();
     if (root !== undefined) await rm(root, { recursive: true, force: true });
     await database?.dispose();
   });
@@ -110,6 +126,26 @@ export const useRuntimeHarness = (): RuntimeHarness => {
     return env.PORT === undefined ? { ...config, server: { ...config.server, port: 0 } } : config;
   };
 
+  const saveSettings = async (overrides: SettingsOverrides = {}): Promise<void> => {
+    const config = configOf();
+    await seedSettings({
+      databaseUrl: config.database.url,
+      authSecret: config.auth.secret,
+      embeddingDim: config.embedding.dimension,
+      settings: syntheticSettings(overrides),
+    });
+  };
+
+  const startRuntime = async (env: Env, options: RuntimeOptions): Promise<Runtime> => {
+    const runtime = await createRuntime(configOf(env), {
+      logger: createLogger((line) => lines.push(line)),
+      bind: bindWithFakes,
+      ...options,
+    });
+    started.push(runtime);
+    return runtime;
+  };
+
   const baseUrlOf = (runtime: Runtime): string => `http://127.0.0.1:${String(runtime.port)}`;
 
   const apiKey = (runtime: Runtime): Promise<string> => {
@@ -125,6 +161,28 @@ export const useRuntimeHarness = (): RuntimeHarness => {
     return created;
   };
 
+  const sessionOf = (runtime: Runtime): Promise<string> => {
+    const known = sessions.get(runtime);
+    if (known !== undefined) return known;
+    const opened = signInOverHttp({
+      baseUrl: baseUrlOf(runtime),
+      publicUrl: configOf().server.publicUrl,
+      account: TEST_ACCOUNT,
+    });
+    sessions.set(runtime, opened);
+    return opened;
+  };
+
+  const callAsPerson = async (runtime: Runtime, path: string, init: RequestInit = {}) =>
+    fetch(`${baseUrlOf(runtime)}${path}`, {
+      ...init,
+      headers: {
+        ...Object.fromEntries(new Headers(init.headers)),
+        Cookie: await sessionOf(runtime),
+        Origin: configOf().server.publicUrl,
+      },
+    });
+
   const call = async (runtime: Runtime, path: string, init: RequestInit = {}) =>
     fetch(`${baseUrlOf(runtime)}${path}`, {
       ...init,
@@ -139,17 +197,15 @@ export const useRuntimeHarness = (): RuntimeHarness => {
     root: folder,
     lines: () => lines,
     configOf,
-    start: async (env = {}, options = {}) => {
-      const runtime = await createRuntime(configOf(env), {
-        logger: createLogger((line) => lines.push(line)),
-        bind: bindWithFakes,
-        ...options,
-      });
-      started.push(runtime);
-      return runtime;
+    saveSettings,
+    start: async (env = {}, options = {}, settings = {}) => {
+      await saveSettings(settings);
+      return startRuntime(env, options);
     },
+    startUnconfigured: (env = {}, options = {}) => startRuntime(env, options),
     apiKey,
     call,
+    callAsPerson,
     upload: async (runtime, pdfLines, name) => {
       const form = new FormData();
       form.append('file', new File([buildSyntheticPdf([{ lines: [...pdfLines] }])], name));

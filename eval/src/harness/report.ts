@@ -1,10 +1,10 @@
-import type { Config } from '@liasse/core/config';
 import { DEFAULT_LOCAL_EMBEDDING_MODEL } from '@liasse/core/embeddings';
+import type { ResolvedSettings } from '@liasse/core/settings';
 import type { Answer } from '../schema/index.ts';
 import type { AnswerScore, DocumentResult, EvaluationReport } from '../score/index.ts';
 import type { ToolCallRecord } from './agent.ts';
 
-/** The models a run measured, as the configuration names them. No credential. */
+/** The models a run measured, as the settings name them. No credential. */
 export interface RunModels {
   readonly llm_provider: string;
   readonly text_model: string;
@@ -44,7 +44,7 @@ export interface RunReport {
   };
 }
 
-export const modelsOf = ({ llm, embedding }: Config): RunModels => ({
+export const modelsOf = ({ llm, embedding }: ResolvedSettings): RunModels => ({
   llm_provider: llm.provider,
   text_model: llm.textModel,
   vision_model: llm.visionModel,

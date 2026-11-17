@@ -50,6 +50,7 @@ const TABLES = [
   'oauth_consents',
   'oauth_refresh_tokens',
   'oauth_resources',
+  'settings',
   'subjects',
   'type_changes',
 ];
@@ -91,7 +92,7 @@ describe('migrate', () => {
     await database.dispose();
   });
 
-  it('creates the twenty-seven tables on an empty database', async () => {
+  it('creates the twenty-eight tables on an empty database', async () => {
     expect(await publicTables(database)).toEqual(TABLES);
   });
 

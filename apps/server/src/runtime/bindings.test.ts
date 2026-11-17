@@ -1,15 +1,12 @@
-import { loadConfig } from '@liasse/core/config';
 import { ENTITY_ARBITRATION_CANDIDATES } from '@liasse/contract/domain';
-import { SYNTHETIC_ENV } from '@liasse/core/testing';
+import { resolvedSyntheticSettings } from '@liasse/core/testing';
 import { describe, expect, it } from 'vitest';
 import { pipelineSettingsOf } from './bindings.ts';
 
 describe('pipelineSettingsOf', () => {
-  it('hands the configured entity similarity thresholds to the pipeline', () => {
-    const { pipeline } = loadConfig({
-      ...SYNTHETIC_ENV,
-      ENTITY_ATTACH_SIMILARITY: '0.97',
-      ENTITY_ARBITRATION_SIMILARITY: '0.9',
+  it('hands the entity similarity thresholds of the settings to the pipeline', () => {
+    const { pipeline } = resolvedSyntheticSettings({
+      pipeline: { entity_attach_similarity: 0.97, entity_arbitration_similarity: 0.9 },
     });
     expect(pipelineSettingsOf(pipeline).entitySimilarity).toEqual({
       attach: 0.97,

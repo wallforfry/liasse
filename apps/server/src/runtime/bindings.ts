@@ -35,12 +35,14 @@ import {
   type PipelineDeps,
   type PipelineSettings,
 } from '@liasse/core/pipeline';
+import type { PipelineConfig, ResolvedSettings } from '@liasse/core/settings';
 import type { Storage } from '@liasse/core/storage';
 import type { Logger } from '../log.ts';
 
-/** What the runtime built before it binds the features to it. */
+/** What the runtime built from its configuration and its settings before it binds the features. */
 export interface RuntimeParts {
   readonly config: Config;
+  readonly settings: ResolvedSettings;
   readonly db: Database;
   readonly storage: Storage;
   readonly embedder: Embedder;
@@ -60,9 +62,9 @@ export interface Bindings {
   readonly perKindConcurrency: Readonly<Record<string, number>>;
   /** The use cases of the API that live in a module of their own. */
   readonly features: ApiFeatures;
-  /** Run once, in order, before the workers start. */
+  /** Run in order each time settings are put in force, before the workers start. */
   readonly startupTasks: readonly StartupTask[];
-  /** One line each, for the operator, at startup. */
+  /** One line each, for the operator, each time settings are put in force. */
   readonly notices: readonly string[];
 }
 
@@ -75,7 +77,7 @@ export const pipelineSettingsOf = ({
   maxFileSize,
   maxVisionPages,
   entitySimilarity,
-}: Config['pipeline']): PipelineSettings => ({
+}: PipelineConfig): PipelineSettings => ({
   confidenceThreshold,
   maxNewTypesPerDay,
   schemaLanguage,
@@ -85,7 +87,7 @@ export const pipelineSettingsOf = ({
 });
 
 const pipelineDepsOf = (
-  { config, db, storage, embedder, textModel, visionModel }: RuntimeParts,
+  { config, settings, db, storage, embedder, textModel, visionModel }: RuntimeParts,
   hindsight: HindsightIntegration,
 ): PipelineDeps => {
   const identifierKey = deriveIdentifierKey(config.auth.fileUrlSecret);
@@ -96,7 +98,7 @@ const pipelineDepsOf = (
     textModel,
     visionModel,
     identifierKey,
-    settings: pipelineSettingsOf(config.pipeline),
+    settings: pipelineSettingsOf(settings.pipeline),
     // Consolidation counts the documents settled since its last run, and runs again
     // after every batch of them.
     afterIndexed: async (id: string) => {
@@ -128,8 +130,8 @@ const featuresOf = (deps: PipelineDeps, hindsight: HindsightIntegration): ApiFea
  * its lines here and nowhere else.
  */
 export const bindFeatures: Bind = (parts) => {
-  const { config, db, storage, logger } = parts;
-  const hindsight = createHindsightIntegration(config.hindsight, {
+  const { settings, db, storage, logger } = parts;
+  const hindsight = createHindsightIntegration(settings.hindsight, {
     db,
     isSensitive: (text) => findSensitiveIdentifiers(text).length > 0,
     // A count only: the id of the document would tell which one holds an account or a
@@ -138,7 +140,7 @@ export const bindFeatures: Bind = (parts) => {
       logger.event('hindsight_facts_withheld', { count });
     },
   });
-  const hindsightNotice = describeHindsight(config);
+  const hindsightNotice = describeHindsight(settings);
   const pipeline = pipelineDepsOf(parts, hindsight);
   return {
     handlers: [
@@ -148,8 +150,8 @@ export const bindFeatures: Bind = (parts) => {
       ...createConsolidationHandlers({
         db,
         textModel: parts.textModel,
-        autoApply: config.pipeline.autoApply,
-        schemaLanguage: config.pipeline.schemaLanguage,
+        autoApply: settings.pipeline.autoApply,
+        schemaLanguage: settings.pipeline.schemaLanguage,
       }),
       ...hindsight.handlers,
     ],

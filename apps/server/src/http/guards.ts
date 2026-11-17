@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import type { ApiContext } from '@liasse/core/api';
 import type { MiddlewareHandler } from 'hono';
 import { bodyLimit } from 'hono/body-limit';
 import { every } from 'hono/combine';
@@ -37,6 +38,25 @@ export const securityHeaders: MiddlewareHandler<AppEnv> = async (context, next) 
     if (!context.res.headers.has(name)) context.res.headers.set(name, value);
   });
 };
+
+const NOT_CONFIGURED = failure(
+  503,
+  'not_configured',
+  'Liasse has no settings yet: save them with PUT /settings first.',
+);
+
+/**
+ * Gives the request the API context of the settings in force when it arrives, which it
+ * keeps to its end whatever a save does meanwhile; 503 while no settings are saved.
+ */
+export const requireSettings =
+  (current: () => ApiContext | undefined): MiddlewareHandler<AppEnv> =>
+  async (context, next) => {
+    const api = current();
+    if (api === undefined) throw new HttpFailure(NOT_CONFIGURED);
+    context.set('api', api);
+    await next();
+  };
 
 /**
  * Answers 504 once the time is up. The work behind the request is not interrupted: a

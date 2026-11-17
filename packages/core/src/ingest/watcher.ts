@@ -6,7 +6,7 @@ import { createWatchProblems } from './watch-problems.ts';
 import { createVisitor, type WatchedFile } from './watch-visitor.ts';
 
 export interface WatcherOptions {
-  /** `config.pipeline.watchDir`. The watcher does nothing when it is undefined. */
+  /** `config.resources.watchDir`. The watcher does nothing when it is undefined. */
   readonly dir: string | undefined;
   /** Typically `ingestFile` with the source `watch`. Rejections are reported, not thrown. */
   readonly ingest: (file: WatchedFile) => Promise<unknown>;

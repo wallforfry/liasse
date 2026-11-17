@@ -1,11 +1,10 @@
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
-import { loadConfig } from '../config/load.ts';
 import { documents } from '../db/schema/documents.ts';
 import { jobs } from '../db/schema/jobs.ts';
 import { facts } from '../db/schema/knowledge.ts';
 import { deleteDocument } from '../ingest/delete-document.ts';
 import { insertSyntheticDocument } from '../testing/fixtures.ts';
-import { SYNTHETIC_ENV } from '../testing/synthetic-env.ts';
+import { resolvedSyntheticSettings } from '../testing/synthetic-settings.ts';
 import { createTestDatabase, type TestDatabase } from '../testing/test-database.ts';
 import { flagsNothing, flagsSyntheticIdentifiers } from './detector.test-helper.ts';
 import {
@@ -35,12 +34,8 @@ describe('createHindsightIntegration', () => {
 
   const enabled = (deps: Partial<HindsightIntegrationDeps> = {}, bank = 'documents') =>
     createHindsightIntegration(
-      loadConfig({
-        ...SYNTHETIC_ENV,
-        HINDSIGHT_URL: stub.url,
-        HINDSIGHT_BANK: bank,
-        HINDSIGHT_API_KEY: SYNTHETIC_KEY,
-      }).hindsight,
+      resolvedSyntheticSettings({ hindsight: { url: stub.url, bank, api_key: SYNTHETIC_KEY } })
+        .hindsight,
       { db: database.db, isSensitive: flagsNothing, client: { retries: 0 }, ...deps },
     );
 
@@ -68,10 +63,10 @@ describe('createHindsightIntegration', () => {
     await database.dispose();
   });
 
-  it('is disabled without HINDSIGHT_URL: no job, no handler, no client, no request', async () => {
+  it('is disabled without a URL: no job, no handler, no client, no request', async () => {
     const fetchSpy = vi.fn<typeof fetch>();
     const before = stub.calls.length;
-    const { hindsight } = loadConfig({ ...SYNTHETIC_ENV, HINDSIGHT_API_KEY: SYNTHETIC_KEY });
+    const { hindsight } = resolvedSyntheticSettings({ hindsight: { api_key: SYNTHETIC_KEY } });
     expect(hindsight).toBeUndefined();
     const integration = createHindsightIntegration(hindsight, {
       db: database.db,
@@ -97,7 +92,7 @@ describe('createHindsightIntegration', () => {
     expect(stub.calls).toHaveLength(before);
   });
 
-  it('queues a sync and registers its handler once HINDSIGHT_URL is set', async () => {
+  it('queues a sync and registers its handler once a URL is set', async () => {
     const integration = enabled();
     expect(integration.enabled).toBe(true);
     expect(integration.handlers.map(({ kind }) => kind)).toEqual(['hindsight_sync']);
@@ -191,21 +186,23 @@ describe('createHindsightIntegration', () => {
 
 describe('describeHindsight', () => {
   it('says nothing when the integration is disabled', () => {
-    expect(describeHindsight(loadConfig(SYNTHETIC_ENV))).toBeUndefined();
+    expect(describeHindsight(resolvedSyntheticSettings())).toBeUndefined();
   });
 
   it('names the host and the bank the facts go to, and neither the key nor the path', () => {
     const line = describeHindsight(
-      loadConfig({
-        ...SYNTHETIC_ENV,
-        HINDSIGHT_URL: 'https://hindsight.example.test:8443/synthetic-path',
-        HINDSIGHT_BANK: 'household',
-        HINDSIGHT_API_KEY: SYNTHETIC_KEY,
+      resolvedSyntheticSettings({
+        hindsight: {
+          url: 'https://hindsight.example.test:8443/synthetic-path',
+          bank: 'household',
+          api_key: SYNTHETIC_KEY,
+        },
       }),
     );
     expect(line).toBe(
       'Warning: facts extracted from documents not flagged private are sent to Hindsight at ' +
-        'hindsight.example.test:8443 (bank household). Unset HINDSIGHT_URL to keep them local.',
+        'hindsight.example.test:8443 (bank household). Clear the URL of Hindsight in the ' +
+        'settings to keep them local.',
     );
   });
 });

@@ -1,7 +1,11 @@
+import { resolve } from 'node:path';
+import { parseArgs } from 'node:util';
 import { loadConfig } from '@liasse/core/config';
 import { createEmbedder } from '@liasse/core/embeddings';
 import type { Embedder } from '@liasse/core/models';
+import { resolveSettings } from '@liasse/core/settings';
 import { loadCorpus } from '../corpus.ts';
+import { readSettingsFile } from '../settings-file.ts';
 import { entityMentionsOf } from './mentions.ts';
 import {
   type Calibration,
@@ -13,8 +17,8 @@ import {
   type ThresholdOutcomes,
 } from './thresholds.ts';
 
-// `pnpm eval:calibrate`: measures the entity similarity thresholds with the embedder of
-// the configuration, and suggests values. It changes no setting: a suggestion is for a
+// `pnpm eval:calibrate --settings <file>`: measures the entity similarity thresholds with
+// the embedder of the settings file (README.md), and suggests values. It changes no setting: a suggestion is for a
 // person to weigh. Two measures: the bare names of the entities, and the issuers and
 // recipients of the documents, embedded with a line of their context as resolution
 // embeds a mention. Both are embedded as `passage`, like resolution does.
@@ -57,12 +61,20 @@ const measure = async (
   return describe(title, samples.length, calibrate(samples, embeddings, thresholds));
 };
 
-const config = loadConfig(process.env);
-const { embedder, close } = await createEmbedder(config.embedding);
+const { values } = parseArgs({ options: { settings: { type: 'string' } } });
+if (values.settings === undefined) {
+  process.stderr.write('Pass the JSON file of the settings with --settings <file>.\n');
+  process.exit(2);
+}
+const settings = resolveSettings(
+  await readSettingsFile(resolve(process.env.INIT_CWD ?? process.cwd(), values.settings)),
+  loadConfig(process.env).embedding,
+);
+const { embedder, close } = await createEmbedder(settings.embedding);
 try {
   const corpus = await loadCorpus();
   const names = entityNamesOf(corpus).map((name) => ({ ...name, text: name.name }));
-  const thresholds = config.pipeline.entitySimilarity;
+  const thresholds = settings.pipeline.entitySimilarity;
   const reports = [
     await measure(embedder, 'Bare names of the entities', names, thresholds),
     await measure(

@@ -2,9 +2,11 @@ import { randomBytes } from 'node:crypto';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import type { Settings } from '@liasse/contract';
 import { type Config, loadConfig } from '@liasse/core/config';
 import type { Database } from '@liasse/core/db';
-import { createApiKeyOverHttp, createTestDatabase } from '@liasse/core/testing';
+import { type ResolvedSettings, resolveSettings } from '@liasse/core/settings';
+import { createApiKeyOverHttp, createTestDatabase, seedSettings } from '@liasse/core/testing';
 import { createRuntime, type RuntimeOptions } from '@liasse/server/runtime';
 
 export type Env = Readonly<Record<string, string | undefined>>;
@@ -12,6 +14,8 @@ export type Env = Readonly<Record<string, string | undefined>>;
 /** A Liasse server of its own, on a database and a folder that exist for one run. */
 export interface Instance {
   readonly config: Config;
+  /** The settings the instance runs with, Hindsight off. */
+  readonly settings: ResolvedSettings;
   readonly baseUrl: string;
   /** An API key of the one account of the instance, both made for the run. */
   readonly token: string;
@@ -25,17 +29,15 @@ interface RunAccount {
   readonly password: string;
 }
 
-// Everything that would reach outside the run is switched off: the watched folder, the
-// Hindsight bank and the accounts of the operator's configuration. The models and the
-// embedder stay as configured: they are what a run measures.
+// Everything that would reach outside the run is switched off: the watched folder and the
+// accounts of the operator's configuration, and the Hindsight bank of the settings. The
+// models and the embedder stay as given: they are what a run measures.
 const throwawayEnv = (env: Env, databaseUrl: string, folder: string, account: RunAccount): Env => ({
   ...env,
   DATABASE_URL: databaseUrl,
   STORAGE_DRIVER: 'fs',
   STORAGE_PATH: join(folder, 'files'),
   WATCH_DIR: undefined,
-  HINDSIGHT_URL: undefined,
-  HINDSIGHT_API_KEY: undefined,
   AUTH_SECRET: randomBytes(32).toString('hex'),
   AUTH_BOOTSTRAP_EMAIL: account.email,
   AUTH_BOOTSTRAP_PASSWORD: account.password,
@@ -47,10 +49,12 @@ const throwawayEnv = (env: Env, databaseUrl: string, folder: string, account: Ru
 /**
  * Starts the real server, the one `createRuntime` builds, on a throwaway database of the
  * test Postgres (`TEST_DATABASE_URL`) and a temporary folder. The configuration is read
- * from `env` like the server reads it, with the overrides above.
+ * from `env` like the server reads it, with the overrides above, and `settings` are saved
+ * in the database before it starts.
  */
 export const startInstance = async (
   env: Env,
+  settings: Settings,
   { logger }: Pick<RuntimeOptions, 'logger'> = {},
 ): Promise<Instance> => {
   const database = await createTestDatabase({ migrate: false });
@@ -64,6 +68,13 @@ export const startInstance = async (
     const loaded = loadConfig(throwawayEnv(env, database.url, folder, account));
     // Port 0 lets the system pick a free one; the configuration itself refuses it.
     const config = { ...loaded, server: { ...loaded.server, port: 0 } };
+    const kept: Settings = { ...settings, hindsight: { bank: settings.hindsight.bank } };
+    await seedSettings({
+      databaseUrl: database.url,
+      authSecret: config.auth.secret,
+      embeddingDim: config.embedding.dimension,
+      settings: kept,
+    });
     const runtime = await createRuntime(config, logger === undefined ? {} : { logger });
     if (runtime.port === undefined) {
       await runtime.stop();
@@ -84,6 +95,7 @@ export const startInstance = async (
     let stopped: Promise<void> | undefined;
     return {
       config,
+      settings: resolveSettings(kept, config.embedding),
       baseUrl,
       token,
       db: database.db,

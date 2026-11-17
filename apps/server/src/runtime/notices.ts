@@ -2,6 +2,7 @@ import { mcpResourceOf } from '@liasse/core/auth';
 import type { Config } from '@liasse/core/config';
 import { describeEmbeddingWindow } from '@liasse/core/embeddings';
 import { describeModelPrivacy, type HostLookup } from '@liasse/core/models';
+import type { ResolvedSettings } from '@liasse/core/settings';
 
 const LOOPBACK_HOSTS: readonly string[] = ['127.0.0.1', '::1', 'localhost'];
 const WILDCARD_HOSTS: readonly string[] = ['0.0.0.0', '::'];
@@ -28,32 +29,48 @@ const describeMcpOAuth = ({ publicUrl }: Config['server']): string | undefined =
       'accepts API keys only, and no OAuth client can connect. Serve it on https.'
     : undefined;
 
-const describeOptionalParts = ({ pipeline, hindsight }: Config): string =>
+const describeOptionalParts = (
+  { resources }: Config,
+  { hindsight }: Pick<ResolvedSettings, 'hindsight'>,
+): string =>
   'Optional parts: ' +
   [
-    `watched folder ${pipeline.watchDir === undefined ? 'off' : 'on'}`,
+    `watched folder ${resources.watchDir === undefined ? 'off' : 'on'}`,
     `Hindsight ${hindsight === undefined ? 'off' : 'configured'}`,
   ].join(', ') +
   '.';
 
 /**
- * What the operator is told before anything starts, one line each: where document
- * content goes, how chunks are sized, who can reach the listener, what is enabled.
- * No line holds a secret or a rejected value.
+ * What the operator is told before anything starts, one line each: who can reach the
+ * listener and where signed URLs point. No line holds a secret or a rejected value.
  */
-export const startupNotices = async (
-  config: Config,
-  lookup?: HostLookup,
-): Promise<readonly string[]> => {
-  // The warning names a self-hosted endpoint whose name did not resolve: it counts as
-  // external until the next start.
-  const { warning } = await describeModelPrivacy(config, lookup);
-  return [
-    warning,
-    describeEmbeddingWindow(config.embedding),
+export const startupNotices = (config: Config): readonly string[] =>
+  [
     describeListener(config.server),
     describePublicUrl(config.server),
     describeMcpOAuth(config.server),
-    describeOptionalParts(config),
+  ].filter((line) => line !== undefined);
+
+/**
+ * What the operator is told each time settings are put in force: where document content
+ * goes, how chunks are sized, what is enabled.
+ */
+export const settingsNotices = async (
+  config: Config,
+  settings: ResolvedSettings,
+  lookup?: HostLookup,
+): Promise<readonly string[]> => {
+  // The warning names a self-hosted endpoint whose name did not resolve: it counts as
+  // external until the settings apply again.
+  const { warning } = await describeModelPrivacy(settings, lookup);
+  return [
+    warning,
+    describeEmbeddingWindow(settings.embedding),
+    describeOptionalParts(config, settings),
   ].filter((line) => line !== undefined);
 };
+
+/** Said at startup while no settings are saved. */
+export const UNCONFIGURED_NOTICE =
+  'Notice: Liasse has no settings yet. It processes no document until they are saved: sign ' +
+  'in to the web UI, then save them with PUT /settings.';

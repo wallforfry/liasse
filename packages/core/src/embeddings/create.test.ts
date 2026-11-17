@@ -1,14 +1,21 @@
 import { EMBEDDING_PROVIDERS } from '@liasse/contract/domain';
 import { describe, expect, it } from 'vitest';
-import { loadConfig } from '../config/load.ts';
+import type { SettingsInput } from '@liasse/contract';
 import { StartupError } from '../domain/errors.ts';
-import { SYNTHETIC_ENV } from '../testing/synthetic-env.ts';
+import { resolveSettings } from '../settings/resolve.ts';
+import {
+  SYNTHETIC_EMBEDDING_ENVIRONMENT,
+  syntheticSettings,
+} from '../testing/synthetic-settings.ts';
 import { createEmbedder } from './create.ts';
 import { DEFAULT_LOCAL_EMBEDDING_MODEL } from './local.ts';
 import { startModelProcess } from './model-process.ts';
 
-const embeddingConfig = (env: Readonly<Record<string, string>> = {}) =>
-  loadConfig({ ...SYNTHETIC_ENV, ...env }).embedding;
+const embeddingConfig = (embedding: SettingsInput['embedding'] = {}, dimension = 384) =>
+  resolveSettings(syntheticSettings({ embedding }), {
+    ...SYNTHETIC_EMBEDDING_ENVIRONMENT,
+    dimension,
+  }).embedding;
 
 const isRunning = (pid: number): boolean => {
   try {
@@ -20,10 +27,10 @@ const isRunning = (pid: number): boolean => {
 };
 
 const REMOTE = {
-  EMBEDDING_MODEL: 'synthetic-embedding-model',
-  EMBEDDING_API_KEY: 'synthetic-embedding-key',
-  EMBEDDING_BASE_URL: 'http://models.example.test/v1',
-};
+  model: 'synthetic-embedding-model',
+  api_key: 'synthetic-embedding-key',
+  base_url: 'http://models.example.test/v1',
+} as const;
 
 describe('createEmbedder', () => {
   it('builds the local embedder by default, which runs no model until it is used', async () => {
@@ -59,7 +66,7 @@ describe('createEmbedder', () => {
   });
 
   it('checks the dimension of the local model at creation', async () => {
-    const failure = createEmbedder(embeddingConfig({ EMBEDDING_DIM: '768' }));
+    const failure = createEmbedder(embeddingConfig({}, 768));
     await expect(failure).rejects.toBeInstanceOf(StartupError);
   });
 
@@ -67,7 +74,7 @@ describe('createEmbedder', () => {
     'builds the provider embedder for %s',
     async (provider) => {
       const { embedder, close } = await createEmbedder(
-        embeddingConfig({ ...REMOTE, EMBEDDING_PROVIDER: provider, EMBEDDING_DIM: '768' }),
+        embeddingConfig({ ...REMOTE, provider }, 768),
         { resolveHost: () => Promise.resolve(['203.0.113.7']) },
       );
       expect(embedder).toMatchObject({

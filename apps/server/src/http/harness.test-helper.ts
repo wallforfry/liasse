@@ -1,19 +1,28 @@
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { type ApiContext, type ApiFeatures, createFileUrls } from '@liasse/core/api';
+import {
+  type ApiContext,
+  type ApiFeatures,
+  createFileUrls,
+  type SettingsContext,
+} from '@liasse/core/api';
 import { documentPages } from '@liasse/core/db';
 import { indexDocument, rankByFullText } from '@liasse/core/search';
 import type { Auth } from '@liasse/core/auth';
 import { NO_TRUSTED_PROXIES } from '@liasse/core/network';
+import { createSecretBox } from '@liasse/core/settings';
 import { createFsStorage } from '@liasse/core/storage';
 import {
   createFakeEmbedder,
+  createFakeModelFactories,
   createTestApiKey,
   createTestAuth,
   createTestDatabase,
   insertSyntheticDocument,
   type NewDocumentRow,
+  SYNTHETIC_EMBEDDING_ENVIRONMENT,
+  TEST_AUTH_SECRET,
   type TestDatabase,
 } from '@liasse/core/testing';
 import type { Hono } from 'hono';
@@ -26,7 +35,7 @@ export const TEST_PUBLIC_URL = 'https://liasse.example.com';
 export const TEST_MAX_FILE_SIZE = 64 * 1024;
 const TEST_FILE_URL_SECRET = 'synthetic-file-url-secret-0123456789';
 
-type AppOverrides = Partial<Omit<AppDependencies, 'api'>> & {
+type AppOverrides = Partial<Omit<AppDependencies, 'api' | 'base'>> & {
   readonly features?: ApiFeatures;
   readonly queryTimeoutMs?: number;
 };
@@ -34,6 +43,8 @@ type AppOverrides = Partial<Omit<AppDependencies, 'api'>> & {
 export interface HttpHarness {
   readonly database: TestDatabase;
   readonly api: ApiContext;
+  /** The settings use cases of the app: fake models, and a preparation that changes nothing. */
+  readonly settings: SettingsContext;
   readonly auth: Auth;
   readonly app: Hono<AppEnv>;
   /** An API key of the test account, and another one. */
@@ -92,9 +103,24 @@ export const createHttpHarness = async (): Promise<HttpHarness> => {
     }),
     features: {},
   };
-  const appWith: HttpHarness['appWith'] = ({ features = {}, queryTimeoutMs, ...overrides }) =>
-    createApp({
-      api: { ...api, features, ...(queryTimeoutMs === undefined ? {} : { queryTimeoutMs }) },
+  const settings: SettingsContext = {
+    db: database.db,
+    secrets: createSecretBox(TEST_AUTH_SECRET),
+    embedding: SYNTHETIC_EMBEDDING_ENVIRONMENT,
+    factories: createFakeModelFactories(),
+    prepare: () =>
+      Promise.resolve({ activate: () => Promise.resolve(), discard: () => Promise.resolve() }),
+  };
+  const appWith: HttpHarness['appWith'] = ({ features = {}, queryTimeoutMs, ...overrides }) => {
+    const current: ApiContext = {
+      ...api,
+      features,
+      ...(queryTimeoutMs === undefined ? {} : { queryTimeoutMs }),
+    };
+    return createApp({
+      api: () => current,
+      base: api,
+      settings,
       auth,
       publicUrl: TEST_PUBLIC_URL,
       trustedProxies: NO_TRUSTED_PROXIES,
@@ -103,12 +129,14 @@ export const createHttpHarness = async (): Promise<HttpHarness> => {
       logger: createLogger((line) => lines.push(line)),
       ...overrides,
     });
+  };
   const app = appWith({});
   const authorized = (init: RequestInit = {}, presented = token): RequestInit =>
     withBearer(init, presented);
   return {
     database,
     api,
+    settings,
     auth,
     app,
     token,

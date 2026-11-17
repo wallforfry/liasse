@@ -5,7 +5,7 @@ import type { RegisteredType } from '../registry/type-store.ts';
 
 /**
  * Whether a change is applied without approval. `type_changes.auto` records whether the
- * change is safe by the auto-apply policy of the specification; `AUTO_APPLY` decides
+ * change is safe by the auto-apply policy of the specification; `auto_apply` decides
  * what is done with that: `none` applies nothing, `safe` the safe changes, `all` every
  * change consolidation proposes. A change to the common core is never proposed at all.
  */

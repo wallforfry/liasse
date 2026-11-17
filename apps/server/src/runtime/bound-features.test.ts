@@ -285,8 +285,9 @@ describe('the features the runtime binds', () => {
     // Without these handlers the syncs stay queued to be counted, and only the
     // correction itself can queue one after the indexing.
     const runtime = await start(
-      { HINDSIGHT_URL: 'http://127.0.0.1:9' },
+      {},
       { bind: withoutHandlers('hindsight_sync', 'reindex_document') },
+      { hindsight: { url: 'http://127.0.0.1:9' } },
     );
     const id = await upload(runtime, LETTER.lines, 'followed.pdf');
     const syncs = async () => (await jobsOf('hindsight_sync', id)).length;

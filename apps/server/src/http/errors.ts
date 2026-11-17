@@ -12,6 +12,7 @@ import type { AppContext } from './env.ts';
 const STATUS_OF_KIND: Readonly<Record<ApiErrorKind, ContentfulStatusCode>> = {
   invalid: 400,
   not_found: 404,
+  conflict: 409,
   too_large: 413,
   unsupported: 415,
   timeout: 504,

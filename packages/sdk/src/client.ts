@@ -37,6 +37,12 @@ import {
   type SearchRequest,
   type SearchResults,
   searchResultsSchema,
+  type SettingsCheck,
+  type SettingsCheckRequestInput,
+  settingsCheckSchema,
+  type SettingsState,
+  settingsStateSchema,
+  type SettingsUpdateInput,
   type SubjectList,
   type TypeList,
   typeListSchema,
@@ -111,6 +117,15 @@ export interface LiasseClient {
   ) => Promise<ChangeDecisionResult>;
   /** Queues a consolidation run now, unless one due at once already waits. */
   readonly requestConsolidationRun: () => Promise<ConsolidationRun>;
+  /**
+   * The settings, keys replaced by whether each is set. These three take the session of the
+   * web UI (`session: true`) and refuse an API key.
+   */
+  readonly getSettings: () => Promise<SettingsState>;
+  /** Saves the whole document at the version it was read at; a stale version answers 409. */
+  readonly saveSettings: (update: SettingsUpdateInput) => Promise<SettingsState>;
+  /** Tries settings with one short call per part, without saving them. */
+  readonly checkSettings: (request: SettingsCheckRequestInput) => Promise<SettingsCheck>;
 }
 
 const documentPath = (id: string): string => `/documents/${encodeURIComponent(id)}`;
@@ -169,5 +184,12 @@ export const createLiasseClient = (options: ClientOptions): LiasseClient => {
         consolidationRunSchema,
         await send({ method: 'POST', path: '/consolidation/runs' }),
       ),
+    getSettings: async () => get(settingsStateSchema, '/settings'),
+    saveSettings: async (update) =>
+      parseJson(
+        settingsStateSchema,
+        await send({ method: 'PUT', path: '/settings', json: update }),
+      ),
+    checkSettings: async (request) => post(settingsCheckSchema, '/settings/check', request),
   };
 };

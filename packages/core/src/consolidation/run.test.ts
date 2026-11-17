@@ -98,11 +98,11 @@ describe('a run of consolidation', () => {
         fields: { meter_id: 'PDL-9' },
       });
       expect(await changesOf(db(), 'merge')).toMatchObject([
-        { status: 'applied', auto: true, note: 'Applied automatically (AUTO_APPLY=safe).' },
+        { status: 'applied', auto: true, note: 'Applied automatically (auto_apply safe).' },
       ]);
     });
 
-    it('leaves the merge pending with AUTO_APPLY=none', async () => {
+    it('leaves the merge pending with auto_apply none', async () => {
       const { absorbed } = await twins();
       expect(await run(modelOf(merging('electricity_bill')), 'none')).toMatchObject({
         applied: 0,
@@ -194,7 +194,7 @@ describe('a run of consolidation', () => {
     expect(await queuedReextractions(db())).toHaveLength(5);
   });
 
-  it('never applies a retyping alone with AUTO_APPLY=safe', async () => {
+  it('never applies a retyping alone with auto_apply safe', async () => {
     const type = await seedType(db(), { slug: 'tax_notice', fields: { year: { type: 'text' } } });
     for (const year of [2024, 2025, 2026]) {
       await seedDocument(db(), type.id, { extra: { tax_year: year } });

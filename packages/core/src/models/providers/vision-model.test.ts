@@ -9,7 +9,7 @@ import {
 import { createVisionModel } from './vision-model.ts';
 import {
   chatCompletion,
-  llmConfig,
+  llmSettings,
   RESOLVED_MODEL,
   SYNTHETIC_API_KEY,
 } from '../../testing/provider-wire.ts';
@@ -28,10 +28,10 @@ const start = async (
 ): Promise<{ readonly server: StubServer; readonly model: VisionModel }> => {
   const server = await startStubServer(handler);
   servers.push(server);
-  const config = llmConfig({
-    LLM_PROVIDER: 'openai-compatible',
-    LLM_BASE_URL: `${server.url}/v1`,
-    LLM_API_KEY: SYNTHETIC_API_KEY,
+  const config = llmSettings({
+    provider: 'openai-compatible',
+    base_url: `${server.url}/v1`,
+    api_key: SYNTHETIC_API_KEY,
   });
   return { server, model: createVisionModel(config) };
 };

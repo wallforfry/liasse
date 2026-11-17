@@ -1,11 +1,9 @@
 import type { FinishReason, LanguageModel } from 'ai';
-import type { Config } from '../../config/schema.ts';
+import type { LlmSettings } from '../../settings/resolve.ts';
 import { ModelOutputError } from '../errors.ts';
 import { type CallContext, incompleteReason, resolvedModel, toModelError } from './failure.ts';
 import { loadSdk, once, type Sdk } from './lazy.ts';
 import { type ProviderOptions, PROVIDERS } from './registry.ts';
-
-export type LlmConfig = Config['llm'];
 
 // The SDK retries a call only after HTTP 408, 409, 429 or 5xx, with an exponential backoff
 // that honours `retry-after`.
@@ -17,7 +15,7 @@ export interface LanguageCall extends CallContext {
   readonly loadModel: () => Promise<LanguageModel>;
 }
 
-export const languageCall = (config: LlmConfig, modelId: string): LanguageCall => ({
+export const languageCall = (config: LlmSettings, modelId: string): LanguageCall => ({
   provider: config.provider,
   model: modelId,
   timeoutMs: config.timeoutMs,

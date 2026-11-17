@@ -11,7 +11,7 @@ import { createTextModel } from './text-model.ts';
 import {
   chatCompletion,
   failure,
-  llmConfig,
+  llmSettings,
   RESOLVED_MODEL,
   SYNTHETIC_API_KEY,
 } from '../../testing/provider-wire.ts';
@@ -32,15 +32,15 @@ afterEach(async () => {
 
 const start = async (
   handler: StubHandler,
-  env: Readonly<Record<string, string>> = {},
+  env: Readonly<Record<string, unknown>> = {},
 ): Promise<{ readonly server: StubServer; readonly model: TextModel }> => {
   const server = await startStubServer(handler);
   servers.push(server);
   const model = createTextModel(
-    llmConfig({
-      LLM_PROVIDER: 'openai-compatible',
-      LLM_BASE_URL: `${server.url}/v1`,
-      LLM_API_KEY: SYNTHETIC_API_KEY,
+    llmSettings({
+      provider: 'openai-compatible',
+      base_url: `${server.url}/v1`,
+      api_key: SYNTHETIC_API_KEY,
       ...env,
     }),
   );
@@ -182,7 +182,7 @@ describe('createTextModel', () => {
   });
 
   it('fails with a retryable error when the provider does not answer in time', async () => {
-    const { model } = await start(() => undefined, { LLM_TIMEOUT: '50ms' });
+    const { model } = await start(() => undefined, { timeout_ms: 50 });
     const error = await failureOf(model.generateObject(request));
     expect(error).toBeInstanceOf(ModelProviderError);
     expect(error).toMatchObject({
@@ -215,11 +215,11 @@ describe('createTextModel', () => {
 
   it('reaches Ollama through the /v1 API of its server root, without a key', async () => {
     const { server, model } = await start(() => chatCompletion(VALID_OUTPUT), {
-      LLM_PROVIDER: 'ollama',
-      LLM_API_KEY: '',
+      provider: 'ollama',
+      api_key: undefined,
     });
     const withRoot = createTextModel(
-      llmConfig({ LLM_PROVIDER: 'ollama', LLM_BASE_URL: `${server.url}/` }),
+      llmSettings({ provider: 'ollama', base_url: `${server.url}/` }),
     );
     expect((await model.generateObject(request)).object.decision).toBe('existing');
     expect((await withRoot.generateObject(request)).model).toBe(RESOLVED_MODEL);

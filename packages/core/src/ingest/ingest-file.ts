@@ -15,7 +15,7 @@ import { cleanFilename, cleanHint } from './untrusted-text.ts';
 export interface IngestDeps {
   readonly db: Database;
   readonly storage: Storage;
-  /** In bytes; `config.pipeline.maxFileSize`. */
+  /** In bytes; `max_file_size` of the settings. */
   readonly maxFileSize: number;
 }
 

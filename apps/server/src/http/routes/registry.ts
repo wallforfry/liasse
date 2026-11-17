@@ -75,7 +75,7 @@ const graphQuery = z
 
 const changesQuery = z.strictObject({ kind: text }).pipe(listChangesOptionsSchema);
 
-export const registryRoutes = ({ api, authenticated }: RouteDeps): Hono<AppEnv> =>
+export const registryRoutes = ({ authenticated }: RouteDeps): Hono<AppEnv> =>
   new Hono<AppEnv>()
     .get(
       '/types',
@@ -86,7 +86,8 @@ export const registryRoutes = ({ api, authenticated }: RouteDeps): Hono<AppEnv> 
       }),
       authenticated,
       valid('query', typesQuery),
-      async (context) => context.json(await describeTypes(api, context.req.valid('query'))),
+      async (context) =>
+        context.json(await describeTypes(context.var.api, context.req.valid('query'))),
     )
     .post(
       '/types',
@@ -101,7 +102,8 @@ export const registryRoutes = ({ api, authenticated }: RouteDeps): Hono<AppEnv> 
       authenticated,
       jsonBody,
       valid('json', createTypeRequestSchema),
-      async (context) => context.json(await createType(api, context.req.valid('json')), 201),
+      async (context) =>
+        context.json(await createType(context.var.api, context.req.valid('json')), 201),
     )
     .get(
       '/entities',
@@ -112,7 +114,8 @@ export const registryRoutes = ({ api, authenticated }: RouteDeps): Hono<AppEnv> 
       }),
       authenticated,
       valid('query', entitiesQuery),
-      async (context) => context.json(await listEntities(api, context.req.valid('query'))),
+      async (context) =>
+        context.json(await listEntities(context.var.api, context.req.valid('query'))),
     )
     .get(
       '/subjects',
@@ -126,7 +129,8 @@ export const registryRoutes = ({ api, authenticated }: RouteDeps): Hono<AppEnv> 
       }),
       authenticated,
       valid('query', subjectsQuery),
-      async (context) => context.json(await listSubjects(api, context.req.valid('query'))),
+      async (context) =>
+        context.json(await listSubjects(context.var.api, context.req.valid('query'))),
     )
     .get(
       '/graph',
@@ -137,7 +141,7 @@ export const registryRoutes = ({ api, authenticated }: RouteDeps): Hono<AppEnv> 
       }),
       authenticated,
       valid('query', graphQuery),
-      async (context) => context.json(await readGraph(api, context.req.valid('query'))),
+      async (context) => context.json(await readGraph(context.var.api, context.req.valid('query'))),
     )
     .get(
       '/upcoming',
@@ -151,7 +155,7 @@ export const registryRoutes = ({ api, authenticated }: RouteDeps): Hono<AppEnv> 
       }),
       authenticated,
       valid('query', upcomingQuery),
-      async (context) => context.json(await upcoming(api, context.req.valid('query'))),
+      async (context) => context.json(await upcoming(context.var.api, context.req.valid('query'))),
     )
     .get(
       '/changes',
@@ -165,7 +169,8 @@ export const registryRoutes = ({ api, authenticated }: RouteDeps): Hono<AppEnv> 
       }),
       authenticated,
       valid('query', changesQuery),
-      async (context) => context.json(await listChanges(api, context.req.valid('query'))),
+      async (context) =>
+        context.json(await listChanges(context.var.api, context.req.valid('query'))),
     )
     .post(
       '/changes/:id',
@@ -183,7 +188,11 @@ export const registryRoutes = ({ api, authenticated }: RouteDeps): Hono<AppEnv> 
       valid('json', changeDecisionSchema),
       async (context) =>
         context.json(
-          await applyChange(api, context.req.valid('param').id, context.req.valid('json')),
+          await applyChange(
+            context.var.api,
+            context.req.valid('param').id,
+            context.req.valid('json'),
+          ),
         ),
     )
     .post(
@@ -197,5 +206,5 @@ export const registryRoutes = ({ api, authenticated }: RouteDeps): Hono<AppEnv> 
         },
       }),
       authenticated,
-      async (context) => context.json(await requestConsolidationRun(api), 202),
+      async (context) => context.json(await requestConsolidationRun(context.var.api), 202),
     );

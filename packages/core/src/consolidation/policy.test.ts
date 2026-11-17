@@ -32,7 +32,7 @@ describe('the auto-apply policy', () => {
     ['safe', false, false],
     ['all', true, true],
     ['all', false, true],
-  ] as const)('AUTO_APPLY=%s applies a change safe=%s: %s', (mode, auto, expected) => {
+  ] as const)('auto_apply %s applies a change safe=%s: %s', (mode, auto, expected) => {
     expect(appliesAutomatically(mode, auto)).toBe(expected);
   });
 

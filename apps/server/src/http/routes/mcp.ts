@@ -37,7 +37,7 @@ const NOT_ALLOWED_OPERATION = operation({
 });
 
 /** MCP over Streamable HTTP, behind the credentials of the API. */
-export const mcpRoutes = ({ api, authenticated, report }: McpRouteDeps): Hono<AppEnv> =>
+export const mcpRoutes = ({ authenticated, report }: McpRouteDeps): Hono<AppEnv> =>
   new Hono<AppEnv>()
     .post(
       PATH,
@@ -53,18 +53,19 @@ export const mcpRoutes = ({ api, authenticated, report }: McpRouteDeps): Hono<Ap
       }),
       authenticated,
       requireMediaType(['application/json']),
-      bodyLimit({
-        maxSize: mcpMessageSizeLimit(api.maxFileSize),
-        onError: () => {
-          throw new HTTPException(413);
-        },
-      }),
+      (context, next) =>
+        bodyLimit({
+          maxSize: mcpMessageSizeLimit(context.var.api.maxFileSize),
+          onError: () => {
+            throw new HTTPException(413);
+          },
+        })(context, next),
       jsonDepth,
       async (context) => {
         const body: unknown = await context.req.json().catch(() => {
           throw new HttpFailure(failure(400, 'invalid_body', 'The request body is not JSON.'));
         });
-        return handleMcpRequest({ api, report }, context.req.raw, body);
+        return handleMcpRequest({ api: context.var.api, report }, context.req.raw, body);
       },
     )
     .get(PATH, NOT_ALLOWED_OPERATION, authenticated, notAllowed)

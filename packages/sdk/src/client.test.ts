@@ -77,6 +77,41 @@ describe('createLiasseClient', () => {
     ]);
   });
 
+  it('reads, saves and checks the settings with the session, as the routes expect', async () => {
+    const state = {
+      version: 0,
+      updated_at: null,
+      settings: null,
+      embedder_locked: false,
+    };
+    const check = {
+      text_model: { status: 'ok' },
+      vision_model: { status: 'ok' },
+      embedder: { status: 'failed', code: 'dimension_mismatch', message: 'Too long.' },
+      hindsight: { status: 'skipped' },
+    };
+    const server = answering((url) => json(url.endsWith('/check') ? check : state));
+    const client = createLiasseClient({
+      baseUrl: 'https://liasse.example.com',
+      session: true,
+      fetch: server.fetch,
+    });
+    const draft = { llm: { provider: 'ollama', text_model: 't', vision_model: 'v' } } as const;
+    expect(await client.getSettings()).toEqual(state);
+    expect(await client.saveSettings({ version: 0, settings: draft })).toEqual(state);
+    expect(await client.checkSettings({ settings: draft })).toEqual(check);
+    expect(server.sent.map(({ url, init }) => `${init?.method ?? 'GET'} ${url}`)).toEqual([
+      'GET https://liasse.example.com/settings',
+      'PUT https://liasse.example.com/settings',
+      'POST https://liasse.example.com/settings/check',
+    ]);
+    const body = server.sent[1]?.init?.body;
+    expect(typeof body === 'string' ? JSON.parse(body) : body).toEqual({
+      version: 0,
+      settings: draft,
+    });
+  });
+
   it('forwards the filters of every list and the decision on a change', async () => {
     const answers: Readonly<Record<string, unknown>> = {
       '/subjects': { subjects: [], truncated: false },

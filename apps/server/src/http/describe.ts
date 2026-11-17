@@ -7,6 +7,7 @@ import { HttpFailure, invalidRequest } from './errors.ts';
 
 export const BEARER_SCHEME = 'bearerAuth';
 export const SIGNED_URL_SCHEME = 'signedUrl';
+export const SESSION_SCHEME = 'sessionCookie';
 
 type Responses = NonNullable<DescribeRouteOptions['responses']>;
 
@@ -20,6 +21,7 @@ const FAILURES: Readonly<Record<number, string>> = {
   401: 'No valid credential.',
   404: 'Not found.',
   405: 'The route does not serve this method.',
+  409: 'The request conflicts with the current state.',
   413: 'The body is too large.',
   415: 'The body has an unsupported media type or format.',
   501: 'This server does not provide the feature yet.',
