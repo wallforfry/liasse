@@ -4,6 +4,8 @@ import {
   getDocumentOptionsSchema,
   idSchema,
   ingestRequestSchema,
+  listDocumentsOptionsSchema,
+  PRIVATE_FILTERS,
 } from '@liasse/contract';
 import { liveDocumentStatusSchema } from '@liasse/contract/domain';
 import {
@@ -11,7 +13,9 @@ import {
   CORRECTED_PARTS,
   getDocument,
   listDocumentEvents,
+  listDocuments,
   reclassifyDocument,
+  removeDocument,
   retryDocument,
   uploadDocument,
 } from '@liasse/core/api';
@@ -47,7 +51,7 @@ const INGEST_DESCRIPTION =
   'The same bytes give back the document they already have (`duplicate`). `url` is not ' +
   'accepted by this server yet.';
 
-// A tool polled until processing ends: the whole log is `GET /documents/:id/events`.
+// A tool polled until processing ends: the whole log is `list_document_events`.
 const STATUS_EVENTS = 10;
 
 const GET_STATUS_DESCRIPTION =
@@ -78,6 +82,29 @@ const RECLASSIFY_DESCRIPTION =
   'asks for a new type only. Its fields are then extracted again for the type chosen. ' +
   'Refused while the document is processed. Returns its id and status; then call ' +
   '`get_status`. To set a type you know, use `update_document`.';
+
+const LIST_DOCUMENTS_DESCRIPTION =
+  'Lists documents, most recent first, a page at a time (`limit`, `offset`, then ' +
+  `\`total\`), filtered by \`status\` (${liveDocumentStatusSchema.options.join(', ')}), ` +
+  '`type` (a slug or an alias), `entity` (the id of an entity named in an entity field) ' +
+  `and \`private\` (${PRIVATE_FILTERS.join(', ')}; private documents are left out by ` +
+  'default). The `needs_review` queue is ' +
+  'this list with that status. To find documents by what they say, use `search`; to ' +
+  `filter or aggregate on values, use \`query\`. ${UNTRUSTED}`;
+
+const LIST_EVENTS_DESCRIPTION =
+  'The whole processing log of a document, oldest first: each stage that succeeded and ' +
+  'each attempt that failed, with its error code, whether it is retried, the model and ' +
+  'counts such as the values the model returned that were rejected. `get_status` gives ' +
+  `its last ${String(STATUS_EVENTS)} events.`;
+
+const DELETE_DESCRIPTION =
+  'Deletes a document: its text, values, links and index are removed, and its stored file ' +
+  'soon after; only a tombstone with the hash of the file is kept, so the same file in the ' +
+  'watched folder is not ingested again. It cannot be undone: the same bytes sent to ' +
+  '`ingest` bring the document back under the same id, processed again from the file. ' +
+  'Answers the id and `deleted`; an unknown or already deleted id answers ' +
+  '`document_not_found`.';
 
 export const registerDocumentTools = (server: McpServer, { api, report }: McpDeps): void => {
   server.registerTool(
@@ -149,6 +176,38 @@ export const registerDocumentTools = (server: McpServer, { api, report }: McpDep
       toolAnswer('update_document', report, async () => {
         await correctDocument(api(), id, correction);
         return getDocument(api(), id, { include: [...CORRECTED_PARTS] });
+      }),
+  );
+  server.registerTool(
+    'list_documents',
+    {
+      description: LIST_DOCUMENTS_DESCRIPTION,
+      inputSchema: listDocumentsOptionsSchema,
+      annotations: READ_ONLY,
+    },
+    async (options) => toolAnswer('list_documents', report, () => listDocuments(api(), options)),
+  );
+  server.registerTool(
+    'list_document_events',
+    {
+      description: LIST_EVENTS_DESCRIPTION,
+      inputSchema: statusInputSchema,
+      annotations: READ_ONLY,
+    },
+    async ({ id }) =>
+      toolAnswer('list_document_events', report, () => listDocumentEvents(api(), id)),
+  );
+  server.registerTool(
+    'delete_document',
+    {
+      description: DELETE_DESCRIPTION,
+      inputSchema: statusInputSchema,
+      annotations: { readOnlyHint: false, destructiveHint: true, openWorldHint: false },
+    },
+    async ({ id }) =>
+      toolAnswer('delete_document', report, async () => {
+        await removeDocument(api(), id);
+        return { id, deleted: true };
       }),
   );
 };
