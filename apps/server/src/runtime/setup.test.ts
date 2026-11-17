@@ -115,6 +115,10 @@ describe('the onboarding of a server without an account', () => {
       ),
     );
     expect(responses.map(({ status: code }) => code)).toEqual([400, 400]);
+    expect(await Promise.all(responses.map(codeOf))).toEqual([
+      'invalid_request',
+      'invalid_request',
+    ]);
     expect(await harness.database().db.select().from(authUsers)).toEqual([]);
     expect(await harness.database().db.select().from(settingsTable)).toEqual([]);
   });
