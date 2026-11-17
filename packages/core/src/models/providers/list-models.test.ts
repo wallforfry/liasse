@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ModelListError } from '../errors.ts';
 import {
   type StubHandler,
@@ -243,8 +243,21 @@ describe('listModels', () => {
     ).resolves.toMatchObject({ failure: 'timeout' });
   });
 
-  it('gives a listing 15 seconds unless told otherwise', () => {
-    expect(MODEL_LIST_TIMEOUT_MS).toBe(15_000);
+  it('gives a listing 15 seconds unless told otherwise', async () => {
+    const server = await serve(() => ({ body: OPENAI_LIST }));
+    const deadline = vi.spyOn(AbortSignal, 'timeout');
+    try {
+      await listModels({
+        provider: 'openai',
+        endpoint: { apiKey: SYNTHETIC_API_KEY, baseUrl: `${server.url}/v1` },
+        purpose: 'language',
+      });
+      await list('openai', `${server.url}/v1`, 'language', 50);
+      expect(deadline.mock.calls).toEqual([[MODEL_LIST_TIMEOUT_MS], [50]]);
+      expect(MODEL_LIST_TIMEOUT_MS).toBe(15_000);
+    } finally {
+      deadline.mockRestore();
+    }
   });
 
   it('stops following pages at its page limit', async () => {
