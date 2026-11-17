@@ -30,6 +30,9 @@ export const ChangesPage = () => {
         actions={<RunConsolidation onRequested={followRequest} />}
       />
       {runs.data === undefined ? null : <ConsolidationStatus runs={runs.data.runs} />}
+      {runs.isError && !isNotImplemented(runs.error) ? (
+        <ErrorAlert error={runs.error} title="The consolidation runs could not be read" />
+      ) : null}
       {changes.isPending ? <Skeleton className="h-48 w-full" /> : null}
       {changes.isError ? (
         isNotImplemented(changes.error) ? (

@@ -72,7 +72,7 @@ export const consolidationRunListSchema = z.strictObject({
     .array(consolidationRunViewSchema)
     .max(MAX_LISTED_CONSOLIDATION_RUNS)
     .describe(
-      `The latest runs, newest first, at most ${String(MAX_LISTED_CONSOLIDATION_RUNS)}. The ` +
+      `The latest runs, the one due last first, at most ${String(MAX_LISTED_CONSOLIDATION_RUNS)}. The ` +
         'next nightly run is left out until it is due or has started.',
     ),
 });

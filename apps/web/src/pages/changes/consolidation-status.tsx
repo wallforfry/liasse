@@ -8,7 +8,7 @@ const unfinishedLabel = ({ status, last_error: lastError }: ConsolidationRunView
   return 'A consolidation run is queued.';
 };
 
-/** Where the latest consolidation run stands, newest first in `runs`. */
+/** Where the latest consolidation run stands, the one due last first in `runs`. */
 export const ConsolidationStatus = ({
   runs,
 }: {

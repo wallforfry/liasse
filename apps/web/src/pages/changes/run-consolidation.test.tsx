@@ -93,6 +93,17 @@ describe('a consolidation run asked for by hand', () => {
     ).toBeInTheDocument();
   });
 
+  it('says when the runs could not be read', async () => {
+    const server = fakeServer((request) => {
+      if (request.path === '/consolidation/runs') {
+        return errorBody(500, 'internal', 'The runs could not be listed.');
+      }
+      return request.path === '/changes' ? json({ changes: [], truncated: false }) : undefined;
+    });
+    renderApp('/changes', server.fetch);
+    expect(await screen.findByText('The consolidation runs could not be read')).toBeInTheDocument();
+  });
+
   it('says when a run was already waiting', async () => {
     serve(json({ queued: false }, 202), [RUN]);
     await ask();

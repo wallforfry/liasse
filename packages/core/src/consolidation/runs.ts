@@ -10,7 +10,10 @@ import { consolidateJob } from './schedule.ts';
 const scheduledNightly = sql`(${jobs.payload} ->> 'trigger' = 'nightly' and ${jobs.status} = 'queued'
   and ${jobs.attempts} = 0 and ${jobs.runAfter} > now())`;
 
-/** The latest runs of consolidation, newest first, read from the job queue. */
+/**
+ * The latest runs of consolidation, read from the job queue, the one due last first: a
+ * nightly run is queued a day before it is due, so its creation does not order it.
+ */
 export const recentConsolidationRuns = async (
   db: Database,
 ): Promise<readonly ConsolidationRunView[]> => {
@@ -26,7 +29,7 @@ export const recentConsolidationRuns = async (
     })
     .from(jobs)
     .where(and(eq(jobs.kind, consolidateJob.name), sql`not ${scheduledNightly}`))
-    .orderBy(desc(jobs.createdAt), desc(jobs.id))
+    .orderBy(desc(jobs.runAfter), desc(jobs.id))
     .limit(MAX_LISTED_CONSOLIDATION_RUNS);
   return rows.map((row) => ({
     id: row.id,

@@ -207,7 +207,7 @@ export const registryRoutes = ({ api, authenticated }: RouteDeps): Hono<AppEnv> 
         summary: 'List the latest consolidation runs',
         tag: 'Registry',
         responses: {
-          200: jsonResponse('The latest runs, newest first.', consolidationRunListSchema),
+          200: jsonResponse('The latest runs, the one due last first.', consolidationRunListSchema),
           ...failures(501),
         },
       }),

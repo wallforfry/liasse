@@ -63,7 +63,7 @@ export const requestConsolidationRun = async ({
   db,
 }: ConsolidationReadContext): Promise<ConsolidationRun> => ({ queued: await queueManualRun(db) });
 
-/** The latest runs, newest first, the next nightly one left out until it is due. */
+/** The latest runs, the one due last first, the next nightly one left out until it is due. */
 export const listConsolidationRuns = async ({
   db,
 }: ConsolidationReadContext): Promise<ConsolidationRunList> => ({

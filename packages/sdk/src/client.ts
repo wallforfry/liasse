@@ -113,7 +113,7 @@ export interface LiasseClient {
   ) => Promise<ChangeDecisionResult>;
   /** Queues a consolidation run now, unless one due at once already waits. */
   readonly requestConsolidationRun: () => Promise<ConsolidationRun>;
-  /** The latest consolidation runs, newest first, the next nightly one left out. */
+  /** The latest consolidation runs, the one due last first, the next nightly one left out. */
   readonly listConsolidationRuns: () => Promise<ConsolidationRunList>;
 }
 

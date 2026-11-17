@@ -46,6 +46,23 @@ describe('the latest consolidation runs', () => {
     ]);
   });
 
+  it('puts a nightly run that started after a run asked for by hand first', async () => {
+    await scheduleNightlyRun(db(), new Date());
+    await queueManualRun(db());
+    await db()
+      .update(jobs)
+      .set({ status: 'succeeded', runAfter: sql`now() - interval '2 hours'` })
+      .where(sql`${jobs.payload} ->> 'trigger' = 'manual'`);
+    await db()
+      .update(jobs)
+      .set({ status: 'running', attempts: 1, runAfter: sql`now() - interval '1 hour'` })
+      .where(sql`${jobs.payload} ->> 'trigger' = 'nightly'`);
+    expect(await recentConsolidationRuns(db())).toMatchObject([
+      { trigger: 'nightly', status: 'running' },
+      { trigger: 'manual', status: 'succeeded' },
+    ]);
+  });
+
   it('leaves out the next nightly run until it is due, or failed an attempt', async () => {
     await scheduleNightlyRun(db(), new Date());
     expect(await recentConsolidationRuns(db())).toEqual([]);
@@ -61,7 +78,7 @@ describe('the latest consolidation runs', () => {
     expect(await recentConsolidationRuns(db())).toMatchObject([{ trigger: 'nightly' }]);
   });
 
-  it('lists the newest first, at most the limit, and no job of another kind', async () => {
+  it('lists the one due last first, at most the limit, and no job of another kind', async () => {
     const triggers = Array.from({ length: MAX_LISTED_CONSOLIDATION_RUNS + 2 }, (_, index) =>
       index % 2 === 0 ? ('batch' as const) : ('manual' as const),
     );
@@ -76,7 +93,7 @@ describe('the latest consolidation runs', () => {
       .select({ id: jobs.id })
       .from(jobs)
       .where(eq(jobs.kind, consolidateJob.name))
-      .orderBy(sql`${jobs.createdAt} desc, ${jobs.id} desc`);
+      .orderBy(sql`${jobs.runAfter} desc, ${jobs.id} desc`);
     expect(listed.map(({ id }) => id)).toEqual(
       all.slice(0, MAX_LISTED_CONSOLIDATION_RUNS).map(({ id }) => id),
     );
