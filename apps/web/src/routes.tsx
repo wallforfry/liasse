@@ -8,6 +8,7 @@ import { ChangesPage } from './pages/changes/changes-page.tsx';
 import { ConsentPage } from './pages/consent-page.tsx';
 import { DocumentPage } from './pages/document/document-page.tsx';
 import { DocumentListPage } from './pages/documents/document-list-page.tsx';
+import { GraphPage } from './pages/graph/graph-page.tsx';
 import { LoginPage } from './pages/login-page.tsx';
 import { NotFoundPage } from './pages/not-found-page.tsx';
 import { TypePage } from './pages/types/type-page.tsx';
@@ -55,6 +56,7 @@ export const ROUTES: RouteObject[] = [
           { path: '/upload', element: <UploadPage /> },
           { path: '/types', element: <TypesPage /> },
           { path: '/types/:slug', element: <TypePage /> },
+          { path: '/graph', element: <GraphPage /> },
           { path: '/changes', element: <ChangesPage /> },
           { path: '/account/api-keys', element: <ApiKeysPage /> },
           { path: '/account/mcp-connections', element: <McpConnectionsPage /> },

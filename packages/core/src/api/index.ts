@@ -38,5 +38,6 @@ export { queryDocuments } from './query-documents.ts';
 export { reclassifyDocument } from './reclassify-document.ts';
 export { searchDocuments } from './search-documents.ts';
 export { retryDocument } from './retry-document.ts';
+export { readGraph } from './read-graph.ts';
 export { readStats, type Stats } from './stats.ts';
 export { uploadDocument, type UploadInput } from './upload-document.ts';

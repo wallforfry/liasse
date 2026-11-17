@@ -132,6 +132,9 @@ export const MAX_SUBJECT_NEXT_DATES = 5;
 export const MAX_SUBJECT_SUGGESTIONS = 5;
 export const DEFAULT_SUBJECT_LIST_LIMIT = 100;
 export const MAX_SUBJECT_LIST_LIMIT = 500;
+// Documents of the graph, most recent first: the web UI lays them out in the browser.
+export const DEFAULT_GRAPH_DOCUMENT_LIMIT = 200;
+export const MAX_GRAPH_DOCUMENT_LIMIT = 1000;
 
 // Consolidation, by the specification. None of these was calibrated on the evaluation set
 // yet (see the open questions of the specification).

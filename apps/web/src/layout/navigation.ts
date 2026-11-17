@@ -5,6 +5,7 @@ import {
   KeyRoundIcon,
   LockKeyholeIcon,
   type LucideIcon,
+  NetworkIcon,
   PlugIcon,
   ShapesIcon,
   UploadIcon,
@@ -22,6 +23,7 @@ export const NAVIGATION: readonly NavigationItem[] = [
   { label: 'Review', path: '/review', icon: InboxIcon },
   { label: 'Upload', path: '/upload', icon: UploadIcon },
   { label: 'Types', path: '/types', icon: ShapesIcon },
+  { label: 'Graph', path: '/graph', icon: NetworkIcon },
   { label: 'Changes', path: '/changes', icon: GitPullRequestArrowIcon },
 ];
 
