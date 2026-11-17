@@ -35,6 +35,9 @@ describe('loadConfig', () => {
   });
 
   it('reads process.env by default', () => {
+    Object.keys(process.env).forEach((key) => {
+      vi.stubEnv(key, undefined);
+    });
     Object.entries(SYNTHETIC_ENV).forEach(([key, value]) => {
       vi.stubEnv(key, value);
     });
