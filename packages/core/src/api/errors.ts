@@ -6,6 +6,7 @@ import { sqlStateOf } from '../db/sql-state.ts';
 // into a tool error. A kind says who can act on the failure, never how it is carried.
 export const API_ERROR_KINDS = [
   'invalid',
+  'forbidden',
   'not_found',
   'conflict',
   'too_large',

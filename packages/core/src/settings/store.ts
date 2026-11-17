@@ -2,13 +2,14 @@ import { type Settings, settingsSchema } from '@liasse/contract';
 import { eq, sql } from 'drizzle-orm';
 import { z } from 'zod';
 import type { Database } from '../db/client.ts';
+import type { Transaction } from '../db/isolation.ts';
 import type { JsonObject } from '../db/columns.ts';
 import { settings as settingsTable } from '../db/schema/settings.ts';
 import { StartupError } from '../domain/errors.ts';
 import type { SecretBox } from './secret-box.ts';
 
 export interface SettingsStoreDeps {
-  readonly db: Database;
+  readonly db: Database | Transaction;
   readonly secrets: SecretBox;
 }
 
@@ -107,6 +108,12 @@ export const readSettings = async ({
 }: SettingsStoreDeps): Promise<StoredSettings | undefined> => {
   const [row] = await db.select(COLUMNS).from(settingsTable);
   return row === undefined ? undefined : storedOf(secrets, row);
+};
+
+/** The version of the saved settings, 0 while none were saved; their keys stay sealed. */
+export const storedSettingsVersion = async (db: Database | Transaction): Promise<number> => {
+  const [row] = await db.select({ version: settingsTable.version }).from(settingsTable);
+  return row?.version ?? 0;
 };
 
 export interface SettingsWrite {

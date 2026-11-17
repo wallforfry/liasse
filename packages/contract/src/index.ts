@@ -188,6 +188,21 @@ export {
   settingsUpdateSchema,
 } from './settings-api.ts';
 export {
+  SETUP_BASE_PATH,
+  type SetupAccount,
+  setupAccountSchema,
+  type SetupCheckRequest,
+  type SetupCheckRequestInput,
+  setupCheckRequestSchema,
+  type SetupRequest,
+  type SetupRequestInput,
+  setupRequestSchema,
+  type SetupResult,
+  setupResultSchema,
+  type SetupStatus,
+  setupStatusSchema,
+} from './setup.ts';
+export {
   type ErrorBody,
   errorBodySchema,
   type Health,

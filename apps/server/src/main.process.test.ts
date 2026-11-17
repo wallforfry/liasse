@@ -12,6 +12,7 @@ import {
   createApiKeyOverHttp,
   createTestDatabase,
   seedSettings,
+  seedTestAccount,
   type SettingsOverrides,
   SYNTHETIC_ENV,
   syntheticSettings,
@@ -78,7 +79,7 @@ interface RunningServer {
   readonly child: ChildProcess;
   readonly port: number;
   readonly url: string;
-  /** An API key of the bootstrap account, created over HTTP once the server listens. */
+  /** An API key of the test account, created over HTTP once the server listens. */
   readonly token: string;
   /** A request to `path` with the API key. */
   readonly call: Call;
@@ -133,13 +134,16 @@ const withServer = async (
     embeddingDim: Number(env.EMBEDDING_DIM ?? TEST_EMBEDDING_DIM),
     settings: syntheticSettings(settings),
   });
-  const files = await mkdtemp(join(tmpdir(), 'liasse-process-'));
   const port = await freePort();
+  await seedTestAccount({
+    databaseUrl: database.url,
+    embeddingDim: Number(env.EMBEDDING_DIM ?? TEST_EMBEDDING_DIM),
+    publicUrl: `http://127.0.0.1:${String(port)}`,
+  });
+  const files = await mkdtemp(join(tmpdir(), 'liasse-process-'));
   const { child, stdout, stderr } = launch({
     STORAGE_PATH: files,
     EMBEDDING_CACHE_DIR: join(files, 'models'),
-    AUTH_BOOTSTRAP_EMAIL: TEST_ACCOUNT.email,
-    AUTH_BOOTSTRAP_PASSWORD: TEST_ACCOUNT.password,
     ...env,
     DATABASE_URL: database.url,
     HOST: '127.0.0.1',

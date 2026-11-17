@@ -1,11 +1,11 @@
-import { bootstrapAccount } from '../auth/bootstrap.ts';
 import { type Auth, createAuth } from '../auth/create-auth.ts';
+import { createFirstAccount } from '../auth/first-account.ts';
 import type { Database } from '../db/client.ts';
 
 export const TEST_AUTH_SECRET = 'synthetic-auth-secret-0123456789abcdef';
 export const TEST_SESSION_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 
-/** The account of the tests, made by `createTestAuth` through the bootstrap. */
+/** The account of the tests, made by `createTestAuth` as the first account. */
 export const TEST_ACCOUNT = {
   email: 'owner@example.com',
   password: 'synthetic-owner-password',
@@ -28,7 +28,7 @@ export const createTestAuth = async (
     sessionTtlMs,
     report: () => undefined,
   });
-  await bootstrapAccount(auth, db, TEST_ACCOUNT);
+  await createFirstAccount(auth, db, { ...TEST_ACCOUNT, name: TEST_ACCOUNT.email });
   return auth;
 };
 

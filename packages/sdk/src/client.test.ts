@@ -112,6 +112,57 @@ describe('createLiasseClient', () => {
     });
   });
 
+  it('calls the onboarding under the path of the auth server, with the setup token', async () => {
+    const check = {
+      text_model: { status: 'ok' },
+      vision_model: { status: 'ok' },
+      embedder: { status: 'ok' },
+      hindsight: { status: 'skipped' },
+    };
+    const result = {
+      email: 'owner@example.com',
+      settings: { version: 1, updated_at: null, settings: null, embedder_locked: false },
+    };
+    const answers: Readonly<Record<string, unknown>> = {
+      '/api/setup': { needs_setup: true },
+      '/api/setup/check': check,
+    };
+    const server = answering((url) => json(answers[new URL(url).pathname] ?? {}));
+    const client = createLiasseClient({
+      baseUrl: 'https://liasse.example.com',
+      session: true,
+      fetch: server.fetch,
+    });
+    const draft = { llm: { provider: 'ollama', text_model: 't', vision_model: 'v' } } as const;
+    const account = { name: 'Owner', email: 'owner@example.com', password: 'synthetic-password' };
+    expect(await client.getSetupStatus()).toEqual({ needs_setup: true });
+    expect(await client.checkSetup({ token: 'synthetic-token', settings: draft })).toEqual(check);
+    const completing = answering(() => json(result, 201));
+    const completer = createLiasseClient({
+      baseUrl: 'https://liasse.example.com',
+      session: true,
+      fetch: completing.fetch,
+    });
+    expect(
+      await completer.completeSetup({ token: 'synthetic-token', account, settings: draft }),
+    ).toEqual(result);
+    expect(
+      [...server.sent, ...completing.sent].map(
+        ({ url, init }) => `${init?.method ?? 'GET'} ${url}`,
+      ),
+    ).toEqual([
+      'GET https://liasse.example.com/api/setup',
+      'POST https://liasse.example.com/api/setup/check',
+      'POST https://liasse.example.com/api/setup',
+    ]);
+    const body = completing.sent[0]?.init?.body;
+    expect(typeof body === 'string' ? JSON.parse(body) : body).toEqual({
+      token: 'synthetic-token',
+      account,
+      settings: draft,
+    });
+  });
+
   it('forwards the filters of every list and the decision on a change', async () => {
     const answers: Readonly<Record<string, unknown>> = {
       '/subjects': { subjects: [], truncated: false },

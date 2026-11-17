@@ -37,6 +37,7 @@ export {
   type StubResponse,
   type StubServer,
 } from './provider-stub-server.ts';
+export { type AccountSeed, seedTestAccount } from './seed-account.ts';
 export { seedSettings, type SettingsSeed } from './seed-settings.ts';
 export { SYNTHETIC_ENV } from './synthetic-env.ts';
 export {

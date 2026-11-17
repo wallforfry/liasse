@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { SYNTHETIC_ENV } from '../testing/synthetic-env.ts';
 import { CONFIG_ENV_KEYS, ConfigError, loadConfig } from './index.ts';
-import { REMOVED_ENV_KEYS } from './removed.ts';
+import { REMOVED_ACCOUNT_ENV_KEYS, REMOVED_ENV_KEYS } from './removed.ts';
 
 const problemsOf = (env: Readonly<Record<string, string | undefined>>): readonly string[] => {
   try {
@@ -29,7 +29,6 @@ describe('loadConfig', () => {
       auth: {
         secret: SYNTHETIC_ENV.AUTH_SECRET,
         sessionTtlMs: 604_800_000,
-        bootstrap: undefined,
         fileUrlSecret: SYNTHETIC_ENV.FILE_URL_SECRET,
       },
     });
@@ -56,8 +55,6 @@ describe('loadConfig', () => {
       WORKERS: '4',
       WATCH_DIR: '/inbox',
       AUTH_SESSION_TTL: '12h',
-      AUTH_BOOTSTRAP_EMAIL: 'owner@example.com',
-      AUTH_BOOTSTRAP_PASSWORD: 'synthetic-owner-password',
     });
     expect(config.server).toEqual({
       host: '0.0.0.0',
@@ -68,10 +65,6 @@ describe('loadConfig', () => {
     expect(config.embedding).toEqual({ dimension: 768, cacheDir: '/models' });
     expect(config.resources).toEqual({ watchDir: '/inbox', workers: 4 });
     expect(config.auth.sessionTtlMs).toBe(43_200_000);
-    expect(config.auth.bootstrap).toEqual({
-      email: 'owner@example.com',
-      password: 'synthetic-owner-password',
-    });
   });
 
   it('refuses to start while a variable of the settings is set, naming each one', () => {
@@ -87,26 +80,22 @@ describe('loadConfig', () => {
     expect(REMOVED_ENV_KEYS.filter((key) => CONFIG_ENV_KEYS.includes(key))).toEqual([]);
   });
 
-  it('needs both bootstrap variables or neither', () => {
-    expect(problemsOf({ ...SYNTHETIC_ENV, AUTH_BOOTSTRAP_EMAIL: 'owner@example.com' })).toEqual([
-      'AUTH_BOOTSTRAP_PASSWORD: required when AUTH_BOOTSTRAP_EMAIL is set',
-    ]);
-    expect(
-      problemsOf({ ...SYNTHETIC_ENV, AUTH_BOOTSTRAP_PASSWORD: 'synthetic-owner-password' }),
-    ).toEqual(['AUTH_BOOTSTRAP_EMAIL: required when AUTH_BOOTSTRAP_PASSWORD is set']);
-  });
-
-  it('refuses a bootstrap password shorter than 12 characters and a malformed email', () => {
+  it('refuses to start while a variable of the first account is set, naming each one', () => {
     expect(
       problemsOf({
         ...SYNTHETIC_ENV,
-        AUTH_BOOTSTRAP_EMAIL: 'not-an-email',
-        AUTH_BOOTSTRAP_PASSWORD: 'short-pass',
+        AUTH_BOOTSTRAP_EMAIL: 'owner@example.com',
+        AUTH_BOOTSTRAP_PASSWORD: 'synthetic-owner-password',
       }),
-    ).toEqual([
-      'AUTH_BOOTSTRAP_EMAIL: expected an email address',
-      'AUTH_BOOTSTRAP_PASSWORD: expected at least 12 characters',
-    ]);
+    ).toEqual(
+      ['AUTH_BOOTSTRAP_EMAIL', 'AUTH_BOOTSTRAP_PASSWORD'].map(
+        (key) =>
+          `${key}: no longer read from the environment: the first account is created in the ` +
+          'web UI, with the setup token the server prints at startup while no account ' +
+          'exists. Unset it.',
+      ),
+    );
+    expect(REMOVED_ACCOUNT_ENV_KEYS.filter((key) => CONFIG_ENV_KEYS.includes(key))).toEqual([]);
   });
 
   it('returns a frozen configuration', () => {

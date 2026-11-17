@@ -55,13 +55,18 @@ const staleVersion = (): ApiError =>
     'The settings changed since they were read. Read them again, then save.',
   );
 
-const candidateOf = (update: SettingsUpdate['settings'], stored: Settings | undefined) => {
+/** The settings a draft leads to, or the issues that make it invalid. */
+export const settingsCandidate = (
+  update: SettingsUpdate['settings'],
+  stored: Settings | undefined,
+) => {
   const candidate = settingsFromDraft(update, stored);
   if (!candidate.success) throw invalidRequest(candidate.error.issues);
   return candidate.data;
 };
 
-const prepared = async (context: SettingsContext, settings: Settings) => {
+/** The parts built from settings, not in force yet; an inapplicable model is the caller's. */
+export const prepareSettings = async (context: SettingsContext, settings: Settings) => {
   try {
     return await context.prepare(settings);
   } catch (error) {
@@ -84,7 +89,7 @@ export const saveSettings = async (
 ): Promise<SettingsState> => {
   const stored = await readSettings(context);
   if ((stored?.version ?? 0) !== version) throw staleVersion();
-  const settings = candidateOf(draft, stored?.settings);
+  const settings = settingsCandidate(draft, stored?.settings);
   const embedderLocked = await hasLiveDocument(context.db);
   if (stored !== undefined && embedderLocked && !sameEmbedder(stored.settings, settings)) {
     throw new ApiError(
@@ -93,7 +98,7 @@ export const saveSettings = async (
       'The embedder cannot change once a document exists: the stored vectors are its own.',
     );
   }
-  const parts = await prepared(context, settings);
+  const parts = await prepareSettings(context, settings);
   const written = await writeSettings(context, { expectedVersion: version, settings });
   if (written === undefined) {
     await parts.discard();
@@ -108,6 +113,6 @@ export const checkSettingsDraft = async (
   context: SettingsContext,
   { settings: draft }: SettingsCheckRequest,
 ): Promise<SettingsCheck> => {
-  const settings = candidateOf(draft, (await readSettings(context))?.settings);
+  const settings = settingsCandidate(draft, (await readSettings(context))?.settings);
   return checkSettings(context.factories, resolveSettings(settings, context.embedding));
 };

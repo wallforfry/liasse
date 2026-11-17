@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { embeddingSection, resourcesSection } from './process-sections.ts';
-import { REMOVED_ENV_KEYS, REMOVED_ENV_MESSAGE } from './removed.ts';
+import { REMOVED_ENV } from './removed.ts';
 import { authSection, databaseSection, serverSection, storageSection } from './server-sections.ts';
 
 const SECTIONS = {
@@ -34,9 +34,9 @@ export const configSchema = z.record(z.string(), z.string().optional()).transfor
     resources: SECTIONS.resources.safeParse(env),
     auth: SECTIONS.auth.safeParse(env),
   };
-  const removed = REMOVED_ENV_KEYS.filter((key) => env[key] !== undefined);
-  removed.forEach((key) => {
-    ctx.addIssue({ code: 'custom', path: [key], message: REMOVED_ENV_MESSAGE });
+  const removed = [...REMOVED_ENV].filter(([key]) => env[key] !== undefined);
+  removed.forEach(([key, message]) => {
+    ctx.addIssue({ code: 'custom', path: [key], message });
   });
   Object.values(parsed)
     .flatMap((result) => (result.success ? [] : result.error.issues))
