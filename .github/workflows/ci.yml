@@ -92,12 +92,14 @@ jobs:
           POSTGRES_USER: liasse
           POSTGRES_PASSWORD: liasse
           POSTGRES_DB: liasse_test
-          # Same settings as the `command` of docker-compose.dev.yml, which a service container
-          # cannot set: parallel test files ran out of the default lock table.
-          POSTGRES_INITDB_ARGS: -c max_locks_per_transaction=256 -c shared_buffers=256MB
+          # Same settings as the `command` of `postgres-test` in docker-compose.dev.yml, which a
+          # service container cannot set.
+          POSTGRES_INITDB_ARGS: >-
+            -c max_locks_per_transaction=256 -c shared_buffers=256MB
+            -c fsync=off -c synchronous_commit=off
         ports:
-          - 54329:5432
-        # `--init`: the postmaster must not be PID 1, see the `init` of docker-compose.dev.yml.
+          - 54332:5432
+        # `--init`: the postmaster must not be PID 1, see `postgres-test` in docker-compose.dev.yml.
         options: >-
           --init
           --health-cmd "pg_isready -U liasse -d liasse_test"
@@ -118,7 +120,7 @@ jobs:
           --health-timeout 3s
           --health-retries 30
     env:
-      TEST_DATABASE_URL: postgres://liasse:liasse@127.0.0.1:54329/liasse_test
+      TEST_DATABASE_URL: postgres://liasse:liasse@127.0.0.1:54332/liasse_test
       TEST_S3_ENDPOINT: http://127.0.0.1:54330
     steps:
       - uses: actions/checkout@v7
