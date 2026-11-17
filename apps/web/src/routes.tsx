@@ -10,7 +10,6 @@ import { DocumentPage } from './pages/document/document-page.tsx';
 import { DocumentListPage } from './pages/documents/document-list-page.tsx';
 import { LoginPage } from './pages/login-page.tsx';
 import { NotFoundPage } from './pages/not-found-page.tsx';
-import { SearchPage } from './pages/search/search-page.tsx';
 import { TypePage } from './pages/types/type-page.tsx';
 import { TypesPage } from './pages/types/types-page.tsx';
 import { UploadPage } from './pages/upload/upload-page.tsx';
@@ -53,7 +52,6 @@ export const ROUTES: RouteObject[] = [
               />
             ),
           },
-          { path: '/search', element: <SearchPage /> },
           { path: '/upload', element: <UploadPage /> },
           { path: '/types', element: <TypesPage /> },
           { path: '/types/:slug', element: <TypePage /> },

@@ -1,5 +1,13 @@
 import { describe, expect, it } from 'vitest';
-import { listOptions, PAGE_SIZE, readFilters, withFilter, withOffset } from './list-params.ts';
+import { MAX_SEARCH_LIMIT } from '@liasse/contract/search';
+import {
+  listOptions,
+  PAGE_SIZE,
+  readFilters,
+  searchRequest,
+  withFilter,
+  withOffset,
+} from './list-params.ts';
 
 describe('the filters of a document list', () => {
   it('reads the filters of the address', () => {
@@ -33,5 +41,38 @@ describe('the filters of a document list', () => {
     const params = new URLSearchParams('type=invoice&offset=50');
     expect(withOffset(params, 100).toString()).toBe('type=invoice&offset=100');
     expect(withOffset(params, 0).toString()).toBe('type=invoice');
+  });
+
+  it('reads a search, trimmed, and leaves a blank one out', () => {
+    expect(readFilters(new URLSearchParams('q=%20electricity%20&type=bill'))).toEqual({
+      query: 'electricity',
+      type: 'bill',
+      private: 'exclude',
+      offset: 0,
+    });
+    expect(readFilters(new URLSearchParams('q=%20%20'))).toEqual({ private: 'exclude', offset: 0 });
+  });
+
+  it('includes private documents in a search asked to keep only them', () => {
+    expect(readFilters(new URLSearchParams('q=gas&private=only')).private).toBe('include');
+    expect(readFilters(new URLSearchParams('private=only')).private).toBe('only');
+  });
+
+  it('lists without the search and searches with the filters of the list', () => {
+    const filters = readFilters(new URLSearchParams('q=gas&status=indexed&type=bill&offset=50'));
+    expect(listOptions(filters)).toEqual({
+      status: 'indexed',
+      type: 'bill',
+      private: 'exclude',
+      offset: 50,
+      limit: PAGE_SIZE,
+    });
+    expect(searchRequest('gas', filters)).toEqual({
+      query: 'gas',
+      filters: { status: 'indexed', type: 'bill' },
+      limit: MAX_SEARCH_LIMIT,
+      include_private: false,
+    });
+    expect(searchRequest('gas', { ...filters, private: 'include' }).include_private).toBe(true);
   });
 });

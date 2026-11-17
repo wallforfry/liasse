@@ -6,7 +6,6 @@ import {
   LockKeyholeIcon,
   type LucideIcon,
   PlugIcon,
-  SearchIcon,
   ShapesIcon,
   UploadIcon,
 } from 'lucide-react';
@@ -21,7 +20,6 @@ export interface NavigationItem {
 export const NAVIGATION: readonly NavigationItem[] = [
   { label: 'Documents', path: '/documents', icon: FileTextIcon },
   { label: 'Review', path: '/review', icon: InboxIcon },
-  { label: 'Search', path: '/search', icon: SearchIcon },
   { label: 'Upload', path: '/upload', icon: UploadIcon },
   { label: 'Types', path: '/types', icon: ShapesIcon },
   { label: 'Changes', path: '/changes', icon: GitPullRequestArrowIcon },
@@ -39,4 +37,4 @@ export const documentPath = (id: string): string => `/documents/${encodeURICompo
 export const documentFilePath = (id: string): string => `/documents/${encodeURIComponent(id)}/file`;
 
 export const searchPath = (query: string): string =>
-  `/search?${new URLSearchParams({ q: query }).toString()}`;
+  `/documents?${new URLSearchParams({ q: query }).toString()}`;
