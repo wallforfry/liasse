@@ -5,6 +5,8 @@ import {
   type ChangeList,
   changeListSchema,
   type ConsolidationRun,
+  type ConsolidationRunList,
+  consolidationRunListSchema,
   consolidationRunSchema,
   type CreatedType,
   createdTypeSchema,
@@ -126,6 +128,8 @@ export interface LiasseClient {
   readonly saveSettings: (update: SettingsUpdateInput) => Promise<SettingsState>;
   /** Tries settings with one short call per part, without saving them. */
   readonly checkSettings: (request: SettingsCheckRequestInput) => Promise<SettingsCheck>;
+  /** The latest consolidation runs, the one due last first, the next nightly one left out. */
+  readonly listConsolidationRuns: () => Promise<ConsolidationRunList>;
 }
 
 const documentPath = (id: string): string => `/documents/${encodeURIComponent(id)}`;
@@ -191,5 +195,6 @@ export const createLiasseClient = (options: ClientOptions): LiasseClient => {
         await send({ method: 'PUT', path: '/settings', json: update }),
       ),
     checkSettings: async (request) => post(settingsCheckSchema, '/settings/check', request),
+    listConsolidationRuns: async () => get(consolidationRunListSchema, '/consolidation/runs'),
   };
 };

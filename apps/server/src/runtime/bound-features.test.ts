@@ -1,4 +1,8 @@
-import { changeDecisionResultSchema, changeListSchema } from '@liasse/contract';
+import {
+  changeDecisionResultSchema,
+  changeListSchema,
+  consolidationRunListSchema,
+} from '@liasse/contract';
 import { documents, jobs, typeChanges } from '@liasse/core/db';
 import { waitUntil } from '@liasse/core/testing';
 import { and, eq, sql } from 'drizzle-orm';
@@ -233,6 +237,13 @@ describe('the features the runtime binds', () => {
     expect(await ask()).toEqual({ queued: true });
     await waitUntil(async () => (await manualRuns()).every(({ status }) => status === 'succeeded'));
     expect(await manualRuns()).toEqual([{ status: 'succeeded' }, { status: 'succeeded' }]);
+    const listed = await call(runtime, '/consolidation/runs');
+    expect(listed.status).toBe(200);
+    const { runs } = consolidationRunListSchema.parse(await listed.json());
+    expect(runs.filter(({ trigger }) => trigger === 'manual')).toMatchObject([
+      { status: 'succeeded', last_error: null },
+      { status: 'succeeded', last_error: null },
+    ]);
   });
 
   it('lists and decides consolidation changes over MCP, as the routes answer', async () => {

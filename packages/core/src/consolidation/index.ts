@@ -7,7 +7,12 @@ export {
   type PolicyResult,
 } from './apply-change.ts';
 export type { ConsolidationContext, ConsolidationReadContext } from './context.ts';
-export { applyChange, listChanges, requestConsolidationRun } from './features.ts';
+export {
+  applyChange,
+  listChanges,
+  listConsolidationRuns,
+  requestConsolidationRun,
+} from './features.ts';
 export { CONSOLIDATION_CONCURRENCY, createConsolidationHandlers } from './handlers.ts';
 export {
   type ConsolidationChange,
@@ -23,9 +28,7 @@ export {
 export { appliesAutomatically } from './policy.ts';
 export { type ConsolidationReport, runConsolidation } from './run.ts';
 export {
-  CONSOLIDATION_TRIGGERS,
   consolidateJob,
-  type ConsolidationTrigger,
   nextNightlyRun,
   queueBatchRunIfDue,
   queueManualRun,

@@ -190,6 +190,8 @@ export const FIELD_CLEANUP_MIN_DOCUMENTS = 20;
 export const MAX_CHANGE_RATIONALE_LENGTH = 1000;
 // Pending changes one listing returns, oldest first.
 export const MAX_LISTED_CHANGES = 100;
+// Consolidation runs one listing returns, newest first.
+export const MAX_LISTED_CONSOLIDATION_RUNS = 10;
 
 // The length of an account password, checked by the configuration, the auth server and the
 // web UI alike. The upper bound keeps the cost of one hash bounded.

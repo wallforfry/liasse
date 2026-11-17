@@ -287,6 +287,29 @@ describe('createLiasseClient', () => {
       LiasseResponseError,
     );
     await expect(client.requestConsolidationRun()).rejects.toBeInstanceOf(LiasseResponseError);
+    await expect(client.listConsolidationRuns()).rejects.toBeInstanceOf(LiasseResponseError);
+  });
+
+  it('reads the latest consolidation runs', async () => {
+    const run = {
+      id: 'job_01',
+      trigger: 'manual',
+      status: 'failed',
+      attempts: 3,
+      queued_at: '2026-11-17T09:00:00.000Z',
+      due_at: '2026-11-17T09:00:00.000Z',
+      last_error: 'Error: the text model refused the request',
+    };
+    const server = answering(() => json({ runs: [run] }));
+    const client = createLiasseClient({
+      baseUrl: 'http://x.test',
+      token: 't',
+      fetch: server.fetch,
+    });
+    expect(await client.listConsolidationRuns()).toEqual({ runs: [run] });
+    expect(server.sent.map(({ url, init }) => [url, init?.method ?? 'GET'])).toEqual([
+      ['http://x.test/consolidation/runs', 'GET'],
+    ]);
   });
 
   it('rejects a body that is not JSON as a LiasseResponseError', async () => {

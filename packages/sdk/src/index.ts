@@ -3,6 +3,8 @@ export type {
   ChangeList,
   ChangeView,
   ConsolidationRun,
+  ConsolidationRunList,
+  ConsolidationRunView,
   CreatedType,
   CreateTypeRequest,
   DescribeTypesOptions,
