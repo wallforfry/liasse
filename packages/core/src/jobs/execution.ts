@@ -43,6 +43,8 @@ export interface ExecutionDeps {
   /** Read once a job is claimed, after any catch-up: its handler runs the job. */
   readonly handlers: () => ActiveHandlers;
   readonly settings?: SettingsFollower;
+  /** The deferral of a job that cannot run yet, by the settings version it was queued under. */
+  readonly notReadyDelay: (settingsVersion: number) => number;
   readonly retry: RetryPolicy;
   readonly lockRenewalMs: number;
   readonly onJobFailed: (failure: JobFailure) => void;
@@ -107,9 +109,22 @@ const runHandler = async (
   return completeJob(deps.db, job);
 };
 
-// A job queued under newer settings, or of a kind the set in force no longer has, waits
-// this long in the queue, its attempt not counted, before a worker tries it again.
-export const NOT_READY_DELAY_MS = 1000;
+/**
+ * How long a job that cannot run yet waits in the queue, its attempt not counted: one queued
+ * under settings this process could not catch up with, or of a kind the set in force no
+ * longer has. The delay doubles at each deferral for one settings version, up to the cap,
+ * so a process that never catches up does not claim the job every second.
+ */
+export const NOT_READY_DELAY = { firstMs: 1000, maxMs: 5 * 60_000 } as const;
+
+export const createNotReadyDelay = (): ((settingsVersion: number) => number) => {
+  const next = new Map<number, number>();
+  return (settingsVersion) => {
+    const delayMs = next.get(settingsVersion) ?? NOT_READY_DELAY.firstMs;
+    next.set(settingsVersion, Math.min(delayMs * 2, NOT_READY_DELAY.maxMs));
+    return delayMs;
+  };
+};
 
 const settingsCaughtUp = async (deps: ExecutionDeps, job: ClaimedJob): Promise<boolean> => {
   const { settings } = deps;
@@ -135,7 +150,7 @@ const run = async (
     const handler = await handlerFor(deps, job);
     const written =
       handler === undefined
-        ? await deferJob(deps.db, job, NOT_READY_DELAY_MS)
+        ? await deferJob(deps.db, job, deps.notReadyDelay(job.settingsVersion))
         : await runHandler(deps, job, handler, controller.signal);
     if (!written) deps.onError(new JobLockLostError());
   } catch (error) {

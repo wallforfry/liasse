@@ -1,6 +1,6 @@
 import { screen, waitFor, within } from '@testing-library/react';
 import { userEvent } from '@testing-library/user-event';
-import { describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { POLL_MILLISECONDS } from '../../lib/processing.ts';
 import { fakeServer, json, jsonBody, renderApp } from '../../test/render.test-helper.tsx';
 
@@ -234,116 +234,125 @@ describe('the review panel', () => {
     expect((await screen.findAllByText('Issuer read again')).length).toBeGreaterThan(0);
   });
 
-  const classified = (outcome: 'succeeded' | 'failed') => ({
-    id: `evt_${outcome}`,
-    occurred_at: '2026-11-15T10:05:00.000Z',
-    stage: 'classification',
-    outcome,
-    status: 'needs_review',
-    attempt: outcome === 'failed' ? 3 : null,
-    max_attempts: outcome === 'failed' ? 3 : null,
-    error_code: outcome === 'failed' ? 'model_provider_failed' : null,
-    error_name: null,
-    http_status: null,
-    provider_code: null,
-    retryable: outcome === 'failed' ? false : null,
-    model: 'synthetic-model',
-    details: {},
-  });
-
-  const isReclassify = (request: { readonly method: string; readonly path: string }) =>
-    request.method === 'POST' && request.path === '/documents/doc_01FLAGGED/reclassify';
-
-  // The flagged document until the reanalysis is asked for, then pending for the read that
-  // follows the request, then, from the next read, as the job left it with its events.
-  const serveReanalysis = (ended: { readonly document: unknown; readonly events: unknown[] }) => {
-    const job = { asked: false, pendingReads: 0 };
-    const done = () => job.pendingReads > 1;
-    return fakeServer((request) => {
-      if (isReclassify(request)) {
-        job.asked = true;
-        return json({ ...FLAGGED_DOCUMENT, analysis_pending: true }, 202);
-      }
-      if (request.path === '/documents/doc_01FLAGGED/events') {
-        return json({ events: done() ? ended.events : [] });
-      }
-      if (!request.path.startsWith('/documents/doc_01FLAGGED')) return undefined;
-      if (!job.asked) return json(FLAGGED_DOCUMENT);
-      job.pendingReads += 1;
-      return done() ? json(ended.document) : json({ ...FLAGGED_DOCUMENT, analysis_pending: true });
+  describe('after a new analysis of the type is asked for', () => {
+    const classified = (outcome: 'succeeded' | 'failed') => ({
+      id: `evt_${outcome}`,
+      occurred_at: '2026-11-15T10:05:00.000Z',
+      stage: 'classification',
+      outcome,
+      status: 'needs_review',
+      attempt: outcome === 'failed' ? 3 : null,
+      max_attempts: outcome === 'failed' ? 3 : null,
+      error_code: outcome === 'failed' ? 'model_provider_failed' : null,
+      error_name: null,
+      http_status: null,
+      provider_code: null,
+      retryable: outcome === 'failed' ? false : null,
+      model: 'synthetic-model',
+      details: {},
     });
-  };
 
-  const askAgain = async (hint: string): Promise<void> => {
-    const user = userEvent.setup();
-    const typeDecision = await screen.findByRole('group', { name: 'Decision for the type' });
-    await user.click(within(typeDecision).getByRole('button', { name: 'Analyse again' }));
-    await user.type(screen.getByLabelText('What the document is (optional)'), hint);
-    await user.click(screen.getByRole('button', { name: 'Analyse the type again' }));
-  };
+    const isReclassify = (request: { readonly method: string; readonly path: string }) =>
+      request.method === 'POST' && request.path === '/documents/doc_01FLAGGED/reclassify';
 
-  it('asks the model for the type again from the review, then follows the analysis to its end', async () => {
-    const server = serveReanalysis({
-      document: {
-        ...FLAGGED_DOCUMENT,
-        status: 'indexed',
-        type: 'water_bill',
-        updated_at: '2026-11-15T11:00:00.000Z',
-      },
-      events: [classified('succeeded')],
+    // The flagged document until the reanalysis is asked for, then pending for the read that
+    // follows the request, then, from the next read, as the job left it with its events.
+    const serveReanalysis = (ended: { readonly document: unknown; readonly events: unknown[] }) => {
+      const job = { asked: false, pendingReads: 0 };
+      const done = () => job.pendingReads > 1;
+      return fakeServer((request) => {
+        if (isReclassify(request)) {
+          job.asked = true;
+          return json({ ...FLAGGED_DOCUMENT, analysis_pending: true }, 202);
+        }
+        if (request.path === '/documents/doc_01FLAGGED/events') {
+          return json({ events: done() ? ended.events : [] });
+        }
+        if (!request.path.startsWith('/documents/doc_01FLAGGED')) return undefined;
+        if (!job.asked) return json(FLAGGED_DOCUMENT);
+        job.pendingReads += 1;
+        return done()
+          ? json(ended.document)
+          : json({ ...FLAGGED_DOCUMENT, analysis_pending: true });
+      });
+    };
+
+    // The page reads the document again on a timer while the analysis is pending: the clock is
+    // moved, not waited for.
+    beforeEach(() => {
+      vi.useFakeTimers({ shouldAdvanceTime: true });
     });
-    renderApp('/documents/doc_01FLAGGED', server.fetch);
-    const user = userEvent.setup();
-    const typeDecision = await screen.findByRole('group', { name: 'Decision for the type' });
-    await user.click(within(typeDecision).getByRole('button', { name: 'Analyse again' }));
-    expect(screen.getAllByText('Will be read again once the type is analysed.')).toHaveLength(3);
-    const issuer = screen.getByRole('group', { name: 'Decision for issuer' });
-    expect(within(issuer).getByRole('button', { name: 'Accept' })).toBeDisabled();
-    await user.type(screen.getByLabelText('What the document is (optional)'), ' A water bill ');
-    await user.click(screen.getByRole('button', { name: 'Analyse the type again' }));
-    expect(await screen.findByText('The document is being analysed again')).toBeInTheDocument();
-    expect(jsonBody(server.requests.find(isReclassify))).toEqual({ hint: 'A water bill' });
-    expect(server.requests.some(({ method }) => method === 'PATCH')).toBe(false);
-    expect(screen.queryByText('To review')).toBeNull();
-    // The page reads the document again every POLL_MILLISECONDS while the analysis is pending.
-    expect(
-      await screen.findByText(
-        'The document was analysed again: its type is water_bill.',
-        {},
-        { timeout: POLL_MILLISECONDS * 2 },
-      ),
-    ).toBeInTheDocument();
-    expect(screen.queryByText('The document is being analysed again')).toBeNull();
-  });
-
-  it('says so when the new analysis failed, and gives the review back', async () => {
-    const server = serveReanalysis({
-      document: { ...FLAGGED_DOCUMENT, updated_at: '2026-11-15T11:00:00.000Z' },
-      events: [classified('failed')],
+    afterEach(() => {
+      vi.useRealTimers();
     });
-    renderApp('/documents/doc_01FLAGGED', server.fetch);
-    await askAgain('A water bill');
-    expect(
-      await screen.findByText(
-        'The new analysis failed (model_provider_failed): the document is as it was.',
-        {},
-        { timeout: POLL_MILLISECONDS * 2 },
-      ),
-    ).toBeInTheDocument();
-    expect(screen.queryByText('The document was analysed again: its type is note.')).toBeNull();
-    expect(screen.getByText('To review')).toBeInTheDocument();
-  });
 
-  it('says nothing was done when the jobs logged nothing', async () => {
-    const server = serveReanalysis({ document: FLAGGED_DOCUMENT, events: [] });
-    renderApp('/documents/doc_01FLAGGED', server.fetch);
-    await askAgain('A water bill');
-    expect(
-      await screen.findByText(
-        'The document changed before it could be analysed again: nothing was done.',
-        {},
-        { timeout: POLL_MILLISECONDS * 2 },
-      ),
-    ).toBeInTheDocument();
+    const fakeClockUser = () => userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+
+    const askAgain = async (hint: string): Promise<void> => {
+      const user = fakeClockUser();
+      const typeDecision = await screen.findByRole('group', { name: 'Decision for the type' });
+      await user.click(within(typeDecision).getByRole('button', { name: 'Analyse again' }));
+      await user.type(screen.getByLabelText('What the document is (optional)'), hint);
+      await user.click(screen.getByRole('button', { name: 'Analyse the type again' }));
+    };
+
+    it('asks the model for the type again from the review, then follows the analysis to its end', async () => {
+      const server = serveReanalysis({
+        document: {
+          ...FLAGGED_DOCUMENT,
+          status: 'indexed',
+          type: 'water_bill',
+          updated_at: '2026-11-15T11:00:00.000Z',
+        },
+        events: [classified('succeeded')],
+      });
+      renderApp('/documents/doc_01FLAGGED', server.fetch);
+      const user = fakeClockUser();
+      const typeDecision = await screen.findByRole('group', { name: 'Decision for the type' });
+      await user.click(within(typeDecision).getByRole('button', { name: 'Analyse again' }));
+      expect(screen.getAllByText('Will be read again once the type is analysed.')).toHaveLength(3);
+      const issuer = screen.getByRole('group', { name: 'Decision for issuer' });
+      expect(within(issuer).getByRole('button', { name: 'Accept' })).toBeDisabled();
+      await user.type(screen.getByLabelText('What the document is (optional)'), ' A water bill ');
+      await user.click(screen.getByRole('button', { name: 'Analyse the type again' }));
+      expect(await screen.findByText('The document is being analysed again')).toBeInTheDocument();
+      expect(jsonBody(server.requests.find(isReclassify))).toEqual({ hint: 'A water bill' });
+      expect(server.requests.some(({ method }) => method === 'PATCH')).toBe(false);
+      expect(screen.queryByText('To review')).toBeNull();
+      await vi.advanceTimersByTimeAsync(POLL_MILLISECONDS);
+      expect(
+        await screen.findByText('The document was analysed again: its type is water_bill.'),
+      ).toBeInTheDocument();
+      expect(screen.queryByText('The document is being analysed again')).toBeNull();
+    });
+
+    it('says so when the new analysis failed, and gives the review back', async () => {
+      const server = serveReanalysis({
+        document: { ...FLAGGED_DOCUMENT, updated_at: '2026-11-15T11:00:00.000Z' },
+        events: [classified('failed')],
+      });
+      renderApp('/documents/doc_01FLAGGED', server.fetch);
+      await askAgain('A water bill');
+      await vi.advanceTimersByTimeAsync(POLL_MILLISECONDS);
+      expect(
+        await screen.findByText(
+          'The new analysis failed (model_provider_failed): the document is as it was.',
+        ),
+      ).toBeInTheDocument();
+      expect(screen.queryByText('The document was analysed again: its type is note.')).toBeNull();
+      expect(screen.getByText('To review')).toBeInTheDocument();
+    });
+
+    it('says nothing was done when the jobs logged nothing', async () => {
+      const server = serveReanalysis({ document: FLAGGED_DOCUMENT, events: [] });
+      renderApp('/documents/doc_01FLAGGED', server.fetch);
+      await askAgain('A water bill');
+      await vi.advanceTimersByTimeAsync(POLL_MILLISECONDS);
+      expect(
+        await screen.findByText(
+          'The document changed before it could be analysed again: nothing was done.',
+        ),
+      ).toBeInTheDocument();
+    });
   });
 });

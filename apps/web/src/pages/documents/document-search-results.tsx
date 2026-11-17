@@ -7,6 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/ca
 import { Skeleton } from '../../components/ui/skeleton.tsx';
 import { documentPath } from '../../layout/navigation.ts';
 import { plural } from '../../lib/format.ts';
+import { cn } from '../../lib/utils.ts';
 import { Highlighted } from './highlighted.tsx';
 import { type ListFilters, searchRequest } from './list-params.ts';
 
@@ -28,8 +29,13 @@ export const DocumentSearchResults = ({ query, filters }: DocumentSearchResultsP
   if (search.isError) return <ErrorAlert error={search.error} title="The search failed" />;
   if (search.data === undefined) return <Skeleton className="h-40 w-full" />;
   const { results } = search.data;
+  // The results of the previous search, shown until those of this one arrive.
+  const stale = search.isPlaceholderData;
   return (
-    <>
+    <div
+      aria-busy={stale}
+      className={cn('flex flex-col gap-6 transition-opacity', stale && 'opacity-50')}
+    >
       <p className="text-sm text-muted-foreground">
         {plural(results.length, 'result')}, most relevant first
       </p>
@@ -68,6 +74,6 @@ export const DocumentSearchResults = ({ query, filters }: DocumentSearchResultsP
           ))}
         </ol>
       )}
-    </>
+    </div>
   );
 };

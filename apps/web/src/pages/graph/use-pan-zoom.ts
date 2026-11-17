@@ -1,3 +1,4 @@
+import type { Bounds } from './graph-simulation.ts';
 import { type PointerEvent, type RefObject, useEffect, useRef, useState } from 'react';
 
 export interface Viewport {
@@ -15,7 +16,21 @@ const WHEEL_STEP = 0.0015;
 export const transformOf = ({ x, y, scale }: Viewport): string =>
   `translate(${String(x)} ${String(y)}) scale(${String(scale)})`;
 
-const clampScale = (scale: number): number => Math.min(MAX_SCALE, Math.max(MIN_SCALE, scale));
+// A fit may leave the scale beyond the zoom limits: from there, a zoom moves the scale in
+// its own direction up to the limit, never back past it.
+const zoomedScale = (current: number, factor: number): number =>
+  Math.min(Math.max(MAX_SCALE, current), Math.max(Math.min(MIN_SCALE, current), current * factor));
+
+/** The viewport that shows `content` whole and centred in `viewBox`. */
+export const fittedTo = (viewBox: Bounds, content: Bounds): Viewport => {
+  // Not bounded by the zoom limits: a fit shows everything, however far it spreads.
+  const scale = Math.min(viewBox.width / content.width, viewBox.height / content.height);
+  return {
+    scale,
+    x: viewBox.x + (viewBox.width - content.width * scale) / 2 - content.x * scale,
+    y: viewBox.y + (viewBox.height - content.height * scale) / 2 - content.y * scale,
+  };
+};
 
 /** The scale that keeps `point` (in the units of the view box) under the cursor. */
 export const zoomedAt = (
@@ -23,7 +38,7 @@ export const zoomedAt = (
   point: { readonly x: number; readonly y: number },
   factor: number,
 ): Viewport => {
-  const scale = clampScale(viewport.scale * factor);
+  const scale = zoomedScale(viewport.scale, factor);
   const ratio = scale / viewport.scale;
   return {
     scale,
@@ -70,7 +85,9 @@ export const usePanZoom = (svgRef: RefObject<SVGSVGElement | null>) => {
 
   const handlers = {
     onPointerDown: (event: PointerEvent<SVGSVGElement>) => {
-      if (event.target !== event.currentTarget || svgRef.current === null) return;
+      if (event.button !== 0 || event.target !== event.currentTarget || svgRef.current === null) {
+        return;
+      }
       drag.current = toViewBox(svgRef.current, event.clientX, event.clientY);
       moved.current = false;
       event.currentTarget.setPointerCapture(event.pointerId);
@@ -91,17 +108,34 @@ export const usePanZoom = (svgRef: RefObject<SVGSVGElement | null>) => {
     onPointerUp: () => {
       drag.current = undefined;
     },
+    onPointerCancel: () => {
+      drag.current = undefined;
+    },
+    onLostPointerCapture: () => {
+      drag.current = undefined;
+    },
   };
 
   return {
     viewport,
     handlers,
     panned: () => moved.current,
+    /** A client point in the units of the content, under the current pan and zoom. */
+    toContent: (clientX: number, clientY: number) => {
+      const svg = svgRef.current;
+      const point = svg === null ? undefined : toViewBox(svg, clientX, clientY);
+      if (point === undefined) return undefined;
+      return {
+        x: (point.x - viewport.x) / viewport.scale,
+        y: (point.y - viewport.y) / viewport.scale,
+      };
+    },
     zoomBy: (factor: number, center: { readonly x: number; readonly y: number }) => {
       setViewport((current) => zoomedAt(current, center, factor));
     },
-    reset: () => {
-      setViewport(IDENTITY);
+    /** Shows `content` whole and centred in the view box. */
+    fit: (viewBox: Bounds, content: Bounds) => {
+      setViewport(fittedTo(viewBox, content));
     },
   };
 };
