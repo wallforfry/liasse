@@ -23,7 +23,7 @@ Changing `AUTH_SECRET` leaves the stored keys unreadable. The server still start
 
 Every process on the database follows the settings: the HTTP server, MCP over stdio and every other instance. A save notifies the channel `liasse_settings` with its version when it commits. A process that `LISTEN`s on it puts newer settings in force at once, and reads the stored version again each time its listener connects again, so a save made while it was cut off is not missed. A reading that fails is tried again with a growing delay until one succeeds. Behind a transaction pooler, which refuses `LISTEN`, the server says so at startup; another process then takes a save into account when it claims a job queued under it, or when it restarts.
 
-The routes `GET /settings`, `PUT /settings` and `POST /settings/check` take the session of the web UI only, never an API key, so a leaked key cannot point the models elsewhere. Until the web UI has its settings page, save them with `curl` and a session:
+The routes `GET /settings`, `PUT /settings`, `POST /settings/check` and `POST /settings/models` take the session of the web UI only, never an API key, so a leaked key cannot point the models elsewhere. Until the web UI has its settings page, save them with `curl` and a session:
 
 ```bash
 curl -sS -c cookies.txt -H 'Origin: http://localhost:8080' -H 'Content-Type: application/json' \

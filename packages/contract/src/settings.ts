@@ -80,6 +80,10 @@ type ModelProvider = LlmProvider | EmbeddingProvider;
 const KEYLESS_PROVIDERS: readonly ModelProvider[] = ['local', 'ollama', 'openai-compatible'];
 const BASE_URL_PROVIDERS: readonly ModelProvider[] = ['openai-compatible'];
 
+/** Whether a provider has no endpoint of its own, so its base URL is required. */
+export const requiresBaseUrl = (provider: ModelProvider): boolean =>
+  BASE_URL_PROVIDERS.includes(provider);
+
 interface Issue {
   readonly path: readonly string[];
   readonly message: string;
@@ -104,7 +108,7 @@ const baseUrlIssues = (
   provider: ModelProvider,
   baseUrl: string | undefined,
 ): readonly Issue[] =>
-  baseUrl === undefined && BASE_URL_PROVIDERS.includes(provider)
+  baseUrl === undefined && requiresBaseUrl(provider)
     ? [{ path: [section, 'base_url'], message: `required when provider is ${provider}` }]
     : [];
 
@@ -192,7 +196,8 @@ export const secretUpdateSchema = z.discriminatedUnion('action', [
 export type SecretUpdate = z.output<typeof secretUpdateSchema>;
 
 const KEEP: SecretUpdate = { action: 'keep' };
-const keyUpdate = secretUpdateSchema.default(KEEP);
+/** A key of a request: kept as stored when absent. */
+export const keyUpdateSchema = secretUpdateSchema.default(KEEP);
 
 /**
  * The settings a person sends. The rule of a required key waits for the stored keys: the
@@ -200,10 +205,10 @@ const keyUpdate = secretUpdateSchema.default(KEEP);
  */
 export const settingsDraftSchema = z
   .strictObject({
-    llm: z.strictObject({ ...llmFields, api_key: keyUpdate }),
-    embedding: z.strictObject({ ...embeddingFields, api_key: keyUpdate }).prefault({}),
+    llm: z.strictObject({ ...llmFields, api_key: keyUpdateSchema }),
+    embedding: z.strictObject({ ...embeddingFields, api_key: keyUpdateSchema }).prefault({}),
     pipeline: pipelineSettingsSchema.prefault({}),
-    hindsight: z.strictObject({ ...hindsightFields, api_key: keyUpdate }).prefault({}),
+    hindsight: z.strictObject({ ...hindsightFields, api_key: keyUpdateSchema }).prefault({}),
   })
   .superRefine((settings, ctx) => {
     report(ctx, shapeIssues(settings));

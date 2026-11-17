@@ -1,11 +1,14 @@
 import {
   settingsCheckRequestSchema,
   settingsCheckSchema,
+  settingsModelsRequestSchema,
+  settingsModelsSchema,
   settingsStateSchema,
   settingsUpdateSchema,
 } from '@liasse/contract';
 import {
   checkSettingsDraft,
+  listSettingsModels,
   readSettingsState,
   saveSettings,
   type SettingsContext,
@@ -78,4 +81,24 @@ export const settingsRoutes = ({
       valid('json', settingsCheckRequestSchema),
       async (context) =>
         context.json(await checkSettingsDraft(settings, context.req.valid('json'))),
+    )
+    .post(
+      '/settings/models',
+      operation({
+        summary: 'List the models of the provider of one section, without saving anything',
+        tag: TAG,
+        credentials: CREDENTIALS,
+        responses: {
+          200: jsonResponse(
+            'The ids the provider lists, or why it listed none.',
+            settingsModelsSchema,
+          ),
+          ...failures(400, 413, 415),
+        },
+      }),
+      signedIn,
+      jsonBody,
+      valid('json', settingsModelsRequestSchema),
+      async (context) =>
+        context.json(await listSettingsModels(settings, context.req.valid('json'))),
     );

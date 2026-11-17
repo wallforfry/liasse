@@ -25,7 +25,7 @@ export const incompleteReason = (finishReason: FinishReason): string | undefined
 export const resolvedModel = (reported: unknown, configured: string): string =>
   identifier(reported) ?? configured;
 
-const isTimeout = (error: unknown): boolean =>
+export const isTimeout = (error: unknown): boolean =>
   error instanceof Error && error.name === 'TimeoutError';
 
 // The shape of the codes of Node and undici: `ECONNREFUSED`, `ENOTFOUND` (the name did not
@@ -36,7 +36,7 @@ const MAX_CAUSE_DEPTH = 8;
 
 // A request that got no response fails with `fetch failed`; what went wrong is the `code`
 // of an error further down its chain of causes.
-const networkCode = (error: unknown, depth = 0): string => {
+export const networkCode = (error: unknown, depth = 0): string => {
   if (!(error instanceof Error) || depth >= MAX_CAUSE_DEPTH) return UNNAMED_NETWORK_FAILURE;
   const code: unknown = 'code' in error ? error.code : undefined;
   return typeof code === 'string' && NETWORK_CODE.test(code)

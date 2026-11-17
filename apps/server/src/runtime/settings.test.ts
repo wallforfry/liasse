@@ -6,6 +6,7 @@ import {
   createFakeTextModel,
   createGate,
   insertSyntheticDocument,
+  startStubServer,
   SYNTHETIC_SETTINGS,
   waitUntil,
 } from '@liasse/core/testing';
@@ -187,7 +188,35 @@ describe('the settings of a running server', () => {
       json('POST', { settings: { llm: llmOf('model-b') } }),
     );
     expect(check.status).toBe(401);
+    const listing = await harness.call(
+      runtime,
+      '/settings/models',
+      json('POST', { section: 'llm', provider: 'ollama' }),
+    );
+    expect(listing.status).toBe(401);
     expect((await stateOf(runtime)).settings?.llm.text_model).toBe('text-model');
+  });
+
+  it('lists the models of a provider for a session', async () => {
+    const provider = await startStubServer(() => ({ body: { models: [{ name: 'llama:8b' }] } }));
+    try {
+      const runtime = await harness.start({}, { models });
+      const response = await callAsPerson(
+        runtime,
+        '/settings/models',
+        json('POST', { section: 'llm', provider: 'ollama', base_url: provider.url }),
+      );
+      expect(response.status).toBe(200);
+      expect(await response.json()).toEqual({ status: 'ok', models: ['llama:8b'] });
+      const local = await callAsPerson(
+        runtime,
+        '/settings/models',
+        json('POST', { section: 'embedding', provider: 'local' }),
+      );
+      expect(local.status).toBe(400);
+    } finally {
+      await provider.close();
+    }
   });
 
   it('never answers a key, and keeps it when a save says nothing of it', async () => {
