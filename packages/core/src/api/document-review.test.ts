@@ -126,7 +126,23 @@ describe('reviewDocument', () => {
     };
     const review = reviewDocument(document, 0.7);
     expect(review.reasons).toEqual([reason]);
-    expect(review.type).toEqual({ confidence: 0.95, outcome, manual: false, doubtful: true });
+    expect(review.type).toEqual({
+      confidence: 0.95,
+      outcome,
+      manual: false,
+      doubtful: true,
+      refusal: null,
+    });
+  });
+
+  it('says why the new type the model proposed was not created', () => {
+    const type = { model: 'm', confidence: 0, outcome: 'untyped', refusal: 'quota_exceeded' };
+    const review = reviewDocument(
+      { ...DOCUMENT, confidence: 0.9, provenance: { '@pipeline': { type } } },
+      0.7,
+    );
+    expect(review.reasons).toEqual(['type_untyped']);
+    expect(review.type).toMatchObject({ outcome: 'untyped', refusal: 'quota_exceeded' });
   });
 
   it('says a type chosen by hand waits for its extraction, and a re-extraction failed', () => {
@@ -138,7 +154,13 @@ describe('reviewDocument', () => {
     };
     const review = reviewDocument(document, 0.7);
     expect(review.reasons).toEqual(['type_pending_extraction', 'reextraction_failed']);
-    expect(review.type).toEqual({ confidence: null, outcome: null, manual: true, doubtful: false });
+    expect(review.type).toEqual({
+      confidence: null,
+      outcome: null,
+      manual: true,
+      doubtful: false,
+      refusal: null,
+    });
   });
 
   it.each(['classified', 'indexed'] as const)('gives no reason for a %s document', (status) => {

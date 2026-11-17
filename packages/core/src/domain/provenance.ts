@@ -1,4 +1,8 @@
-import { CLASSIFICATION_OUTCOMES, entityMatchRuleSchema } from '@liasse/contract/domain';
+import {
+  CLASSIFICATION_OUTCOMES,
+  entityMatchRuleSchema,
+  TYPE_REFUSALS,
+} from '@liasse/contract/domain';
 import { z } from 'zod';
 
 // `documents.provenance` is keyed by the bare name of the field it describes, for a core
@@ -72,7 +76,13 @@ const textProvenanceSchema = z.object({
 
 const typeProvenanceSchema = z.union([
   manualProvenanceSchema,
-  z.object({ model: z.string(), confidence, outcome: z.enum(CLASSIFICATION_OUTCOMES) }),
+  z.object({
+    model: z.string(),
+    confidence,
+    outcome: z.enum(CLASSIFICATION_OUTCOMES),
+    // Set with the outcome `untyped`: why the new type the model proposed was not created.
+    refusal: z.enum(TYPE_REFUSALS).optional(),
+  }),
 ]);
 export type TypeProvenance = Readonly<z.output<typeof typeProvenanceSchema>>;
 

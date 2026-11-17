@@ -6,7 +6,7 @@ import { enqueue } from '../jobs/enqueue.ts';
 import { recordDocumentEvent } from '../processing-log/record.ts';
 import { findTypeById, type RegisteredType } from '../registry/type-store.ts';
 import { findCandidates } from './classify/candidates.ts';
-import { decideType, type TypeDecision } from './classify/decide-type.ts';
+import { classificationEvent, decideType, type TypeDecision } from './classify/decide-type.ts';
 import { moveFields } from './correction/move-fields.ts';
 import type { PipelineDeps } from './deps.ts';
 import {
@@ -31,12 +31,12 @@ const stillRejected = (
 // manual marks stay, and so do the values they cover, wherever they move.
 const reclassified = (
   current: PipelineDocument,
-  type: RegisteredType | undefined,
+  type: RegisteredType,
   provenance: TypeProvenance,
 ) => {
   const moved = moveFields(current, type);
   return {
-    typeId: type?.id ?? null,
+    typeId: type.id,
     schemaVersion: null,
     confidence: null,
     fields: moved.fields,
@@ -50,35 +50,52 @@ const reclassified = (
 const storeReclassification = (
   { db }: PipelineDeps,
   payload: Readonly<ReclassifyPayload>,
-  { typeId, provenance }: TypeDecision,
+  decision: Extract<TypeDecision, { readonly typeId: string }>,
 ): Promise<boolean> =>
   writeFromStatus(db, payload.documentId, SETTLED_STATUSES, async (tx, current) => {
     if (current.typeId !== payload.rejectedTypeId) return;
-    const type = typeId === null ? undefined : await findTypeById(tx, typeId);
-    if (typeId !== null && (type === undefined || !(await isCurrentType(tx, type)))) {
+    const type = await findTypeById(tx, decision.typeId);
+    if (type === undefined || !(await isCurrentType(tx, type))) {
       throw new PipelineConflictError(payload.documentId);
     }
     await tx
       .update(documents)
-      .set(reclassified(current, type, provenance))
+      .set(reclassified(current, type, decision.provenance))
       .where(eq(documents.id, payload.documentId));
     await recordDocumentEvent(tx, payload.documentId, {
       stage: 'classification',
       outcome: 'succeeded',
       status: current.status,
-      ...('model' in provenance
-        ? { model: provenance.model, details: { classification: provenance.outcome } }
-        : {}),
+      ...classificationEvent(decision),
     });
     await enqueue(tx, { kind: reextractDocumentJob, payload: { documentId: payload.documentId } });
   });
 
+// A new type that could not be created changes nothing: the document keeps its type, its
+// values and its status, so no type it is not takes the place of the rejected one and no
+// re-extraction for such a type drops its values. The log says why, for the caller.
+const storeRefusal = (
+  { db }: PipelineDeps,
+  payload: Readonly<ReclassifyPayload>,
+  decision: Extract<TypeDecision, { readonly typeId: null }>,
+): Promise<boolean> =>
+  writeFromStatus(db, payload.documentId, SETTLED_STATUSES, async (tx, current) => {
+    if (current.typeId !== payload.rejectedTypeId) return;
+    await recordDocumentEvent(tx, payload.documentId, {
+      stage: 'classification',
+      outcome: 'failed',
+      status: current.status,
+      errorCode: decision.refusal,
+      retryable: false,
+      ...classificationEvent(decision),
+    });
+  });
+
 /**
  * `reclassify_document`: the classification of a settled document again, without the
- * type a person rejected, with what they said. The rules of the first classification
- * hold: past the quota, or when creation is refused, the closest other candidate is
- * assigned with a confidence of 0, and with none the document is left without a type,
- * so the re-extraction flags it for review either way.
+ * type a person rejected, with what they said. A new type that cannot be created, past
+ * the quota or refused, leaves the document as it was, with a failed `classification`
+ * event whose code says why: no other existing type is assigned in its place.
  */
 export const reclassifyDocument = async (
   deps: PipelineDeps,
@@ -109,5 +126,7 @@ export const reclassifyDocument = async (
     },
     signal,
   );
-  await storeReclassification(deps, payload, decision);
+  await (decision.typeId === null
+    ? storeRefusal(deps, payload, decision)
+    : storeReclassification(deps, payload, decision));
 };

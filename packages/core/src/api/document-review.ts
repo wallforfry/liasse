@@ -105,12 +105,13 @@ const reviewedValues = (
 // of the classification already weighs on the confidence of the document.
 const reviewedType = (type: TypeProvenance | undefined) =>
   type !== undefined && 'manual' in type
-    ? { confidence: null, outcome: null, manual: true, doubtful: false }
+    ? { confidence: null, outcome: null, manual: true, doubtful: false, refusal: null }
     : {
         confidence: type?.confidence ?? null,
         outcome: type?.outcome ?? null,
         manual: false,
         doubtful: typeReason(type) !== undefined,
+        refusal: type?.refusal ?? null,
       };
 
 // A document flagged by a rule or a threshold that no longer flags it, the threshold

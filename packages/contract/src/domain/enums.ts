@@ -34,10 +34,23 @@ export const DOCUMENT_JOB_FAILURE_CODES = {
   reextraction: 'reextraction_failed',
 } as const;
 
-// How a document got its type: an offered type the model chose, a type it created, the
-// closest candidate when a new type was refused or over quota, or no type at all.
+// How a document got its type: an offered type the model chose, a type it created, or no
+// type at all, when the new type it proposed could not be created. `fallback`, the
+// closest candidate given in that case, is no longer assigned; documents classified
+// before keep it.
 export const CLASSIFICATION_OUTCOMES = ['existing', 'new', 'fallback', 'untyped'] as const;
 export type ClassificationOutcome = (typeof CLASSIFICATION_OUTCOMES)[number];
+
+// Why the new type the model proposed was not created: the daily quota is reached; the
+// document is private and the embedder outside the installation; the registry refused
+// the proposal twice (naming, fields, hierarchy); or it named the type a person rejected.
+export const TYPE_REFUSALS = [
+  'quota_exceeded',
+  'private_document',
+  'invalid_proposal',
+  'rejected_type',
+] as const;
+export type TypeRefusal = (typeof TYPE_REFUSALS)[number];
 
 // Why a settled document is flagged for review: its confidence is below the threshold,
 // or unknown until the extraction its new type owes; it got the closest type, or none;

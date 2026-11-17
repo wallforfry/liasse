@@ -52,7 +52,7 @@ const REVIEW: DocumentReview = {
   threshold: 0.7,
   reasons: ['low_confidence', 'rejected_values'],
   rejected_values: 1,
-  type: { confidence: 0.9, outcome: 'existing', manual: false, doubtful: false },
+  type: { confidence: 0.9, outcome: 'existing', manual: false, doubtful: false, refusal: null },
   values: [
     value('core', 'reference', true),
     value('core', 'iban', true),
@@ -141,6 +141,19 @@ describe('the review of a document', () => {
       'Its confidence, 42%, is below the threshold of 70%.',
       '1 value the model read could not be checked against the text and was left out.',
     ]);
+  });
+
+  it.each([
+    ['quota_exceeded', 'the daily quota of new types is reached, create the type by hand'],
+    ['private_document', 'a new type for a private document needs a local embedder'],
+    ['invalid_proposal', 'the new type the model proposed was refused'],
+  ] as const)('says why a document has no type: %s', (refusal, why) => {
+    const untyped = {
+      ...REVIEW,
+      reasons: ['type_untyped' as const],
+      type: { ...REVIEW.type, outcome: 'untyped' as const, doubtful: true, refusal },
+    };
+    expect(reasonSentences(DOCUMENT, untyped)).toEqual([`No type could be given to it: ${why}.`]);
   });
 
   describe('asking for the type again', () => {

@@ -1,5 +1,10 @@
 import { z } from 'zod';
-import { CLASSIFICATION_OUTCOMES, REVIEW_REASONS, VALUE_SECTIONS } from './domain/enums.ts';
+import {
+  CLASSIFICATION_OUTCOMES,
+  REVIEW_REASONS,
+  TYPE_REFUSALS,
+  VALUE_SECTIONS,
+} from './domain/enums.ts';
 
 const confidenceSchema = z.number().min(0).max(1);
 
@@ -8,6 +13,10 @@ const reviewedTypeSchema = z.object({
   outcome: z.enum(CLASSIFICATION_OUTCOMES).nullable(),
   manual: z.boolean().describe('The type was chosen by a person.'),
   doubtful: z.boolean().describe('The closest type, or none: a fallback or untyped outcome.'),
+  refusal: z
+    .enum(TYPE_REFUSALS)
+    .nullable()
+    .describe('Why the new type the model proposed was not created; null when none was refused.'),
 });
 
 const reviewedValueSchema = z.object({

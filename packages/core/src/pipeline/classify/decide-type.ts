@@ -1,3 +1,4 @@
+import type { TypeRefusal } from '@liasse/contract/domain';
 import type { TypeProvenance } from '../../domain/provenance.ts';
 import { createType } from '../../registry/create-type.ts';
 import type { RegistryError } from '../../registry/errors.ts';
@@ -18,11 +19,14 @@ import {
   type NewTypeDecision,
 } from './classification-schema.ts';
 
-export interface TypeDecision {
-  /** Null for a document left without a type. */
-  readonly typeId: string | null;
-  readonly provenance: TypeProvenance;
-}
+export type TypeDecision =
+  | { readonly typeId: string; readonly provenance: TypeProvenance }
+  /** No type: the new type the model proposed was not created, for `refusal`. */
+  | {
+      readonly typeId: null;
+      readonly provenance: TypeProvenance;
+      readonly refusal: TypeRefusal;
+    };
 
 export interface TypeQuestion {
   readonly opening: string;
@@ -106,6 +110,7 @@ const ask = async (
 const create = async (
   deps: PipelineDeps,
   { new_type: proposal }: NewTypeDecision,
+  requireNew: boolean,
 ): Promise<Settled> => {
   const { db, embedder, settings, now } = deps;
   const mask = maskOf(deps);
@@ -125,8 +130,9 @@ const create = async (
     },
   );
   if (created.ok) return { type: created.value, outcome: 'new' };
+  // A person who asked for a new type only gets none of the existing ones, even named.
   const holder =
-    created.error.code === 'name_taken'
+    created.error.code === 'name_taken' && !requireNew
       ? await resolveType(created.error.heldBy, { db })
       : undefined;
   return holder === undefined ? { refused: created.error } : { type: holder, outcome: 'existing' };
@@ -134,10 +140,12 @@ const create = async (
 
 const chosenOf = async (
   deps: PipelineDeps,
-  candidates: readonly Candidate[],
+  { candidates, reclassification }: TypeQuestion,
   decision: Classification,
 ): Promise<Settled> => {
-  if (decision.decision === 'new') return create(deps, decision);
+  if (decision.decision === 'new') {
+    return create(deps, decision, reclassification?.requireNew ?? false);
+  }
   const chosen = candidates.find(({ type }) => type.slug === decision.slug);
   if (chosen === undefined) throw new Error('The model chose a type that was not offered');
   return { type: chosen.type, outcome: 'existing' };
@@ -146,11 +154,11 @@ const chosenOf = async (
 // A new slug can name the rejected type, under its name or an alias: that is no answer.
 const settle = async (
   deps: PipelineDeps,
-  { candidates, reclassification }: TypeQuestion,
+  question: TypeQuestion,
   decision: Classification,
 ): Promise<Settled> => {
-  const settled = await chosenOf(deps, candidates, decision);
-  const rejected = reclassification?.rejected;
+  const settled = await chosenOf(deps, question, decision);
+  const rejected = question.reclassification?.rejected;
   return 'type' in settled && settled.type.id === rejected?.id
     ? {
         refused: {
@@ -166,20 +174,37 @@ const assignment = ({ type, outcome }: Assigned, { decision, model }: Answer): T
   provenance: { model, confidence: decision.confidence, outcome },
 });
 
-// Spec: past the daily quota, and for a proposal still refused after one correction,
-// the document gets the closest candidate and is flagged for review; with no candidate
-// it stays without a type. Nothing vouches for such an assignment: its confidence is 0.
-const fallback = (candidates: readonly Candidate[], model: string): TypeDecision => {
-  const [closest] = candidates;
-  return closest === undefined
-    ? { typeId: null, provenance: { model, confidence: 0, outcome: 'untyped' } }
-    : { typeId: closest.type.id, provenance: { model, confidence: 0, outcome: 'fallback' } };
+// Spec: a new type that could not be created leaves the document without a type, for
+// review, with the reason. No existing type is assigned in its place: the model said none
+// of the candidates fits, and the closest one by embedding is a type the document is not.
+const untyped = (model: string, refusal: TypeRefusal): TypeDecision => ({
+  typeId: null,
+  provenance: { model, confidence: 0, outcome: 'untyped', refusal },
+  refusal,
+});
+
+/** What the processing log records of a decision: codes only, never the proposal. */
+export const classificationEvent = ({ provenance }: TypeDecision) =>
+  'model' in provenance
+    ? {
+        model: provenance.model,
+        details: {
+          classification: provenance.outcome,
+          ...(provenance.refusal === undefined ? {} : { type_refusal: provenance.refusal }),
+        },
+      }
+    : {};
+
+const refusalOf = ({ code }: Refusal): TypeRefusal => {
+  if (code === 'quota_exceeded' || code === 'rejected_type') return code;
+  return 'invalid_proposal';
 };
 
 /**
  * One classification call, and a second one only when the registry refused the proposed
  * type for a reason the model can correct: the reason is given back to it once. A new
- * type that may not be created is answered like a full quota.
+ * type that may not be created, over quota or still refused, leaves the document without
+ * a type and says why.
  */
 export const decideType = async (
   deps: PipelineDeps,
@@ -188,11 +213,11 @@ export const decideType = async (
 ): Promise<TypeDecision> => {
   const first = await ask(deps, question, signal);
   if (first.decision.decision === 'new' && !question.mayCreate) {
-    return fallback(question.candidates, first.model);
+    return untyped(first.model, 'private_document');
   }
   const settled = await settle(deps, question, first.decision);
   if ('type' in settled) return assignment(settled, first);
-  if (settled.refused.code === 'quota_exceeded') return fallback(question.candidates, first.model);
+  if (settled.refused.code === 'quota_exceeded') return untyped(first.model, 'quota_exceeded');
   const second = await ask(deps, question, signal, {
     proposal: first.decision,
     reason: settled.refused.message,
@@ -200,5 +225,5 @@ export const decideType = async (
   const corrected = await settle(deps, question, second.decision);
   return 'type' in corrected
     ? assignment(corrected, second)
-    : fallback(question.candidates, second.model);
+    : untyped(second.model, refusalOf(corrected.refused));
 };
