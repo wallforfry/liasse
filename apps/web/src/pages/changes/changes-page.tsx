@@ -7,7 +7,9 @@ import { PageHeader } from '../../components/page-header.tsx';
 import { Alert, AlertDescription, AlertTitle } from '../../components/ui/alert.tsx';
 import { Skeleton } from '../../components/ui/skeleton.tsx';
 import { ChangeCard } from './change-card.tsx';
+import { ConsolidationStatus } from './consolidation-status.tsx';
 import { RunConsolidation } from './run-consolidation.tsx';
+import { useConsolidationRuns } from './use-consolidation-runs.ts';
 
 // What the API answers while consolidation is not part of the build.
 const isNotImplemented = (error: unknown): error is LiasseApiError =>
@@ -19,13 +21,18 @@ export const ChangesPage = () => {
     queryKey: ['changes'],
     queryFn: async () => client.listChanges(),
   });
+  const { runs, followRequest } = useConsolidationRuns();
   return (
     <>
       <PageHeader
         title="Changes"
         description="What consolidation proposes for the type registry, waiting for a decision."
-        actions={<RunConsolidation />}
+        actions={<RunConsolidation onRequested={followRequest} />}
       />
+      {runs.data === undefined ? null : <ConsolidationStatus runs={runs.data.runs} />}
+      {runs.isError && !isNotImplemented(runs.error) ? (
+        <ErrorAlert error={runs.error} title="The consolidation runs could not be read" />
+      ) : null}
       {changes.isPending ? <Skeleton className="h-48 w-full" /> : null}
       {changes.isError ? (
         isNotImplemented(changes.error) ? (

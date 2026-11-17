@@ -2,6 +2,7 @@ import {
   changeDecisionResultSchema,
   changeDecisionSchema,
   changeListSchema,
+  consolidationRunListSchema,
   consolidationRunSchema,
   createdTypeSchema,
   createTypeRequestSchema,
@@ -22,6 +23,7 @@ import {
   createType,
   describeTypes,
   listChanges,
+  listConsolidationRuns,
   listEntities,
   listSubjects,
   readGraph,
@@ -198,4 +200,17 @@ export const registryRoutes = ({ api, authenticated }: RouteDeps): Hono<AppEnv> 
       }),
       authenticated,
       async (context) => context.json(await requestConsolidationRun(api), 202),
+    )
+    .get(
+      '/consolidation/runs',
+      operation({
+        summary: 'List the latest consolidation runs',
+        tag: 'Registry',
+        responses: {
+          200: jsonResponse('The latest runs, the one due last first.', consolidationRunListSchema),
+          ...failures(501),
+        },
+      }),
+      authenticated,
+      async (context) => context.json(await listConsolidationRuns(api)),
     );

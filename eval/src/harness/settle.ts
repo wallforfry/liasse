@@ -1,6 +1,6 @@
 import { setTimeout as delay } from 'node:timers/promises';
-import type { DocumentStatus, JobStatus } from '@liasse/contract/domain';
-import { type ConsolidationTrigger, consolidateJob } from '@liasse/core/consolidation';
+import type { ConsolidationTrigger, DocumentStatus, JobStatus } from '@liasse/contract/domain';
+import { consolidateJob } from '@liasse/core/consolidation';
 import { type Database, documents, isLiveDocument, jobs } from '@liasse/core/db';
 import { and, inArray, not, sql } from 'drizzle-orm';
 
