@@ -104,6 +104,8 @@ describe('useGraphSimulation', () => {
       initialProps: { shown: everything },
     });
     passes(UNTIL_AT_REST);
+    const all = result.current.bodies;
+    const hidden = all.filter((body) => !documentsOnly(body.node));
     const atRest = placesOf(result.current.bodies);
     passes(2000);
     expect(placesOf(result.current.bodies)).toEqual(atRest);
@@ -114,8 +116,10 @@ describe('useGraphSimulation', () => {
       'doc_amendment',
     ]);
     const shown = placesOf(result.current.bodies);
+    const hiddenAtToggle = placesOf(hidden);
     passes(500);
     expect(placesOf(result.current.bodies)).not.toEqual(shown);
+    expect(placesOf(hidden)).toEqual(hiddenAtToggle);
   });
 
   it('holds a pulled body under the pointer while its neighbors follow, then frees it', () => {
@@ -135,6 +139,7 @@ describe('useGraphSimulation', () => {
     act(() => {
       result.current.release(contract);
     });
+    expect([contract.fx, contract.fy]).toEqual([null, null]);
     passes(1000);
     expect(placeOf(contract)).not.toBe('translate(400 300)');
   });

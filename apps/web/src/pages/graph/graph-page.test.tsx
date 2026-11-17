@@ -202,10 +202,69 @@ describe('the graph page', () => {
     fireEvent.pointerMove(contract, { clientX: 300, clientY: 300, buttons: 1, pointerId: 7 });
     expect(placeOf(name)).toBe('translate(80 90)');
 
+    pressAndMove(contract, { x: 40, y: 50 });
+    fireEvent.lostPointerCapture(contract, { pointerId: 7 });
+    fireEvent.pointerMove(contract, { clientX: 300, clientY: 300, buttons: 1, pointerId: 7 });
+    expect(placeOf(name)).toBe('translate(40 50)');
+
     pressAndMove(contract, { x: 20, y: 30 });
     fireEvent.pointerMove(contract, { clientX: 300, clientY: 300, buttons: 0, pointerId: 7 });
     fireEvent.pointerMove(contract, { clientX: 310, clientY: 310, buttons: 1, pointerId: 7 });
     expect(placeOf(name)).toBe('translate(20 30)');
+  });
+
+  it('pans only on a primary press of the background, and stops on a cancelled one', async () => {
+    withScreen();
+    renderApp('/graph', fakeServer(graphAnswer).fetch);
+    await nodeButton('type energy_contract');
+    const canvas = screen.getByRole('img', { name: /^Graph of/ });
+
+    fireEvent.pointerDown(canvas, { button: 2, clientX: 0, clientY: 0, pointerId: 5 });
+    fireEvent.pointerMove(canvas, { clientX: 30, clientY: 20, buttons: 2, pointerId: 5 });
+    fireEvent.pointerUp(canvas, { button: 2, pointerId: 5 });
+    expect(contentTransform()).toBe('translate(0 0) scale(1)');
+
+    fireEvent.pointerDown(canvas, { clientX: 0, clientY: 0, pointerId: 6 });
+    fireEvent.pointerCancel(canvas, { pointerId: 6 });
+    fireEvent.pointerMove(canvas, { clientX: 30, clientY: 20, buttons: 1, pointerId: 6 });
+    expect(contentTransform()).toBe('translate(0 0) scale(1)');
+  });
+
+  it('fits the graph as it stands into the view', async () => {
+    withReducedMotion();
+    withScreen();
+    renderApp('/graph', fakeServer(graphAnswer).fetch);
+    const contract = await nodeButton('document Synthetic power contract');
+    pressAndMove(contract, { x: 5000, y: 5000 });
+    letGo(contract);
+    const canvas = screen.getByRole('img', { name: /^Graph of/ });
+    const [boxX = 0, boxY = 0, boxWidth = 0, boxHeight = 0] = (canvas.getAttribute('viewBox') ?? '')
+      .split(' ')
+      .map(Number);
+
+    await userEvent.click(screen.getByRole('button', { name: 'Fit the graph' }));
+
+    const [x = 0, y = 0, scale = 0] = (
+      /^translate\((\S+) (\S+)\) scale\((\S+)\)$/.exec(contentTransform() ?? '') ?? []
+    )
+      .slice(1)
+      .map(Number);
+    expect(scale).toBeLessThan(1);
+    const shownAt = (place: string | null) => {
+      const [px = 0, py = 0] = (/^translate\((\S+) (\S+)\)$/.exec(place ?? '') ?? [])
+        .slice(1)
+        .map(Number);
+      return { x: x + px * scale, y: y + py * scale };
+    };
+    for (const node of screen.getAllByRole('button', {
+      name: /^(document|type|subject|entity) /,
+    })) {
+      const { x: shownX, y: shownY } = shownAt(node.getAttribute('transform'));
+      expect(shownX).toBeGreaterThanOrEqual(boxX);
+      expect(shownX).toBeLessThanOrEqual(boxX + boxWidth);
+      expect(shownY).toBeGreaterThanOrEqual(boxY);
+      expect(shownY).toBeLessThanOrEqual(boxY + boxHeight);
+    }
   });
 
   it('lights a hovered node and its neighbors, and dims the rest', async () => {

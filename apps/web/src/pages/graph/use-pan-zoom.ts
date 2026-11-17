@@ -20,9 +20,8 @@ const clampScale = (scale: number): number => Math.min(MAX_SCALE, Math.max(MIN_S
 
 /** The viewport that shows `content` whole and centred in `viewBox`. */
 export const fittedTo = (viewBox: Bounds, content: Bounds): Viewport => {
-  const scale = clampScale(
-    Math.min(viewBox.width / content.width, viewBox.height / content.height),
-  );
+  // Not bounded by the zoom limits: a fit shows everything, however far it spreads.
+  const scale = Math.min(viewBox.width / content.width, viewBox.height / content.height);
   return {
     scale,
     x: viewBox.x + (viewBox.width - content.width * scale) / 2 - content.x * scale,
