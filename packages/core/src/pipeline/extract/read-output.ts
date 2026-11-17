@@ -7,6 +7,7 @@ import { validateDocumentFields } from '../../registry/validate-document-fields.
 import { coreValueSchema, extraValueSchema } from '../../registry/values.ts';
 import { type Evidenced, evidencedSchema, type ExtractionOutput } from './extraction-schema.ts';
 import type { QuoteIndex } from './quotes.ts';
+import { addRejections, type Rejections, rejectionsOf } from './rejections.ts';
 import { quoteSupports, type SupportKind } from './support.ts';
 import { coreKinds, type KindOf, kindOfShape, typeKinds } from './value-kinds.ts';
 
@@ -27,8 +28,7 @@ export const plainValue = (reading: Reading): unknown =>
 
 export interface SectionReading {
   readonly readings: Readings;
-  /** Values the model returned that were dropped. */
-  readonly rejected: number;
+  readonly rejected: Rejections;
 }
 
 /** What a value is verified against: the pages the model was given, and their language. */
@@ -130,11 +130,13 @@ const readSection = (
   const invalid = invalidNames(
     Object.fromEntries(read.map(([name, reading]) => [name, plainValue(reading)])),
   );
-  const valid = read.filter(([name]) => invalid !== 'all' && !invalid.includes(name));
+  const isValid = (name: string): boolean => invalid !== 'all' && !invalid.includes(name);
   return {
-    readings: Object.fromEntries(valid),
-    rejected:
-      fields.reduce((total, { rejected }) => total + rejected, 0) + (read.length - valid.length),
+    readings: Object.fromEntries(read.filter(([name]) => isValid(name))),
+    rejected: rejectionsOf([
+      ...fields.map(({ name, rejected }) => [name, rejected] as const),
+      ...read.flatMap(([name]) => (isValid(name) ? [] : [[name, 1] as const])),
+    ]),
   };
 };
 
@@ -174,7 +176,14 @@ export const readOutput = (
     fields: readSection(output.fields, typeKinds(typeFields), evidence, invalidForType(typeFields)),
     extra: {
       ...read,
-      rejected: read.rejected + (Object.keys(output.extra).length - Object.keys(extra).length),
+      rejected: addRejections(
+        read.rejected,
+        rejectionsOf(
+          Object.keys(output.extra).flatMap((key) =>
+            Object.hasOwn(extra, key) ? [] : [[key, 1] as const],
+          ),
+        ),
+      ),
     },
   };
 };

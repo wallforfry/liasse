@@ -456,6 +456,36 @@ describe('extraction and re-extraction', () => {
     expect((await harness.document(id)).confidence).toBeCloseTo(0.8, 5);
   });
 
+  it('weighs a rejected key date in the mean of the key dates, not as a field', async () => {
+    const type = await seedType();
+    const id = await classified(type.id);
+    const keyDate = (quote: string) => ({
+      value: { kind: 'due', date: '2026-10-18', label: 'Payment' },
+      page: 2,
+      quote,
+      confidence: 1,
+    });
+    await harness.db
+      .update(documentPages)
+      .set({ text: `${PAGE_TWO}\ndue 18/10/2026` })
+      .where(eq(documentPages.page, 2));
+    const output = {
+      core: {
+        reference: at('SYN-2026-001', 'Invoice SYN-2026-001', 1),
+        language: at('fr', 'Invoice SYN-2026-001', 1),
+        key_dates: [
+          keyDate('due 18/10/2026'),
+          keyDate('not in the text'),
+          keyDate('nor this'),
+          keyDate('nor that'),
+        ],
+      },
+    };
+    await processDocument(harness.deps({ textModel: model(() => output) }), id, live());
+    // Mean of 1, 1 and 0.25 over three fields, not of 1, 1, 1, 0, 0 and 0.
+    expect((await harness.document(id)).confidence).toBeCloseTo(0.75, 5);
+  });
+
   it('fails a classified document that has no stored text', async () => {
     const { id } = await insertSyntheticDocument(harness.db, { status: 'classified' });
     await expect(processDocument(harness.deps(), id, live())).rejects.toMatchObject({

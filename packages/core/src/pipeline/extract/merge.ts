@@ -91,14 +91,13 @@ export const mergeWithStored = (
   const entries = (values: Values, storedValues: Values): Values =>
     provenanceOf(values, storedValues, fresh.provenance, stored.provenance, keep);
   const pipeline = readPipelineProvenance(stored.provenance);
-  // One entry per filled core field: a list field such as `key_dates` weighs by the mean
-  // of its items. A value that was rejected counts as one field at 0.
+  // One entry per core field the model or a person filled: a list field such as
+  // `key_dates` weighs by the mean of its items, a rejected item among them at 0.
   const coreConfidences = [
-    ...Object.keys(core).flatMap((name) =>
-      manualCore.includes(name) ? [1] : meanOf(ownValue(fresh.coreConfidences, name) ?? []),
-    ),
-    ...Array.from({ length: fresh.rejectedCore }, () => 0),
-  ];
+    ...new Set([...Object.keys(core), ...Object.keys(fresh.coreConfidences)]),
+  ].flatMap((name) =>
+    manualCore.includes(name) ? [1] : meanOf(ownValue(fresh.coreConfidences, name) ?? []),
+  );
   return {
     core,
     fields,
