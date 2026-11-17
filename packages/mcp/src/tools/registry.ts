@@ -1,11 +1,20 @@
 import {
   changeDecisionSchema,
+  createTypeRequestSchema,
   describeTypesOptionsSchema,
   idSchema,
   listChangesOptionsSchema,
   listEntitiesRequestSchema,
+  typeSuggestionRequestSchema,
 } from '@liasse/contract';
-import { applyChange, describeTypes, listChanges, listEntities } from '@liasse/core/api';
+import {
+  applyChange,
+  createType,
+  describeTypes,
+  listChanges,
+  listEntities,
+  suggestType,
+} from '@liasse/core/api';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import { type McpDeps, UNTRUSTED } from '../deps.ts';
@@ -37,6 +46,22 @@ const APPLY_CHANGE_DESCRIPTION =
   'Applies or rejects a proposed change of the type registry. Returns the outcome and the ' +
   'number of documents to extract again.';
 
+const CREATE_TYPE_DESCRIPTION =
+  'Creates a document type, `provisional` like one the pipeline creates, so that ' +
+  '`update_document` can then file a document under its slug: use it when no type of ' +
+  '`describe_types` truly fits and classification could not create one (its refusal, such ' +
+  'as `quota_exceeded`, is in `get_status` and the `review` of `get_document`). The slug ' +
+  'is snake_case and generic, never a name, a date or a number; the fields are those ' +
+  'every document of the type has, beyond the common core. The daily quota of new types ' +
+  'bounds automatic classification only and does not refuse this call. A refusal names ' +
+  'the broken rule (`invalid_slug`, `invalid_fields`, `name_taken` with the type that ' +
+  'holds the name, `parent_not_found`...). Returns the type.';
+
+const SUGGEST_TYPE_DESCRIPTION =
+  'Drafts a document type with the text model from `request`, a free-text account of the ' +
+  'documents it is for and what to read from them. Nothing is stored: review the draft, ' +
+  'then send it to `create_type`.';
+
 export const registerRegistryTools = (server: McpServer, { api, report }: McpDeps): void => {
   server.registerTool(
     'describe_types',
@@ -55,6 +80,24 @@ export const registerRegistryTools = (server: McpServer, { api, report }: McpDep
       annotations: READ_ONLY,
     },
     async (request) => toolAnswer('list_entities', report, () => listEntities(api(), request)),
+  );
+  server.registerTool(
+    'create_type',
+    {
+      description: CREATE_TYPE_DESCRIPTION,
+      inputSchema: createTypeRequestSchema,
+      annotations: { readOnlyHint: false, idempotentHint: false, openWorldHint: false },
+    },
+    async (request) => toolAnswer('create_type', report, () => createType(api(), request)),
+  );
+  server.registerTool(
+    'suggest_type',
+    {
+      description: SUGGEST_TYPE_DESCRIPTION,
+      inputSchema: typeSuggestionRequestSchema,
+      annotations: READ_ONLY,
+    },
+    async (request) => toolAnswer('suggest_type', report, () => suggestType(api(), request)),
   );
   server.registerTool(
     'list_pending_changes',

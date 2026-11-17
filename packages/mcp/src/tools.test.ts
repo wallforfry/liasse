@@ -12,6 +12,7 @@ import { callTool, createMcpHarness, type McpHarness } from './harness.test-help
 
 const TOOLS = [
   'apply_change',
+  'create_type',
   'describe_types',
   'get_document',
   'get_status',
@@ -24,6 +25,7 @@ const TOOLS = [
   'reclassify_document',
   'retry_document',
   'search',
+  'suggest_type',
   'timeline',
   'upcoming',
   'update_document',
@@ -32,9 +34,15 @@ const TOOLS = [
 // The tools whose answer is read from documents.
 const UNTRUSTED_TOOLS = TOOLS.filter(
   (name) =>
-    !['apply_change', 'get_status', 'ingest', 'reclassify_document', 'retry_document'].includes(
-      name,
-    ),
+    ![
+      'apply_change',
+      'create_type',
+      'get_status',
+      'ingest',
+      'reclassify_document',
+      'retry_document',
+      'suggest_type',
+    ].includes(name),
 );
 
 const hits = z.object({ results: z.array(z.object({ id: z.string() })) });
@@ -71,7 +79,7 @@ describe('the tools', () => {
     return failure.parse(body).error;
   };
 
-  it('lists the sixteen tools, flagging document content as untrusted', async () => {
+  it('lists the eighteen tools, flagging document content as untrusted', async () => {
     const { tools } = await client.listTools();
     expect(tools.map(({ name }) => name).toSorted()).toEqual(TOOLS);
     const flagged = tools
@@ -335,6 +343,43 @@ describe('the tools', () => {
     });
   });
 
+  // Real use: classification over quota left a document no type fitted, and an agent had
+  // no way to create the type `update_document` then refused as `type_not_found`.
+  describe('create_type', () => {
+    const created = z.object({ slug: z.string(), status: z.string() });
+
+    it('creates a provisional type, listed by describe_types', async () => {
+      const { isError, body } = await callTool(client, 'create_type', {
+        slug: 'workshop_receipt',
+        description: 'Receipt of a synthetic workshop for a repair',
+        fields: { repair_kind: { type: 'text' } },
+      });
+      expect(isError).toBe(false);
+      expect(created.parse(body)).toMatchObject({
+        slug: 'workshop_receipt',
+        status: 'provisional',
+      });
+      const { types } = z
+        .object({ types: z.array(z.object({ slug: z.string() })) })
+        .parse((await callTool(client, 'describe_types')).body);
+      expect(types.map(({ slug }) => slug)).toContain('workshop_receipt');
+    });
+
+    it('refuses a slug the naming rules forbid, with the code of the registry', async () => {
+      expect(
+        (await failureOf('create_type', { slug: 'Workshop Receipt', description: 'Receipt' })).code,
+      ).toBe('invalid_slug');
+    });
+
+    it('shows a strict input schema', async () => {
+      const { tools } = await client.listTools();
+      expect(tools.find(({ name }) => name === 'create_type')?.inputSchema).toMatchObject({
+        required: ['slug', 'description'],
+        additionalProperties: false,
+      });
+    });
+  });
+
   describe('a feature this build does not provide', () => {
     it.each([
       ['update_document', { id: 'doc_x', private: true }],
@@ -344,6 +389,7 @@ describe('the tools', () => {
       ['timeline', { subject: 'sub_x' }],
       ['recall', { query: 'zircon' }],
       ['get_subject', { query: 'zircon' }],
+      ['suggest_type', { request: 'Synthetic invoices of a workshop' }],
     ])('answers not_implemented from %s, as REST answers 501', async (name, args) => {
       expect((await failureOf(name, args)).code).toBe('not_implemented');
     });
@@ -400,6 +446,27 @@ describe('the tools of a bound feature', () => {
     });
     expect(isError).toBe(false);
     expect(received).toEqual([{ id, type: 'note', confirm: { reference: 'SYN-1' } }]);
+  });
+
+  it('hands suggest_type the request and answers the draft, storing nothing', async () => {
+    const received: unknown[] = [];
+    const draft = {
+      slug: 'workshop_receipt',
+      description: 'Receipt of a synthetic workshop',
+      parent_slug: null,
+      fields: {},
+    };
+    const client = await harness.connect({
+      suggestType: (request) => {
+        received.push(request);
+        return Promise.resolve(draft);
+      },
+    });
+    expect(
+      (await callTool(client, 'suggest_type', { request: ' Workshop receipts ' })).body,
+    ).toEqual(draft);
+    expect(received).toEqual(['Workshop receipts']);
+    expect((await callTool(client, 'describe_types')).body).toEqual({ types: [] });
   });
 
   it('answers internal_error for an unexpected failure, reported and never quoted', async () => {
