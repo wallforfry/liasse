@@ -52,6 +52,9 @@ const stepHandlers = (section: SettingsSection, props: SettingsStepProps) => {
   };
 };
 
+// Listing the models of a provider takes a session, which no one has before the first account:
+// the model fields take an id typed by hand.
+
 /** The text and vision models, with a check of both before the account exists. */
 export const LanguageModelsStep = (props: SettingsStepProps) => {
   const { submit, runCheck, section } = stepHandlers('llm', props);
@@ -63,6 +66,7 @@ export const LanguageModelsStep = (props: SettingsStepProps) => {
         onChange={section('llm')}
         check={props.check}
         onCheck={runCheck}
+        listModels={false}
       />
       <StepActions onBack={props.onBack} />
     </form>
@@ -81,6 +85,7 @@ export const EmbedderStep = (props: SettingsStepProps) => {
         locked={false}
         check={props.check}
         onCheck={runCheck}
+        listModels={false}
       />
       <p className="text-sm text-muted-foreground">
         The embedder cannot change once a document is stored. Its check also compares the length of

@@ -97,6 +97,8 @@ describe('the onboarding', () => {
     await passAccount(user);
 
     const llm = await step('Language models');
+    // The list of the provider needs a session: before the first account, ids are typed.
+    expect(llm.queryByRole('button', { name: /^Browse the models/u })).not.toBeInTheDocument();
     await next(user);
     expect(llm.getByLabelText('Text model')).toHaveAccessibleDescription(/Too small|at least/u);
     expect(currentStep()).toHaveTextContent('Language models');

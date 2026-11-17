@@ -5,7 +5,7 @@ import { SectionCheck, type SettingsCheckMutation } from './check-results.tsx';
 import { SecretField } from './secret-field.tsx';
 import { SettingsCard } from './settings-card.tsx';
 import { ChoiceField, TextField } from './settings-fields.tsx';
-import { ModelField } from './model-field.tsx';
+import { ModelOrTextField } from './model-field.tsx';
 import {
   embeddingModelsRequest,
   fieldSetter,
@@ -19,6 +19,8 @@ interface EmbedderSectionProps extends SectionProps<'embedding'> {
   readonly locked: boolean;
   readonly check: SettingsCheckMutation;
   readonly onCheck: () => void;
+  /** Whether the model field offers the list of the provider, which needs a session. */
+  readonly listModels?: boolean;
 }
 
 const EmbedderLock = () => (
@@ -39,10 +41,11 @@ export const EmbedderSection = ({
   locked,
   check,
   onCheck,
+  listModels = true,
 }: EmbedderSectionProps) => {
   const set = fieldSetter(values, onChange);
   const remote = !isLocalEmbedder(values.provider);
-  const request = embeddingModelsRequest(values);
+  const request = listModels ? embeddingModelsRequest(values) : undefined;
   return (
     <SettingsCard
       id="embedding"
@@ -59,27 +62,16 @@ export const EmbedderSection = ({
         disabled={locked}
         error={issueAt(issues, 'embedding.provider')}
       />
-      {request === undefined ? (
-        <TextField
-          id="embedding-model"
-          label="Model"
-          hint="Leave empty for the model the local embedder ships."
-          value={values.model}
-          onChange={set('model')}
-          disabled={locked}
-          error={issueAt(issues, 'embedding.model')}
-        />
-      ) : (
-        <ModelField
-          id="embedding-model"
-          label="Model"
-          request={request}
-          value={values.model}
-          onChange={set('model')}
-          disabled={locked}
-          error={issueAt(issues, 'embedding.model')}
-        />
-      )}
+      <ModelOrTextField
+        id="embedding-model"
+        label="Model"
+        hint={remote ? undefined : 'Leave empty for the model the local embedder ships.'}
+        request={request}
+        value={values.model}
+        onChange={set('model')}
+        disabled={locked}
+        error={issueAt(issues, 'embedding.model')}
+      />
       {remote ? (
         <>
           <TextField
