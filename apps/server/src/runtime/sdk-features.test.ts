@@ -3,7 +3,7 @@ import { buildSyntheticPdf, waitUntil } from '@liasse/core/testing';
 import { createLiasseClient, LiasseApiError, type LiasseClient } from '@liasse/sdk';
 import { eq } from 'drizzle-orm';
 import { describe, expect, it } from 'vitest';
-import { LETTER } from '../synthetic-documents.fixture.ts';
+import { LETTER, TYPE_DRAFT } from '../synthetic-documents.fixture.ts';
 import type { Runtime } from './create-runtime.ts';
 import { useRuntimeHarness } from './runtime.test-helper.ts';
 
@@ -46,6 +46,11 @@ describe('the TypeScript SDK on the bound features', () => {
       .catch((error: unknown) => error);
     expect(refused).toBeInstanceOf(LiasseApiError);
     expect(refused).toMatchObject({ status: 404, code: 'document_not_found' });
+  });
+
+  it('drafts a type with the text model of the runtime', async () => {
+    const client = await clientOf(await start());
+    expect(await client.suggestType({ request: 'Invoices of a workshop' })).toEqual(TYPE_DRAFT);
   });
 
   it('lists the pending consolidation changes and decides one', async () => {

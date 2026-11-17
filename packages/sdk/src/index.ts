@@ -48,6 +48,8 @@ export type {
   SettingsView,
   SubjectList,
   TypeList,
+  TypeSuggestion,
+  TypeSuggestionRequest,
   TypeView,
   Upcoming,
   UpcomingDate,

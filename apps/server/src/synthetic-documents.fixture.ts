@@ -102,6 +102,14 @@ const CLASSIFICATION = {
   },
 } as const;
 
+/** What the text model drafts for a type described by a person. */
+export const TYPE_DRAFT = {
+  slug: 'workshop_invoice',
+  description: 'Invoice of a workshop',
+  parent_slug: null,
+  fields: { hours: { type: 'number' } },
+} as const;
+
 const titleOf = ({ lines }: SyntheticDocument): string => lines[0] ?? '';
 
 // The document under review comes before its candidates, which alone carry an id.
@@ -127,6 +135,7 @@ const links = (prompt: string) => {
  */
 export const answerFor = (system: string, prompt: string): unknown => {
   if (system.startsWith('You file')) return CLASSIFICATION;
+  if (system.startsWith('You design a document type')) return TYPE_DRAFT;
   if (system.startsWith('You find the links')) return links(prompt);
   const document = DOCUMENTS.find((candidate) => prompt.includes(titleOf(candidate)));
   return document?.extraction ?? { core: {}, fields: {}, extra: {} };

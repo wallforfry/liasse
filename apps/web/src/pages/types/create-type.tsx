@@ -1,4 +1,3 @@
-import { MAX_TYPE_DESCRIPTION_LENGTH } from '@liasse/contract/domain';
 import type { CreateTypeRequest, TypeView } from '@liasse/sdk';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { PlusIcon } from 'lucide-react';
@@ -16,74 +15,51 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '../../components/ui/dialog.tsx';
-import { Input } from '../../components/ui/input.tsx';
-import { Label } from '../../components/ui/label.tsx';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '../../components/ui/select.tsx';
-import { Textarea } from '../../components/ui/textarea.tsx';
-import {
-  emptyField,
-  type FieldDraft,
-  fieldsOf,
-  hasUnnamedRow,
-  repeatedNames,
-} from './field-drafts.ts';
-import { FieldRow } from './field-row.tsx';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '../../components/ui/tabs.tsx';
+import { DescribeType } from './describe-type.tsx';
+import { hasUnnamedRow, repeatedNames } from './field-drafts.ts';
+import { draftOf, EMPTY_DRAFT, requestOf, type TypeDraft } from './type-draft.ts';
+import { TypeDraftFields } from './type-draft-fields.tsx';
 import { TYPES_QUERY_KEY, typePath } from './types-query.ts';
 
-// Radix Select keeps the empty string for clearing the selection.
-const NO_PARENT = '-';
+type Mode = 'describe' | 'define';
 
-interface Draft {
-  readonly slug: string;
-  readonly description: string;
-  readonly parent: string;
-  readonly fields: readonly FieldDraft[];
-}
+const isMode = (value: string): value is Mode => value === 'describe' || value === 'define';
 
-const EMPTY_DRAFT: Draft = { slug: '', description: '', parent: NO_PARENT, fields: [] };
-
-const requestOf = ({ slug, description, parent, fields }: Draft): CreateTypeRequest => ({
-  slug: slug.trim(),
-  description,
-  parent_slug: parent === NO_PARENT ? null : parent,
-  fields: fieldsOf(fields),
-});
+const isComplete = (draft: TypeDraft): boolean =>
+  draft.slug.trim() !== '' &&
+  draft.description.trim() !== '' &&
+  repeatedNames(draft.fields).length === 0 &&
+  !hasUnnamedRow(draft.fields);
 
 /**
- * Creates a type by hand. The registry judges the request with the rules it applies to
- * the pipeline, and its refusal names every broken rule.
+ * Creates a type, described in a sentence for the text model to draft, or defined by
+ * hand. Either way the person sends the definition, and the registry judges it with the
+ * rules it applies to the pipeline; its refusal names every broken rule.
  */
 export const CreateType = ({ roots }: { readonly roots: readonly TypeView[] }) => {
   const client = useClient();
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   const [open, setOpen] = useState(false);
-  const [draft, setDraft] = useState<Draft>(EMPTY_DRAFT);
-  const [nextKey, setNextKey] = useState(0);
+  const [mode, setMode] = useState<Mode>('describe');
+  const [draft, setDraft] = useState<TypeDraft>(EMPTY_DRAFT);
+  const [drafted, setDrafted] = useState<readonly string[] | null>(null);
   const create = useMutation({
     mutationFn: async (request: CreateTypeRequest) => client.createType(request),
     onSuccess: async (created) => {
       await queryClient.invalidateQueries({ queryKey: TYPES_QUERY_KEY });
       setOpen(false);
+      setMode('describe');
       setDraft(EMPTY_DRAFT);
+      setDrafted(null);
       create.reset();
       toast.success(`The type ${created.slug} was created.`);
       await navigate(typePath(created.slug));
     },
   });
-  const repeated = repeatedNames(draft.fields);
-  const unnamed = hasUnnamedRow(draft.fields);
   const parents = roots.filter(({ parent_slug }) => parent_slug === null);
 
-  const setFields = (fields: readonly FieldDraft[]) => {
-    setDraft({ ...draft, fields });
-  };
   const submit = (event: SubmitEvent<HTMLFormElement>) => {
     event.preventDefault();
     create.mutate(requestOf(draft));
@@ -97,114 +73,59 @@ export const CreateType = ({ roots }: { readonly roots: readonly TypeView[] }) =
           Create type
         </Button>
       </DialogTrigger>
-      <DialogContent className="sm:max-w-2xl">
-        <form className="flex flex-col gap-4" onSubmit={submit}>
-          <DialogHeader>
-            <DialogTitle>Create a type</DialogTitle>
-            <DialogDescription>
-              Generic to specific, in snake_case: energy_bill, never edf_october. The type starts
-              provisional, like one the pipeline creates, and counts towards the daily quota of new
-              types the pipeline may create.
-            </DialogDescription>
-          </DialogHeader>
-          {create.error === null ? null : (
-            <ErrorAlert error={create.error} title="Type not created" />
-          )}
-          <div className="grid gap-2">
-            <Label htmlFor="type-slug">Slug</Label>
-            <Input
-              id="type-slug"
-              required
-              className="font-mono"
-              value={draft.slug}
-              onChange={(event) => {
-                setDraft({ ...draft, slug: event.target.value });
+      <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
+        <DialogHeader>
+          <DialogTitle>Create a type</DialogTitle>
+          <DialogDescription>
+            Generic to specific, in snake_case: energy_bill, never edf_october. The type starts
+            provisional, like one the pipeline creates, and counts towards the daily quota of new
+            types the pipeline may create.
+          </DialogDescription>
+        </DialogHeader>
+        <Tabs
+          value={mode}
+          onValueChange={(value) => {
+            if (isMode(value)) setMode(value);
+          }}
+        >
+          <TabsList>
+            <TabsTrigger value="describe">Describe it</TabsTrigger>
+            <TabsTrigger value="define">Define it</TabsTrigger>
+          </TabsList>
+          <TabsContent value="describe" className="pt-2">
+            <DescribeType
+              onSuggested={(suggestion) => {
+                const { draft: suggested, leftOut } = draftOf(suggestion);
+                setDraft(suggested);
+                setDrafted(leftOut);
+                setMode('define');
               }}
             />
-          </div>
-          <div className="grid gap-2">
-            <Label htmlFor="type-description">Description</Label>
-            <Textarea
-              id="type-description"
-              required
-              maxLength={MAX_TYPE_DESCRIPTION_LENGTH}
-              value={draft.description}
-              onChange={(event) => {
-                setDraft({ ...draft, description: event.target.value });
-              }}
-            />
-          </div>
-          <div className="grid gap-2">
-            <Label htmlFor="type-parent">Parent</Label>
-            <Select
-              value={draft.parent}
-              onValueChange={(parent) => {
-                setDraft({ ...draft, parent });
-              }}
-            >
-              <SelectTrigger id="type-parent" className="w-64">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value={NO_PARENT}>None</SelectItem>
-                {parents.map(({ slug }) => (
-                  <SelectItem key={slug} value={slug}>
-                    {slug}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-          <fieldset className="grid gap-2">
-            <legend className="mb-2 text-sm font-medium">Fields</legend>
-            {draft.fields.map((field, index) => (
-              <FieldRow
-                key={field.key}
-                index={index}
-                draft={field}
-                onChange={(changed) => {
-                  setFields(draft.fields.map((row) => (row.key === field.key ? changed : row)));
-                }}
-                onRemove={() => {
-                  setFields(draft.fields.filter((row) => row.key !== field.key));
-                }}
-              />
-            ))}
-            <Button
-              type="button"
-              variant="outline"
-              className="justify-self-start"
-              onClick={() => {
-                setFields([...draft.fields, emptyField(nextKey)]);
-                setNextKey(nextKey + 1);
-              }}
-            >
-              <PlusIcon />
-              Add field
-            </Button>
-            {unnamed ? (
-              <p className="text-sm text-muted-foreground">Name every field, or remove it.</p>
-            ) : null}
-            {repeated.length === 0 ? null : (
-              <p className="text-sm text-destructive">
-                Two fields have the same name: {repeated.join(', ')}.
-              </p>
-            )}
-          </fieldset>
-          <Button
-            type="submit"
-            className="self-end"
-            disabled={
-              create.isPending ||
-              draft.slug.trim() === '' ||
-              draft.description.trim() === '' ||
-              repeated.length > 0 ||
-              unnamed
-            }
-          >
-            {create.isPending ? 'Creating...' : 'Create'}
-          </Button>
-        </form>
+          </TabsContent>
+          <TabsContent value="define" className="pt-2">
+            <form className="flex flex-col gap-4" onSubmit={submit}>
+              {drafted === null ? null : (
+                <p className="text-sm text-muted-foreground">
+                  Drafted by the text model: review it, then create the type.
+                  {drafted.length === 0
+                    ? null
+                    : ` Left out, since an enum value holds a comma: ${drafted.join(', ')}.`}
+                </p>
+              )}
+              {create.error === null ? null : (
+                <ErrorAlert error={create.error} title="Type not created" />
+              )}
+              <TypeDraftFields draft={draft} parents={parents} onChange={setDraft} />
+              <Button
+                type="submit"
+                className="self-end"
+                disabled={create.isPending || !isComplete(draft)}
+              >
+                {create.isPending ? 'Creating...' : 'Create'}
+              </Button>
+            </form>
+          </TabsContent>
+        </Tabs>
       </DialogContent>
     </Dialog>
   );

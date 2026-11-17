@@ -15,6 +15,8 @@ import {
   listSubjectsOptionsSchema,
   listSubjectsOutputSchema,
   typeListSchema,
+  typeSuggestionRequestSchema,
+  typeSuggestionSchema,
   upcomingOptionsSchema,
   upcomingOutputSchema,
 } from '@liasse/contract';
@@ -28,6 +30,7 @@ import {
   listSubjects,
   readGraph,
   requestConsolidationRun,
+  suggestType,
   upcoming,
 } from '@liasse/core/api';
 import { Hono } from 'hono';
@@ -106,6 +109,25 @@ export const registryRoutes = ({ authenticated }: RouteDeps): Hono<AppEnv> =>
       valid('json', createTypeRequestSchema),
       async (context) =>
         context.json(await createType(context.var.api, context.req.valid('json')), 201),
+    )
+    .post(
+      '/types/suggestion',
+      operation({
+        summary: 'Draft a type with the text model, without creating it',
+        tag: 'Registry',
+        responses: {
+          200: jsonResponse(
+            'The draft, to review and send to create the type.',
+            typeSuggestionSchema,
+          ),
+          ...failures(400, 413, 415, 501, 503),
+        },
+      }),
+      authenticated,
+      jsonBody,
+      valid('json', typeSuggestionRequestSchema),
+      async (context) =>
+        context.json(await suggestType(context.var.api, context.req.valid('json'))),
     )
     .get(
       '/entities',

@@ -19,6 +19,14 @@ export const UNTRUSTED_RULE =
 export const namingConventions = (language: SchemaLanguage): string =>
   `Slugs and field names are written in ${SCHEMA_LANGUAGE_NAMES[language]}, whatever the language of the document, in snake_case, from generic to specific (energy_bill, never edf_october). A slug never holds the name of an organization or a person, a date, a month or a number.`;
 
+/** How a new type is named and defined; `offered` names the types listed in the prompt. */
+export const newTypeRules = (language: SchemaLanguage, offered: string): readonly string[] => [
+  namingConventions(language),
+  `A new type has a one-sentence description, at most ${String(MAX_FIELDS_PER_TYPE)} fields and, when it specializes a ${offered} that has no parent itself, that ${offered} as parent_slug (null otherwise).`,
+  `Each field is defined as {"type": one of ${FIELD_PRIMITIVES.join(', ')}}; an enum adds "values" (a list of strings), an identifier may add "format", a list adds "items" (the definition of one item, never a list).`,
+  `Do not define the fields every document already has: ${CORE_FIELD_NAMES.join(', ')}.`,
+];
+
 export const classificationSystemPrompt = (language: SchemaLanguage): string =>
   [
     'You file a document into a registry of document types.',
@@ -26,10 +34,7 @@ export const classificationSystemPrompt = (language: SchemaLanguage): string =>
     REUSE_BY_DEFAULT,
     'To reuse a type, answer with decision "existing", the slug of one candidate and your confidence between 0 and 1.',
     'To propose a type, answer with decision "new", the new type, your confidence, and a justification of two sentences saying why no candidate fits.',
-    namingConventions(language),
-    `A new type has a one-sentence description, at most ${String(MAX_FIELDS_PER_TYPE)} fields and, when it specializes a candidate that has no parent itself, that candidate as parent_slug (null otherwise).`,
-    `Each field is defined as {"type": one of ${FIELD_PRIMITIVES.join(', ')}}; an enum adds "values" (a list of strings), an identifier may add "format", a list adds "items" (the definition of one item, never a list).`,
-    `Do not define the fields every document already has: ${CORE_FIELD_NAMES.join(', ')}.`,
+    ...newTypeRules(language, 'candidate'),
   ].join('\n');
 
 export interface CandidateLine {
@@ -55,7 +60,7 @@ export interface ClassificationPromptInput {
   readonly refusal?: { readonly proposal: unknown; readonly reason: string };
 }
 
-const candidateLine = ({ slug, description, exampleTitle }: CandidateLine): string =>
+export const candidateLine = ({ slug, description, exampleTitle }: CandidateLine): string =>
   `- ${slug}: ${description}${exampleTitle === null ? '' : ` (example: ${exampleTitle})`}`;
 
 const candidatesSection = (

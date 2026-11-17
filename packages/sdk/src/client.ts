@@ -55,6 +55,9 @@ import {
   type SubjectList,
   type TypeList,
   typeListSchema,
+  type TypeSuggestion,
+  type TypeSuggestionRequest,
+  typeSuggestionSchema,
   type Upcoming,
   type upcomingOptionsSchema,
   upcomingOutputSchema,
@@ -111,6 +114,8 @@ export interface LiasseClient {
   readonly listTypes: (options?: DescribeTypesOptions) => Promise<TypeList>;
   /** A provisional type, judged by the naming rules and primitives of the registry. */
   readonly createType: (request: CreateTypeRequest) => Promise<CreatedType>;
+  /** A draft of a type by the text model, from free text; nothing is created. */
+  readonly suggestType: (request: TypeSuggestionRequest) => Promise<TypeSuggestion>;
   readonly listEntities: (options?: ListEntitiesRequest) => Promise<EntityListView>;
   readonly listSubjects: (options?: ListSubjectsRequest) => Promise<SubjectList>;
   /** The most recent documents with their types, subjects and entities, and their edges. */
@@ -192,6 +197,7 @@ export const createLiasseClient = (options: ClientOptions): LiasseClient => {
     query: async (request) => post(queryResultSchema, '/query', request),
     listTypes: async (query = {}) => get(typeListSchema, '/types', query),
     createType: async (request) => post(createdTypeSchema, '/types', request),
+    suggestType: async (request) => post(typeSuggestionSchema, '/types/suggestion', request),
     listEntities: async (query = {}) => get(entityListSchema, '/entities', query),
     listSubjects: async (query = {}) => get(listSubjectsOutputSchema, '/subjects', query),
     graph: async (query = {}) => get(graphSchema, '/graph', query),
