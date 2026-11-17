@@ -1,6 +1,7 @@
-import { type Auth, bootstrapAccount, createAuth } from '@liasse/core/auth';
+import { type Auth, createAuth, hasAccount } from '@liasse/core/auth';
 import type { Config } from '@liasse/core/config';
 import type { Database } from '@liasse/core/db';
+import { issueSetupToken, type SetupToken } from '@liasse/core/setup';
 import type { Logger } from '../log.ts';
 
 export interface StartAuthOptions {
@@ -9,15 +10,20 @@ export interface StartAuthOptions {
   readonly logger: Logger;
 }
 
-const BOOTSTRAP_NOTICES = {
-  created: 'Created the first account from AUTH_BOOTSTRAP_EMAIL and AUTH_BOOTSTRAP_PASSWORD.',
-  kept:
-    'Notice: AUTH_BOOTSTRAP_EMAIL and AUTH_BOOTSTRAP_PASSWORD are ignored, since an account ' +
-    'exists already. Unset them; change the password from the web UI.',
-} as const;
+export interface StartedAuth {
+  readonly auth: Auth;
+  /** Issued while no account exists; undefined otherwise. */
+  readonly setupToken: SetupToken | undefined;
+}
 
-/** The auth server of the HTTP front, and the first account when the configuration asks. */
-export const startAuth = async ({ db, config, logger }: StartAuthOptions): Promise<Auth> => {
+// The one line that holds the token: the operator copies it from stderr into the
+// onboarding. Only its hash stays in memory.
+const setupNotice = (publicUrl: string, token: string): string =>
+  `Notice: no account exists yet. Open ${publicUrl}/ui/ to create the first one, with this ` +
+  `setup token: ${token} (valid until the server stops; a restart prints another one).`;
+
+/** The auth server of the HTTP front, and the setup token while no account exists. */
+export const startAuth = async ({ db, config, logger }: StartAuthOptions): Promise<StartedAuth> => {
   const auth = createAuth({
     db,
     secret: config.auth.secret,
@@ -27,9 +33,8 @@ export const startAuth = async ({ db, config, logger }: StartAuthOptions): Promi
       logger.event('auth_server', { level, message });
     },
   });
-  const { bootstrap } = config.auth;
-  if (bootstrap !== undefined) {
-    logger.notice(BOOTSTRAP_NOTICES[await bootstrapAccount(auth, db, bootstrap)]);
-  }
-  return auth;
+  if (await hasAccount(db)) return { auth, setupToken: undefined };
+  const { value, token } = issueSetupToken();
+  logger.notice(setupNotice(config.server.publicUrl, value));
+  return { auth, setupToken: token };
 };

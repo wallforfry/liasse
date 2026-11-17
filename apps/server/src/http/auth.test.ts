@@ -5,9 +5,13 @@ import { requireAny } from './auth.ts';
 import type { AppEnv } from './env.ts';
 import { createHttpHarness, type HttpHarness } from './harness.test-helper.ts';
 
-// The web UI, the auth server and its discovery documents, which answer for themselves.
+// The web UI, the auth server and its discovery documents, which answer for themselves, and
+// the onboarding, guarded by its setup token.
 const PUBLIC_ROUTES = [
   'GET /health',
+  'GET /api/setup',
+  'POST /api/setup',
+  'POST /api/setup/check',
   'GET /',
   'GET /ui/*',
   'GET /api/auth/*',
@@ -40,7 +44,7 @@ describe('authentication', () => {
           index,
       );
 
-  it('refuses every route but /health without a credential', async () => {
+  it('refuses every route but the public ones without a credential', async () => {
     const guarded = routes().filter(
       ({ method, path }) => !PUBLIC_ROUTES.includes(`${method} ${path}`),
     );

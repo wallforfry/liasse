@@ -195,7 +195,8 @@ export const MAX_LISTED_CHANGES = 100;
 // Consolidation runs one listing returns, newest first.
 export const MAX_LISTED_CONSOLIDATION_RUNS = 10;
 
-// The length of an account password, checked by the configuration, the auth server and the
-// web UI alike. The upper bound keeps the cost of one hash bounded.
+// The length of an account password, checked by the onboarding, the auth server and the web
+// UI alike. The upper bound keeps the cost of one hash bounded.
 export const MIN_PASSWORD_LENGTH = 12;
 export const MAX_PASSWORD_LENGTH = 128;
+export const MAX_ACCOUNT_NAME_LENGTH = 128;

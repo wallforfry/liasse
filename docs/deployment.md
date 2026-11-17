@@ -94,11 +94,11 @@ Inside the container, `127.0.0.1` is the container itself: an Ollama server on t
 
 ## Coolify
 
-[`docker-compose.coolify.yml`](../docker-compose.coolify.yml) is the same stack for a Coolify Docker Compose application built from this repository. Coolify generates the database password, `AUTH_SECRET`, `FILE_URL_SECRET` and the password of the first account, and routes the domain set on the `liasse` service to port 8080.
+[`docker-compose.coolify.yml`](../docker-compose.coolify.yml) is the same stack for a Coolify Docker Compose application built from this repository. Coolify generates the database password, `AUTH_SECRET` and `FILE_URL_SECRET`, and routes the domain set on the `liasse` service to port 8080.
 
 1. Create the application from the repository with the Docker Compose build pack and `/docker-compose.coolify.yml` as its Docker Compose location.
-2. Set `AUTH_BOOTSTRAP_EMAIL` among its environment variables.
-3. Read the generated `SERVICE_PASSWORD_64_ADMIN` there to sign in to the web UI, then change it there, and save the [settings](#settings).
+2. Deploy it, and read the setup token in the logs of the `liasse` service.
+3. Open the domain, create the first account with that token, and save the [settings](#settings).
 
 The compose file trusts `172.16.0.0/12`, Docker's default range for the network Coolify's proxy reaches the container over; when Cloudflare proxies the domain, set `TRUSTED_PROXIES` to `172.16.0.0/12,cloudflare`. No untrusted container may share a network with `liasse`. Behind a Cloudflare Tunnel, every client counts as the `cloudflared` container unless its address is trusted too.
 

@@ -71,7 +71,7 @@ export const startFront = async ({
     api,
     base,
     settings,
-    auth: await startAuth({ db: base.db, config, logger }),
+    ...(await startAuth({ db: base.db, config, logger })),
     publicUrl: config.server.publicUrl,
     trustedProxies: config.server.trustedProxies,
     assets,

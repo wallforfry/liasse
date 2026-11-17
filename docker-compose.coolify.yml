@@ -1,8 +1,8 @@
 # Coolify: a Docker Compose application built from this repository. Coolify generates every
 # SERVICE_* value once and keeps it across deployments; SERVICE_URL_LIASSE_8080 routes the
-# domain set on the `liasse` service to port 8080. Fill AUTH_BOOTSTRAP_EMAIL in Coolify; any
-# other variable of `.env.example` can be added there too. The models are settings saved once
-# signed in (docs/deployment.md#settings).
+# domain set on the `liasse` service to port 8080. Any variable of `.env.example` can be added
+# there too. The first account is created in the web UI with the setup token printed in the
+# logs of `liasse` at startup; the models are settings saved there (docs/deployment.md#settings).
 services:
   postgres:
     image: pgvector/pgvector:pg16
@@ -43,9 +43,6 @@ services:
       EMBEDDING_CACHE_DIR: /data/models
       AUTH_SECRET: ${SERVICE_BASE64_64_AUTHSECRET}
       FILE_URL_SECRET: ${SERVICE_BASE64_64_FILEURLSECRET}
-      # The first account, created at the first start only: sign in to /ui with them.
-      AUTH_BOOTSTRAP_EMAIL: ${AUTH_BOOTSTRAP_EMAIL:?}
-      AUTH_BOOTSTRAP_PASSWORD: ${SERVICE_PASSWORD_64_ADMIN}
     volumes:
       - liasse-data:/data
 

@@ -26,15 +26,6 @@ describe('loadConfig value parsing', () => {
     );
   });
 
-  it('keeps the bootstrap password exactly as given', () => {
-    const config = loadConfig({
-      ...SYNTHETIC_ENV,
-      AUTH_BOOTSTRAP_EMAIL: 'owner@example.com',
-      AUTH_BOOTSTRAP_PASSWORD: '  padded password ',
-    });
-    expect(config.auth.bootstrap?.password).toBe('  padded password ');
-  });
-
   it('treats empty variables as unset, a variable of the settings included', () => {
     const config = loadConfig({
       ...SYNTHETIC_ENV,
@@ -42,10 +33,8 @@ describe('loadConfig value parsing', () => {
       WATCH_DIR: '',
       LLM_PROVIDER: '',
       AUTH_BOOTSTRAP_EMAIL: '',
-      AUTH_BOOTSTRAP_PASSWORD: '',
     });
     expect(config.server.port).toBe(8080);
     expect(config.resources.watchDir).toBeUndefined();
-    expect(config.auth.bootstrap).toBeUndefined();
   });
 });

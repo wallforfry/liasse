@@ -1,8 +1,4 @@
-import {
-  MAX_PASSWORD_LENGTH,
-  MIN_PASSWORD_LENGTH,
-  storageDriverSchema,
-} from '@liasse/contract/domain';
+import { storageDriverSchema } from '@liasse/contract/domain';
 import { z } from 'zod';
 import { type CrossFieldProblem, duration, integer, reportProblems, text } from './fields.ts';
 import { trustedProxies } from './trusted-proxies.ts';
@@ -116,42 +112,16 @@ const secret = z
   .string()
   .min(MIN_SECRET_LENGTH, `expected at least ${String(MIN_SECRET_LENGTH)} characters`);
 
-// Kept exactly as written: a password may start or end with a space.
-const password = z
-  .string()
-  .min(MIN_PASSWORD_LENGTH, `expected at least ${String(MIN_PASSWORD_LENGTH)} characters`)
-  .max(MAX_PASSWORD_LENGTH, `expected at most ${String(MAX_PASSWORD_LENGTH)} characters`);
-
-const BOOTSTRAP_KEYS = ['AUTH_BOOTSTRAP_EMAIL', 'AUTH_BOOTSTRAP_PASSWORD'] as const;
-
 export const authSection = z
   .object({
     AUTH_SECRET: secret,
     AUTH_SESSION_TTL: duration.prefault('7d'),
-    AUTH_BOOTSTRAP_EMAIL: z.email('expected an email address').optional(),
-    AUTH_BOOTSTRAP_PASSWORD: password.optional(),
     FILE_URL_SECRET: secret,
   })
-  .transform((env, ctx) => {
-    const { AUTH_BOOTSTRAP_EMAIL: email, AUTH_BOOTSTRAP_PASSWORD: bootstrapPassword } = env;
-    // One without the other would create no user, silently.
-    if ((email === undefined) !== (bootstrapPassword === undefined)) {
-      reportProblems(
-        ctx,
-        BOOTSTRAP_KEYS.filter((key) => env[key] === undefined).map((key) => ({
-          key,
-          message: `required when ${BOOTSTRAP_KEYS.find((other) => other !== key) ?? ''} is set`,
-        })),
-      );
-      return z.NEVER;
-    }
-    return Object.freeze({
+  .transform((env) =>
+    Object.freeze({
       secret: env.AUTH_SECRET,
       sessionTtlMs: env.AUTH_SESSION_TTL,
-      bootstrap:
-        email === undefined || bootstrapPassword === undefined
-          ? undefined
-          : Object.freeze({ email, password: bootstrapPassword }),
       fileUrlSecret: env.FILE_URL_SECRET,
-    });
-  });
+    }),
+  );

@@ -125,6 +125,12 @@ export const settingsOf = (stored: StoredSettings): Settings | undefined => {
   return outcome.settings;
 };
 
+/** The version of the saved settings, 0 while none were saved; their keys stay sealed. */
+export const storedSettingsVersion = async (db: SettingsExecutor): Promise<number> => {
+  const [row] = await db.select({ version: settingsTable.version }).from(settingsTable);
+  return row?.version ?? 0;
+};
+
 export interface SettingsWrite {
   /** The version the settings were read at, 0 for none. */
   readonly expectedVersion: number;
