@@ -1,6 +1,6 @@
 {
   "name": "@liasse/eval",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "description": "Liasse public evaluation set: a synthetic corpus, its ground truth, reference questions and scoring",
   "license": "AGPL-3.0-only",
