@@ -102,6 +102,8 @@ Inside the container, `127.0.0.1` is the container itself: an Ollama server on t
 
 The compose file trusts `172.16.0.0/12`, Docker's default range for the network Coolify's proxy reaches the container over; when Cloudflare proxies the domain, set `TRUSTED_PROXIES` to `172.16.0.0/12,cloudflare`. No untrusted container may share a network with `liasse`. Behind a Cloudflare Tunnel, every client counts as the `cloudflared` container unless its address is trusted too.
 
+Files stay in the `liasse-data` volume unless `STORAGE_DRIVER` is `s3`: set it in Coolify with `S3_BUCKET`, `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY` and, for a server other than AWS, `S3_ENDPOINT` (and `S3_REGION` if it checks the region). The key of a file is the same in both drivers, its path under `/data/files`, so moving to a bucket is copying that directory to the root of the bucket while the application is stopped, then deploying with the new variables. Any other variable of `.env.example` must also be named under `environment` in the compose file before Coolify passes it to the server.
+
 ## Resources
 
 The target is under 150 MB of RAM for the idle container, Postgres excluded. `scripts/check-idle-memory.sh <image>` starts an image with Postgres, waits for its health check and measures it; CI runs it on every pull request. The local embedding model runs in a child process only while it works, between 0.8 and 1.35 GB at its peak, and ends after 10 minutes without a request.
