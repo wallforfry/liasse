@@ -4,7 +4,13 @@ import { DocumentFilters } from './document-filters.tsx';
 import { DocumentListResults } from './document-list-results.tsx';
 import { DocumentSearchBox } from './document-search-box.tsx';
 import { DocumentSearchResults } from './document-search-results.tsx';
-import { type DocumentStatus, readFilters, withFilter, withOffset } from './list-params.ts';
+import {
+  type DocumentStatus,
+  readFilters,
+  withEntity,
+  withFilter,
+  withOffset,
+} from './list-params.ts';
 
 export interface DocumentListPageProps {
   readonly title: string;
@@ -34,6 +40,9 @@ export const DocumentListPage = ({ title, description, status }: DocumentListPag
         statusFilter={status === undefined}
         onChange={(name, value) => {
           setParams(withFilter(params, name, value));
+        }}
+        onEntityChange={(entity) => {
+          setParams(withEntity(params, entity));
         }}
       />
       {filters.query === undefined ? (

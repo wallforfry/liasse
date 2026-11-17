@@ -31,6 +31,7 @@ const listQuery = z
   .strictObject({
     status: z.string().optional(),
     type: z.string().optional(),
+    entity: z.string().optional(),
     private: z.string().optional(),
     limit: integerParam.optional(),
     offset: integerParam.optional(),

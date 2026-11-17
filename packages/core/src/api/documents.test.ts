@@ -8,7 +8,7 @@ import { enqueue } from '../jobs/enqueue.ts';
 import { detectLinksJob } from '../knowledge/jobs.ts';
 import { reclassifyDocumentJob } from '../pipeline/jobs.ts';
 import { type DocumentEventInput, recordDocumentEvent } from '../processing-log/record.ts';
-import { CORPUS } from '../search/corpus.fixture.ts';
+import { CORPUS, ENTITIES } from '../search/corpus.fixture.ts';
 import { parseStorageKey } from '../storage/key.ts';
 import { insertSyntheticDocument } from '../testing/fixtures.ts';
 import { syntheticPdf } from '../testing/synthetic-files.ts';
@@ -419,6 +419,14 @@ describe('documents of the API', () => {
         total: 0,
         has_more: false,
       });
+    });
+
+    it('names an entity by its id, in any of its entity fields', async () => {
+      const issued = PUBLIC.filter(({ issuer }) => issuer === ENTITIES.northwind).length;
+      expect((await listed({ entity: ENTITIES.northwind })).total).toBe(issued);
+      const received = PUBLIC.filter(({ recipient }) => recipient === ENTITIES.resident).length;
+      expect((await listed({ entity: ENTITIES.resident })).total).toBe(received);
+      expect((await listed({ entity: 'ent_synthetic_absent' })).total).toBe(0);
     });
 
     it('pages through the documents, most recent first', async () => {
