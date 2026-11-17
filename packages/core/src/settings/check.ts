@@ -95,7 +95,7 @@ const checkEmbedder = async (
 
 /**
  * Tries each part of the settings with one short call, in parallel, and saves nothing:
- * a text answer, the reading of one pixel, one embedding of the length of
+ * a text answer, the reading of one blank page, one embedding of the length of
  * `EMBEDDING_DIM`, and when Hindsight is on, the forget of a document it does not hold.
  */
 export const checkSettings = async (
