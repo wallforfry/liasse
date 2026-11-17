@@ -250,13 +250,7 @@ export const createLiveRuntime = (options: LiveRuntimeOptions): LiveRuntime => {
     version: () => activeVersion,
     prepare,
     stopSteps: [
-      {
-        name: 'startup tasks',
-        run: () => {
-          tasks.stop();
-          return Promise.resolve();
-        },
-      },
+      { name: 'startup tasks', run: () => tasks.stop() },
       { name: 'workers', run: async () => background?.queue.run() },
       { name: 'watcher', run: async () => background?.folder.run() },
       { name: 'embedder', run: async () => active?.embedder.close() },
