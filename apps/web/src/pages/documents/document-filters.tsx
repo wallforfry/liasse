@@ -74,6 +74,9 @@ const PRIVATE_OPTIONS: readonly Option[] = PRIVATE_FILTERS.map((filter): Option 
   PRIVATE_LABELS[filter],
 ]);
 
+// A search can include private documents or leave them out, not keep only them.
+const SEARCH_PRIVATE_OPTIONS = PRIVATE_OPTIONS.filter(([filter]) => filter !== 'only');
+
 export const DocumentFilters = ({ filters, statusFilter, onChange }: DocumentFiltersProps) => {
   const client = useClient();
   const types = useQuery({ queryKey: ['types'], queryFn: async () => client.listTypes() });
@@ -103,7 +106,7 @@ export const DocumentFilters = ({ filters, statusFilter, onChange }: DocumentFil
         name="private"
         label="Privacy"
         value={filters.private}
-        options={PRIVATE_OPTIONS}
+        options={filters.query === undefined ? PRIVATE_OPTIONS : SEARCH_PRIVATE_OPTIONS}
         onChange={onChange}
       />
     </div>
