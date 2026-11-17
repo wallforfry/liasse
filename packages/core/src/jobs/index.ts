@@ -10,9 +10,15 @@ export {
   PermanentJobError,
   WorkersStoppingError,
 } from './errors.ts';
-export type { JobDeferral, JobFailure } from './execution.ts';
+export {
+  type JobDeferral,
+  type JobFailure,
+  NOT_READY_DELAY,
+  type SettingsFollower,
+} from './execution.ts';
 export {
   handle,
+  type HandlerSet,
   type JobContext,
   type JobHandler,
   type JobRun,

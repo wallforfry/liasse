@@ -18,7 +18,7 @@ export interface EntitiesContext extends EntitiesReadContext {
   readonly textModel: TextModel;
   // `deriveIdentifierKey(config.auth.fileUrlSecret)`.
   readonly identifierKey: IdentifierKey;
-  // The thresholds of the similarity rule, `config.pipeline.entitySimilarity`; by default
+  // The thresholds of the similarity rule, from the pipeline settings; by default
   // those measured with the default local embedder.
   readonly similarity?: SimilarityThresholds;
 }

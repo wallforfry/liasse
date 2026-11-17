@@ -41,7 +41,7 @@ export const registerResources = (server: McpServer, { api, report }: McpDeps): 
         UNTRUSTED,
       mimeType: JSON_TYPE,
     },
-    async (uri) => read(uri, 'types://', report, () => describeTypes(api)),
+    async (uri) => read(uri, 'types://', report, () => describeTypes(api())),
   );
   // Not listed: documents are found with `search` and `query`, never enumerated.
   server.registerResource(
@@ -56,7 +56,7 @@ export const registerResources = (server: McpServer, { api, report }: McpDeps): 
     },
     async (uri, { id }) =>
       read(uri, 'doc://', report, () =>
-        getDocument(api, documentIdOf(id), { include: ['text'], text_limit: MAX_TEXT_LENGTH }),
+        getDocument(api(), documentIdOf(id), { include: ['text'], text_limit: MAX_TEXT_LENGTH }),
       ),
   );
 };

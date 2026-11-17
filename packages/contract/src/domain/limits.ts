@@ -14,6 +14,26 @@ export const MAX_TYPE_DESCRIPTION_LENGTH = 500;
 
 // A page without a text layer costs one vision call, so a scanned PDF longer than this is refused.
 export const DEFAULT_MAX_VISION_PAGES = 100;
+export const MAX_VISION_PAGES_LIMIT = 10_000;
+
+const MEBIBYTE = 1024 * 1024;
+export const DEFAULT_MAX_FILE_SIZE = 50 * MEBIBYTE;
+// An ingested file is hashed and sniffed in memory, and a Node Buffer stops at 2 GiB.
+export const MAX_FILE_SIZE_LIMIT = 2048 * MEBIBYTE - 1;
+
+export const DEFAULT_MAX_NEW_TYPES_PER_DAY = 5;
+export const MAX_NEW_TYPES_PER_DAY_LIMIT = 1000;
+export const DEFAULT_CONFIDENCE_THRESHOLD = 0.7;
+
+// Upper bounds of one model call or one embedding request, their retries included.
+export const DEFAULT_LLM_TIMEOUT_MS = 5 * 60_000;
+export const DEFAULT_EMBEDDING_TIMEOUT_MS = 60_000;
+export const MAX_MODEL_TIMEOUT_MS = 60 * 60_000;
+export const MAX_EMBEDDING_INPUT_TOKENS = 1_000_000;
+
+export const DEFAULT_HINDSIGHT_BANK = 'documents';
+// A provider key is a token, never a document: anything longer is a paste gone wrong.
+export const MAX_API_KEY_LENGTH = 4096;
 
 // A hint given with a file is free text from the caller; it is cut, not rejected.
 export const MAX_HINT_LENGTH = 2000;
@@ -28,7 +48,7 @@ export const MAX_WATCH_REQUEUES = 1;
 // Entity resolution: a mention whose embedding is closer than the first threshold is
 // attached, one at or above the second is arbitrated by the text model among this many
 // candidates, and anything below is a new entity. The two thresholds are the defaults of
-// `ENTITY_ATTACH_SIMILARITY` and `ENTITY_ARBITRATION_SIMILARITY`, measured with the default
+// `entity_attach_similarity` and `entity_arbitration_similarity` of the settings, measured with the default
 // local embedder by `pnpm eval:calibrate` (eval/README.md): with it, two distinct entities
 // mentioned with their context reach 0.995 and no alias goes above 0.976, so similarity
 // alone attaches nothing, and every alias measured is at or above 0.819.

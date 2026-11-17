@@ -6,7 +6,6 @@ import { z } from 'zod';
 import { BEARER_SCHEME, failures, operation, SIGNED_URL_SCHEME, valid } from '../describe.ts';
 import type { AppEnv } from '../env.ts';
 import { idParam } from '../query-params.ts';
-import type { RouteDeps } from './deps.ts';
 
 // Types a browser displays without running anything of the file. Everything else is
 // downloaded: an email or a DOCX may carry markup, and HEIC is not displayed anyway.
@@ -56,12 +55,14 @@ const grantQuery = z.strictObject({
   signature: z.string().optional(),
 });
 
-export interface FileRouteDeps extends Pick<RouteDeps, 'api'> {
+export interface FileRouteDeps {
+  /** Files are served whether or not the settings are saved. */
+  readonly files: Pick<ApiContext, 'db' | 'storage'>;
   /** A Bearer token, or the grant of a signed URL. No request deadline: a file may be long. */
   readonly fileAccess: MiddlewareHandler<AppEnv>;
 }
 
-export const fileRoutes = ({ api, fileAccess }: FileRouteDeps): Hono<AppEnv> =>
+export const fileRoutes = ({ files, fileAccess }: FileRouteDeps): Hono<AppEnv> =>
   new Hono<AppEnv>().get(
     '/documents/:id/file',
     operation({
@@ -79,5 +80,5 @@ export const fileRoutes = ({ api, fileAccess }: FileRouteDeps): Hono<AppEnv> =>
     fileAccess,
     valid('param', idParam),
     valid('query', grantQuery),
-    async (context) => documentFileResponse(api, context.req.valid('param').id),
+    async (context) => documentFileResponse(files, context.req.valid('param').id),
   );

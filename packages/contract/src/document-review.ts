@@ -31,7 +31,7 @@ export type ReviewedValue = z.output<typeof reviewedValueSchema>;
 // is of its type and of each value. The rule is the server's, with its current threshold.
 export const documentReviewSchema = z.object({
   threshold: confidenceSchema.describe(
-    'The current `CONFIDENCE_THRESHOLD` of the server, which may differ from the one the ' +
+    'The current `confidence_threshold` of the settings, which may differ from the one the ' +
       'document was settled with.',
   ),
   reasons: z

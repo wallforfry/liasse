@@ -3,7 +3,8 @@ import type { ReportFailure } from './outcome.ts';
 
 /** What the tools and resources are built on: the use cases REST is given, and a log. */
 export interface McpDeps {
-  readonly api: ApiContext;
+  /** Read at every call: the context of the settings in force then. */
+  readonly api: () => ApiContext;
   readonly report: ReportFailure;
 }
 

@@ -219,7 +219,7 @@ describe('the job handlers of the pipeline', () => {
     const id = await harness.ingest('queued');
     const workers = await startWorkers({
       db: harness.db,
-      handlers: createPipelineHandlers(harness.deps()),
+      handlers: () => ({ handlers: createPipelineHandlers(harness.deps()) }),
       concurrency: 2,
       pollIntervalMs: 20,
     });
@@ -353,7 +353,7 @@ describe('a document whose job the queue fails by itself', () => {
     });
     const workers = await startWorkers({
       db: harness.db,
-      handlers: createPipelineHandlers(deps),
+      handlers: () => ({ handlers: createPipelineHandlers(deps) }),
       concurrency: 1,
       pollIntervalMs: 20,
     });

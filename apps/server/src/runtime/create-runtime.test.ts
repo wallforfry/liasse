@@ -123,7 +123,7 @@ describe('createRuntime', () => {
     expect(row).toMatchObject({ source: 'watch', originalName: 'dropped.pdf' });
   });
 
-  it('binds Hindsight once HINDSIGHT_URL is set: a deletion forgets what the bank holds', async () => {
+  it('binds Hindsight once its URL is set: a deletion forgets what the bank holds', async () => {
     const calls: string[] = [];
     const hindsight = createHttpServer((request, response) => {
       calls.push(`${request.method ?? ''} ${request.url ?? ''}`);
@@ -138,7 +138,11 @@ describe('createRuntime', () => {
     const address = hindsight.address();
     if (address === null || typeof address === 'string') throw new Error('no port');
     try {
-      const runtime = await start({ HINDSIGHT_URL: `http://127.0.0.1:${String(address.port)}` });
+      const runtime = await start(
+        {},
+        {},
+        { hindsight: { url: `http://127.0.0.1:${String(address.port)}` } },
+      );
       expect(
         harness.lines().some((line) => line.includes('are sent to Hindsight at 127.0.0.1')),
       ).toBe(true);
@@ -184,7 +188,7 @@ describe('createRuntime', () => {
     const address = hindsight.address();
     if (address === null || typeof address === 'string') throw new Error('no port');
     try {
-      await start({ HINDSIGHT_URL: `http://127.0.0.1:${String(address.port)}` });
+      await start({}, {}, { hindsight: { url: `http://127.0.0.1:${String(address.port)}` } });
       const { db } = harness.database();
       const { id } = await insertSyntheticDocument(db, { status: 'indexed' });
       await db.insert(facts).values([
@@ -205,7 +209,7 @@ describe('createRuntime', () => {
     }
   });
 
-  it('queues no Hindsight sync without HINDSIGHT_URL', async () => {
+  it('queues no Hindsight sync without a URL of Hindsight', async () => {
     const runtime = await start();
     const form = new FormData();
     form.append('file', new File([syntheticPdf('kept local')], 'local.pdf'));

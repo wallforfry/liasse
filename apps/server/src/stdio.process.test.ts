@@ -8,7 +8,10 @@ import {
   buildSyntheticPdf,
   createTestDatabase,
   insertSyntheticDocument,
+  seedSettings,
+  type SettingsOverrides,
   SYNTHETIC_ENV,
+  syntheticSettings,
   TEST_EMBEDDING_DIM,
   type TestDatabase,
   waitUntil,
@@ -95,8 +98,15 @@ interface StdioServer {
 const withStdioServer = async (
   env: Readonly<Record<string, string>>,
   use: (server: StdioServer) => Promise<void>,
+  settings: SettingsOverrides = {},
 ): Promise<void> => {
   const database = await createTestDatabase({ migrate: false });
+  await seedSettings({
+    databaseUrl: database.url,
+    authSecret: SYNTHETIC_ENV.AUTH_SECRET,
+    embeddingDim: Number(env.EMBEDDING_DIM ?? TEST_EMBEDDING_DIM),
+    settings: syntheticSettings(settings),
+  });
   const files = await mkdtemp(join(tmpdir(), 'liasse-stdio-'));
   const child = spawn(
     process.execPath,
@@ -214,31 +224,33 @@ describe('MCP over stdio', () => {
     'keeps stdout to the protocol while a first PDF goes through extraction',
     async () => {
       const models = await startModelStub(TEST_EMBEDDING_DIM);
-      const env = {
-        LLM_BASE_URL: models.url,
-        EMBEDDING_PROVIDER: 'ollama',
-        EMBEDDING_MODEL: 'embedding-model',
-        EMBEDDING_BASE_URL: models.url,
-        EMBEDDING_DIM: String(TEST_EMBEDDING_DIM),
-      };
+      const settings = {
+        llm: { base_url: models.url },
+        embedding: { provider: 'ollama', model: 'embedding-model', base_url: models.url },
+      } as const;
+      const env = { EMBEDDING_DIM: String(TEST_EMBEDDING_DIM) };
       try {
-        await withStdioServer(env, async ({ callTool, end, ...server }) => {
-          const pdf = buildSyntheticPdf([{ lines: [...LETTER.lines] }]);
-          const { id } = z.object({ id: z.string() }).parse(
-            await callTool('ingest', {
-              file: Buffer.from(pdf).toString('base64'),
-              filename: 'letter.pdf',
-            }),
-          );
-          await waitUntil(
-            async () => status.parse(await callTool('get_status', { id })).status === 'indexed',
-          );
-          expect(models.requests.map(({ path }) => path)).toContain('/v1/chat/completions');
+        await withStdioServer(
+          env,
+          async ({ callTool, end, ...server }) => {
+            const pdf = buildSyntheticPdf([{ lines: [...LETTER.lines] }]);
+            const { id } = z.object({ id: z.string() }).parse(
+              await callTool('ingest', {
+                file: Buffer.from(pdf).toString('base64'),
+                filename: 'letter.pdf',
+              }),
+            );
+            await waitUntil(
+              async () => status.parse(await callTool('get_status', { id })).status === 'indexed',
+            );
+            expect(models.requests.map(({ path }) => path)).toContain('/v1/chat/completions');
 
-          expect(await end()).toBe(0);
-          expect(foreignLines(server.stdout())).toEqual([]);
-          expect(server.unreadable()).toEqual([]);
-        });
+            expect(await end()).toBe(0);
+            expect(foreignLines(server.stdout())).toEqual([]);
+            expect(server.unreadable()).toEqual([]);
+          },
+          settings,
+        );
       } finally {
         await models.close();
       }

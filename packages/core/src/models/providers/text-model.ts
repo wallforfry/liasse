@@ -1,10 +1,11 @@
 import { ModelOutputError } from '../errors.ts';
 import type { TextModel } from '../ports.ts';
-import { languageCall, type LlmConfig, runLanguageCall } from './language-call.ts';
+import type { LlmSettings } from '../../settings/resolve.ts';
+import { languageCall, runLanguageCall } from './language-call.ts';
 import { describeIssues } from './safe-text.ts';
 import { wireSchema } from './wire-schema.ts';
 
-export const createTextModel = (config: LlmConfig): TextModel => {
+export const createTextModel = (config: LlmSettings): TextModel => {
   const call = languageCall(config, config.textModel);
   return {
     generateObject: async ({ schema, system, prompt, signal }) => {

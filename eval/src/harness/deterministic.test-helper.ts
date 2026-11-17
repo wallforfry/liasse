@@ -1,4 +1,5 @@
 import { join } from 'node:path';
+import type { Settings } from '@liasse/contract';
 import {
   chatCompletion,
   createFakeTextModel,
@@ -9,6 +10,7 @@ import {
   type StubResponse,
   type StubServer,
   SYNTHETIC_ENV,
+  syntheticSettings,
   TEST_EMBEDDING_DIM,
 } from '@liasse/core/testing';
 import { z } from 'zod';
@@ -69,16 +71,19 @@ const answer = ({ path, body }: StubRequest): StubResponse => {
 
 export const startModelStub = (): Promise<StubServer> => startStubServer(answer);
 
-/** The environment of a deterministic run: the synthetic one, models on the stand-in. */
-export const deterministicEnv = (stubUrl: string, folder: string): Env => ({
+/** The environment of a deterministic run: the synthetic one. */
+export const deterministicEnv = (folder: string): Env => ({
   ...SYNTHETIC_ENV,
-  LLM_BASE_URL: stubUrl,
-  EMBEDDING_PROVIDER: 'ollama',
-  EMBEDDING_MODEL: 'embedding-model',
-  EMBEDDING_BASE_URL: stubUrl,
   EMBEDDING_DIM: String(TEST_EMBEDDING_DIM),
   EMBEDDING_CACHE_DIR: join(folder, 'models'),
 });
+
+/** The settings of a deterministic run: every model on the stand-in. */
+export const deterministicSettings = (stubUrl: string): Settings =>
+  syntheticSettings({
+    llm: { base_url: stubUrl },
+    embedding: { provider: 'ollama', model: 'embedding-model', base_url: stubUrl },
+  });
 
 // The agent prompt numbers each call it shows: "Call 1: search {...}".
 const callsShown = (prompt: string): number => prompt.match(/^Call \d+: /gm)?.length ?? 0;

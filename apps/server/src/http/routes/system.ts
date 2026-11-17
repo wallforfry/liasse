@@ -1,5 +1,7 @@
 import { healthSchema } from '@liasse/contract';
 import { readStats } from '@liasse/core/api';
+import type { Database } from '@liasse/core/db';
+import type { MiddlewareHandler } from 'hono';
 import { Hono } from 'hono';
 import { jsonResponse, operation } from '../describe.ts';
 import type { AppEnv } from '../env.ts';
@@ -9,21 +11,18 @@ import {
   readProcessStats,
   renderMetrics,
 } from '../metrics.ts';
-import type { RouteDeps } from './deps.ts';
 
 const TAG = 'System';
 
-export interface SystemRouteDeps extends RouteDeps {
+export interface SystemRouteDeps {
+  /** Credentials and a deadline only: the metrics answer whether or not settings are saved. */
+  readonly credentialed: MiddlewareHandler<AppEnv>;
+  readonly db: Database;
   readonly ping: () => Promise<void>;
   readonly metrics: HttpMetrics;
 }
 
-export const systemRoutes = ({
-  api,
-  authenticated,
-  ping,
-  metrics,
-}: SystemRouteDeps): Hono<AppEnv> =>
+export const systemRoutes = ({ credentialed, db, ping, metrics }: SystemRouteDeps): Hono<AppEnv> =>
   new Hono<AppEnv>()
     .get(
       '/health',
@@ -59,13 +58,13 @@ export const systemRoutes = ({
           },
         },
       }),
-      authenticated,
+      credentialed,
       async (context) =>
         context.body(
           renderMetrics({
             process: readProcessStats(),
             http: metrics.snapshot(),
-            stats: await readStats(api),
+            stats: await readStats({ db }),
           }),
           200,
           { 'Content-Type': METRICS_CONTENT_TYPE },

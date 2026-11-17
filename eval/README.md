@@ -178,16 +178,30 @@ The tool calls document the intended route: an agent is free to answer another w
 
 ```sh
 pnpm db:up
-pnpm eval:run --label <name> [--out <file>]
+pnpm eval:run --settings <settings.json> --label <name> [--out <file>]
 pnpm eval:compare <report.json> <report.json> [...]
 ```
 
-`pnpm eval:run` calls the models of the configuration: it reads `.env` at the root of the repository, then the environment, like the server. It is never part of `pnpm test` or the CI. One run:
+`pnpm eval:run` calls the models of a settings file: a JSON document in the shape of the settings the server stores in its database, keys in clear, read with the same schema of `@liasse/contract` (`settingsSchema`), defaults included. For instance:
 
-1. Starts the real server (`createRuntime` of `@liasse/server`) on a throwaway database of the test Postgres (`TEST_DATABASE_URL`) and a temporary folder, with an account and an API key made for the run through the auth server (the bootstrap account, then a key created over HTTP as the web UI does). The watched folder, Hindsight and the accounts of the configuration are switched off; the models and the embedder are the configured ones.
+```json
+{
+  "llm": {
+    "provider": "anthropic",
+    "api_key": "...",
+    "text_model": "...",
+    "vision_model": "..."
+  },
+  "embedding": { "provider": "local" }
+}
+```
+
+A path is read from the folder the command is called from. The file holds keys: keep it out of the repository, for instance as `eval-settings.json` at its root, which git ignores like the reports. The rest of the configuration (`TEST_DATABASE_URL`, `EMBEDDING_DIM`, `EMBEDDING_CACHE_DIR`) comes from `.env` at the root of the repository, then the environment, like the server. It is never part of `pnpm test` or the CI. One run:
+
+1. Starts the real server (`createRuntime` of `@liasse/server`) on a throwaway database of the test Postgres (`TEST_DATABASE_URL`) and a temporary folder, with an account and an API key made for the run through the auth server (the bootstrap account, then a key created over HTTP as the web UI does). The settings file is saved in that database before the server starts, Hindsight cleared from it; the watched folder and the accounts of the configuration are switched off too. The models and the embedder are those of the file.
 2. Uploads the fifty files through the API, in corpus order, and waits until no job is queued or running. The attached bill is found as the document linked `attachment_of` to the email.
 3. Reads what the instance stored for each document, names the documents it links to by their corpus id, and scores it with `scoreDocument`.
-4. Has an agent answer each question with the read-only tools of the MCP endpoint. The agent is the configured text model behind the `TextModel` port: each turn it calls one tool or answers, and sees every call made so far, the results delimited as untrusted data. It is shown the keys and labels of the question's slots, and its answer schema offers those keys and nothing else, so no value can land under a key the question does not have; a verdict is offered only for a yes-or-no question. The documents it cites are translated to corpus ids and the answer is scored with `scoreAnswer`.
+4. Has an agent answer each question with the read-only tools of the MCP endpoint. The agent is the text model of the settings behind the `TextModel` port: each turn it calls one tool or answers, and sees every call made so far, the results delimited as untrusted data. It is shown the keys and labels of the question's slots, and its answer schema offers those keys and nothing else, so no value can land under a key the question does not have; a verdict is offered only for a yes-or-no question. The documents it cites are translated to corpus ids and the answer is scored with `scoreAnswer`.
 5. Writes the report (`eval-<label>.json` unless `--out` says otherwise) and prints its summary. The instance is dropped, also when the run is interrupted by SIGINT or SIGTERM.
 
 The report holds the models of the run, the documents the instance did not find or left failed or waiting for review, every document result (each judgement with its outcome), the totals of `aggregateReport` (per section, per core field and per type field), and each question with its answer, its tool calls, whether it passed and why not. `pnpm eval:compare` puts several reports side by side, one column each, in Markdown: two models, or two versions of a prompt, under two labels.
@@ -199,15 +213,15 @@ The scanned pages have been read by no vision model yet: until a run with one re
 ### Entity similarity thresholds
 
 ```sh
-pnpm eval:calibrate
+pnpm eval:calibrate --settings <settings.json>
 ```
 
-Entity resolution attaches a mention to a known entity above `ENTITY_ATTACH_SIMILARITY` (cosine) and asks the text model from `ENTITY_ARBITRATION_SIMILARITY` up to it. The command measures both with the embedder of the configuration, in two ways:
+Entity resolution attaches a mention to a known entity above `entity_attach_similarity` (cosine) and asks the text model from `entity_arbitration_similarity` up to it, two pipeline settings. The command measures both with the embedder of the settings file, the file of `pnpm eval:run`, in two ways:
 
 - **Bare names**: every name and alias of the corpus entities (51 names of 27 entities).
 - **Mentions with their line of context**: every name or alias of an entity that a document writes (case aside, not inside a longer word, and not as part of a longer name of the same entity), once per document, duplicates of a document left out. It is embedded as resolution embeds a mention, by `mentionEmbeddingText` of `@liasse/core/entities`: the name as written, a line break, then the line of the page text that holds it, or the next line when that line is the name alone. The line stands in for the context the extraction model writes, which no measure here can know.
 
-For each, it compares every pair of samples of one kind, except two equal names of one entity (after the normalization of the name rule, which attaches them before similarity is looked at), counts what the configured thresholds attach and arbitrate, and suggests values: `attach` at or above the closest pair of distinct entities, `arbitrate` at or below the farthest pair of names of one entity. It changes no setting.
+For each, it compares every pair of samples of one kind, except two equal names of one entity (after the normalization of the name rule, which attaches them before similarity is looked at), counts what the thresholds of the file attach and arbitrate, and suggests values: `attach` at or above the closest pair of distinct entities, `arbitrate` at or below the farthest pair of names of one entity. It changes no setting.
 
 Measured on 15 November 2026 with the default local embedder (`Xenova/multilingual-e5-small`, 384 dimensions, run offline once downloaded):
 
@@ -230,7 +244,7 @@ The context weighs more than the name. Two distinct entities named on one line g
 
 An earlier record of the bare names counted 31 pairs of one entity, two names equal but for their case among them, and counted as arbitrated the pairs above `attach` too.
 
-Limits: the context line is a stand-in, and the corpus is small. Of the 123 mentions, 55 are of the owner, so 630 of the 640 pairs of one entity are pairs of her names; the other entities give 10. Another embedder needs its own measure: run the command with its configuration and set `ENTITY_ATTACH_SIMILARITY` and `ENTITY_ARBITRATION_SIMILARITY` from what it prints.
+Limits: the context line is a stand-in, and the corpus is small. Of the 123 mentions, 55 are of the owner, so 630 of the 640 pairs of one entity are pairs of her names; the other entities give 10. Another embedder needs its own measure: run the command with its settings and set `entity_attach_similarity` and `entity_arbitration_similarity` from what it prints.
 
 ## Regenerating
 

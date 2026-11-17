@@ -162,7 +162,7 @@ export const decideChange = (
 /**
  * The application of a pending change by the auto-apply policy. Whether the change is
  * safe is read again under the lock of its row, from the registry as it is now: a change
- * that is no longer safe loses its `auto` flag, and `AUTO_APPLY=safe` leaves it pending.
+ * that is no longer safe loses its `auto` flag, and `auto_apply` safe leaves it pending.
  */
 export const applyByPolicy = (
   db: Database,
@@ -174,6 +174,6 @@ export const applyByPolicy = (
     const safe = stored.auto && change !== undefined && (await isStillSafe(tx, change));
     if (stored.auto && !safe) await markUnsafe(tx, id);
     if (!appliesAutomatically(mode, safe)) return { outcome: 'not_eligible' };
-    const note = `Applied automatically (AUTO_APPLY=${mode}).`;
+    const note = `Applied automatically (auto_apply ${mode}).`;
     return { outcome: 'decided', decided: await applyLocked(tx, stored, note) };
   });

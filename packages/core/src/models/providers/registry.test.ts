@@ -11,9 +11,9 @@ import {
 import { createTextModel } from './text-model.ts';
 import { NATIVE_GENERATION } from './native.fixture.ts';
 import {
-  embeddingConfig,
+  remoteEmbeddingSettings,
   embeddings,
-  llmConfig,
+  llmSettings,
   SYNTHETIC_API_KEY,
 } from '../../testing/provider-wire.ts';
 
@@ -74,10 +74,10 @@ describe('provider registry', () => {
       const { path, credential, resolvedModel, respond } = NATIVE_GENERATION[provider];
       const server = await start({ body: respond(OUTPUT) });
       const model = createTextModel(
-        llmConfig({
-          LLM_PROVIDER: provider,
-          LLM_API_KEY: SYNTHETIC_API_KEY,
-          LLM_BASE_URL: `${server.url}/v1`,
+        llmSettings({
+          provider: provider,
+          api_key: SYNTHETIC_API_KEY,
+          base_url: `${server.url}/v1`,
         }),
       );
       expect(
@@ -99,12 +99,14 @@ describe('provider registry', () => {
       const { path, response, body, withoutKey } = EMBEDDING[provider];
       const server = await start(response);
       const embedder = await createProviderEmbedder(
-        embeddingConfig({
-          EMBEDDING_PROVIDER: provider,
-          EMBEDDING_API_KEY: SYNTHETIC_API_KEY,
-          EMBEDDING_BASE_URL: `${server.url}/v1`,
-          EMBEDDING_DIM: '3',
-        }),
+        remoteEmbeddingSettings(
+          {
+            provider: provider,
+            api_key: SYNTHETIC_API_KEY,
+            base_url: `${server.url}/v1`,
+          },
+          3,
+        ),
       );
       expect(await embedder.embed(TEXTS, 'passage')).toEqual(VECTORS);
       expect(server.requests[0]).toMatchObject({ path, body });
@@ -115,12 +117,14 @@ describe('provider registry', () => {
   it('asks Gemini for query embeddings when the texts are queries', async () => {
     const server = await start(EMBEDDING.gemini.response);
     const embedder = await createProviderEmbedder(
-      embeddingConfig({
-        EMBEDDING_PROVIDER: 'gemini',
-        EMBEDDING_API_KEY: SYNTHETIC_API_KEY,
-        EMBEDDING_BASE_URL: `${server.url}/v1`,
-        EMBEDDING_DIM: '3',
-      }),
+      remoteEmbeddingSettings(
+        {
+          provider: 'gemini',
+          api_key: SYNTHETIC_API_KEY,
+          base_url: `${server.url}/v1`,
+        },
+        3,
+      ),
     );
     await embedder.embed(TEXTS, 'query');
     expect(server.requests[0]).toMatchObject({

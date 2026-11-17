@@ -1,6 +1,6 @@
 import type { z } from 'zod';
-import { baseUrl } from '../config/fields.ts';
-import type { Config } from '../config/schema.ts';
+import { httpBaseUrlSchema } from '@liasse/contract/domain';
+import type { HindsightSettings } from '../settings/resolve.ts';
 import { type HindsightOperation, HindsightUrlError } from './errors.ts';
 import {
   type HindsightRequest,
@@ -20,8 +20,6 @@ import {
   retainPath,
   retainResponseSchema,
 } from './wire.ts';
-
-export type HindsightSettings = NonNullable<Config['hindsight']>;
 
 export type HindsightClientOptions = Partial<RequestPolicy>;
 
@@ -82,7 +80,7 @@ export const createHindsightClient = (
   { url, bank, apiKey }: HindsightSettings,
   options: HindsightClientOptions = {},
 ): HindsightClient => {
-  if (!baseUrl.safeParse(url).success) throw new HindsightUrlError();
+  if (!httpBaseUrlSchema.safeParse(url).success) throw new HindsightUrlError();
   const policy: RequestPolicy = { fetch, ...DEFAULTS, ...options };
   const authorization = apiKey === undefined ? {} : { authorization: `Bearer ${apiKey}` };
 

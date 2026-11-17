@@ -121,7 +121,7 @@ describe('workers: locks, wake-up and stop', () => {
     await harness.start({
       pollIntervalMs,
       maxPollIntervalMs: pollIntervalMs,
-      handlers: [handle(labelJob, () => Promise.resolve())],
+      handlers: () => ({ handlers: [handle(labelJob, () => Promise.resolve())] }),
     });
     for (const label of ['first', 'second', 'third', 'fourth', 'fifth']) {
       const id = await harness.queue(label);
@@ -271,7 +271,7 @@ describe('workers: locks, wake-up and stop', () => {
       db: unreachable.db,
       concurrency: 1,
       pollIntervalMs: 10,
-      handlers: [handle(labelJob, () => Promise.resolve())],
+      handlers: () => ({ handlers: [handle(labelJob, () => Promise.resolve())] }),
       onError: (error) => errors.push(error),
     });
     await waitUntil(() => errors.length >= 3);

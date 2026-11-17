@@ -68,20 +68,20 @@ export type ExtractDocumentText = (
 ) => Promise<ExtractedText>;
 
 export interface PipelineSettings {
-  /** `CONFIDENCE_THRESHOLD`, `MAX_NEW_TYPES_PER_DAY`, `SCHEMA_LANGUAGE`, `MAX_FILE_SIZE`. */
+  /** `confidence_threshold`, `max_new_types_per_day`, `schema_language`, `max_file_size`. */
   readonly confidenceThreshold: number;
   readonly maxNewTypesPerDay: number;
   readonly schemaLanguage: SchemaLanguage;
   readonly maxFileSize: number;
-  /** `MAX_VISION_PAGES`. */
+  /** `max_vision_pages`. */
   readonly maxVisionPages?: number;
   /** Tokens of document text one extraction call may carry; `MAX_EXTRACTION_TOKENS` by default. */
   readonly maxExtractionTokens?: number;
   /** Memory and CPU the process that reads a file may use; `DEFAULT_TEXT_PROCESS_LIMITS` by default. */
   readonly textProcessLimits?: Partial<TextProcessLimits>;
   /**
-   * Thresholds of the similarity rule of entity resolution, `ENTITY_ATTACH_SIMILARITY`
-   * and `ENTITY_ARBITRATION_SIMILARITY`; those measured with the default local embedder
+   * Thresholds of the similarity rule of entity resolution, `entity_attach_similarity`
+   * and `entity_arbitration_similarity` of the settings; those measured with the default local embedder
    * by default.
    */
   readonly entitySimilarity?: SimilarityThresholds;

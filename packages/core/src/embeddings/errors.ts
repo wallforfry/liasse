@@ -10,7 +10,8 @@ export class EmbeddingModelDimensionError extends StartupError {
     super(
       `The embedding model ${model} produces vectors of ${String(produced)} dimensions but ` +
         `EMBEDDING_DIM=${String(configured)}. Set EMBEDDING_DIM=${String(produced)}, or set ` +
-        `EMBEDDING_MODEL to a model that produces ${String(configured)} dimensions. The ` +
+        `the embedding model of the settings to one that produces ${String(configured)} ` +
+        'dimensions. The ' +
         'dimension of an installed database is fixed: changing it needs an empty database.',
     );
     this.model = model;

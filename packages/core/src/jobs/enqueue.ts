@@ -2,6 +2,7 @@ import { sql } from 'drizzle-orm';
 import type { Database } from '../db/client.ts';
 import type { JsonObject } from '../db/columns.ts';
 import { jobs } from '../db/schema/jobs.ts';
+import { settings } from '../db/schema/settings.ts';
 import { type JobKind, parseJobPayload } from './kinds.ts';
 
 export const JOBS_CHANNEL = 'liasse_jobs';
@@ -24,6 +25,9 @@ export const enqueue = async <Payload extends JsonObject>(
     .values({
       kind: kind.name,
       payload: parseJobPayload(kind, payload),
+      // Read in the transaction of the caller: under the shared embedder lock at ingestion,
+      // a save that changed the embedder has committed before this reads its version.
+      settingsVersion: sql`COALESCE((SELECT ${settings.version} FROM ${settings}), 0)`,
       ...(runAfter === undefined ? {} : { runAfter }),
       ...(kind.maxAttempts === undefined ? {} : { maxAttempts: kind.maxAttempts }),
     })

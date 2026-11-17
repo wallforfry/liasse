@@ -1,7 +1,7 @@
-import type { Config } from '../config/schema.ts';
 import type { Database } from '../db/client.ts';
 import type { JobExecutor } from '../jobs/enqueue.ts';
 import type { RegisteredHandler } from '../jobs/handlers.ts';
+import type { HindsightSettings, ResolvedSettings } from '../settings/resolve.ts';
 import { createHindsightClient, type HindsightClientOptions } from './client.ts';
 import { type HindsightForgetSweepOptions, requeueHindsightForgets } from './forget-sweep.ts';
 import type { SensitiveDetector } from './memory.ts';
@@ -54,12 +54,12 @@ const DISABLED: HindsightIntegration = Object.freeze({
 });
 
 /**
- * The whole integration, from `config.hindsight`. Without `HINDSIGHT_URL` that section
- * is undefined: no client exists, no job is queued and no handler is registered, so no
+ * The whole integration, from the Hindsight settings. Without a URL they are
+ * undefined: no client exists, no job is queued and no handler is registered, so no
  * request to Hindsight can be made.
  */
 export const createHindsightIntegration = (
-  settings: Config['hindsight'],
+  settings: HindsightSettings | undefined,
   { db, client, isSensitive, onFactsWithheld }: HindsightIntegrationDeps,
 ): HindsightIntegration => {
   if (settings === undefined) return DISABLED;
@@ -82,8 +82,10 @@ export const createHindsightIntegration = (
 };
 
 /** The line of the startup privacy summary, undefined when the integration is disabled. */
-export const describeHindsight = ({ hindsight }: Pick<Config, 'hindsight'>): string | undefined =>
+export const describeHindsight = ({
+  hindsight,
+}: Pick<ResolvedSettings, 'hindsight'>): string | undefined =>
   hindsight === undefined
     ? undefined
     : `Warning: facts extracted from documents not flagged private are sent to Hindsight at ${new URL(hindsight.url).host} (bank ${hindsight.bank}). ` +
-      'Unset HINDSIGHT_URL to keep them local.';
+      'Clear the URL of Hindsight in the settings to keep them local.';

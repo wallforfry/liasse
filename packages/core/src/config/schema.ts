@@ -1,16 +1,14 @@
 import { z } from 'zod';
-import { embeddingSection, llmSection } from './model-sections.ts';
-import { hindsightSection, pipelineSection } from './pipeline-sections.ts';
+import { embeddingSection, resourcesSection } from './process-sections.ts';
+import { REMOVED_ENV_KEYS, REMOVED_ENV_MESSAGE } from './removed.ts';
 import { authSection, databaseSection, serverSection, storageSection } from './server-sections.ts';
 
 const SECTIONS = {
   server: serverSection,
   database: databaseSection,
   storage: storageSection,
-  llm: llmSection,
   embedding: embeddingSection,
-  pipeline: pipelineSection,
-  hindsight: hindsightSection,
+  resources: resourcesSection,
   auth: authSection,
 } as const;
 
@@ -32,25 +30,26 @@ export const configSchema = z.record(z.string(), z.string().optional()).transfor
     server: SECTIONS.server.safeParse(env),
     database: SECTIONS.database.safeParse(env),
     storage: SECTIONS.storage.safeParse(env),
-    llm: SECTIONS.llm.safeParse(env),
     embedding: SECTIONS.embedding.safeParse(env),
-    pipeline: SECTIONS.pipeline.safeParse(env),
-    hindsight: SECTIONS.hindsight.safeParse(env),
+    resources: SECTIONS.resources.safeParse(env),
     auth: SECTIONS.auth.safeParse(env),
   };
+  const removed = REMOVED_ENV_KEYS.filter((key) => env[key] !== undefined);
+  removed.forEach((key) => {
+    ctx.addIssue({ code: 'custom', path: [key], message: REMOVED_ENV_MESSAGE });
+  });
   Object.values(parsed)
     .flatMap((result) => (result.success ? [] : result.error.issues))
     .forEach(({ path, message }) => {
       ctx.addIssue({ code: 'custom', path: [...path], message });
     });
   if (
+    removed.length > 0 ||
     !parsed.server.success ||
     !parsed.database.success ||
     !parsed.storage.success ||
-    !parsed.llm.success ||
     !parsed.embedding.success ||
-    !parsed.pipeline.success ||
-    !parsed.hindsight.success ||
+    !parsed.resources.success ||
     !parsed.auth.success
   ) {
     return z.NEVER;
@@ -59,10 +58,8 @@ export const configSchema = z.record(z.string(), z.string().optional()).transfor
     server: parsed.server.data,
     database: parsed.database.data,
     storage: parsed.storage.data,
-    llm: parsed.llm.data,
     embedding: parsed.embedding.data,
-    pipeline: parsed.pipeline.data,
-    hindsight: parsed.hindsight.data,
+    resources: parsed.resources.data,
     auth: parsed.auth.data,
   });
 });

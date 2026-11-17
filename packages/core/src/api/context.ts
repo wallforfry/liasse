@@ -13,11 +13,11 @@ export interface ApiContext {
   readonly embedder: Embedder;
   /** The full-text side of hybrid search, chosen at startup by `prepareFullTextRanking`. */
   readonly fullText: ChunkRanker;
-  /** `SCHEMA_LANGUAGE` of the configuration: the language a type created by hand is named in. */
+  /** `schema_language` of the settings: the language a type created by hand is named in. */
   readonly schemaLanguage: SchemaLanguage;
-  /** In bytes; `config.pipeline.maxFileSize`. */
+  /** In bytes; `max_file_size` of the settings. */
   readonly maxFileSize: number;
-  /** `CONFIDENCE_THRESHOLD`: the rule of the `review` part of a document. */
+  /** `confidence_threshold` of the settings: the rule of the `review` part of a document. */
   readonly confidenceThreshold: number;
   readonly fileUrls: FileUrls;
   readonly features: ApiFeatures;

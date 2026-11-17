@@ -1,4 +1,4 @@
-import type { Config } from '../../config/schema.ts';
+import type { RemoteEmbeddingSettings } from '../../settings/resolve.ts';
 import { EmbeddingDimensionError, ModelProviderError } from '../errors.ts';
 import type { Embedder, Embedding, EmbeddingKind } from '../ports.ts';
 import { inRequestOrder } from './embedding-order.ts';
@@ -7,8 +7,6 @@ import { MAX_RETRIES } from './language-call.ts';
 import { loadSdk, once } from './lazy.ts';
 import { type HostResolver, isLocalEndpoint } from './locality.ts';
 import { PROVIDERS } from './registry.ts';
-
-export type RemoteEmbeddingConfig = Exclude<Config['embedding'], { readonly provider: 'local' }>;
 
 // The SDK already splits a call at the provider's own limit of inputs per request (32 for
 // Mistral, 100 for Gemini, 2048 for OpenAI). This lower bound also keeps a request of
@@ -28,7 +26,7 @@ export interface ProviderEmbedderOptions {
 
 // Asynchronous because `isLocal` is settled here, once, by resolving the endpoint's host.
 export const createProviderEmbedder = async (
-  config: RemoteEmbeddingConfig,
+  config: RemoteEmbeddingSettings,
   { resolveHost }: ProviderEmbedderOptions = {},
 ): Promise<Embedder> => {
   const { provider, model, dimension, timeoutMs } = config;

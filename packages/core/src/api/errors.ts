@@ -7,6 +7,7 @@ import { sqlStateOf } from '../db/sql-state.ts';
 export const API_ERROR_KINDS = [
   'invalid',
   'not_found',
+  'conflict',
   'too_large',
   'unsupported',
   'timeout',

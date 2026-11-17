@@ -5,7 +5,7 @@ import { extractionOutputSchema } from '../../pipeline/extract/extraction-schema
 import { anthropicJsonText, NATIVE_GENERATION } from './native.fixture.ts';
 import { type StubServer, startStubServer } from '../../testing/provider-stub-server.ts';
 import { createTextModel } from './text-model.ts';
-import { chatCompletion, llmConfig, SYNTHETIC_API_KEY } from '../../testing/provider-wire.ts';
+import { chatCompletion, llmSettings, SYNTHETIC_API_KEY } from '../../testing/provider-wire.ts';
 
 // The shapes the specification mandates for extraction: optional core fields, a nullable
 // value, a format the strict modes do not know, and `extra` with free keys.
@@ -35,13 +35,13 @@ afterEach(async () => {
 
 const bodyOf = async (
   responseBody: unknown,
-  env: Readonly<Record<string, string>>,
+  env: Readonly<Record<string, unknown>>,
   schema: z.ZodType = specShaped,
 ): Promise<unknown> => {
   const server = await startStubServer(() => ({ body: responseBody }));
   servers.push(server);
   const model = createTextModel(
-    llmConfig({ LLM_API_KEY: SYNTHETIC_API_KEY, LLM_BASE_URL: `${server.url}/v1`, ...env }),
+    llmSettings({ api_key: SYNTHETIC_API_KEY, base_url: `${server.url}/v1`, ...env }),
   );
   await model.generateObject({ schema, system: 'Extract.', prompt: 'An energy bill.' });
   return server.requests[0]?.body;
@@ -49,7 +49,7 @@ const bodyOf = async (
 
 describe('a schema with optional and free-key properties', () => {
   it('reaches OpenAI without strict mode, which would refuse it', async () => {
-    const body = await bodyOf(NATIVE_GENERATION.openai.respond(OUTPUT), { LLM_PROVIDER: 'openai' });
+    const body = await bodyOf(NATIVE_GENERATION.openai.respond(OUTPUT), { provider: 'openai' });
     expect(body).toMatchObject({
       text: { format: { type: 'json_schema', strict: false, schema: SCHEMA_SENT } },
     });
@@ -58,10 +58,10 @@ describe('a schema with optional and free-key properties', () => {
 
   it.each([
     ['openai-compatible', {}],
-    ['ollama', { LLM_API_KEY: '' }],
+    ['ollama', { api_key: undefined }],
   ])('reaches an %s server without strict mode', async (provider, env) => {
     const body = await bodyOf(chatCompletion(JSON.stringify(OUTPUT)).body, {
-      LLM_PROVIDER: provider,
+      provider: provider,
       ...env,
     });
     expect(body).toMatchObject({
@@ -75,7 +75,7 @@ describe('a schema with optional and free-key properties', () => {
 
   it('reaches Mistral without strict mode', async () => {
     const body = await bodyOf(NATIVE_GENERATION.mistral.respond(OUTPUT), {
-      LLM_PROVIDER: 'mistral',
+      provider: 'mistral',
     });
     expect(body).toMatchObject({
       response_format: { json_schema: { strict: false, schema: SCHEMA_SENT } },
@@ -84,7 +84,7 @@ describe('a schema with optional and free-key properties', () => {
 
   it('reaches Gemini as responseJsonSchema, without the $schema keyword', async () => {
     const body = await bodyOf(NATIVE_GENERATION.gemini.respond(OUTPUT), {
-      LLM_PROVIDER: 'gemini',
+      provider: 'gemini',
     });
     expect(body).toMatchObject({ generationConfig: { responseJsonSchema: SCHEMA_SENT } });
     expect(body).not.toHaveProperty('generationConfig.responseJsonSchema.$schema');
@@ -92,8 +92,8 @@ describe('a schema with optional and free-key properties', () => {
 
   it('reaches a current Anthropic model through the JSON tool, not native structured outputs', async () => {
     const body = await bodyOf(NATIVE_GENERATION.anthropic.respond(OUTPUT), {
-      LLM_PROVIDER: 'anthropic',
-      TEXT_MODEL: 'claude-sonnet-4-5',
+      provider: 'anthropic',
+      text_model: 'claude-sonnet-4-5',
     });
     expect(body).toMatchObject({
       model: 'claude-sonnet-4-5',
@@ -112,7 +112,7 @@ describe('a closed schema on a current Anthropic model', () => {
     });
     const body = await bodyOf(
       anthropicJsonText({ decision: 'existing', confidence: 0.9 }),
-      { LLM_PROVIDER: 'anthropic', TEXT_MODEL: 'claude-sonnet-4-5' },
+      { provider: 'anthropic', text_model: 'claude-sonnet-4-5' },
       closed,
     );
     expect(body).toMatchObject({
@@ -149,34 +149,34 @@ const chatBody = (output: unknown): unknown => chatCompletion(JSON.stringify(out
 
 // Where each provider carries the schema, in the body it receives.
 const PIPELINE_SCHEMA_CASES = [
-  ['openai', { LLM_PROVIDER: 'openai' }, NATIVE_GENERATION.openai.respond, 'text.format.schema'],
+  ['openai', { provider: 'openai' }, NATIVE_GENERATION.openai.respond, 'text.format.schema'],
   [
     'openai-compatible',
-    { LLM_PROVIDER: 'openai-compatible' },
+    { provider: 'openai-compatible' },
     chatBody,
     'response_format.json_schema.schema',
   ],
   [
     'ollama',
-    { LLM_PROVIDER: 'ollama', LLM_API_KEY: '' },
+    { provider: 'ollama', api_key: undefined },
     chatBody,
     'response_format.json_schema.schema',
   ],
   [
     'mistral',
-    { LLM_PROVIDER: 'mistral' },
+    { provider: 'mistral' },
     NATIVE_GENERATION.mistral.respond,
     'response_format.json_schema.schema',
   ],
   [
     'gemini',
-    { LLM_PROVIDER: 'gemini' },
+    { provider: 'gemini' },
     NATIVE_GENERATION.gemini.respond,
     'generationConfig.responseJsonSchema',
   ],
   [
     'anthropic',
-    { LLM_PROVIDER: 'anthropic', TEXT_MODEL: 'claude-sonnet-4-5' },
+    { provider: 'anthropic', text_model: 'claude-sonnet-4-5' },
     NATIVE_GENERATION.anthropic.respond,
     'tools.0.input_schema',
   ],

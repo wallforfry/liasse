@@ -1,4 +1,4 @@
-import type { Config } from '../../config/schema.ts';
+import type { ResolvedSettings } from '../../settings/resolve.ts';
 import { endpointHost, endpointLocality, type HostLookup } from './locality.ts';
 import type { ModelProvider } from './registry.ts';
 
@@ -41,7 +41,7 @@ const externalDestination = async (
 
 // Resolves the hosts of the endpoints, so the verdict is the one the embedder reaches.
 export const describeModelPrivacy = async (
-  { llm, embedding }: Pick<Config, 'llm' | 'embedding'>,
+  { llm, embedding }: Pick<ResolvedSettings, 'llm' | 'embedding'>,
   lookup?: HostLookup,
 ): Promise<ModelPrivacy> => {
   const llmDestination = await externalDestination(llm.provider, llm.baseUrl, lookup);
@@ -71,6 +71,6 @@ export const describeModelPrivacy = async (
       flows.length === 0
         ? undefined
         : `Warning: document content leaves this machine: ${flows.join('; ')}. ` +
-          'Set LLM_PROVIDER=ollama and EMBEDDING_PROVIDER=local to keep it local.',
+          'Choose ollama for the language models and the local embedder in the settings to keep it local.',
   };
 };
