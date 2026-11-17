@@ -105,7 +105,7 @@ describe('the document list', () => {
     expect(screen.queryByRole('option', { name: 'Private only' })).not.toBeInTheDocument();
   });
 
-  it('keeps the results of a search on screen while a filter changes it', async () => {
+  it('keeps the results of a search on screen, dimmed, while a filter changes it', async () => {
     const user = userEvent.setup();
     const server = library();
     // The search with private documents never answers: what shows meanwhile stays.
@@ -114,12 +114,18 @@ describe('the document list', () => {
         ? new Promise<Response>(() => undefined)
         : server.fetch(input, init);
     const { router } = renderApp('/documents?q=power', fetch);
-    await screen.findByRole('link', { name: 'Found bill' });
+    const resultsOf = (link: HTMLElement) => link.closest('[aria-busy]');
+    expect(resultsOf(await screen.findByRole('link', { name: 'Found bill' }))).toHaveAttribute(
+      'aria-busy',
+      'false',
+    );
     screen.getByRole('combobox', { name: 'Privacy' }).focus();
     await user.keyboard('{Enter}');
     await user.click(await screen.findByRole('option', { name: 'Include private' }));
     expect(router.state.location.search).toBe('?q=power&private=include');
-    expect(screen.getByRole('link', { name: 'Found bill' })).toBeInTheDocument();
+    const stale = resultsOf(screen.getByRole('link', { name: 'Found bill' }));
+    expect(stale).toHaveAttribute('aria-busy', 'true');
+    expect(stale).toHaveClass('opacity-50');
   });
 });
 
