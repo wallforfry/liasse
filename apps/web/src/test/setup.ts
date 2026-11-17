@@ -22,6 +22,12 @@ Object.defineProperty(Element.prototype, 'scrollIntoView', {
   configurable: true,
   value: () => undefined,
 });
+// Nor pointer capture, which Radix Select and the graph's drags call on a press.
+Object.defineProperties(Element.prototype, {
+  setPointerCapture: { configurable: true, value: ignored },
+  releasePointerCapture: { configurable: true, value: ignored },
+  hasPointerCapture: { configurable: true, value: () => false },
+});
 
 // jsdom has no media queries; the application reads the theme and the width from them.
 Object.defineProperty(window, 'matchMedia', {
