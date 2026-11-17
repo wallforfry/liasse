@@ -1,8 +1,10 @@
+import { decode } from 'jpeg-js';
 import { describe, expect, it } from 'vitest';
 import { ModelProviderError } from '../models/errors.ts';
 import { createFakeEmbedder } from '../testing/fake-embedder.ts';
 import { createFakeModelFactories } from '../testing/fake-model-factories.ts';
 import { createFakeTextModel } from '../testing/fake-text-model.ts';
+import { createFakeVisionModel } from '../testing/fake-vision-model.ts';
 import { resolvedSyntheticSettings } from '../testing/synthetic-settings.ts';
 import { checkSettings } from './check.ts';
 
@@ -16,6 +18,17 @@ describe('checkSettings', () => {
       embedder: { status: 'ok' },
       hindsight: { status: 'skipped' },
     });
+  });
+
+  it('shows the vision model a page a decoder reads', async () => {
+    const visionModel = createFakeVisionModel(() => '');
+    await checkSettings(
+      createFakeModelFactories({ visionModel: () => visionModel }),
+      resolvedSyntheticSettings(),
+    );
+    expect(visionModel.calls.map(({ mime }) => mime)).toEqual(['image/jpeg']);
+    const decoded = decode(visionModel.calls[0]?.image ?? new Uint8Array(0), { useTArray: true });
+    expect({ width: decoded.width, height: decoded.height }).toEqual({ width: 32, height: 32 });
   });
 
   it('asks Hindsight once a URL is set', async () => {
