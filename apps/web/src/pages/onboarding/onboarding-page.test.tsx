@@ -133,4 +133,20 @@ describe('the onboarding', () => {
     await next(user);
     expect(currentStep()).toHaveTextContent('Summary');
   });
+
+  it('offers no list of the models of a remote embedder, for want of a session', async () => {
+    renderApp('/', fakeServer(onboardingServer()).fetch);
+    const user = userEvent.setup();
+    await passToken(user);
+    await passAccount(user);
+    await fillModels(user);
+    await next(user);
+
+    const embedder = await step('Embedder');
+    await user.click(embedder.getByRole('combobox', { name: 'Provider' }));
+    await user.click(await screen.findByRole('option', { name: 'openai' }));
+    expect(embedder.getByLabelText('Model')).toBeInTheDocument();
+    expect(embedder.getByRole('group', { name: 'API key' })).toBeInTheDocument();
+    expect(embedder.queryByRole('button', { name: /^Browse the models/u })).not.toBeInTheDocument();
+  });
 });

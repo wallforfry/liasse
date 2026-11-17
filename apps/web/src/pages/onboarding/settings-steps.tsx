@@ -52,10 +52,10 @@ const stepHandlers = (section: SettingsSection, props: SettingsStepProps) => {
   };
 };
 
-// Listing the models of a provider takes a session, which no one has before the first account:
-// the model fields take an id typed by hand.
-
-/** The text and vision models, with a check of both before the account exists. */
+/**
+ * The text and vision models, with a check of both before the account exists. Their ids are
+ * typed by hand: listing the models of a provider takes a session, which no one has yet.
+ */
 export const LanguageModelsStep = (props: SettingsStepProps) => {
   const { submit, runCheck, section } = stepHandlers('llm', props);
   return (
@@ -73,7 +73,10 @@ export const LanguageModelsStep = (props: SettingsStepProps) => {
   );
 };
 
-/** The embedder, local by default; the check compares its vectors with the database. */
+/**
+ * The embedder, local by default; the check compares its vectors with the database. A remote
+ * one offers no list of models either, for want of a session.
+ */
 export const EmbedderStep = (props: SettingsStepProps) => {
   const { submit, runCheck, section } = stepHandlers('embedding', props);
   return (
