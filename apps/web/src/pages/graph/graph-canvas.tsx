@@ -4,7 +4,7 @@ import { Button } from '../../components/ui/button.tsx';
 import { cn } from '../../lib/utils.ts';
 import { isDocumentLink } from './graph-model.ts';
 import { GraphNodeMark } from './graph-node.tsx';
-import { type Body, placeOf, type Spring } from './graph-simulation.ts';
+import { type Body, boundsOf, placeOf, type Spring } from './graph-simulation.ts';
 import type { LiveGraph } from './use-graph-simulation.ts';
 import { useNodeDrag } from './use-node-drag.ts';
 import { transformOf, usePanZoom } from './use-pan-zoom.ts';
@@ -41,7 +41,7 @@ const placeLine = (element: SVGLineElement, { source, target }: Spring): void =>
 
 export const GraphCanvas = ({ live, selectedId, onSelect }: GraphCanvasProps) => {
   const svgRef = useRef<SVGSVGElement>(null);
-  const { viewport, handlers, panned, toContent, zoomBy, reset } = usePanZoom(svgRef);
+  const { viewport, handlers, panned, toContent, zoomBy, fit } = usePanZoom(svgRef);
   const [hoveredId, setHoveredId] = useState<string | undefined>(undefined);
   const pointerOf = useNodeDrag(live, toContent, onSelect);
   const nodeElements = useRef(new Map<Body, SVGGElement>());
@@ -149,7 +149,14 @@ export const GraphCanvas = ({ live, selectedId, onSelect }: GraphCanvasProps) =>
         >
           <MinusIcon />
         </Button>
-        <Button variant="outline" size="icon" aria-label="Fit the graph" onClick={reset}>
+        <Button
+          variant="outline"
+          size="icon"
+          aria-label="Fit the graph"
+          onClick={() => {
+            fit(bounds, boundsOf(live.bodies));
+          }}
+        >
           <ScanIcon />
         </Button>
       </div>

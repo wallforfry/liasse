@@ -94,21 +94,25 @@ export const createGraphSimulation = (
   return { simulation, bodies, springs };
 };
 
-/**
- * Lets the simulation move only the bodies `shown` keeps, from where they are, with the
- * springs between two of them. The others stay where they were for when they come back.
- */
-export const showOnly = (
-  { simulation, bodies, springs }: GraphSimulation,
+/** The bodies `shown` keeps and the springs between two of them. */
+export const shownOf = (
+  { bodies, springs }: GraphSimulation,
   shown: (node: GraphNode) => boolean,
-): ShownGraph => {
-  const kept = bodies.filter(({ node }) => shown(node));
-  const keptSprings = springs.filter(
-    ({ source, target }) => shown(source.node) && shown(target.node),
-  );
-  simulation.nodes(kept);
-  simulation.force<ReturnType<typeof forceLink<Body, Spring>>>('link')?.links(keptSprings);
-  return { bodies: kept, springs: keptSprings };
+): ShownGraph => ({
+  bodies: bodies.filter(({ node }) => shown(node)),
+  springs: springs.filter(({ source, target }) => shown(source.node) && shown(target.node)),
+});
+
+/**
+ * Lets the simulation move only these bodies, from where they are. The others stay
+ * where they were for when they come back.
+ */
+export const simulateOnly = (
+  simulation: GraphSimulation['simulation'],
+  { bodies, springs }: ShownGraph,
+): void => {
+  simulation.nodes([...bodies]);
+  simulation.force<ReturnType<typeof forceLink<Body, Spring>>>('link')?.links([...springs]);
 };
 
 /** Where a body stands, as the `transform` of its element. */

@@ -8,7 +8,8 @@ import {
   createGraphSimulation,
   type ShownGraph,
   SETTLED_TICKS,
-  showOnly,
+  shownOf,
+  simulateOnly,
 } from './graph-simulation.ts';
 
 const REDUCED_MOTION = '(prefers-reduced-motion: reduce)';
@@ -47,7 +48,7 @@ export const useGraphSimulation = (
     [graph, reducedMotion],
   );
   const bounds = useMemo(() => boundsOf(model.bodies), [model]);
-  const visible = useMemo(() => showOnly(model, shown), [model, shown]);
+  const visible = useMemo(() => shownOf(model, shown), [model, shown]);
   const draws = useRef(new Set<() => void>());
   const drawAll = useCallback(() => {
     for (const draw of draws.current) draw();
@@ -55,6 +56,7 @@ export const useGraphSimulation = (
 
   useEffect(() => {
     const { simulation } = model;
+    simulateOnly(simulation, visible);
     simulation.on('tick', drawAll);
     if (!reducedMotion) {
       simulation.alpha(Math.max(simulation.alpha(), REHEAT_ALPHA)).restart();

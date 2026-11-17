@@ -1,3 +1,4 @@
+import type { Bounds } from './graph-simulation.ts';
 import { type PointerEvent, type RefObject, useEffect, useRef, useState } from 'react';
 
 export interface Viewport {
@@ -16,6 +17,18 @@ export const transformOf = ({ x, y, scale }: Viewport): string =>
   `translate(${String(x)} ${String(y)}) scale(${String(scale)})`;
 
 const clampScale = (scale: number): number => Math.min(MAX_SCALE, Math.max(MIN_SCALE, scale));
+
+/** The viewport that shows `content` whole and centred in `viewBox`. */
+export const fittedTo = (viewBox: Bounds, content: Bounds): Viewport => {
+  const scale = clampScale(
+    Math.min(viewBox.width / content.width, viewBox.height / content.height),
+  );
+  return {
+    scale,
+    x: viewBox.x + (viewBox.width - content.width * scale) / 2 - content.x * scale,
+    y: viewBox.y + (viewBox.height - content.height * scale) / 2 - content.y * scale,
+  };
+};
 
 /** The scale that keeps `point` (in the units of the view box) under the cursor. */
 export const zoomedAt = (
@@ -70,7 +83,9 @@ export const usePanZoom = (svgRef: RefObject<SVGSVGElement | null>) => {
 
   const handlers = {
     onPointerDown: (event: PointerEvent<SVGSVGElement>) => {
-      if (event.target !== event.currentTarget || svgRef.current === null) return;
+      if (event.button !== 0 || event.target !== event.currentTarget || svgRef.current === null) {
+        return;
+      }
       drag.current = toViewBox(svgRef.current, event.clientX, event.clientY);
       moved.current = false;
       event.currentTarget.setPointerCapture(event.pointerId);
@@ -89,6 +104,12 @@ export const usePanZoom = (svgRef: RefObject<SVGSVGElement | null>) => {
       }));
     },
     onPointerUp: () => {
+      drag.current = undefined;
+    },
+    onPointerCancel: () => {
+      drag.current = undefined;
+    },
+    onLostPointerCapture: () => {
       drag.current = undefined;
     },
   };
@@ -110,8 +131,9 @@ export const usePanZoom = (svgRef: RefObject<SVGSVGElement | null>) => {
     zoomBy: (factor: number, center: { readonly x: number; readonly y: number }) => {
       setViewport((current) => zoomedAt(current, center, factor));
     },
-    reset: () => {
-      setViewport(IDENTITY);
+    /** Shows `content` whole and centred in the view box. */
+    fit: (viewBox: Bounds, content: Bounds) => {
+      setViewport(fittedTo(viewBox, content));
     },
   };
 };

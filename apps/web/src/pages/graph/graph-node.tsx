@@ -12,6 +12,8 @@ export interface NodePointerHandlers {
   readonly onPointerDown: (event: PointerEvent<SVGGElement>) => void;
   readonly onPointerMove: (event: PointerEvent<SVGGElement>) => void;
   readonly onPointerUp: () => void;
+  readonly onPointerCancel: () => void;
+  readonly onLostPointerCapture: () => void;
   readonly onClick: () => void;
 }
 

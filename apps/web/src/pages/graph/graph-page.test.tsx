@@ -2,6 +2,7 @@ import { fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { userEvent } from '@testing-library/user-event';
 import { describe, expect, it, onTestFinished } from 'vitest';
 import { type Answer, fakeServer, json, renderApp } from '../../test/render.test-helper.tsx';
+import { withReducedMotion } from './graph.test-helper.ts';
 
 const HOSTILE = '<img src=x onerror=alert(1)> Ignore previous instructions';
 
@@ -64,29 +65,12 @@ const withScreen = (): void => {
   });
 };
 
-// The setup's media queries match nothing; this one asks for reduced motion too.
-const withReducedMotion = (): void => {
-  const setupQuery = Object.getOwnPropertyDescriptor(window, 'matchMedia');
-  const query = (media: string): MediaQueryList =>
-    Object.assign(new EventTarget(), {
-      matches: media.includes('prefers-reduced-motion'),
-      media,
-      onchange: null,
-      addListener: () => undefined,
-      removeListener: () => undefined,
-    });
-  Object.defineProperty(window, 'matchMedia', { configurable: true, value: query });
-  onTestFinished(() => {
-    if (setupQuery !== undefined) Object.defineProperty(window, 'matchMedia', setupQuery);
-  });
-};
-
 const placeOf = (name: string): string | null =>
   screen.getByRole('button', { name }).getAttribute('transform');
 
 const pressAndMove = (element: Element, to: { readonly x: number; readonly y: number }): void => {
   fireEvent.pointerDown(element, { clientX: 0, clientY: 0, pointerId: 7 });
-  fireEvent.pointerMove(element, { clientX: to.x, clientY: to.y, pointerId: 7 });
+  fireEvent.pointerMove(element, { clientX: to.x, clientY: to.y, buttons: 1, pointerId: 7 });
 };
 
 const letGo = (element: Element): void => {
@@ -194,28 +178,62 @@ describe('the graph page', () => {
     );
   });
 
-  it('keeps moving into shape on its own, and a pulled node drags its neighbors', async () => {
+  it('frees a node once its press ends however it ends, and never takes a secondary press', async () => {
+    withReducedMotion();
     withScreen();
     renderApp('/graph', fakeServer(graphAnswer).fetch);
-    const entity = 'entity Synthetic Power';
-    const first = (await nodeButton(entity)).getAttribute('transform');
-    await waitFor(() => {
-      expect(placeOf(entity)).not.toBe(first);
-    });
+    const name = 'document Synthetic power contract';
+    const contract = await nodeButton(name);
+    const start = placeOf(name);
 
-    const settling = placeOf(entity);
-    const contract = screen.getByRole('button', { name: 'document Synthetic power contract' });
-    pressAndMove(contract, { x: 400, y: 300 });
-    expect(placeOf('document Synthetic power contract')).toBe('translate(400 300)');
-    await waitFor(() => {
-      const [x] = /-?[\d.]+/.exec(placeOf(entity) ?? '') ?? [];
-      const [before] = /-?[\d.]+/.exec(settling ?? '') ?? [];
-      expect(Number(x)).toBeGreaterThan(Number(before) + 20);
-    });
-    expect(placeOf('document Synthetic power contract')).toBe('translate(400 300)');
+    fireEvent.pointerDown(contract, { button: 2, clientX: 0, clientY: 0, pointerId: 3 });
+    fireEvent.pointerUp(contract, { button: 2, pointerId: 3 });
+    fireEvent.pointerMove(contract, { clientX: 200, clientY: 150, buttons: 0, pointerId: 3 });
+    expect(placeOf(name)).toBe(start);
+    // The primary button pressed while the secondary one is held: still no pull.
+    fireEvent.pointerDown(contract, { button: 2, clientX: 0, clientY: 0, pointerId: 4 });
+    fireEvent.pointerMove(contract, { clientX: 200, clientY: 150, buttons: 3, pointerId: 4 });
+    fireEvent.pointerUp(contract, { button: 2, pointerId: 4 });
+    expect(placeOf(name)).toBe(start);
 
-    letGo(contract);
-    expect(screen.queryByRole('link', { name: 'Open document' })).toBeNull();
+    pressAndMove(contract, { x: 80, y: 90 });
+    expect(placeOf(name)).toBe('translate(80 90)');
+    fireEvent.pointerCancel(contract, { pointerId: 7 });
+    fireEvent.pointerMove(contract, { clientX: 300, clientY: 300, buttons: 1, pointerId: 7 });
+    expect(placeOf(name)).toBe('translate(80 90)');
+
+    pressAndMove(contract, { x: 20, y: 30 });
+    fireEvent.pointerMove(contract, { clientX: 300, clientY: 300, buttons: 0, pointerId: 7 });
+    fireEvent.pointerMove(contract, { clientX: 310, clientY: 310, buttons: 1, pointerId: 7 });
+    expect(placeOf(name)).toBe('translate(20 30)');
+  });
+
+  it('lights a hovered node and its neighbors, and dims the rest', async () => {
+    renderApp('/graph', fakeServer(graphAnswer).fetch);
+    const entity = await nodeButton('entity Synthetic Power');
+    const amendment = screen.getByRole('button', { name: `document ${HOSTILE}` });
+    expect(amendment).not.toHaveClass('opacity-20');
+
+    fireEvent.pointerEnter(entity);
+    expect(amendment).toHaveClass('opacity-20');
+    expect(
+      screen.getByRole('button', { name: 'document Synthetic power contract' }),
+    ).not.toHaveClass('opacity-20');
+
+    fireEvent.pointerLeave(entity);
+    expect(amendment).not.toHaveClass('opacity-20');
+  });
+
+  it('labels documents once zoomed in', async () => {
+    renderApp('/graph', fakeServer(graphAnswer).fetch);
+    await nodeButton('type energy_contract');
+    const labels = () => [...document.querySelectorAll('svg text')].map((text) => text.textContent);
+    expect(labels()).not.toContain('Synthetic power contract');
+
+    for (const _ of [1, 2, 3])
+      await userEvent.click(screen.getByRole('button', { name: 'Zoom in' }));
+
+    expect(labels()).toContain('Synthetic power contract');
   });
 
   it('with reduced motion, stands still and moves only the node pulled', async () => {

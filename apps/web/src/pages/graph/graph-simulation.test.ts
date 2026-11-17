@@ -6,7 +6,8 @@ import {
   nodeRadius,
   placeOf,
   SETTLED_TICKS,
-  showOnly,
+  shownOf,
+  simulateOnly,
 } from './graph-simulation.ts';
 
 const documentNode = (id: string): GraphNode => ({
@@ -68,13 +69,14 @@ describe('createGraphSimulation', () => {
   });
 });
 
-describe('showOnly', () => {
+describe('shownOf and simulateOnly', () => {
   it('moves only the bodies shown, from where they are, with the springs between them', () => {
     const graph = createGraphSimulation(NODES, EDGES, SETTLED_TICKS);
     const type = graph.bodies.find(({ node }) => node.kind === 'type');
     const before = graph.bodies.map((body) => placeOf(body));
 
-    const shown = showOnly(graph, ({ kind }) => kind === 'document');
+    const shown = shownOf(graph, ({ kind }) => kind === 'document');
+    simulateOnly(graph.simulation, shown);
 
     expect(shown.bodies.map(({ node }) => node.id)).toEqual(['doc_a', 'doc_b', 'doc_c']);
     expect(shown.springs.map(({ edge }) => edge.kind)).toEqual(['pays']);
@@ -86,7 +88,7 @@ describe('showOnly', () => {
 
   it('lays out an empty graph', () => {
     const graph = createGraphSimulation([], [], SETTLED_TICKS);
-    expect(showOnly(graph, () => true).bodies).toEqual([]);
+    expect(shownOf(graph, () => true).bodies).toEqual([]);
     expect(boundsOf([]).width).toBeGreaterThan(0);
   });
 });
