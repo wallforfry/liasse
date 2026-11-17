@@ -557,7 +557,7 @@ Documents are personal and sensitive (taxes, health, banking): privacy by defaul
 - Sensitive identifiers (IBAN, tax number, social security number) masked in `core`, `fields` and provenance; the full value is only readable in the document's full text.
 - No telemetry.
 
-**Access**: accounts with a password and database sessions (better-auth); API keys for the API and MCP, kept as digests; OAuth 2.1 access tokens bound to `PUBLIC_URL/mcp` for MCP clients; the session cookie of the UI also opens the REST API, with the `Origin` of `PUBLIC_URL` on every change (never MCP); sign-in limited per client address, read from forwarded headers only when the socket is a trusted proxy; signed, short-lived file URLs; no public listener by default (binds to `127.0.0.1` unless configured).
+**Access**: accounts with a password and database sessions (better-auth); API keys for the API and MCP, kept as digests; OAuth 2.1 access tokens bound to `PUBLIC_URL/mcp` for MCP clients; the session cookie of the UI also opens the REST API, with the `Origin` of `PUBLIC_URL` on every change (never MCP); sign-in limited per client address, read from forwarded headers only when the socket is a trusted proxy; signed, short-lived file URLs; no scopes on `/mcp`, so every MCP connection, an API key or an OAuth client, may call every tool, the ones that create types and delete documents included; no public listener by default (binds to `127.0.0.1` unless configured).
 
 ## Open source
 

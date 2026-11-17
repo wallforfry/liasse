@@ -126,6 +126,31 @@ describe('the tools', () => {
     );
   });
 
+  it('flags the tools that change nothing, and those that destroy', async () => {
+    const { tools } = await client.listTools();
+    const named = (hint: 'readOnlyHint' | 'destructiveHint') =>
+      tools
+        .filter(({ annotations }) => annotations?.[hint] === true)
+        .map(({ name }) => name)
+        .toSorted();
+    expect(named('destructiveHint')).toEqual(['apply_change', 'delete_document']);
+    expect(named('readOnlyHint')).toEqual(
+      TOOLS.filter(
+        (name) =>
+          ![
+            'apply_change',
+            'create_type',
+            'delete_document',
+            'ingest',
+            'reclassify_document',
+            'request_consolidation_run',
+            'retry_document',
+            'update_document',
+          ].includes(name),
+      ),
+    );
+  });
+
   it('shows the DSL as the input schema of query, and strict schemas elsewhere', async () => {
     const { tools } = await client.listTools();
     const schemaOf = (name: string) => tools.find((tool) => tool.name === name)?.inputSchema;

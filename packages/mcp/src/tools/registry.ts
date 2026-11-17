@@ -129,7 +129,7 @@ export const registerRegistryTools = (server: McpServer, { api, report }: McpDep
     {
       description: SUGGEST_TYPE_DESCRIPTION,
       inputSchema: typeSuggestionRequestSchema,
-      annotations: READ_ONLY,
+      annotations: { readOnlyHint: true, openWorldHint: true },
     },
     async (request) => toolAnswer('suggest_type', report, () => suggestType(api(), request)),
   );
