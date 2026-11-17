@@ -4,6 +4,7 @@ import {
   documentListSchema,
   documentReclassificationSchema,
   documentSchema,
+  documentStatusSchema,
   getDocumentOptionsSchema,
   listDocumentsOptionsSchema,
 } from '@liasse/contract';
@@ -11,9 +12,11 @@ import {
   correctDocument,
   CORRECTED_PARTS,
   getDocument,
+  getDocumentStatus,
   listDocumentEvents,
   listDocuments,
   reclassifyDocument,
+  reextractDocument,
   removeDocument,
   retryDocument,
 } from '@liasse/core/api';
@@ -99,6 +102,24 @@ export const documentRoutes = ({ authenticated }: RouteDeps): Hono<AppEnv> =>
       async (context) =>
         context.json(await listDocumentEvents(context.var.api, context.req.valid('param').id)),
     )
+    .get(
+      '/documents/:id/status',
+      operation({
+        summary: 'Read where the processing of a document stands',
+        tag: TAG,
+        responses: {
+          200: jsonResponse(
+            'Its status, the end of its processing log and the job that takes it further.',
+            documentStatusSchema,
+          ),
+          ...failures(400, 404),
+        },
+      }),
+      authenticated,
+      valid('param', idParam),
+      async (context) =>
+        context.json(await getDocumentStatus(context.var.api, context.req.valid('param').id)),
+    )
     .patch(
       '/documents/:id',
       operation({
@@ -156,6 +177,24 @@ export const documentRoutes = ({ authenticated }: RouteDeps): Hono<AppEnv> =>
       async (context) => {
         const { id } = context.req.valid('param');
         await reclassifyDocument(context.var.api, id, context.req.valid('json'));
+        return context.json(await getDocument(context.var.api, id), 202);
+      },
+    )
+    .post(
+      '/documents/:id/reextract',
+      operation({
+        summary: 'Extract the values of a settled document again, for the type it has',
+        tag: TAG,
+        responses: {
+          202: jsonResponse('The document, queued for its values.', documentSchema),
+          ...failures(400, 404),
+        },
+      }),
+      authenticated,
+      valid('param', idParam),
+      async (context) => {
+        const { id } = context.req.valid('param');
+        await reextractDocument(context.var.api, id);
         return context.json(await getDocument(context.var.api, id), 202);
       },
     )

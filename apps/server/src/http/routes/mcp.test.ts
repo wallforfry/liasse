@@ -86,7 +86,7 @@ describe('/mcp', () => {
   it('serves the tools to a client with the token', async () => {
     const client = await connect(harness.token);
     const { tools } = await client.listTools();
-    expect(tools).toHaveLength(18);
+    expect(tools).toHaveLength(20);
   });
 
   it('applies the private-document rules of REST to search', async () => {

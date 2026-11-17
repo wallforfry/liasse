@@ -4,6 +4,7 @@ export { createType } from './create-type.ts';
 export { describeTypes } from './describe-types.ts';
 export { suggestType } from './suggest-type.ts';
 export { listDocumentEvents, type ListDocumentEventsOptions } from './document-events.ts';
+export { getDocumentStatus } from './document-status.ts';
 export { openDocumentFile, type OpenedFile, removeDocument } from './document-file.ts';
 export {
   API_ERROR_KINDS,
@@ -38,6 +39,7 @@ export { listDocuments } from './list-documents.ts';
 export { listEntities } from './list-entities.ts';
 export { queryDocuments } from './query-documents.ts';
 export { reclassifyDocument } from './reclassify-document.ts';
+export { reextractDocument } from './reextract-document.ts';
 export { searchDocuments } from './search-documents.ts';
 export {
   checkSettingsDraft,

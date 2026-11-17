@@ -123,6 +123,20 @@ export type ChangeStatus = (typeof CHANGE_STATUSES)[number];
 export const JOB_STATUSES = ['queued', 'running', 'succeeded', 'failed'] as const;
 export type JobStatus = (typeof JOB_STATUSES)[number];
 
+// The statuses of a job that has not finished: a document whose job is in one of them is
+// still on its way.
+export const UNFINISHED_JOB_STATUSES = [
+  'queued',
+  'running',
+] as const satisfies readonly JobStatus[];
+export type UnfinishedJobStatus = (typeof UNFINISHED_JOB_STATUSES)[number];
+
+// What a queued job waits for. `worker`: it is due, and waits for a worker to be free.
+// `delay`: it is not due before its `run_after`, the backoff after an attempt that failed
+// or the deferral of a worker whose settings are older than the job.
+export const JOB_WAITS = ['worker', 'delay'] as const;
+export type JobWait = (typeof JOB_WAITS)[number];
+
 export const CONSOLIDATION_TRIGGERS = ['nightly', 'batch', 'manual'] as const;
 export type ConsolidationTrigger = (typeof CONSOLIDATION_TRIGGERS)[number];
 
