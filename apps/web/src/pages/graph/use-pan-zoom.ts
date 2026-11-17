@@ -97,6 +97,16 @@ export const usePanZoom = (svgRef: RefObject<SVGSVGElement | null>) => {
     viewport,
     handlers,
     panned: () => moved.current,
+    /** A client point in the units of the content, under the current pan and zoom. */
+    toContent: (clientX: number, clientY: number) => {
+      const svg = svgRef.current;
+      const point = svg === null ? undefined : toViewBox(svg, clientX, clientY);
+      if (point === undefined) return undefined;
+      return {
+        x: (point.x - viewport.x) / viewport.scale,
+        y: (point.y - viewport.y) / viewport.scale,
+      };
+    },
     zoomBy: (factor: number, center: { readonly x: number; readonly y: number }) => {
       setViewport((current) => zoomedAt(current, center, factor));
     },

@@ -1,95 +1,72 @@
 import { MinusIcon, PlusIcon, ScanIcon } from 'lucide-react';
-import { useMemo, useRef } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Button } from '../../components/ui/button.tsx';
 import { cn } from '../../lib/utils.ts';
-import type { GraphLayout, PlacedNode } from './graph-layout.ts';
-import { isDocumentLink, NODE_KIND_STYLES } from './graph-model.ts';
+import { isDocumentLink } from './graph-model.ts';
+import { GraphNodeMark } from './graph-node.tsx';
+import { type Body, placeOf, type Spring } from './graph-simulation.ts';
+import type { LiveGraph } from './use-graph-simulation.ts';
+import { useNodeDrag } from './use-node-drag.ts';
 import { transformOf, usePanZoom } from './use-pan-zoom.ts';
 
 export interface GraphCanvasProps {
-  readonly layout: GraphLayout;
+  readonly live: LiveGraph;
   readonly selectedId: string | undefined;
   readonly onSelect: (id: string | undefined) => void;
 }
 
 const BUTTON_ZOOM = 1.4;
-const LABEL_LENGTH = 32;
+// From this zoom on, documents show their labels too.
+const DOCUMENT_LABEL_SCALE = 2;
 
-const shortened = (label: string): string =>
-  label.length > LABEL_LENGTH ? `${label.slice(0, LABEL_LENGTH - 1)}…` : label;
+const springKey = ({ edge }: Spring): string => `${edge.source} ${edge.target} ${edge.kind}`;
 
-// The selected node and its neighbors; everything else is dimmed while one is selected.
-const focusOf = (layout: GraphLayout, selectedId: string | undefined) => {
-  if (selectedId === undefined) return undefined;
-  const ids = new Set([selectedId]);
-  for (const { source, target } of layout.edges) {
-    if (source.node.id === selectedId) ids.add(target.node.id);
-    if (target.node.id === selectedId) ids.add(source.node.id);
+// The node in focus and its neighbors; everything else is dimmed while one is in focus.
+const neighborhoodOf = (springs: readonly Spring[], focusId: string | undefined) => {
+  if (focusId === undefined) return undefined;
+  const ids = new Set([focusId]);
+  for (const { source, target } of springs) {
+    if (source.node.id === focusId) ids.add(target.node.id);
+    if (target.node.id === focusId) ids.add(source.node.id);
   }
   return ids;
 };
 
-const NodeMark = ({
-  placed,
-  selected,
-  dimmed,
-  labelled,
-  onSelect,
-}: {
-  readonly placed: PlacedNode;
-  readonly selected: boolean;
-  readonly dimmed: boolean;
-  readonly labelled: boolean;
-  readonly onSelect: (id: string) => void;
-}) => {
-  const { node, x, y, radius } = placed;
-  // Labels are read from documents: rendered as text nodes, never as markup.
-  return (
-    <g
-      role="button"
-      tabIndex={0}
-      aria-label={`${node.kind} ${node.label}`}
-      aria-pressed={selected}
-      className={cn('cursor-pointer outline-none', dimmed && 'opacity-20')}
-      transform={`translate(${String(x)} ${String(y)})`}
-      onClick={() => {
-        onSelect(node.id);
-      }}
-      onKeyDown={(event) => {
-        if (event.key !== 'Enter' && event.key !== ' ') return;
-        event.preventDefault();
-        onSelect(node.id);
-      }}
-    >
-      <title>{node.label}</title>
-      <circle
-        r={radius}
-        className={cn(
-          NODE_KIND_STYLES[node.kind].fill,
-          'stroke-background',
-          selected && 'stroke-foreground',
-        )}
-        strokeWidth={selected ? 2.5 : 1}
-      />
-      {labelled ? (
-        <text
-          y={radius + 11}
-          textAnchor="middle"
-          className="pointer-events-none fill-foreground text-[10px] select-none"
-        >
-          {shortened(node.label)}
-        </text>
-      ) : null}
-    </g>
-  );
+const placeLine = (element: SVGLineElement, { source, target }: Spring): void => {
+  element.setAttribute('x1', String(source.x ?? 0));
+  element.setAttribute('y1', String(source.y ?? 0));
+  element.setAttribute('x2', String(target.x ?? 0));
+  element.setAttribute('y2', String(target.y ?? 0));
 };
 
-export const GraphCanvas = ({ layout, selectedId, onSelect }: GraphCanvasProps) => {
+export const GraphCanvas = ({ live, selectedId, onSelect }: GraphCanvasProps) => {
   const svgRef = useRef<SVGSVGElement>(null);
-  const { viewport, handlers, panned, zoomBy, reset } = usePanZoom(svgRef);
-  const focus = useMemo(() => focusOf(layout, selectedId), [layout, selectedId]);
-  const { bounds } = layout;
+  const { viewport, handlers, panned, toContent, zoomBy, reset } = usePanZoom(svgRef);
+  const [hoveredId, setHoveredId] = useState<string | undefined>(undefined);
+  const pointerOf = useNodeDrag(live, toContent, onSelect);
+  const nodeElements = useRef(new Map<Body, SVGGElement>());
+  const lineElements = useRef(new Map<Spring, SVGLineElement>());
+  const neighborhood = useMemo(
+    () => neighborhoodOf(live.springs, hoveredId ?? selectedId),
+    [live.springs, hoveredId, selectedId],
+  );
+  const { bounds } = live;
   const center = { x: bounds.x + bounds.width / 2, y: bounds.y + bounds.height / 2 };
+
+  // Each step of the simulation moves the elements in place: React renders them once,
+  // which keeps a thousand nodes in motion off its render path.
+  useEffect(
+    () =>
+      live.onStep(() => {
+        for (const [body, element] of nodeElements.current) {
+          element.setAttribute('transform', placeOf(body));
+        }
+        for (const [spring, element] of lineElements.current) placeLine(element, spring);
+      }),
+    [live],
+  );
+
+  const inFocus = (id: string): boolean => neighborhood === undefined || neighborhood.has(id);
 
   return (
     <div className="relative overflow-hidden rounded-md border bg-card">
@@ -106,31 +83,47 @@ export const GraphCanvas = ({ layout, selectedId, onSelect }: GraphCanvasProps) 
       >
         <g transform={transformOf(viewport)}>
           <g className="pointer-events-none">
-            {layout.edges.map(({ edge, source, target }) => (
+            {live.springs.map((spring) => (
               <line
-                key={`${edge.source} ${edge.target} ${edge.kind}`}
-                x1={source.x}
-                y1={source.y}
-                x2={target.x}
-                y2={target.y}
-                strokeWidth={isDocumentLink(edge) ? 1.5 : 0.75}
+                key={springKey(spring)}
+                ref={(element) => {
+                  if (element === null) lineElements.current.delete(spring);
+                  else lineElements.current.set(spring, element);
+                }}
+                x1={spring.source.x ?? 0}
+                y1={spring.source.y ?? 0}
+                x2={spring.target.x ?? 0}
+                y2={spring.target.y ?? 0}
+                strokeWidth={isDocumentLink(spring.edge) ? 1.5 : 0.75}
                 className={cn(
-                  isDocumentLink(edge) ? 'stroke-foreground/60' : 'stroke-muted-foreground/30',
-                  focus !== undefined &&
-                    !(focus.has(source.node.id) && focus.has(target.node.id)) &&
+                  'transition-opacity',
+                  isDocumentLink(spring.edge)
+                    ? 'stroke-foreground/60'
+                    : 'stroke-muted-foreground/30',
+                  !(inFocus(spring.source.node.id) && inFocus(spring.target.node.id)) &&
                     'opacity-10',
                 )}
               />
             ))}
           </g>
-          {layout.nodes.map((placed) => (
-            <NodeMark
-              key={placed.node.id}
-              placed={placed}
-              selected={placed.node.id === selectedId}
-              dimmed={focus !== undefined && !focus.has(placed.node.id)}
-              labelled={placed.node.kind !== 'document' || focus?.has(placed.node.id) === true}
+          {live.bodies.map((body) => (
+            <GraphNodeMark
+              key={body.node.id}
+              body={body}
+              register={(element) => {
+                if (element === null) nodeElements.current.delete(body);
+                else nodeElements.current.set(body, element);
+              }}
+              selected={body.node.id === selectedId}
+              dimmed={!inFocus(body.node.id)}
+              labelled={
+                body.node.kind !== 'document' ||
+                neighborhood?.has(body.node.id) === true ||
+                viewport.scale >= DOCUMENT_LABEL_SCALE
+              }
+              onHover={setHoveredId}
               onSelect={onSelect}
+              pointer={pointerOf(body)}
             />
           ))}
         </g>

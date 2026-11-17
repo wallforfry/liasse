@@ -53,6 +53,47 @@ const IDENTITY_MATRIX = {
   inverse: () => IDENTITY_MATRIX,
 };
 
+// jsdom has no `getScreenCTM`: the test gives the canvas a screen.
+const withScreen = (): void => {
+  Object.defineProperty(SVGSVGElement.prototype, 'getScreenCTM', {
+    configurable: true,
+    value: () => IDENTITY_MATRIX,
+  });
+  onTestFinished(() => {
+    Reflect.deleteProperty(SVGSVGElement.prototype, 'getScreenCTM');
+  });
+};
+
+// The setup's media queries match nothing; this one asks for reduced motion too.
+const withReducedMotion = (): void => {
+  const setupQuery = Object.getOwnPropertyDescriptor(window, 'matchMedia');
+  const query = (media: string): MediaQueryList =>
+    Object.assign(new EventTarget(), {
+      matches: media.includes('prefers-reduced-motion'),
+      media,
+      onchange: null,
+      addListener: () => undefined,
+      removeListener: () => undefined,
+    });
+  Object.defineProperty(window, 'matchMedia', { configurable: true, value: query });
+  onTestFinished(() => {
+    if (setupQuery !== undefined) Object.defineProperty(window, 'matchMedia', setupQuery);
+  });
+};
+
+const placeOf = (name: string): string | null =>
+  screen.getByRole('button', { name }).getAttribute('transform');
+
+const pressAndMove = (element: Element, to: { readonly x: number; readonly y: number }): void => {
+  fireEvent.pointerDown(element, { clientX: 0, clientY: 0, pointerId: 7 });
+  fireEvent.pointerMove(element, { clientX: to.x, clientY: to.y, pointerId: 7 });
+};
+
+const letGo = (element: Element): void => {
+  fireEvent.pointerUp(element, { pointerId: 7 });
+  fireEvent.click(element);
+};
+
 const contentTransform = (): string | null =>
   screen
     .getByRole('img', { name: /^Graph of/ })
@@ -89,15 +130,6 @@ describe('the graph page', () => {
     renderApp('/graph', server.fetch);
     await nodeButton('type energy_contract');
 
-    // Radix Select reads pointer capture on its trigger, which jsdom does not implement.
-    Object.defineProperties(Element.prototype, {
-      hasPointerCapture: { configurable: true, value: () => false },
-      releasePointerCapture: { configurable: true, value: () => undefined },
-    });
-    onTestFinished(() => {
-      Reflect.deleteProperty(Element.prototype, 'hasPointerCapture');
-      Reflect.deleteProperty(Element.prototype, 'releasePointerCapture');
-    });
     const user = userEvent.setup();
     await user.click(screen.getByRole('combobox', { name: 'Documents' }));
     await user.click(await screen.findByRole('option', { name: '500' }));
@@ -110,15 +142,7 @@ describe('the graph page', () => {
   });
 
   it('pans on a drag of the background without losing the selection, and zooms on the wheel', async () => {
-    // jsdom has neither: the test gives the canvas a screen and pointer capture.
-    Object.defineProperties(SVGSVGElement.prototype, {
-      getScreenCTM: { configurable: true, value: () => IDENTITY_MATRIX },
-      setPointerCapture: { configurable: true, value: () => undefined },
-    });
-    onTestFinished(() => {
-      Reflect.deleteProperty(SVGSVGElement.prototype, 'getScreenCTM');
-      Reflect.deleteProperty(SVGSVGElement.prototype, 'setPointerCapture');
-    });
+    withScreen();
     renderApp('/graph', fakeServer(graphAnswer).fetch);
     await userEvent.click(await nodeButton('type energy_contract'));
     const canvas = screen.getByRole('img', { name: /^Graph of/ });
@@ -170,7 +194,52 @@ describe('the graph page', () => {
     );
   });
 
+  it('keeps moving into shape on its own, and a pulled node drags its neighbors', async () => {
+    withScreen();
+    renderApp('/graph', fakeServer(graphAnswer).fetch);
+    const entity = 'entity Synthetic Power';
+    const first = (await nodeButton(entity)).getAttribute('transform');
+    await waitFor(() => {
+      expect(placeOf(entity)).not.toBe(first);
+    });
+
+    const settling = placeOf(entity);
+    const contract = screen.getByRole('button', { name: 'document Synthetic power contract' });
+    pressAndMove(contract, { x: 400, y: 300 });
+    expect(placeOf('document Synthetic power contract')).toBe('translate(400 300)');
+    await waitFor(() => {
+      const [x] = /-?[\d.]+/.exec(placeOf(entity) ?? '') ?? [];
+      const [before] = /-?[\d.]+/.exec(settling ?? '') ?? [];
+      expect(Number(x)).toBeGreaterThan(Number(before) + 20);
+    });
+    expect(placeOf('document Synthetic power contract')).toBe('translate(400 300)');
+
+    letGo(contract);
+    expect(screen.queryByRole('link', { name: 'Open document' })).toBeNull();
+  });
+
+  it('with reduced motion, stands still and moves only the node pulled', async () => {
+    withReducedMotion();
+    withScreen();
+    renderApp('/graph', fakeServer(graphAnswer).fetch);
+    const contract = await nodeButton('document Synthetic power contract');
+    const entity = placeOf('entity Synthetic Power');
+
+    pressAndMove(contract, { x: 50, y: 60 });
+    letGo(contract);
+
+    expect(placeOf('document Synthetic power contract')).toBe('translate(50 60)');
+    expect(placeOf('entity Synthetic Power')).toBe(entity);
+    const ends = [...document.querySelectorAll('svg line')].flatMap((line) => [
+      `${line.getAttribute('x1') ?? ''} ${line.getAttribute('y1') ?? ''}`,
+      `${line.getAttribute('x2') ?? ''} ${line.getAttribute('y2') ?? ''}`,
+    ]);
+    expect(ends.filter((end) => end === '50 60')).toHaveLength(4);
+    expect(screen.queryByRole('link', { name: 'Open document' })).toBeNull();
+  });
+
   it('hides a kind of node, and asks for private documents only when told', async () => {
+    withReducedMotion();
     const server = fakeServer(graphAnswer);
     renderApp('/graph', server.fetch);
     await userEvent.click(await nodeButton('document Synthetic power contract'));
@@ -179,8 +248,7 @@ describe('the graph page', () => {
       'subject Synthetic flat',
       'type energy_contract',
     ];
-    const placesOf = () =>
-      kept.map((name) => screen.getByRole('button', { name }).getAttribute('transform'));
+    const placesOf = () => kept.map(placeOf);
     const lines = () => document.querySelectorAll('svg line').length;
     const neighbors = () => {
       const details = screen.getByText('Joined to').closest('div');
