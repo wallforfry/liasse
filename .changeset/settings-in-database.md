@@ -3,6 +3,7 @@
 '@liasse/core': minor
 '@liasse/sdk': minor
 '@liasse/server': minor
+'@liasse/mcp': minor
 '@liasse/eval': minor
 ---
 
