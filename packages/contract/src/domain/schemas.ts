@@ -3,6 +3,7 @@ import {
   AUTO_APPLY_MODES,
   CHANGE_KINDS,
   CHANGE_STATUSES,
+  CONSOLIDATION_TRIGGERS,
   DOCUMENT_SOURCES,
   DOCUMENT_STATES,
   DOCUMENT_STATUSES,
@@ -39,6 +40,7 @@ export const typeStatusSchema = z.enum(TYPE_STATUSES);
 export const changeKindSchema = z.enum(CHANGE_KINDS);
 export const changeStatusSchema = z.enum(CHANGE_STATUSES);
 export const jobStatusSchema = z.enum(JOB_STATUSES);
+export const consolidationTriggerSchema = z.enum(CONSOLIDATION_TRIGGERS);
 export const entityKindSchema = z.enum(ENTITY_KINDS);
 export const entityMatchRuleSchema = z.enum(ENTITY_MATCH_RULES);
 export const entityIdentifierTypeSchema = z.enum(ENTITY_IDENTIFIER_TYPES);

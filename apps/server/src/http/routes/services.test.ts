@@ -222,6 +222,7 @@ describe('search, query, registry and metrics routes', () => {
       ['GET', '/changes?kind=merge', undefined],
       ['POST', '/changes/chg_01JC0000000000000000000000', { decision: 'apply' }],
       ['POST', '/consolidation/runs', undefined],
+      ['GET', '/consolidation/runs', undefined],
     ])('%s %s answers 501 with a typed error', async (method, path, body) => {
       const response = await harness.call(
         path,
@@ -261,6 +262,10 @@ describe('search, query, registry and metrics routes', () => {
             received.push('run');
             return Promise.resolve({ queued: true });
           },
+          listConsolidationRuns: () => {
+            received.push('runs');
+            return Promise.resolve({ runs: [] });
+          },
         },
       });
       const dates = await app.request(
@@ -276,10 +281,14 @@ describe('search, query, registry and metrics routes', () => {
       const run = await app.request('/consolidation/runs', harness.authorized({ method: 'POST' }));
       expect(run.status).toBe(202);
       expect(await run.json()).toEqual({ queued: true });
+      const listed = await app.request('/consolidation/runs', harness.authorized());
+      expect(listed.status).toBe(200);
+      expect(await listed.json()).toEqual({ runs: [] });
       expect(received).toEqual([
         { from: '2026-01-01', to: '2026-03-31', kinds: ['expiry', 'renewal'], current_only: false },
         ['chg_missing', { decision: 'reject', note: 'not the same type' }],
         'run',
+        'runs',
       ]);
     });
   });

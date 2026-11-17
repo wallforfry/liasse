@@ -6,7 +6,11 @@ export {
   type ChangeView,
   changeViewSchema,
   type ConsolidationRun,
+  type ConsolidationRunList,
+  consolidationRunListSchema,
   consolidationRunSchema,
+  type ConsolidationRunView,
+  consolidationRunViewSchema,
 } from './consolidation.ts';
 export {
   type DocumentEvent,

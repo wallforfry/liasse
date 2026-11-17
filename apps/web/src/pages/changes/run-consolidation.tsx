@@ -5,17 +5,22 @@ import { errorMessage } from '../../api/errors.ts';
 import { useClient } from '../../api/session.ts';
 import { Button } from '../../components/ui/button.tsx';
 
-// The run is a job: its proposals reach the list when a worker has run it, not on answer.
-export const RunConsolidation = () => {
+/** Asks for a run; `onRequested` follows it, since a worker runs it after the answer. */
+export const RunConsolidation = ({
+  onRequested,
+}: {
+  readonly onRequested: () => Promise<void>;
+}) => {
   const client = useClient();
   const run = useMutation({
     mutationFn: async () => client.requestConsolidationRun(),
-    onSuccess: ({ queued }) => {
+    onSuccess: async ({ queued }) => {
       if (queued) {
-        toast.success('A consolidation run was queued. Reload this page once it has run.');
+        toast.success('A consolidation run was queued.');
       } else {
         toast.info('A consolidation run is already queued.');
       }
+      await onRequested();
     },
     onError: (error) => {
       toast.error(errorMessage(error));

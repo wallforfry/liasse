@@ -1,5 +1,11 @@
 import { z } from 'zod';
-import { changeKindSchema, changeStatusSchema } from './domain/schemas.ts';
+import { MAX_LISTED_CONSOLIDATION_RUNS } from './domain/limits.ts';
+import {
+  changeKindSchema,
+  changeStatusSchema,
+  consolidationTriggerSchema,
+  jobStatusSchema,
+} from './domain/schemas.ts';
 import { untrustedText } from './knowledge.ts';
 
 // A change of consolidation. Its rationale was written by a model from documents, and its
@@ -42,3 +48,32 @@ export const consolidationRunSchema = z.strictObject({
     ),
 });
 export type ConsolidationRun = z.output<typeof consolidationRunSchema>;
+
+export const consolidationRunViewSchema = z.strictObject({
+  id: z.string(),
+  trigger: consolidationTriggerSchema,
+  status: jobStatusSchema.describe(
+    'A run that failed an attempt is queued again until its last attempt, with its error.',
+  ),
+  attempts: z.number().int().min(0).describe('Attempts started, a deferred one not counted.'),
+  queued_at: z.iso.datetime(),
+  due_at: z.iso
+    .datetime()
+    .describe('When it runs, or ran: the time it was asked for, its next attempt or its retry.'),
+  last_error: z
+    .string()
+    .nullable()
+    .describe('The error of its latest failed attempt, secrets redacted.'),
+});
+export type ConsolidationRunView = z.output<typeof consolidationRunViewSchema>;
+
+export const consolidationRunListSchema = z.strictObject({
+  runs: z
+    .array(consolidationRunViewSchema)
+    .max(MAX_LISTED_CONSOLIDATION_RUNS)
+    .describe(
+      `The latest runs, newest first, at most ${String(MAX_LISTED_CONSOLIDATION_RUNS)}. The ` +
+        'next nightly run is left out until it is due or has started.',
+    ),
+});
+export type ConsolidationRunList = z.output<typeof consolidationRunListSchema>;

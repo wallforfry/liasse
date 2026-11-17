@@ -14,6 +14,7 @@ import {
   applyChange,
   correctDocument,
   listChanges,
+  listConsolidationRuns,
   listSubjects,
   requestConsolidationRun,
   upcoming,
@@ -264,6 +265,7 @@ describe('use cases of the API', () => {
         listChanges(context, {}),
         applyChange(context, 'chg_01JC0000000000000000000000', { decision: 'apply' }),
         requestConsolidationRun(context),
+        listConsolidationRuns(context),
       ];
       for (const call of calls) expect(await failureOf(call)).toMatchObject(NOT_IMPLEMENTED);
     });

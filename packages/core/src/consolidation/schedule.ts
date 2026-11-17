@@ -1,5 +1,7 @@
 import {
   CONSOLIDATION_BATCH_DOCUMENTS,
+  type ConsolidationTrigger,
+  consolidationTriggerSchema,
   CONSOLIDATION_NIGHTLY_HOUR_UTC,
   SETTLED_STATUSES,
 } from '@liasse/contract/domain';
@@ -11,9 +13,6 @@ import { jobs } from '../db/schema/jobs.ts';
 import { enqueue } from '../jobs/enqueue.ts';
 import { defineJobKind } from '../jobs/kinds.ts';
 
-export const CONSOLIDATION_TRIGGERS = ['nightly', 'batch', 'manual'] as const;
-export type ConsolidationTrigger = (typeof CONSOLIDATION_TRIGGERS)[number];
-
 /**
  * One run of consolidation. A `nightly` run queues the next one when it starts, so the
  * chain survives a run that fails; a `batch` run is queued once enough new documents
@@ -22,7 +21,7 @@ export type ConsolidationTrigger = (typeof CONSOLIDATION_TRIGGERS)[number];
  */
 export const consolidateJob = defineJobKind({
   name: 'consolidate',
-  schema: z.object({ trigger: z.enum(CONSOLIDATION_TRIGGERS) }),
+  schema: z.object({ trigger: consolidationTriggerSchema }),
 });
 
 type Transaction = Parameters<Parameters<Database['transaction']>[0]>[0];

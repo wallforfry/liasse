@@ -5,6 +5,8 @@ import {
   type ChangeList,
   changeListSchema,
   type ConsolidationRun,
+  type ConsolidationRunList,
+  consolidationRunListSchema,
   consolidationRunSchema,
   type CreatedType,
   createdTypeSchema,
@@ -106,6 +108,8 @@ export interface LiasseClient {
   ) => Promise<ChangeDecisionResult>;
   /** Queues a consolidation run now, unless one due at once already waits. */
   readonly requestConsolidationRun: () => Promise<ConsolidationRun>;
+  /** The latest consolidation runs, newest first, the next nightly one left out. */
+  readonly listConsolidationRuns: () => Promise<ConsolidationRunList>;
 }
 
 const documentPath = (id: string): string => `/documents/${encodeURIComponent(id)}`;
@@ -163,5 +167,6 @@ export const createLiasseClient = (options: ClientOptions): LiasseClient => {
         consolidationRunSchema,
         await send({ method: 'POST', path: '/consolidation/runs' }),
       ),
+    listConsolidationRuns: async () => get(consolidationRunListSchema, '/consolidation/runs'),
   };
 };
