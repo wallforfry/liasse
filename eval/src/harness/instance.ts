@@ -11,7 +11,6 @@ import {
   createTestDatabase,
   seedSettings,
   seedTestAccount,
-  TEST_ACCOUNT,
 } from '@liasse/core/testing';
 import { createRuntime, type RuntimeOptions } from '@liasse/server/runtime';
 
@@ -63,6 +62,7 @@ export const startInstance = async (
     await database.dispose();
   };
   try {
+    const account = { email: 'eval@example.com', password: randomBytes(32).toString('hex') };
     const loaded = loadConfig(throwawayEnv(env, database.url, folder));
     // Port 0 lets the system pick a free one; the configuration itself refuses it.
     const config = { ...loaded, server: { ...loaded.server, port: 0 } };
@@ -77,6 +77,7 @@ export const startInstance = async (
       databaseUrl: database.url,
       embeddingDim: config.embedding.dimension,
       publicUrl: config.server.publicUrl,
+      account,
     });
     const runtime = await createRuntime(config, logger === undefined ? {} : { logger });
     if (runtime.port === undefined) {
@@ -87,7 +88,7 @@ export const startInstance = async (
     const token = await createApiKeyOverHttp({
       baseUrl,
       publicUrl: config.server.publicUrl,
-      account: TEST_ACCOUNT,
+      account,
       name: 'evaluation run',
     }).catch(async (error: unknown) => {
       await runtime.stop();
