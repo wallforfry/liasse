@@ -3,11 +3,8 @@ import { type SQL, sql } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/pg-core';
 import { documents } from '../db/schema/documents.ts';
 import { docTypes } from '../db/schema/registry.ts';
-import { entityIdProvenancePath } from '../domain/provenance.ts';
+import { namesEntity } from '../entities/references.ts';
 
-// `core` holds the name of an entity as it was extracted; the entity it resolved to is recorded
-// in the provenance of the field (spec, Data model).
-const ENTITY_FIELDS = ['issuer', 'recipient'] as const;
 const DOCUMENT_DATE_KEY = 'document_date';
 
 const MERGED_TYPES = 'merged_types';
@@ -29,15 +26,6 @@ export const ofType = (type: string): SQL => {
   )`;
 };
 
-const ofEntity = (entity: string): SQL =>
-  sql`(${sql.join(
-    ENTITY_FIELDS.map(
-      (field) =>
-        sql`${documents.provenance} #>> ${sql.raw(`'{${entityIdProvenancePath(field).join(',')}}'`)} = ${entity}`,
-    ),
-    sql` OR `,
-  )})`;
-
 // ISO dates compare like text, and a text comparison cannot raise on a malformed stored value
 // the way a cast to date would.
 const documentDate = sql`${documents.core} ->> ${sql.raw(`'${DOCUMENT_DATE_KEY}'`)}`;
@@ -48,7 +36,7 @@ export const documentFilter = (filters: SearchFilters, includePrivate: boolean):
   const conditions = [
     ...(includePrivate ? [] : [sql`NOT ${documents.private}`]),
     ...(filters.type === undefined ? [] : [ofType(filters.type)]),
-    ...(filters.entity === undefined ? [] : [ofEntity(filters.entity)]),
+    ...(filters.entity === undefined ? [] : [namesEntity(filters.entity)]),
     ...(filters.subject === undefined
       ? []
       : [sql`${documents.subjectIds} @> ARRAY[${filters.subject}]::text[]`]),

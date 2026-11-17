@@ -146,6 +146,18 @@ describe('search', () => {
       expect(await filtered(filters, 'salary employer')).toEqual(expected);
     });
 
+    it('keeps a document that names the entity only in a list field of its type', async () => {
+      const witness = 'ent_synthetic_witness';
+      await corpus.add(
+        extra('witnessed', ['zephyr deposition'], {
+          parties: [ENTITIES.harbor, witness],
+          private: true,
+        }),
+      );
+      const hits = await find('zephyr', { filters: { entity: witness }, includePrivate: true });
+      expect(keys(hits)).toEqual(['witnessed']);
+    });
+
     it('narrows the candidates instead of filtering an already limited list', async () => {
       const hits = await search(
         { ...deps, candidatesPerRanker: 2 },

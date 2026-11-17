@@ -41,6 +41,11 @@ export type PrivateFilter = (typeof PRIVATE_FILTERS)[number];
 export const listDocumentsOptionsSchema = z.strictObject({
   status: liveDocumentStatusSchema.optional(),
   type: z.string().min(1).optional().describe('Slug or alias of a type.'),
+  entity: z
+    .string()
+    .min(1)
+    .optional()
+    .describe('Id of an entity: the documents that name it in an entity field.'),
   private: z.enum(PRIVATE_FILTERS).default('exclude'),
   limit: z.int().min(1).max(MAX_DOCUMENT_LIST_LIMIT).default(DEFAULT_DOCUMENT_LIST_LIMIT),
   offset: z.int().min(0).default(0),
