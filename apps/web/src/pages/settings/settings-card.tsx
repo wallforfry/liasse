@@ -19,7 +19,10 @@ interface SettingsCardProps {
 export const SettingsCard = ({ id, title, description, children }: SettingsCardProps) => (
   <Card role="region" aria-labelledby={`${id}-title`}>
     <CardHeader>
-      <CardTitle id={`${id}-title`}>{title}</CardTitle>
+      {/* Focusable by script only: a page that moves between sections puts the focus here. */}
+      <CardTitle id={`${id}-title`} role="heading" aria-level={2} tabIndex={-1}>
+        {title}
+      </CardTitle>
       <CardDescription>{description}</CardDescription>
     </CardHeader>
     <CardContent className="flex flex-col gap-4">{children}</CardContent>

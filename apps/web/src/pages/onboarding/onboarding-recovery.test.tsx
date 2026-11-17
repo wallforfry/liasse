@@ -123,3 +123,15 @@ describe('the onboarding without the server', () => {
     expect(screen.getByRole('button', { name: 'Finish and sign in' })).toBeEnabled();
   });
 });
+
+describe('the focus of the onboarding', () => {
+  it('moves to the heading of each new step', async () => {
+    renderApp('/', fakeServer(onboardingServer()).fetch);
+    const user = userEvent.setup();
+    await passToken(user);
+    expect(await screen.findByRole('heading', { name: 'Your account' })).toHaveFocus();
+
+    await passAccount(user);
+    expect(await screen.findByRole('heading', { name: 'Language models' })).toHaveFocus();
+  });
+});
