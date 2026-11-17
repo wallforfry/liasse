@@ -388,6 +388,10 @@ describe('processDocument', () => {
         schema_version: 1,
         truncated: false,
         rejected_values: 2,
+        rejections: [
+          { section: 'extra', name: 'issuer', reason: 'invalid_key', count: 1 },
+          { section: 'extra', name: 'Not A Field Name', reason: 'invalid_key', count: 1 },
+        ],
         // The company id the model gave for the issuer, which the text does not hold.
         dropped_identifiers: 1,
       },

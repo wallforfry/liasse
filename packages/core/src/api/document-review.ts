@@ -138,6 +138,7 @@ const flagReasons = (
 export const reviewDocument = (document: ReviewedDocument, threshold: number): DocumentReview => {
   const pipeline = readPipelineProvenance(document.provenance);
   const rejected = pipeline.extraction?.rejected_values ?? 0;
+  const rejections = pipeline.extraction?.rejections ?? [];
   const reasons: readonly ReviewReason[] =
     document.status === 'needs_review'
       ? [
@@ -149,6 +150,7 @@ export const reviewDocument = (document: ReviewedDocument, threshold: number): D
     threshold,
     reasons: [...reasons],
     rejected_values: rejected,
+    rejections: [...rejections],
     type: reviewedType(pipeline.type),
     values: [
       ...reviewedValues('core', document.core, document.provenance, threshold),

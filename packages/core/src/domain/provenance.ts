@@ -1,3 +1,4 @@
+import { rejectionSchema } from '@liasse/contract';
 import {
   CLASSIFICATION_OUTCOMES,
   entityMatchRuleSchema,
@@ -94,6 +95,9 @@ const extractionProvenanceSchema = z.object({
   truncated: z.boolean(),
   // Values the model returned that were dropped: no verifiable quote, or not valid.
   rejected_values: z.number().int().min(0),
+  // The same, by section, name and reason; absent from an extraction stored before it was
+  // recorded. Never the value or its quote.
+  rejections: z.array(rejectionSchema).optional(),
   // Identifiers the model gave for an entity that were not used: absent from the text,
   // empty or malformed.
   dropped_identifiers: z.number().int().min(0).optional(),

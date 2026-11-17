@@ -171,6 +171,7 @@ describe('documents of the API', () => {
         threshold: 0.7,
         reasons: ['low_confidence'],
         rejected_values: 0,
+        rejections: [],
         type: { confidence: null, outcome: null, manual: false, doubtful: false, refusal: null },
         values: [
           {

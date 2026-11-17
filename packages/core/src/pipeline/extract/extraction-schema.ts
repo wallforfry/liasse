@@ -113,18 +113,24 @@ const split = (
 
 // `core` and `fields` are closed objects: a key they do not know would refuse the whole
 // output. It is moved to `extra` instead, where a value outside the schema belongs, and
-// never over a key the model wrote there itself.
+// never over a key the model wrote there itself. A key of `extra` that names a field of
+// the type the model left empty is a value put in the wrong place: it is read as that
+// field, and checked as one. A core field is never filled that way.
 const tidy =
   (fieldNames: readonly string[]) =>
   (input: unknown): unknown => {
     if (!isPlainRecord(input)) return input;
     const [core, strayCore] = split(recordOf(input.core), new Set(CORE_FIELD_NAMES));
     const [fields, strayFields] = split(recordOf(input.fields), new Set(fieldNames));
+    const [misplaced, extra] = split(
+      recordOf(input.extra),
+      new Set(fieldNames.filter((name) => !Object.hasOwn(fields, name))),
+    );
     return {
       ...present(input),
       core,
-      fields,
-      extra: { ...strayCore, ...strayFields, ...present(recordOf(input.extra)) },
+      fields: { ...misplaced, ...fields },
+      extra: { ...strayCore, ...strayFields, ...extra },
     };
   };
 

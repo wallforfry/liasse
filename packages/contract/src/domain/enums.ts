@@ -72,6 +72,38 @@ export type ReviewReason = (typeof REVIEW_REASONS)[number];
 export const VALUE_SECTIONS = ['core', 'fields'] as const;
 export type ValueSection = (typeof VALUE_SECTIONS)[number];
 
+// Where a value the model returned and the extraction dropped was: a section of values,
+// whose entries have a name, or a part of the knowledge of the document, whose do not.
+export const REJECTION_SECTIONS = [
+  'core',
+  'fields',
+  'extra',
+  'facts',
+  'subjects',
+  'notice_period',
+] as const;
+export type RejectionSection = (typeof REJECTION_SECTIONS)[number];
+
+// Why the extraction dropped a value the model returned: not the shape of a value with
+// its page, quote and confidence; a quote found on no page; a quote that does not state
+// the value; a value the registry refuses; an `extra` key that could never be a field
+// name, or that names a field of the type the model filled as well; over the limit of
+// keys, facts or subjects; an entity name that resolves to no entity; an identifier
+// masking cannot keep; an identifier of a subject the text does not write.
+export const REJECTION_REASONS = [
+  'malformed',
+  'quote_not_found',
+  'quote_not_stating_value',
+  'invalid_value',
+  'invalid_key',
+  'duplicate_of_field',
+  'over_limit',
+  'unresolved_entity',
+  'sensitive_identifier',
+  'identifier_not_in_text',
+] as const;
+export type RejectionReason = (typeof REJECTION_REASONS)[number];
+
 // Where the text of one page comes from: the file itself, or the vision model.
 export const PAGE_TEXT_METHODS = ['native', 'vision'] as const;
 export type PageTextMethod = (typeof PAGE_TEXT_METHODS)[number];
