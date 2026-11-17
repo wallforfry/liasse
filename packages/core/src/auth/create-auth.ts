@@ -8,6 +8,7 @@ import { MAX_PASSWORD_LENGTH, MIN_PASSWORD_LENGTH } from '@liasse/contract/domai
 import { betterAuth } from 'better-auth';
 import { jwt } from 'better-auth/plugins';
 import type { Database } from '../db/client.ts';
+import type { Transaction } from '../db/isolation.ts';
 import { authIdOf, authSchema } from './models.ts';
 import { mcpConnections } from './mcp-connections-plugin.ts';
 import { MCP_ACCESS_TOKEN_TTL_SECONDS } from './mcp-grant.ts';
@@ -24,6 +25,9 @@ export const CLIENT_ADDRESS_HEADER = 'x-liasse-client-address';
 
 export const SIGN_IN_ATTEMPTS_PER_MINUTE = 5;
 
+/** The IPv6 prefix length one client is counted under: a host is given a whole /64. */
+export const CLIENT_IPV6_SUBNET = 64;
+
 export const UI_LOGIN_PATH = '/ui/login';
 export const UI_CONSENT_PATH = '/ui/consent';
 
@@ -39,6 +43,13 @@ export interface AuthOptions {
 }
 
 const SECONDS = 1000;
+
+/**
+ * The database adapter of better-auth over `db`, a connection pool or a transaction.
+ * `transaction: false` over a transaction, whose writes then commit or roll back with it.
+ */
+export const authDatabaseOf = (db: Database | Transaction, transaction: boolean) =>
+  drizzleAdapter(db, { provider: 'pg', schema: { ...authSchema }, transaction });
 
 const mcpPlugins = (publicUrl: string) => {
   const resource = mcpResourceOf(publicUrl);
@@ -77,7 +88,7 @@ export const createAuth = ({ db, secret, publicUrl, sessionTtlMs, report }: Auth
         if (level === 'warn' || level === 'error') report(level, message);
       },
     },
-    database: drizzleAdapter(db, { provider: 'pg', schema: { ...authSchema }, transaction: true }),
+    database: authDatabaseOf(db, true),
     emailAndPassword: {
       enabled: true,
       disableSignUp: true,
@@ -107,7 +118,7 @@ export const createAuth = ({ db, secret, publicUrl, sessionTtlMs, report }: Auth
       cookiePrefix: 'liasse',
       useSecureCookies: publicUrl.startsWith('https:'),
       defaultCookieAttributes: { httpOnly: true, sameSite: 'strict', path: '/' },
-      ipAddress: { ipAddressHeaders: [CLIENT_ADDRESS_HEADER], ipv6Subnet: 64 },
+      ipAddress: { ipAddressHeaders: [CLIENT_ADDRESS_HEADER], ipv6Subnet: CLIENT_IPV6_SUBNET },
       database: { generateId: authIdOf },
     },
     plugins: [

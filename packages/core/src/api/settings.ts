@@ -48,7 +48,8 @@ export interface SettingsContext {
   readonly prepare: (settings: Settings, version: number) => Promise<PreparedSettings>;
 }
 
-const hasLiveDocument = async (db: SettingsExecutor): Promise<boolean> =>
+/** Whether a live document exists: its vectors are those of the embedder in force. */
+export const hasLiveDocument = async (db: SettingsExecutor): Promise<boolean> =>
   (await db.select({ id: documents.id }).from(documents).where(isLiveDocument).limit(1)).length > 0;
 
 const stateOf = (stored: StoredSettings | undefined, embedderLocked: boolean): SettingsState => ({
@@ -69,20 +70,25 @@ const staleVersion = (): ApiError =>
     'The settings changed since they were read. Read them again, then save.',
   );
 
-const embedderLocked = (): ApiError =>
+export const embedderLocked = (): ApiError =>
   new ApiError(
     'conflict',
     'embedder_locked',
     'The embedder cannot change once a document exists: the stored vectors are its own.',
   );
 
-const candidateOf = (update: SettingsUpdate['settings'], keys: StoredKeys): Settings => {
+/** The settings a draft leads to with these keys, or the issues that make it invalid. */
+export const settingsCandidate = (
+  update: SettingsUpdate['settings'],
+  keys: StoredKeys,
+): Settings => {
   const outcome = settingsFromDraft(update, keys);
   if (!outcome.ok) throw invalidRequest(outcome.issues);
   return outcome.settings;
 };
 
-const prepared = async (
+/** The parts built from settings, not in force yet; an inapplicable model is the caller's. */
+export const prepareSettings = async (
   context: SettingsContext,
   settings: Settings,
   version: number,
@@ -111,9 +117,9 @@ export const saveSettings = async (
 ): Promise<SettingsState> => {
   const stored = await readSettings(context);
   if ((stored?.version ?? 0) !== version) throw staleVersion();
-  const settings = candidateOf(draft, stored?.keys ?? NO_KEYS);
+  const settings = settingsCandidate(draft, stored?.keys ?? NO_KEYS);
   const embedderChanges = stored !== undefined && !sameEmbedder(stored.document, settings);
-  const parts = await prepared(context, settings, version + 1);
+  const parts = await prepareSettings(context, settings, version + 1);
   const written = await context.db
     .transaction(async (tx) => {
       if (embedderChanges) {
@@ -141,6 +147,6 @@ export const checkSettingsDraft = async (
   context: SettingsContext,
   { settings: draft }: SettingsCheckRequest,
 ): Promise<SettingsCheck> => {
-  const settings = candidateOf(draft, (await readSettings(context))?.keys ?? NO_KEYS);
+  const settings = settingsCandidate(draft, (await readSettings(context))?.keys ?? NO_KEYS);
   return checkSettings(context.factories, resolveSettings(settings, context.embedding));
 };

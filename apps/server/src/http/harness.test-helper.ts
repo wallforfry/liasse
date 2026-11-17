@@ -126,6 +126,7 @@ export const createHttpHarness = async (): Promise<HttpHarness> => {
       base: api,
       settings,
       auth,
+      setupToken: undefined,
       publicUrl: TEST_PUBLIC_URL,
       trustedProxies: NO_TRUSTED_PROXIES,
       assets: testAssets(),

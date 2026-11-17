@@ -39,6 +39,13 @@ import {
   type SearchRequest,
   type SearchResults,
   searchResultsSchema,
+  SETUP_BASE_PATH,
+  type SetupCheckRequestInput,
+  type SetupRequestInput,
+  type SetupResult,
+  setupResultSchema,
+  type SetupStatus,
+  setupStatusSchema,
   type SettingsCheck,
   type SettingsCheckRequestInput,
   settingsCheckSchema,
@@ -130,6 +137,15 @@ export interface LiasseClient {
   readonly checkSettings: (request: SettingsCheckRequestInput) => Promise<SettingsCheck>;
   /** The latest consolidation runs, the one due last first, the next nightly one left out. */
   readonly listConsolidationRuns: () => Promise<ConsolidationRunList>;
+  /**
+   * Whether the first account is still to be created. This and the two below need no
+   * credential: the last two take the setup token the server printed at startup.
+   */
+  readonly getSetupStatus: () => Promise<SetupStatus>;
+  /** Tries settings with the setup token, without saving them. */
+  readonly checkSetup: (request: SetupCheckRequestInput) => Promise<SettingsCheck>;
+  /** Creates the first account and saves the settings; then sign in through the auth server. */
+  readonly completeSetup: (request: SetupRequestInput) => Promise<SetupResult>;
 }
 
 const documentPath = (id: string): string => `/documents/${encodeURIComponent(id)}`;
@@ -196,5 +212,8 @@ export const createLiasseClient = (options: ClientOptions): LiasseClient => {
       ),
     checkSettings: async (request) => post(settingsCheckSchema, '/settings/check', request),
     listConsolidationRuns: async () => get(consolidationRunListSchema, '/consolidation/runs'),
+    getSetupStatus: async () => get(setupStatusSchema, SETUP_BASE_PATH),
+    checkSetup: async (request) => post(settingsCheckSchema, `${SETUP_BASE_PATH}/check`, request),
+    completeSetup: async (request) => post(setupResultSchema, SETUP_BASE_PATH, request),
   };
 };

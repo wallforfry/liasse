@@ -19,11 +19,13 @@ export const jsonResponse = (description: string, schema: z.ZodType): Responses[
 const FAILURES: Readonly<Record<number, string>> = {
   400: 'The request is not valid.',
   401: 'No valid credential.',
+  403: 'The setup token is wrong.',
   404: 'Not found.',
   405: 'The route does not serve this method.',
   409: 'The request conflicts with the current state.',
   413: 'The body is too large.',
   415: 'The body has an unsupported media type or format.',
+  429: 'Too many attempts from this client address; retry after `Retry-After` seconds.',
   501: 'This server does not provide the feature yet.',
   503: 'The database could not answer.',
   504: 'The request or the query took too long.',

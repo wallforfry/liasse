@@ -28,7 +28,6 @@ You need Docker with Compose, and either an API key of a model provider (Anthrop
 
 2. Edit `.env`:
    - `AUTH_SECRET` and `FILE_URL_SECRET`: two different values from `openssl rand -hex 32`.
-   - `AUTH_BOOTSTRAP_EMAIL` and `AUTH_BOOTSTRAP_PASSWORD` (12 characters or more): the first account.
    - Add `POSTGRES_PASSWORD=` with a value from `openssl rand -hex 24` (letters and digits only, since it goes into a URL).
 
 3. Start Liasse and Postgres:
@@ -39,7 +38,7 @@ You need Docker with Compose, and either an API key of a model provider (Anthrop
 
    The server applies its migrations at startup, and `docker compose ps` shows it healthy within a minute. Compose pulls the `latest` image; set `LIASSE_VERSION` in `.env` to pin a version (see [the image and its tags](docs/deployment.md#image)). While the repository is private, so is the image: run `docker login ghcr.io` with a token that can read it first.
 
-4. Open <http://localhost:8080> and sign in with the bootstrap account.
+4. Read the setup token the server printed at startup (`docker compose logs liasse`), open <http://localhost:8080> and create the first account with it. A restart prints a new token until an account exists.
 
    Then choose the models: the provider, the text and vision models and their key are settings stored in the database, not variables of `.env`. Until they are saved the server processes nothing; [Settings](docs/deployment.md#settings) shows how to save them with `PUT /settings`. For Ollama on the same machine, its base URL is `http://host.docker.internal:11434` (inside the container, `127.0.0.1` is the container itself; on Linux, see [Ollama on the host](docs/deployment.md#ollama-on-the-host)).
 

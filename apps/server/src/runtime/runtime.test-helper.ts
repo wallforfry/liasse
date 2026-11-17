@@ -11,6 +11,7 @@ import {
   createFakeVisionModel,
   createTestDatabase,
   seedSettings,
+  seedTestAccount,
   signInOverHttp,
   SYNTHETIC_ENV,
   type SettingsOverrides,
@@ -119,8 +120,6 @@ export const useRuntimeHarness = (): RuntimeHarness => {
       DATABASE_URL: current().url,
       STORAGE_PATH: join(folder(), 'files'),
       EMBEDDING_CACHE_DIR: join(folder(), 'models'),
-      AUTH_BOOTSTRAP_EMAIL: TEST_ACCOUNT.email,
-      AUTH_BOOTSTRAP_PASSWORD: TEST_ACCOUNT.password,
       ...env,
     });
     return env.PORT === undefined ? { ...config, server: { ...config.server, port: 0 } } : config;
@@ -148,15 +147,28 @@ export const useRuntimeHarness = (): RuntimeHarness => {
 
   const baseUrlOf = (runtime: Runtime): string => `http://127.0.0.1:${String(runtime.port)}`;
 
+  // The test account, created once the runtime migrated the database, as a finished
+  // onboarding leaves it.
+  const withAccount = async (): Promise<void> => {
+    const config = configOf();
+    await seedTestAccount({
+      databaseUrl: config.database.url,
+      embeddingDim: config.embedding.dimension,
+      publicUrl: config.server.publicUrl,
+    });
+  };
+
   const apiKey = (runtime: Runtime): Promise<string> => {
     const known = keys.get(runtime);
     if (known !== undefined) return known;
-    const created = createApiKeyOverHttp({
-      baseUrl: baseUrlOf(runtime),
-      publicUrl: configOf().server.publicUrl,
-      account: TEST_ACCOUNT,
-      name: 'runtime test',
-    });
+    const created = withAccount().then(() =>
+      createApiKeyOverHttp({
+        baseUrl: baseUrlOf(runtime),
+        publicUrl: configOf().server.publicUrl,
+        account: TEST_ACCOUNT,
+        name: 'runtime test',
+      }),
+    );
     keys.set(runtime, created);
     return created;
   };
@@ -164,11 +176,13 @@ export const useRuntimeHarness = (): RuntimeHarness => {
   const sessionOf = (runtime: Runtime): Promise<string> => {
     const known = sessions.get(runtime);
     if (known !== undefined) return known;
-    const opened = signInOverHttp({
-      baseUrl: baseUrlOf(runtime),
-      publicUrl: configOf().server.publicUrl,
-      account: TEST_ACCOUNT,
-    });
+    const opened = withAccount().then(() =>
+      signInOverHttp({
+        baseUrl: baseUrlOf(runtime),
+        publicUrl: configOf().server.publicUrl,
+        account: TEST_ACCOUNT,
+      }),
+    );
     sessions.set(runtime, opened);
     return opened;
   };

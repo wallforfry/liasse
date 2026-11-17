@@ -6,7 +6,12 @@ import type { Settings } from '@liasse/contract';
 import { type Config, loadConfig } from '@liasse/core/config';
 import type { Database } from '@liasse/core/db';
 import { type ResolvedSettings, resolveSettings } from '@liasse/core/settings';
-import { createApiKeyOverHttp, createTestDatabase, seedSettings } from '@liasse/core/testing';
+import {
+  createApiKeyOverHttp,
+  createTestDatabase,
+  seedSettings,
+  seedTestAccount,
+} from '@liasse/core/testing';
 import { createRuntime, type RuntimeOptions } from '@liasse/server/runtime';
 
 export type Env = Readonly<Record<string, string | undefined>>;
@@ -24,23 +29,16 @@ export interface Instance {
   readonly stop: () => Promise<void>;
 }
 
-interface RunAccount {
-  readonly email: string;
-  readonly password: string;
-}
-
-// Everything that would reach outside the run is switched off: the watched folder and the
-// accounts of the operator's configuration, and the Hindsight bank of the settings. The
+// Everything that would reach outside the run is switched off: the watched folder of the
+// operator's configuration, and the Hindsight bank of the settings. The
 // models and the embedder stay as given: they are what a run measures.
-const throwawayEnv = (env: Env, databaseUrl: string, folder: string, account: RunAccount): Env => ({
+const throwawayEnv = (env: Env, databaseUrl: string, folder: string): Env => ({
   ...env,
   DATABASE_URL: databaseUrl,
   STORAGE_DRIVER: 'fs',
   STORAGE_PATH: join(folder, 'files'),
   WATCH_DIR: undefined,
   AUTH_SECRET: randomBytes(32).toString('hex'),
-  AUTH_BOOTSTRAP_EMAIL: account.email,
-  AUTH_BOOTSTRAP_PASSWORD: account.password,
   HOST: '127.0.0.1',
   PORT: undefined,
   PUBLIC_URL: undefined,
@@ -65,7 +63,7 @@ export const startInstance = async (
   };
   try {
     const account = { email: 'eval@example.com', password: randomBytes(32).toString('hex') };
-    const loaded = loadConfig(throwawayEnv(env, database.url, folder, account));
+    const loaded = loadConfig(throwawayEnv(env, database.url, folder));
     // Port 0 lets the system pick a free one; the configuration itself refuses it.
     const config = { ...loaded, server: { ...loaded.server, port: 0 } };
     const kept: Settings = { ...settings, hindsight: { bank: settings.hindsight.bank } };
@@ -74,6 +72,12 @@ export const startInstance = async (
       authSecret: config.auth.secret,
       embeddingDim: config.embedding.dimension,
       settings: kept,
+    });
+    await seedTestAccount({
+      databaseUrl: database.url,
+      embeddingDim: config.embedding.dimension,
+      publicUrl: config.server.publicUrl,
+      account,
     });
     const runtime = await createRuntime(config, logger === undefined ? {} : { logger });
     if (runtime.port === undefined) {

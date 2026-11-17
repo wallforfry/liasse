@@ -51,7 +51,7 @@ Inside `packages/core/src`, one directory per concern. A new concern gets its ow
 | Directory        | Content                                                                                             |
 | ---------------- | --------------------------------------------------------------------------------------------------- |
 | `api/`           | The use cases REST and MCP share, their schemas, `ApiError`, signed file URLs; knows no transport   |
-| `auth/`          | The auth server (better-auth): accounts, sessions, API keys, the OAuth server of MCP, the bootstrap |
+| `auth/`          | The auth server (better-auth): accounts, sessions, API keys, the OAuth server of MCP, first account |
 | `config/`        | The Zod schema that turns `process.env` into the typed, frozen configuration                        |
 | `consolidation/` | Type merges, field promotion, stabilization, cleanup, applying changes, `consolidate` job           |
 | `db/`            | Drizzle schema, `createDb`, the migration runner; SQL migrations are in `migrations/`               |
@@ -71,6 +71,7 @@ Inside `packages/core/src`, one directory per concern. A new concern gets its ow
 | `registry/`      | Field primitives, naming rules and the operations on the evolving type registry                     |
 | `search/`        | Chunking sized to the embedder's window, `indexDocument`, hybrid `search` (full text + vector, RRF) |
 | `settings/`      | The settings of the database: their resolution, the secret box of their keys, the store, the check  |
+| `setup/`         | The setup token of the onboarding, and the count of attempts at it per client address               |
 | `storage/`       | The file storage port and its `fs` and `s3` drivers                                                 |
 | `testing/`       | Test database and bucket helpers, model fakes and synthetic document builders                       |
 | `text/`          | `extractText`: native text of PDF, DOCX and email, vision transcription otherwise                   |

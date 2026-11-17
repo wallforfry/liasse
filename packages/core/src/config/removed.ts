@@ -29,3 +29,20 @@ export const REMOVED_ENV_KEYS: readonly string[] = [
 export const REMOVED_ENV_MESSAGE =
   'no longer read from the environment: the settings are stored in the database and ' +
   'changed with PUT /settings. Unset it.';
+
+// The first account is created by the onboarding of the web UI, with the setup token the
+// server prints at startup. One still set would create nothing, silently.
+export const REMOVED_ACCOUNT_ENV_KEYS: readonly string[] = [
+  'AUTH_BOOTSTRAP_EMAIL',
+  'AUTH_BOOTSTRAP_PASSWORD',
+];
+
+export const REMOVED_ACCOUNT_ENV_MESSAGE =
+  'no longer read from the environment: the first account is created in the web UI, with ' +
+  'the setup token the server prints at startup while no account exists. Unset it.';
+
+/** Each removed variable, with what the operator is told when it is still set. */
+export const REMOVED_ENV: ReadonlyMap<string, string> = new Map([
+  ...REMOVED_ENV_KEYS.map((key): [string, string] => [key, REMOVED_ENV_MESSAGE]),
+  ...REMOVED_ACCOUNT_ENV_KEYS.map((key): [string, string] => [key, REMOVED_ACCOUNT_ENV_MESSAGE]),
+]);

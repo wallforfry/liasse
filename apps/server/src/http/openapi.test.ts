@@ -66,7 +66,7 @@ describe('GET /openapi.json', () => {
     expect(answer('/subjects')).toContain('truncated');
   });
 
-  it('declares the three credentials and marks /health alone as public', () => {
+  it('declares the three credentials and marks /health and the onboarding as public', () => {
     const { paths, components } = documentSchema.parse(raw);
     expect(Object.keys(components.securitySchemes).toSorted()).toEqual([
       'bearerAuth',
@@ -78,6 +78,11 @@ describe('GET /openapi.json', () => {
         .filter(([, operation]) => JSON.stringify(operation.security ?? []) === '[]')
         .map(([method]) => `${method} ${path}`),
     );
-    expect(open).toEqual(['get /health']);
+    expect(open.toSorted()).toEqual([
+      'get /api/setup',
+      'get /health',
+      'post /api/setup',
+      'post /api/setup/check',
+    ]);
   });
 });

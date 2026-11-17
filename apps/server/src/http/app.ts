@@ -1,6 +1,7 @@
 import type { ApiContext, SettingsContext } from '@liasse/core/api';
 import { type Auth, createMcpGrantCheck, mcpResourceOf } from '@liasse/core/auth';
 import { createClientAddressResolver, type TrustedProxies } from '@liasse/core/network';
+import type { SetupToken } from '@liasse/core/setup';
 import { Hono, type MiddlewareHandler } from 'hono';
 import { every } from 'hono/combine';
 import { generateSpecs } from 'hono-openapi';
@@ -12,6 +13,7 @@ import { apiKeyBearer } from './auth-server/api-key.ts';
 import { authRoutes } from './auth-server/auth-routes.ts';
 import { mcpAccessToken, mcpChallenge } from './auth-server/mcp-access-token.ts';
 import { sessionCookie } from './auth-server/session-cookie.ts';
+import { setupAttempts } from './auth-server/setup-attempts.ts';
 import { BEARER_SCHEME, operation, SESSION_SCHEME, SIGNED_URL_SCHEME } from './describe.ts';
 import type { AppEnv } from './env.ts';
 import { createErrorHandler, notFound } from './errors.ts';
@@ -23,6 +25,7 @@ import { mcpRoutes } from './routes/mcp.ts';
 import { registryRoutes } from './routes/registry.ts';
 import { searchRoutes } from './routes/search.ts';
 import { settingsRoutes } from './routes/settings.ts';
+import { setupRoutes } from './routes/setup.ts';
 import { systemRoutes } from './routes/system.ts';
 import { uploadRoutes } from './routes/upload.ts';
 import type { WebAssets } from './ui/web-assets.ts';
@@ -40,6 +43,8 @@ export interface AppDependencies {
   readonly settings: SettingsContext;
   /** Accounts, sessions, API keys and the OAuth authorization server of MCP. */
   readonly auth: Auth;
+  /** The token of the onboarding, issued at startup while no account existed. */
+  readonly setupToken: SetupToken | undefined;
   /** `config.server.publicUrl`: the origin the web UI and OAuth clients call. */
   readonly publicUrl: string;
   /** `config.server.trustedProxies`: whose forwarded client address is believed. */
@@ -87,6 +92,7 @@ export const createApp = ({
   base,
   settings,
   auth,
+  setupToken,
   publicUrl,
   trustedProxies,
   assets,
@@ -121,6 +127,7 @@ export const createApp = ({
     every(credentialed(milliseconds, credentials, challenge), requireSettings(api));
   const authenticated = within(requestTimeoutMs);
   const metrics = createHttpMetrics();
+  const resolveClientAddress = createClientAddressResolver(trustedProxies);
 
   const app = new Hono<AppEnv>();
   app.use(requestId, accessLog(logger, metrics), securityHeaders);
@@ -152,8 +159,13 @@ export const createApp = ({
   );
   app.route(
     '/',
-    authRoutes(auth, requestTimeout(requestTimeoutMs), createClientAddressResolver(trustedProxies)),
+    setupRoutes({
+      setup: { settings, auth, token: setupToken },
+      timed: requestTimeout(requestTimeoutMs),
+      attempt: every(requestTimeout(uploadTimeoutMs), setupAttempts(base.db, resolveClientAddress)),
+    }),
   );
+  app.route('/', authRoutes(auth, requestTimeout(requestTimeoutMs), resolveClientAddress));
   app.route(UI_ROOT, webRoutes(assets));
   app.get('/', (context) => context.redirect(`${UI_ROOT}/`, 302));
   // `ingest` carries a file: an MCP call gets the deadline of an upload.

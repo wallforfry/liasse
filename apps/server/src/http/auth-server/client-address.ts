@@ -13,6 +13,12 @@ const socketAddress = (context: AppContext): string | undefined => {
   }
 };
 
+/** The address of the client: the socket's, or what a trusted proxy forwarded. */
+export const clientAddressOf = (
+  context: AppContext,
+  resolveClientAddress: ClientAddressResolver,
+): string | undefined => resolveClientAddress(socketAddress(context), context.req.raw.headers);
+
 /**
  * The request for the auth server, with the address of the client as the one header
  * better-auth reads it from: the socket address, or what a trusted proxy forwarded (see
@@ -24,7 +30,7 @@ export const withClientAddress = (
 ): Request => {
   const headers = new Headers(context.req.raw.headers);
   headers.delete(CLIENT_ADDRESS_HEADER);
-  const address = resolveClientAddress(socketAddress(context), context.req.raw.headers);
+  const address = clientAddressOf(context, resolveClientAddress);
   if (address !== undefined) headers.set(CLIENT_ADDRESS_HEADER, address);
   return new Request(context.req.raw, { headers });
 };
