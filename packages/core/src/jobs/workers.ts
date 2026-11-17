@@ -3,7 +3,7 @@ import { DEFAULT_RETRY_POLICY, type RetryPolicy } from './backoff.ts';
 import { JOBS_CHANNEL } from './enqueue.ts';
 import { startDispatcher } from './dispatcher.ts';
 import { InvalidWorkersOptionsError } from './errors.ts';
-import type { Execution, JobDeferral, JobFailure } from './execution.ts';
+import type { Execution, JobDeferral, JobFailure, SettingsFollower } from './execution.ts';
 import { followHandlerSet, type HandlerSet } from './handlers.ts';
 import { recoverStaleJobs, terminalFailureHooks } from './store.ts';
 import { createWakeSignal } from './wake-signal.ts';
@@ -15,6 +15,12 @@ export interface WorkersOptions {
    * while the workers run. A fixed set is a function that answers the same one.
    */
   readonly handlers: () => HandlerSet;
+  /**
+   * Keeps the settings of the handlers up to the version a job was queued under: a job of
+   * newer settings waits for them, never runs with older parts. Left out, versions are
+   * not looked at.
+   */
+  readonly settings?: SettingsFollower;
   /** Jobs run in parallel by this process. */
   readonly concurrency: number;
   /** Idle polling starts at `pollIntervalMs` and doubles up to `maxPollIntervalMs`. */
@@ -121,6 +127,8 @@ export const startWorkers = async (options: WorkersOptions): Promise<Workers> =>
   const dispatcher = startDispatcher({
     execution: {
       db,
+      handlers,
+      ...(options.settings === undefined ? {} : { settings: options.settings }),
       retry: options.retry ?? DEFAULT_RETRY_POLICY,
       lockRenewalMs,
       onJobFailed: options.onJobFailed ?? (() => undefined),
