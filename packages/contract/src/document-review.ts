@@ -15,9 +15,11 @@ const reviewedTypeSchema = z.object({
   outcome: z.enum(CLASSIFICATION_OUTCOMES).nullable(),
   manual: z.boolean().describe('The type was chosen by a person.'),
   doubtful: z.boolean().describe('The closest type, or none: a fallback or untyped outcome.'),
+  // Defaults keep the review of a server older than the field readable.
   refusal: z
     .enum(TYPE_REFUSALS)
     .nullable()
+    .default(null)
     .describe('Why the new type the model proposed was not created; null when none was refused.'),
 });
 
@@ -66,6 +68,7 @@ export const documentReviewSchema = z.object({
     .describe('Values the model returned that were dropped at the last extraction.'),
   rejections: z
     .array(rejectionSchema)
+    .default([])
     .describe(
       'The values of `rejected_values` by section, name and reason; empty for an extraction ' +
         'that recorded only their count.',
