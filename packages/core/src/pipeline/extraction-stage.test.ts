@@ -486,6 +486,40 @@ describe('extraction and re-extraction', () => {
     expect((await harness.document(id)).confidence).toBeCloseTo(0.75, 5);
   });
 
+  it('counts a core value corrected by hand once, at 1, whatever the model read', async () => {
+    const type = await seedType();
+    const id = await classified(type.id, {
+      core: { reference: 'MANUAL-1' },
+      manualFields: ['reference'],
+    });
+    const output = {
+      core: {
+        reference: at('SYN-2026-001', 'not in the text'),
+        issuer: at('Synthetic Energy SA', 'Synthetic Energy SA', 0.4),
+      },
+    };
+    await processDocument(harness.deps({ textModel: model(() => output) }), id, live());
+    const document = await harness.document(id);
+    expect(document.core).toMatchObject({ reference: 'MANUAL-1' });
+    // Mean of 1 and 0.4, not of 1, 0.4 and the 0 of the rejected reading.
+    expect(document.confidence).toBeCloseTo(0.7, 5);
+  });
+
+  it('does not count a core field a person cleared, whatever the model read', async () => {
+    const type = await seedType();
+    const id = await classified(type.id, { core: {}, manualFields: ['reference'] });
+    const output = {
+      core: {
+        reference: at('SYN-2026-001', 'Invoice SYN-2026-001'),
+        issuer: at('Synthetic Energy SA', 'Synthetic Energy SA', 0.4),
+      },
+    };
+    await processDocument(harness.deps({ textModel: model(() => output) }), id, live());
+    const document = await harness.document(id);
+    expect(document.core).not.toHaveProperty('reference');
+    expect(document.confidence).toBeCloseTo(0.4, 5);
+  });
+
   it('fails a classified document that has no stored text', async () => {
     const { id } = await insertSyntheticDocument(harness.db, { status: 'classified' });
     await expect(processDocument(harness.deps(), id, live())).rejects.toMatchObject({
