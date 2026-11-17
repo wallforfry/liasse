@@ -40,7 +40,7 @@ export const proposeStabilizations = async (
 
 /**
  * Step 4: a field of a stable type with many documents that few of them fill is proposed
- * for removal. A removal always waits for approval under `AUTO_APPLY=safe`; one pending
+ * for removal. A removal always waits for approval under `auto_apply` safe; one pending
  * or rejected is not proposed again.
  */
 export const proposeCleanups = async (

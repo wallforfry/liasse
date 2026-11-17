@@ -3,18 +3,32 @@ import { DEFAULT_RETRY_POLICY, type RetryPolicy } from './backoff.ts';
 import { JOBS_CHANNEL } from './enqueue.ts';
 import { startDispatcher } from './dispatcher.ts';
 import { InvalidWorkersOptionsError } from './errors.ts';
-import type { Execution, JobDeferral, JobFailure } from './execution.ts';
-import { createHandlerRegistry, type RegisteredHandler } from './handlers.ts';
+import {
+  createNotReadyDelay,
+  type Execution,
+  type JobDeferral,
+  type JobFailure,
+  type SettingsFollower,
+} from './execution.ts';
+import { followHandlerSet, type HandlerSet } from './handlers.ts';
 import { recoverStaleJobs, terminalFailureHooks } from './store.ts';
 import { createWakeSignal } from './wake-signal.ts';
 
 export interface WorkersOptions {
   readonly db: Database;
-  readonly handlers: readonly RegisteredHandler[];
+  /**
+   * Read again at every claim, with the bounds of its kinds: the caller may change what runs
+   * while the workers run. A fixed set is a function that answers the same one.
+   */
+  readonly handlers: () => HandlerSet;
+  /**
+   * Keeps the settings of the handlers up to the version a job was queued under: a job of
+   * newer settings waits for them, never runs with older parts. Left out, versions are
+   * not looked at.
+   */
+  readonly settings?: SettingsFollower;
   /** Jobs run in parallel by this process. */
   readonly concurrency: number;
-  /** Upper bound per kind, within this process. A kind left out is bound by `concurrency` only. */
-  readonly perKindConcurrency?: Readonly<Record<string, number>>;
   /** Idle polling starts at `pollIntervalMs` and doubles up to `maxPollIntervalMs`. */
   readonly pollIntervalMs?: number;
   readonly maxPollIntervalMs?: number;
@@ -94,14 +108,20 @@ export const startWorkers = async (options: WorkersOptions): Promise<Workers> =>
   const onError = options.onError ?? (() => undefined);
   const visibilityTimeoutMs = options.visibilityTimeoutMs ?? DEFAULTS.visibilityTimeoutMs;
   const lockRenewalMs = lockRenewalOf(options.lockRenewalMs, visibilityTimeoutMs);
-  const handlers = createHandlerRegistry(options.handlers);
-  const hooks = terminalFailureHooks(handlers);
+  const handlers = followHandlerSet(options.handlers);
+  // Read once now, so a set that cannot run fails the start rather than every claim.
+  handlers();
   const wake = createWakeSignal();
 
+  // The hooks of the handlers in force when the lock of a job is found expired.
   const recover = (): void => {
-    recoverStaleJobs(db, visibilityTimeoutMs, hooks).then((recovered) => {
-      if (recovered > 0) wake.notify();
-    }, onError);
+    Promise.resolve()
+      .then(() =>
+        recoverStaleJobs(db, visibilityTimeoutMs, terminalFailureHooks(handlers().registry)),
+      )
+      .then((recovered) => {
+        if (recovered > 0) wake.notify();
+      }, onError);
   };
 
   const unlisten = await listenForJobs(db, wake.notify).catch((error: unknown) => {
@@ -114,14 +134,16 @@ export const startWorkers = async (options: WorkersOptions): Promise<Workers> =>
     execution: {
       db,
       handlers,
+      ...(options.settings === undefined ? {} : { settings: options.settings }),
+      notReadyDelay: createNotReadyDelay(),
       retry: options.retry ?? DEFAULT_RETRY_POLICY,
       lockRenewalMs,
       onJobFailed: options.onJobFailed ?? (() => undefined),
       onJobDeferred: options.onJobDeferred ?? (() => undefined),
       onError,
     },
+    handlers,
     concurrency: options.concurrency,
-    perKindConcurrency: options.perKindConcurrency ?? {},
     pollIntervalMs: options.pollIntervalMs ?? DEFAULTS.pollIntervalMs,
     maxPollIntervalMs: options.maxPollIntervalMs ?? DEFAULTS.maxPollIntervalMs,
     wake,

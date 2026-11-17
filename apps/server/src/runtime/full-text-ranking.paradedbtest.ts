@@ -36,12 +36,11 @@ describe('the runtime on a database with pg_search', () => {
   };
 
   it('ranks the full-text side of /search with BM25', async () => {
-    const runtime = await harness.start({
-      EMBEDDING_PROVIDER: 'ollama',
-      EMBEDDING_MODEL: 'embedding-model',
-      EMBEDDING_BASE_URL: models.url,
-      EMBEDDING_DIM: String(TEST_EMBEDDING_DIM),
-    });
+    const runtime = await harness.start(
+      { EMBEDDING_DIM: String(TEST_EMBEDDING_DIM) },
+      {},
+      { embedding: { provider: 'ollama', model: 'embedding-model', base_url: models.url } },
+    );
     expect(harness.lines().some((line) => line.startsWith('Full text is ranked by BM25'))).toBe(
       true,
     );

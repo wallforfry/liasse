@@ -42,3 +42,33 @@ export const createHandlerRegistry = (
   if (duplicate !== undefined) throw new DuplicateJobHandlerError(duplicate.kind);
   return new Map(handlers.map((handler) => [handler.kind, handler]));
 };
+
+/** What the workers run: their handlers, and the bounds of some kinds. */
+export interface HandlerSet {
+  readonly handlers: readonly RegisteredHandler[];
+  /** Upper bound per kind, within this process. A kind left out is bound by `concurrency` only. */
+  readonly perKindConcurrency?: Readonly<Record<string, number>>;
+}
+
+export interface ActiveHandlers {
+  readonly registry: ReadonlyMap<string, RegisteredHandler>;
+  readonly perKindConcurrency: Readonly<Record<string, number>>;
+}
+
+const activate = ({ handlers, perKindConcurrency = {} }: HandlerSet): ActiveHandlers => ({
+  registry: createHandlerRegistry(handlers),
+  perKindConcurrency,
+});
+
+/**
+ * Reads the handler set again at every call, and builds its registry once per set: a
+ * caller swaps the set to change what the next claimed job runs with.
+ */
+export const followHandlerSet = (read: () => HandlerSet): (() => ActiveHandlers) => {
+  let last: { readonly set: HandlerSet; readonly active: ActiveHandlers } | undefined;
+  return () => {
+    const set = read();
+    if (last?.set !== set) last = { set, active: activate(set) };
+    return last.active;
+  };
+};

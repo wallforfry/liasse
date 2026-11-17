@@ -2,10 +2,14 @@ import { jobs } from '../db/schema/jobs.ts';
 import { createTestDatabase, type TestDatabase } from '../testing/test-database.ts';
 import { enqueue } from './enqueue.ts';
 import { jobById, labelJob } from './kinds.test-helper.ts';
+import type { RegisteredHandler } from './handlers.ts';
 import { startWorkers, type Workers, type WorkersOptions } from './workers.ts';
 
-export type StartOptions = Omit<WorkersOptions, 'db' | 'concurrency'> & {
+// A fixed set, as most tests of the queue need it: the harness gives the workers its source.
+export type StartOptions = Omit<WorkersOptions, 'db' | 'concurrency' | 'handlers'> & {
   readonly concurrency?: number;
+  readonly handlers: readonly RegisteredHandler[] | WorkersOptions['handlers'];
+  readonly perKindConcurrency?: Readonly<Record<string, number>>;
 };
 
 export interface WorkersHarness {
@@ -32,7 +36,11 @@ export const createWorkersHarness = async (): Promise<WorkersHarness> => {
 
   return {
     database,
-    start: async (options) => {
+    start: async ({ handlers, perKindConcurrency = {}, ...options }) => {
+      const fixed = {
+        handlers: typeof handlers === 'function' ? [] : handlers,
+        perKindConcurrency,
+      };
       const workers = await startWorkers({
         db: database.db,
         concurrency: 2,
@@ -40,6 +48,7 @@ export const createWorkersHarness = async (): Promise<WorkersHarness> => {
         maxPollIntervalMs: 40,
         retry: { baseMs: 10, maxMs: 20 },
         ...options,
+        handlers: typeof handlers === 'function' ? handlers : () => fixed,
       });
       started.push(workers);
       return workers;

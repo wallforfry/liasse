@@ -23,7 +23,7 @@ export const handleMcpRequest = async (
   // No `sessionIdGenerator`: the transport keeps no session.
   const transport = new WebStandardStreamableHTTPServerTransport({
     enableJsonResponse: true,
-    maxRequestBodySize: mcpMessageSizeLimit(deps.api.maxFileSize),
+    maxRequestBodySize: mcpMessageSizeLimit(deps.api().maxFileSize),
   });
   await server.connect(transport);
   try {

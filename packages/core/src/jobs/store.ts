@@ -11,6 +11,8 @@ export interface ClaimedJob {
   /** 1 for the first execution. Also the fencing token of this execution. */
   readonly attempt: number;
   readonly maxAttempts: number;
+  /** The version of the stored settings when the job was queued. */
+  readonly settingsVersion: number;
 }
 
 export type JobLease = Pick<ClaimedJob, 'id' | 'attempt'>;
@@ -47,6 +49,7 @@ export const claimJob = async (
       payload: jobs.payload,
       attempt: jobs.attempts,
       maxAttempts: jobs.maxAttempts,
+      settingsVersion: jobs.settingsVersion,
     });
   return claimed;
 };

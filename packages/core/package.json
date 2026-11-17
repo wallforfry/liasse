@@ -122,6 +122,11 @@
       "types": "./dist/search/index.d.ts",
       "default": "./dist/search/index.js"
     },
+    "./settings": {
+      "@liasse/source": "./src/settings/index.ts",
+      "types": "./dist/settings/index.d.ts",
+      "default": "./dist/settings/index.js"
+    },
     "./storage": {
       "@liasse/source": "./src/storage/index.ts",
       "types": "./dist/storage/index.d.ts",

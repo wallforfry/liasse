@@ -50,13 +50,19 @@ docker run --detach --name "$database" --network "$network" \
   pgvector/pgvector:pg16 >/dev/null
 wait_healthy "$database" 120
 
-# The models are never called at idle: the provider only has to pass the configuration schema.
 docker run --detach --name "$server" --network "$network" \
   --env DATABASE_URL="postgres://liasse:liasse@$database:5432/liasse" \
-  --env LLM_PROVIDER=ollama --env TEXT_MODEL=idle-check --env VISION_MODEL=idle-check \
   --env AUTH_SECRET="$secret" --env FILE_URL_SECRET="$secret" \
   --health-interval 1s --health-start-period 0s \
   "$image" >/dev/null
+wait_healthy "$server" 120
+
+# Without settings the server starts no worker. The models are never called at idle: settings
+# without a key only have to pass their schema, and a restart puts them in force with the
+# workers they start.
+docker exec "$database" psql -U liasse -d liasse -v ON_ERROR_STOP=1 -q -c \
+  "INSERT INTO settings (version, document) VALUES (1, '{\"llm\": {\"provider\": \"ollama\", \"text_model\": \"idle-check\", \"vision_model\": \"idle-check\"}}')"
+docker restart "$server" >/dev/null
 wait_healthy "$server" 120
 
 sleep "$settle_seconds"

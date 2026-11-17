@@ -39,6 +39,13 @@ export { listEntities } from './list-entities.ts';
 export { queryDocuments } from './query-documents.ts';
 export { reclassifyDocument } from './reclassify-document.ts';
 export { searchDocuments } from './search-documents.ts';
+export {
+  checkSettingsDraft,
+  type PreparedSettings,
+  readSettingsState,
+  saveSettings,
+  type SettingsContext,
+} from './settings.ts';
 export { retryDocument } from './retry-document.ts';
 export { readGraph } from './read-graph.ts';
 export { readStats, type Stats } from './stats.ts';

@@ -9,8 +9,8 @@ export interface ConsolidationReadContext {
 export interface ConsolidationContext extends ConsolidationReadContext {
   /** Merge candidates and field promotion each ask it; it never sees a document's text. */
   readonly textModel: TextModel;
-  /** `AUTO_APPLY` of the configuration. */
+  /** `auto_apply` of the settings. */
   readonly autoApply: AutoApplyMode;
-  /** `SCHEMA_LANGUAGE`: the language of the field names a promotion proposes. */
+  /** `schema_language` of the settings: the language of the field names a promotion proposes. */
   readonly schemaLanguage: SchemaLanguage;
 }

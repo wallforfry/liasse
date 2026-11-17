@@ -77,7 +77,8 @@ export class HindsightUrlError extends StartupError {
 
   constructor() {
     super(
-      'HINDSIGHT_URL must be an http or https URL without credentials, query string or fragment',
+      'The URL of Hindsight must be an http or https URL without credentials, query string or ' +
+        'fragment',
     );
   }
 }

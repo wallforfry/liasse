@@ -21,6 +21,7 @@ import {
   PROCESSING_OUTCOMES,
   PROCESSING_STAGES,
   SCHEMA_LANGUAGES,
+  SECRET_STATES,
   STORAGE_DRIVERS,
   SUBJECT_IDENTIFIER_TYPES,
   SUBJECT_KINDS,
@@ -59,3 +60,18 @@ export const embeddingProviderSchema = z.enum(EMBEDDING_PROVIDERS);
 export const autoApplyModeSchema = z.enum(AUTO_APPLY_MODES);
 export const schemaLanguageSchema = z.enum(SCHEMA_LANGUAGES);
 export const supportedMimeSchema = z.enum(SUPPORTED_MIMES);
+export const secretStateSchema = z.enum(SECRET_STATES);
+// A client sends the key in a header and appends its paths to the base URL, so
+// credentials, a query string or a fragment in the URL cannot work; they would only end up
+// in logs or in broken paths. The value is searched as written: a bare `?` or `#` leaves
+// `search` and `hash` empty.
+export const httpBaseUrlSchema = z.string().refine((value) => {
+  if (!URL.canParse(value)) return false;
+  const { protocol, username, password } = new URL(value);
+  return (
+    (protocol === 'http:' || protocol === 'https:') &&
+    username === '' &&
+    password === '' &&
+    !/[?#]/.test(value)
+  );
+}, 'expected an http or https URL without credentials, query string or fragment');

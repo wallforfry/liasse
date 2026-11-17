@@ -70,6 +70,7 @@ Inside `packages/core/src`, one directory per concern. A new concern gets its ow
 | `query/`         | The structured query DSL: its schema, field typing and compilation to bound SQL                     |
 | `registry/`      | Field primitives, naming rules and the operations on the evolving type registry                     |
 | `search/`        | Chunking sized to the embedder's window, `indexDocument`, hybrid `search` (full text + vector, RRF) |
+| `settings/`      | The settings of the database: their resolution, the secret box of their keys, the store, the check  |
 | `storage/`       | The file storage port and its `fs` and `s3` drivers                                                 |
 | `testing/`       | Test database and bucket helpers, model fakes and synthetic document builders                       |
 | `text/`          | `extractText`: native text of PDF, DOCX and email, vision transcription otherwise                   |

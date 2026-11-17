@@ -108,7 +108,7 @@ const REQUEST_BODY = {
   },
 } as const;
 
-export const uploadRoutes = ({ api, authenticated }: RouteDeps): Hono<AppEnv> =>
+export const uploadRoutes = ({ authenticated }: RouteDeps): Hono<AppEnv> =>
   new Hono<AppEnv>().post(
     '/documents',
     operation({
@@ -123,14 +123,17 @@ export const uploadRoutes = ({ api, authenticated }: RouteDeps): Hono<AppEnv> =>
     }),
     authenticated,
     requireMediaType([MULTIPART, RAW]),
-    // A form is read whole before its file is known: this is what bounds that read.
-    bodyLimit({
-      maxSize: api.maxFileSize + MULTIPART_OVERHEAD_BYTES,
-      onError: () => {
-        throw tooLarge(api.maxFileSize);
-      },
-    }),
+    // A form is read whole before its file is known: this is what bounds that read, with
+    // the limit of the settings in force when the request arrives.
+    (context, next) =>
+      bodyLimit({
+        maxSize: context.var.api.maxFileSize + MULTIPART_OVERHEAD_BYTES,
+        onError: () => {
+          throw tooLarge(context.var.api.maxFileSize);
+        },
+      })(context, next),
     async (context) => {
+      const { api } = context.var;
       const isForm = context.req.header('Content-Type')?.toLowerCase().startsWith(MULTIPART);
       const input = isForm === true ? await readForm(context) : readRaw(context, api);
       const result = await uploadDocument(api, { ...input, source: 'api' });

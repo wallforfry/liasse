@@ -60,6 +60,7 @@ describe('job store', () => {
       payload: { label: 'synthetic' },
       attempt: 1,
       maxAttempts: 3,
+      settingsVersion: 0,
     });
     const job = await jobById(database.db, id);
     expect(job).toMatchObject({ status: 'running', attempts: 1 });

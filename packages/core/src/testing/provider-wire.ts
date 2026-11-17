@@ -1,8 +1,11 @@
+import { settingsSchema } from '@liasse/contract';
 import { z } from 'zod';
-import { loadConfig } from '../config/load.ts';
-import { SYNTHETIC_ENV } from './synthetic-env.ts';
-import type { RemoteEmbeddingConfig } from '../models/providers/embedder.ts';
-import type { LlmConfig } from '../models/providers/language-call.ts';
+import {
+  type LlmSettings,
+  type RemoteEmbeddingSettings,
+  resolveSettings,
+} from '../settings/resolve.ts';
+import { SYNTHETIC_EMBEDDING_ENVIRONMENT, SYNTHETIC_SETTINGS } from './synthetic-settings.ts';
 import type { StubRequest, StubResponse } from './provider-stub-server.ts';
 
 // Responses in the wire format of the OpenAI Chat Completions and Embeddings APIs, which
@@ -65,16 +68,29 @@ export const indexedEmbeddings = (data: readonly IndexedEmbedding[]): StubRespon
 export const embeddings = (vectors: readonly (readonly number[])[]): StubResponse =>
   indexedEmbeddings(vectors.map((embedding, index) => ({ index, embedding })));
 
-type Env = Readonly<Record<string, string>>;
+// Loose on purpose: the tables of the provider tests name sections with plain strings, and
+// the schema of the contract checks them all the same.
+type Section = Readonly<Record<string, unknown>>;
 
-export const llmConfig = (env: Env): LlmConfig => loadConfig({ ...SYNTHETIC_ENV, ...env }).llm;
+/** The language model settings of the synthetic ones with these fields changed. */
+export const llmSettings = (llm: Section): LlmSettings =>
+  resolveSettings(
+    settingsSchema.parse({ llm: { ...SYNTHETIC_SETTINGS.llm, ...llm } }),
+    SYNTHETIC_EMBEDDING_ENVIRONMENT,
+  ).llm;
 
-export const embeddingConfig = (env: Env): RemoteEmbeddingConfig => {
-  const { embedding } = loadConfig({
-    ...SYNTHETIC_ENV,
-    EMBEDDING_MODEL: 'embedding-model',
-    ...env,
-  });
-  if (embedding.provider === 'local') throw new Error('expected a remote embedding provider');
-  return embedding;
+/** Remote embedder settings, `embedding-model` unless named, of `dimension` dimensions. */
+export const remoteEmbeddingSettings = (
+  embedding: Section,
+  dimension: number = SYNTHETIC_EMBEDDING_ENVIRONMENT.dimension,
+): RemoteEmbeddingSettings => {
+  const resolved = resolveSettings(
+    settingsSchema.parse({
+      llm: SYNTHETIC_SETTINGS.llm,
+      embedding: { model: 'embedding-model', ...embedding },
+    }),
+    { ...SYNTHETIC_EMBEDDING_ENVIRONMENT, dimension },
+  ).embedding;
+  if (resolved.provider === 'local') throw new Error('expected a remote embedding provider');
+  return resolved;
 };

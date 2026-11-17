@@ -1,7 +1,16 @@
-export { type ApiKeyRequest, createApiKeyOverHttp } from './api-key-over-http.ts';
+export {
+  type ApiKeyRequest,
+  createApiKeyOverHttp,
+  signInOverHttp,
+  type SignInRequest,
+} from './api-key-over-http.ts';
 export { createGate, type Gate, sleep, waitUntil } from './async.ts';
 export { columnsHolding } from './column-scan.ts';
 export { createFakeEmbedder, type FakeEmbedderOptions } from './fake-embedder.ts';
+export {
+  createFakeModelFactories,
+  type FakeModelFactoryOverrides,
+} from './fake-model-factories.ts';
 export {
   createFakeTextModel,
   type FakeTextHandler,
@@ -28,7 +37,15 @@ export {
   type StubResponse,
   type StubServer,
 } from './provider-stub-server.ts';
+export { seedSettings, type SettingsSeed } from './seed-settings.ts';
 export { SYNTHETIC_ENV } from './synthetic-env.ts';
+export {
+  resolvedSyntheticSettings,
+  type SettingsOverrides,
+  SYNTHETIC_EMBEDDING_ENVIRONMENT,
+  SYNTHETIC_SETTINGS,
+  syntheticSettings,
+} from './synthetic-settings.ts';
 export {
   createTestApiKey,
   createTestAuth,

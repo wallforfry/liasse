@@ -1,0 +1,1 @@
+ALTER TABLE "jobs" ADD COLUMN "settings_version" integer DEFAULT 0 NOT NULL;

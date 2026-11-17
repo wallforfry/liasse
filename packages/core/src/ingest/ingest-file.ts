@@ -6,6 +6,7 @@ import { documents } from '../db/schema/documents.ts';
 import { storageKeyOf } from '../storage/key.ts';
 import type { Storage } from '../storage/port.ts';
 import { UnsupportedFormatError } from './errors.ts';
+import { holdEmbedderShared } from '../settings/embedder-lock.ts';
 import { type IngestResult, ingestExisting, ingestNew } from './existing-document.ts';
 import { lockFile } from './file-lock.ts';
 import { detectMimeType } from './mime.ts';
@@ -15,7 +16,7 @@ import { cleanFilename, cleanHint } from './untrusted-text.ts';
 export interface IngestDeps {
   readonly db: Database;
   readonly storage: Storage;
-  /** In bytes; `config.pipeline.maxFileSize`. */
+  /** In bytes; `max_file_size` of the settings. */
   readonly maxFileSize: number;
 }
 
@@ -73,6 +74,9 @@ export const ingestFile = async (
 
   return db.transaction(async (tx) => {
     await lockFile(tx, sha256);
+    // A document that becomes live here is indexed by the embedder in force: a save that
+    // changes it waits for this transaction, or this one for that save.
+    await holdEmbedderShared(tx);
     const [existing] = await tx
       .select({ id: documents.id, status: documents.status })
       .from(documents)

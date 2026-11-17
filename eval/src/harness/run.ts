@@ -1,6 +1,7 @@
-import type { Config } from '@liasse/core/config';
+import type { Settings } from '@liasse/contract';
 import { type Database, documents } from '@liasse/core/db';
 import type { TextModel } from '@liasse/core/models';
+import type { ResolvedSettings } from '@liasse/core/settings';
 import type { RuntimeOptions } from '@liasse/server/runtime';
 import { inArray } from 'drizzle-orm';
 import { loadCorpus, loadQuestions } from '../corpus.ts';
@@ -27,8 +28,10 @@ export interface RunOptions {
   readonly label: string;
   /** Read like the server reads `process.env`. */
   readonly env: Env;
+  /** The models, the embedder and the pipeline the run measures. */
+  readonly settings: Settings;
   /** The model that answers the questions, once the corpus is in. */
-  readonly agentModel: (ids: CorpusIds, config: Config) => TextModel;
+  readonly agentModel: (ids: CorpusIds, settings: ResolvedSettings) => TextModel;
   readonly logger?: RuntimeOptions['logger'];
 }
 
@@ -113,21 +116,22 @@ const answerQuestions = async (
 export const runEvaluation = async ({
   label,
   env,
+  settings,
   agentModel,
   logger,
 }: RunOptions): Promise<RunReport> => {
   const [corpus, questionSet] = await Promise.all([loadCorpus(), loadQuestions()]);
   const index = createCorpusIndex(corpus);
-  const instance = await startInstance(env, logger === undefined ? {} : { logger });
+  const instance = await startInstance(env, settings, logger === undefined ? {} : { logger });
   try {
     return await cleanUpOnInterrupt(instance.stop, async () => {
       const ids = await ingestCorpus(instance, corpus);
       const results = await scoreDocuments(instance, corpus, ids, index);
-      const model = agentModel(ids, instance.config);
+      const model = agentModel(ids, instance.settings);
       const answers = await answerQuestions(instance, questionSet, model, ids, index);
       return {
         label,
-        models: modelsOf(instance.config),
+        models: modelsOf(instance.settings),
         ingestion: await summarizeIngestion(instance.db, corpus, ids),
         documents: { totals: aggregateReport(results), results },
         questions: {

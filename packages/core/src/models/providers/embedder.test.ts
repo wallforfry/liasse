@@ -9,7 +9,7 @@ import {
   startStubServer,
 } from '../../testing/provider-stub-server.ts';
 import {
-  embeddingConfig,
+  remoteEmbeddingSettings,
   embeddingInputOf,
   embeddings,
   failure,
@@ -37,18 +37,21 @@ const echo: StubHandler = (request) =>
 
 const start = async (
   handler: StubHandler,
-  env: Readonly<Record<string, string>> = {},
+  env: Readonly<Record<string, unknown>> = {},
+  dimension = 3,
 ): Promise<{ readonly server: StubServer; readonly embedder: Embedder }> => {
   const server = await startStubServer(handler);
   servers.push(server);
   const embedder = await createProviderEmbedder(
-    embeddingConfig({
-      EMBEDDING_PROVIDER: 'openai-compatible',
-      EMBEDDING_BASE_URL: `${server.url}/v1`,
-      EMBEDDING_API_KEY: SYNTHETIC_API_KEY,
-      EMBEDDING_DIM: '3',
-      ...env,
-    }),
+    remoteEmbeddingSettings(
+      {
+        provider: 'openai-compatible',
+        base_url: `${server.url}/v1`,
+        api_key: SYNTHETIC_API_KEY,
+        ...env,
+      },
+      dimension,
+    ),
   );
   return { server, embedder };
 };
@@ -65,7 +68,7 @@ describe('createProviderEmbedder', () => {
   it('states the input window it was configured with, and none otherwise', async () => {
     const { embedder: unbounded } = await start(echo);
     expect(unbounded.maxInputTokens).toBeUndefined();
-    const { embedder: bounded } = await start(echo, { EMBEDDING_MAX_INPUT_TOKENS: '512' });
+    const { embedder: bounded } = await start(echo, { max_input_tokens: 512 });
     expect(bounded.maxInputTokens).toBe(512);
     expect(bounded.countTokens).toBeUndefined();
   });
@@ -133,7 +136,7 @@ describe('createProviderEmbedder', () => {
   });
 
   it('refuses vectors whose dimension differs from EMBEDDING_DIM', async () => {
-    const { embedder } = await start(echo, { EMBEDDING_DIM: '384' });
+    const { embedder } = await start(echo, {}, 384);
     const error = await failureOf(embedder.embed(['1'], 'passage'));
     expect(error).toBeInstanceOf(EmbeddingDimensionError);
     expect(error).toMatchObject({
@@ -161,7 +164,7 @@ describe('createProviderEmbedder', () => {
   });
 
   it('fails with a retryable error when the provider does not answer in time', async () => {
-    const { embedder } = await start(() => undefined, { EMBEDDING_TIMEOUT: '50ms' });
+    const { embedder } = await start(() => undefined, { timeout_ms: 50 });
     const error = await failureOf(embedder.embed(['1'], 'passage'));
     expect(error).toBeInstanceOf(ModelProviderError);
     expect(error).toMatchObject({
@@ -173,16 +176,18 @@ describe('createProviderEmbedder', () => {
 
   it('reaches Ollama through the /v1 API of its server root', async () => {
     const { server, embedder } = await start(echo, {
-      EMBEDDING_PROVIDER: 'ollama',
-      EMBEDDING_API_KEY: '',
-      EMBEDDING_BASE_URL: '',
+      provider: 'ollama',
+      api_key: undefined,
+      base_url: undefined,
     });
     const atServer = await createProviderEmbedder(
-      embeddingConfig({
-        EMBEDDING_PROVIDER: 'ollama',
-        EMBEDDING_BASE_URL: server.url,
-        EMBEDDING_DIM: '3',
-      }),
+      remoteEmbeddingSettings(
+        {
+          provider: 'ollama',
+          base_url: server.url,
+        },
+        3,
+      ),
     );
     expect(embedder.isLocal).toBe(true);
     expect(await atServer.embed(['5'], 'query')).toEqual([[5, 0, 0]]);
@@ -193,21 +198,17 @@ describe('createProviderEmbedder', () => {
 
   it.each([
     ['ollama', {}, true],
-    ['ollama', { EMBEDDING_BASE_URL: 'http://ollama:11434' }, true],
-    ['ollama', { EMBEDDING_BASE_URL: 'https://ollama.example.com' }, false],
-    ['openai-compatible', { EMBEDDING_BASE_URL: 'http://192.168.1.20:8000/v1' }, true],
-    ['openai-compatible', { EMBEDDING_BASE_URL: 'https://api.example.com/v1' }, false],
-    ['openai', { EMBEDDING_API_KEY: SYNTHETIC_API_KEY }, false],
-    [
-      'openai',
-      { EMBEDDING_API_KEY: SYNTHETIC_API_KEY, EMBEDDING_BASE_URL: 'http://127.0.0.1:4000/v1' },
-      false,
-    ],
-    ['mistral', { EMBEDDING_API_KEY: SYNTHETIC_API_KEY }, false],
-    ['gemini', { EMBEDDING_API_KEY: SYNTHETIC_API_KEY }, false],
+    ['ollama', { base_url: 'http://ollama:11434' }, true],
+    ['ollama', { base_url: 'https://ollama.example.com' }, false],
+    ['openai-compatible', { base_url: 'http://192.168.1.20:8000/v1' }, true],
+    ['openai-compatible', { base_url: 'https://api.example.com/v1' }, false],
+    ['openai', { api_key: SYNTHETIC_API_KEY }, false],
+    ['openai', { api_key: SYNTHETIC_API_KEY, base_url: 'http://127.0.0.1:4000/v1' }, false],
+    ['mistral', { api_key: SYNTHETIC_API_KEY }, false],
+    ['gemini', { api_key: SYNTHETIC_API_KEY }, false],
   ])('%s with %j is local: %j', async (provider, env, isLocal) => {
     const embedder = await createProviderEmbedder(
-      embeddingConfig({ EMBEDDING_PROVIDER: provider, ...env }),
+      remoteEmbeddingSettings({ provider: provider, ...env }),
       { resolveHost },
     );
     expect(embedder.isLocal).toBe(isLocal);
@@ -215,9 +216,9 @@ describe('createProviderEmbedder', () => {
 
   it('is not local when the host of its endpoint does not resolve', async () => {
     const embedder = await createProviderEmbedder(
-      embeddingConfig({
-        EMBEDDING_PROVIDER: 'ollama',
-        EMBEDDING_BASE_URL: 'http://unknown.example:11434',
+      remoteEmbeddingSettings({
+        provider: 'ollama',
+        base_url: 'http://unknown.example:11434',
       }),
       { resolveHost },
     );

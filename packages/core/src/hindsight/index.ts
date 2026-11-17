@@ -2,7 +2,6 @@ export {
   createHindsightClient,
   type HindsightClient,
   type HindsightClientOptions,
-  type HindsightSettings,
 } from './client.ts';
 export {
   HindsightError,

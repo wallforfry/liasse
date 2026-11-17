@@ -164,6 +164,34 @@ export {
   searchResultsSchema,
 } from './search.ts';
 export {
+  pipelineSettingsSchema,
+  type PipelineSettingsDocument,
+  type SecretUpdate,
+  secretUpdateSchema,
+  type Settings,
+  type SettingsDraft,
+  type SettingsDraftInput,
+  settingsDraftSchema,
+  type SettingsInput,
+  settingsSchema,
+  type SettingsView,
+  settingsViewSchema,
+} from './settings.ts';
+export {
+  type SettingsCheck,
+  type SettingsCheckRequest,
+  type SettingsCheckRequestInput,
+  settingsCheckRequestSchema,
+  settingsCheckSchema,
+  type SettingsPartCheck,
+  settingsPartCheckSchema,
+  type SettingsState,
+  settingsStateSchema,
+  type SettingsUpdate,
+  type SettingsUpdateInput,
+  settingsUpdateSchema,
+} from './settings-api.ts';
+export {
   type ErrorBody,
   errorBodySchema,
   type Health,

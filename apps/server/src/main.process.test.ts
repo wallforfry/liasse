@@ -11,7 +11,10 @@ import {
   buildSyntheticPdf,
   createApiKeyOverHttp,
   createTestDatabase,
+  seedSettings,
+  type SettingsOverrides,
   SYNTHETIC_ENV,
+  syntheticSettings,
   TEST_ACCOUNT,
   TEST_EMBEDDING_DIM,
   syntheticPdf,
@@ -121,8 +124,15 @@ const launch = (
 const withServer = async (
   env: Readonly<Record<string, string>>,
   use: (server: RunningServer) => Promise<void>,
+  settings: SettingsOverrides = {},
 ): Promise<void> => {
   const database = await createTestDatabase({ migrate: false });
+  await seedSettings({
+    databaseUrl: database.url,
+    authSecret: SYNTHETIC_ENV.AUTH_SECRET,
+    embeddingDim: Number(env.EMBEDDING_DIM ?? TEST_EMBEDDING_DIM),
+    settings: syntheticSettings(settings),
+  });
   const files = await mkdtemp(join(tmpdir(), 'liasse-process-'));
   const port = await freePort();
   const { child, stdout, stderr } = launch({
@@ -251,35 +261,36 @@ describe('server process', () => {
     'takes an uploaded document to indexed through the pipeline it binds',
     async () => {
       const models = await startModelStub(TEST_EMBEDDING_DIM);
-      const env = {
-        LLM_BASE_URL: models.url,
-        EMBEDDING_PROVIDER: 'ollama',
-        EMBEDDING_MODEL: 'embedding-model',
-        EMBEDDING_BASE_URL: models.url,
-        EMBEDDING_DIM: String(TEST_EMBEDDING_DIM),
-      };
+      const settings = {
+        llm: { base_url: models.url },
+        embedding: { provider: 'ollama', model: 'embedding-model', base_url: models.url },
+      } as const;
       try {
-        await withServer(env, async ({ call, database, terminate }) => {
-          const form = new FormData();
-          const pdf = buildSyntheticPdf([{ lines: [...LETTER.lines] }]);
-          form.append('file', new File([pdf], 'letter.pdf'));
-          const response = await call('/documents', { method: 'POST', body: form });
-          expect(response.status).toBe(201);
-          const { id } = z.object({ id: z.string() }).parse(await response.json());
+        await withServer(
+          { EMBEDDING_DIM: String(TEST_EMBEDDING_DIM) },
+          async ({ call, database, terminate }) => {
+            const form = new FormData();
+            const pdf = buildSyntheticPdf([{ lines: [...LETTER.lines] }]);
+            form.append('file', new File([pdf], 'letter.pdf'));
+            const response = await call('/documents', { method: 'POST', body: form });
+            expect(response.status).toBe(201);
+            const { id } = z.object({ id: z.string() }).parse(await response.json());
 
-          const statusOf = async () =>
-            (
-              await database.db
-                .select({ status: documents.status })
-                .from(documents)
-                .where(eq(documents.id, id))
-            )[0]?.status;
-          await waitUntil(async () => (await statusOf()) === 'indexed');
-          const paths = models.requests.map(({ path }) => path);
-          expect(paths).toContain('/v1/chat/completions');
-          expect(paths).toContain('/v1/embeddings');
-          expect(await terminate()).toBe(0);
-        });
+            const statusOf = async () =>
+              (
+                await database.db
+                  .select({ status: documents.status })
+                  .from(documents)
+                  .where(eq(documents.id, id))
+              )[0]?.status;
+            await waitUntil(async () => (await statusOf()) === 'indexed');
+            const paths = models.requests.map(({ path }) => path);
+            expect(paths).toContain('/v1/chat/completions');
+            expect(paths).toContain('/v1/embeddings');
+            expect(await terminate()).toBe(0);
+          },
+          settings,
+        );
       } finally {
         await models.close();
       }
@@ -291,16 +302,20 @@ describe('server process', () => {
     'warns on stderr when a cloud model provider is configured',
     async () => {
       const apiKey = 'synthetic-llm-key-7c1e';
-      await withServer({ LLM_PROVIDER: 'anthropic', LLM_API_KEY: apiKey }, async (server) => {
-        expect(await server.terminate()).toBe(0);
-        expect(server.stderr()).toContain(
-          'Warning: document content leaves this machine: ' +
-            'document text and page images are sent to anthropic. ' +
-            'Set LLM_PROVIDER=ollama and EMBEDDING_PROVIDER=local to keep it local.\n',
-        );
-        expect(server.stderr()).not.toContain(apiKey);
-        expect(server.stdout()).toBe('');
-      });
+      await withServer(
+        {},
+        async (server) => {
+          expect(await server.terminate()).toBe(0);
+          expect(server.stderr()).toContain(
+            'Warning: document content leaves this machine: ' +
+              'document text and page images are sent to anthropic. Choose ollama for the ' +
+              'language models and the local embedder in the settings to keep it local.\n',
+          );
+          expect(server.stderr()).not.toContain(apiKey);
+          expect(server.stdout()).toBe('');
+        },
+        { llm: { provider: 'anthropic', api_key: apiKey } },
+      );
     },
     4 * STEP_TIMEOUT_MS,
   );
@@ -366,6 +381,31 @@ describe('server process', () => {
       );
       expect(stderr()).not.toContain(password);
       expect(stderr()).not.toContain('    at ');
+      expect(stdout()).toBe('');
+    },
+    4 * STEP_TIMEOUT_MS,
+  );
+
+  it(
+    'refuses to start while a variable moved to the settings is set, and names it',
+    async () => {
+      const apiKey = 'synthetic-llm-key-90ab';
+      const { child, stdout, stderr } = launch({
+        PORT: String(await freePort()),
+        TEXT_MODEL: 'text-model',
+        LLM_API_KEY: apiKey,
+      });
+      const closed: readonly unknown[] = await once(child, 'close', {
+        signal: AbortSignal.timeout(STEP_TIMEOUT_MS),
+      });
+      expect(closed[0]).toBe(1);
+      const moved =
+        'no longer read from the environment: the settings are stored in the database and ' +
+        'changed with PUT /settings. Unset it.';
+      expect(stderr()).toBe(
+        `Invalid configuration:\n  - LLM_API_KEY: ${moved}\n  - TEXT_MODEL: ${moved}\n`,
+      );
+      expect(stderr()).not.toContain(apiKey);
       expect(stdout()).toBe('');
     },
     4 * STEP_TIMEOUT_MS,

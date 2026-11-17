@@ -5,9 +5,9 @@ import { once } from './lazy.ts';
 import { type StubServer, startStubServer } from '../../testing/provider-stub-server.ts';
 import {
   chatCompletion,
-  embeddingConfig,
+  remoteEmbeddingSettings,
   embeddings,
-  llmConfig,
+  llmSettings,
 } from '../../testing/provider-wire.ts';
 
 // Importing a forbidden package fails the test: only the configured provider may load.
@@ -40,15 +40,17 @@ describe('lazy loading', () => {
       path.endsWith('/embeddings') ? embeddings([[1, 0, 0]]) : chatCompletion('{"title":"Bill"}'),
     );
     servers.push(server);
-    const llm = llmConfig({ LLM_PROVIDER: 'ollama', LLM_BASE_URL: server.url });
+    const llm = llmSettings({ provider: 'ollama', base_url: server.url });
     const text = createTextModel(llm);
     const vision = createVisionModel(llm);
     const embedder = await createProviderEmbedder(
-      embeddingConfig({
-        EMBEDDING_PROVIDER: 'ollama',
-        EMBEDDING_BASE_URL: server.url,
-        EMBEDDING_DIM: '3',
-      }),
+      remoteEmbeddingSettings(
+        {
+          provider: 'ollama',
+          base_url: server.url,
+        },
+        3,
+      ),
     );
     expect(loads.sdk).toBe(0);
 

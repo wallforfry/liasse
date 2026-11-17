@@ -47,7 +47,7 @@ const documentQuery = z
   })
   .pipe(getDocumentOptionsSchema);
 
-export const documentRoutes = ({ api, authenticated }: RouteDeps): Hono<AppEnv> =>
+export const documentRoutes = ({ authenticated }: RouteDeps): Hono<AppEnv> =>
   new Hono<AppEnv>()
     .get(
       '/documents',
@@ -61,7 +61,8 @@ export const documentRoutes = ({ api, authenticated }: RouteDeps): Hono<AppEnv> 
       }),
       authenticated,
       valid('query', listQuery),
-      async (context) => context.json(await listDocuments(api, context.req.valid('query'))),
+      async (context) =>
+        context.json(await listDocuments(context.var.api, context.req.valid('query'))),
     )
     .get(
       '/documents/:id',
@@ -75,7 +76,11 @@ export const documentRoutes = ({ api, authenticated }: RouteDeps): Hono<AppEnv> 
       valid('query', documentQuery),
       async (context) =>
         context.json(
-          await getDocument(api, context.req.valid('param').id, context.req.valid('query')),
+          await getDocument(
+            context.var.api,
+            context.req.valid('param').id,
+            context.req.valid('query'),
+          ),
         ),
     )
     .get(
@@ -90,7 +95,8 @@ export const documentRoutes = ({ api, authenticated }: RouteDeps): Hono<AppEnv> 
       }),
       authenticated,
       valid('param', idParam),
-      async (context) => context.json(await listDocumentEvents(api, context.req.valid('param').id)),
+      async (context) =>
+        context.json(await listDocumentEvents(context.var.api, context.req.valid('param').id)),
     )
     .patch(
       '/documents/:id',
@@ -108,8 +114,10 @@ export const documentRoutes = ({ api, authenticated }: RouteDeps): Hono<AppEnv> 
       valid('json', documentCorrectionSchema),
       async (context) => {
         const { id } = context.req.valid('param');
-        await correctDocument(api, id, context.req.valid('json'));
-        return context.json(await getDocument(api, id, { include: [...CORRECTED_PARTS] }));
+        await correctDocument(context.var.api, id, context.req.valid('json'));
+        return context.json(
+          await getDocument(context.var.api, id, { include: [...CORRECTED_PARTS] }),
+        );
       },
     )
     .post(
@@ -126,8 +134,8 @@ export const documentRoutes = ({ api, authenticated }: RouteDeps): Hono<AppEnv> 
       valid('param', idParam),
       async (context) => {
         const { id } = context.req.valid('param');
-        await retryDocument(api, id);
-        return context.json(await getDocument(api, id), 202);
+        await retryDocument(context.var.api, id);
+        return context.json(await getDocument(context.var.api, id), 202);
       },
     )
     .post(
@@ -146,8 +154,8 @@ export const documentRoutes = ({ api, authenticated }: RouteDeps): Hono<AppEnv> 
       valid('json', documentReclassificationSchema),
       async (context) => {
         const { id } = context.req.valid('param');
-        await reclassifyDocument(api, id, context.req.valid('json'));
-        return context.json(await getDocument(api, id), 202);
+        await reclassifyDocument(context.var.api, id, context.req.valid('json'));
+        return context.json(await getDocument(context.var.api, id), 202);
       },
     )
     .delete(
@@ -160,7 +168,7 @@ export const documentRoutes = ({ api, authenticated }: RouteDeps): Hono<AppEnv> 
       authenticated,
       valid('param', idParam),
       async (context) => {
-        await removeDocument(api, context.req.valid('param').id);
+        await removeDocument(context.var.api, context.req.valid('param').id);
         return context.body(null, 204);
       },
     );
