@@ -5,13 +5,21 @@ import { EmbeddingDimensionError, ModelOutputError, ModelProviderError } from '.
 import type { ModelFactories } from './factories.ts';
 import type { ResolvedSettings } from './resolve.ts';
 
-// A white pixel: the smallest page a vision model can be asked to read.
-const PIXEL = Uint8Array.from(
-  Buffer.from(
-    'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8/x8AAwMCAO+ip1sAAAAASUVORK5CYII=',
-    'base64',
-  ),
-);
+// A provider refuses a page it cannot decode (OpenAI answers HTTP 400 invalid_value), so the
+// blank page comes from a real encoder rather than bytes written by hand.
+const PROBE_PAGE_EDGE_PX = 32;
+const PROBE_PAGE_QUALITY = 90;
+const WHITE = 255;
+
+const buildProbePage = async (): Promise<Uint8Array> => {
+  const { encode } = await import('jpeg-js');
+  const data = new Uint8Array(PROBE_PAGE_EDGE_PX * PROBE_PAGE_EDGE_PX * 4).fill(WHITE);
+  return Uint8Array.from(
+    encode({ width: PROBE_PAGE_EDGE_PX, height: PROBE_PAGE_EDGE_PX, data }, PROBE_PAGE_QUALITY)
+      .data,
+  );
+};
+
 const PROBE_TEXT = 'Liasse settings check';
 const PROBE_DOCUMENT = 'liasse-settings-check';
 const MODEL_PROBE_TIMEOUT_MS = 60_000;
@@ -87,7 +95,7 @@ const checkEmbedder = async (
 
 /**
  * Tries each part of the settings with one short call, in parallel, and saves nothing:
- * a text answer, the reading of one pixel, one embedding of the length of
+ * a text answer, the reading of one blank page, one embedding of the length of
  * `EMBEDDING_DIM`, and when Hindsight is on, the forget of a document it does not hold.
  */
 export const checkSettings = async (
@@ -107,8 +115,8 @@ export const checkSettings = async (
     }),
     attempt(async () => {
       await factories.visionModel(settings.llm).transcribePage({
-        image: PIXEL,
-        mime: 'image/png',
+        image: await buildProbePage(),
+        mime: 'image/jpeg',
         prompt: 'Transcribe the text of this page, if any.',
         signal: signal(),
       });
