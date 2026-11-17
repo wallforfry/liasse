@@ -3,7 +3,13 @@ import { DEFAULT_RETRY_POLICY, type RetryPolicy } from './backoff.ts';
 import { JOBS_CHANNEL } from './enqueue.ts';
 import { startDispatcher } from './dispatcher.ts';
 import { InvalidWorkersOptionsError } from './errors.ts';
-import type { Execution, JobDeferral, JobFailure, SettingsFollower } from './execution.ts';
+import {
+  createNotReadyDelay,
+  type Execution,
+  type JobDeferral,
+  type JobFailure,
+  type SettingsFollower,
+} from './execution.ts';
 import { followHandlerSet, type HandlerSet } from './handlers.ts';
 import { recoverStaleJobs, terminalFailureHooks } from './store.ts';
 import { createWakeSignal } from './wake-signal.ts';
@@ -129,6 +135,7 @@ export const startWorkers = async (options: WorkersOptions): Promise<Workers> =>
       db,
       handlers,
       ...(options.settings === undefined ? {} : { settings: options.settings }),
+      notReadyDelay: createNotReadyDelay(),
       retry: options.retry ?? DEFAULT_RETRY_POLICY,
       lockRenewalMs,
       onJobFailed: options.onJobFailed ?? (() => undefined),
