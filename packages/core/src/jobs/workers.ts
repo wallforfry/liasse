@@ -4,21 +4,19 @@ import { JOBS_CHANNEL } from './enqueue.ts';
 import { startDispatcher } from './dispatcher.ts';
 import { InvalidWorkersOptionsError } from './errors.ts';
 import type { Execution, JobDeferral, JobFailure } from './execution.ts';
-import { followHandlerSet, type HandlerSet, type RegisteredHandler } from './handlers.ts';
+import { followHandlerSet, type HandlerSet } from './handlers.ts';
 import { recoverStaleJobs, terminalFailureHooks } from './store.ts';
 import { createWakeSignal } from './wake-signal.ts';
 
 export interface WorkersOptions {
   readonly db: Database;
   /**
-   * A fixed list, with `perKindConcurrency`; or a source read again at every claim, which
-   * carries its own bounds, so the caller may change what runs while the workers run.
+   * Read again at every claim, with the bounds of its kinds: the caller may change what runs
+   * while the workers run. A fixed set is a function that answers the same one.
    */
-  readonly handlers: readonly RegisteredHandler[] | (() => HandlerSet);
+  readonly handlers: () => HandlerSet;
   /** Jobs run in parallel by this process. */
   readonly concurrency: number;
-  /** For a fixed list: upper bound per kind. A kind left out is bound by `concurrency` only. */
-  readonly perKindConcurrency?: Readonly<Record<string, number>>;
   /** Idle polling starts at `pollIntervalMs` and doubles up to `maxPollIntervalMs`. */
   readonly pollIntervalMs?: number;
   readonly maxPollIntervalMs?: number;
@@ -93,21 +91,12 @@ const listenForJobs = async (db: Database, onNotify: () => void): Promise<() => 
   return () => subscription.unlisten();
 };
 
-const handlerSetOf = ({
-  handlers,
-  perKindConcurrency = {},
-}: WorkersOptions): (() => HandlerSet) => {
-  if (typeof handlers === 'function') return handlers;
-  const fixed: HandlerSet = { handlers, perKindConcurrency };
-  return () => fixed;
-};
-
 export const startWorkers = async (options: WorkersOptions): Promise<Workers> => {
   const { db } = options;
   const onError = options.onError ?? (() => undefined);
   const visibilityTimeoutMs = options.visibilityTimeoutMs ?? DEFAULTS.visibilityTimeoutMs;
   const lockRenewalMs = lockRenewalOf(options.lockRenewalMs, visibilityTimeoutMs);
-  const handlers = followHandlerSet(handlerSetOf(options));
+  const handlers = followHandlerSet(options.handlers);
   // Read once now, so a set that cannot run fails the start rather than every claim.
   handlers();
   const wake = createWakeSignal();
