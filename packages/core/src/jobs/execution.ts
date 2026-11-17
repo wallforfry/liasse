@@ -32,7 +32,6 @@ export interface JobDeferral {
 
 export interface ExecutionDeps {
   readonly db: Database;
-  readonly handlers: ReadonlyMap<string, RegisteredHandler>;
   readonly retry: RetryPolicy;
   readonly lockRenewalMs: number;
   readonly onJobFailed: (failure: JobFailure) => void;
@@ -69,6 +68,7 @@ const defer = async (
 const settleFailure = (
   deps: ExecutionDeps,
   job: ClaimedJob,
+  handler: RegisteredHandler | undefined,
   error: unknown,
   signal: AbortSignal,
 ): Promise<boolean> => {
@@ -79,20 +79,20 @@ const settleFailure = (
   const lastError = describeJobError(error);
   return willRetry
     ? retryJob(deps.db, job, lastError, retryDelayMs(job.attempt, deps.retry))
-    : failJob(deps.db, job, lastError, deps.handlers.get(job.kind)?.onTerminalFailure);
+    : failJob(deps.db, job, lastError, handler?.onTerminalFailure);
 };
 
 const runHandler = async (
   deps: ExecutionDeps,
   job: ClaimedJob,
+  handler: RegisteredHandler | undefined,
   signal: AbortSignal,
 ): Promise<boolean> => {
   try {
-    const handler = deps.handlers.get(job.kind);
     if (handler === undefined) throw new PermanentJobError(`No handler for the kind ${job.kind}`);
     await handler.run(job.payload, { signal, attempt: job.attempt });
   } catch (error) {
-    return settleFailure(deps, job, error, signal);
+    return settleFailure(deps, job, handler, error, signal);
   }
   return completeJob(deps.db, job);
 };
@@ -100,11 +100,12 @@ const runHandler = async (
 const run = async (
   deps: ExecutionDeps,
   job: ClaimedJob,
+  handler: RegisteredHandler | undefined,
   controller: AbortController,
   renewal: NodeJS.Timeout,
 ): Promise<void> => {
   try {
-    const written = await runHandler(deps, job, controller.signal);
+    const written = await runHandler(deps, job, handler, controller.signal);
     if (!written) deps.onError(new JobLockLostError());
   } catch (error) {
     // The row could not be written back. It stays `running` without renewal, so the
@@ -115,7 +116,15 @@ const run = async (
   }
 };
 
-export const executeJob = (deps: ExecutionDeps, job: ClaimedJob): Execution => {
+/**
+ * Runs the job with the handler it was claimed for: one the workers are given in its place
+ * meanwhile only runs the jobs claimed after it.
+ */
+export const executeJob = (
+  deps: ExecutionDeps,
+  job: ClaimedJob,
+  handler: RegisteredHandler | undefined,
+): Execution => {
   const controller = new AbortController();
   // A handler that outlives the visibility timeout keeps its job as long as its
   // process answers: only a silent worker loses it.
@@ -126,7 +135,7 @@ export const executeJob = (deps: ExecutionDeps, job: ClaimedJob): Execution => {
   }, deps.lockRenewalMs);
   return {
     job,
-    done: run(deps, job, controller, renewal),
+    done: run(deps, job, handler, controller, renewal),
     interrupt: () => {
       controller.abort(new WorkersStoppingError());
     },

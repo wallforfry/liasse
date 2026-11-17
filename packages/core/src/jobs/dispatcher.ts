@@ -1,14 +1,21 @@
 import { type Execution, type ExecutionDeps, executeJob } from './execution.ts';
+import type { ActiveHandlers } from './handlers.ts';
 import { type ClaimedJob, claimJob } from './store.ts';
 import type { WakeSignal } from './wake-signal.ts';
 
 export interface DispatcherOptions {
   readonly execution: ExecutionDeps;
+  /** Read at every claim: the handlers and bounds in force when a job is claimed run it. */
+  readonly handlers: () => ActiveHandlers;
   readonly concurrency: number;
-  readonly perKindConcurrency: Readonly<Record<string, number>>;
   readonly pollIntervalMs: number;
   readonly maxPollIntervalMs: number;
   readonly wake: WakeSignal;
+}
+
+interface Claim {
+  readonly job: ClaimedJob;
+  readonly active: ActiveHandlers;
 }
 
 export interface Dispatcher {
@@ -21,8 +28,8 @@ export interface Dispatcher {
 // running jobs of each kind before it asks for more.
 export const startDispatcher = ({
   execution,
+  handlers,
   concurrency,
-  perKindConcurrency,
   pollIntervalMs,
   maxPollIntervalMs,
   wake,
@@ -33,24 +40,26 @@ export const startDispatcher = ({
   const runningOfKind = (kind: string): number =>
     [...running.values()].filter(({ job }) => job.kind === kind).length;
 
-  const claimableKinds = (): readonly string[] =>
+  const claimableKinds = ({ registry, perKindConcurrency }: ActiveHandlers): readonly string[] =>
     running.size >= concurrency
       ? []
-      : [...execution.handlers.keys()].filter(
+      : [...registry.keys()].filter(
           (kind) => runningOfKind(kind) < (perKindConcurrency[kind] ?? concurrency),
         );
 
-  const claim = async (): Promise<ClaimedJob | undefined> => {
+  const claim = async (): Promise<Claim | undefined> => {
     try {
-      return await claimJob(execution.db, claimableKinds());
+      const active = handlers();
+      const job = await claimJob(execution.db, claimableKinds(active));
+      return job === undefined ? undefined : { job, active };
     } catch (error) {
       execution.onError(error);
       return undefined;
     }
   };
 
-  const start = (job: ClaimedJob): void => {
-    const started = executeJob(execution, job);
+  const start = ({ job, active }: Claim): void => {
+    const started = executeJob(execution, job, active.registry.get(job.kind));
     // A job this process lost and claimed again runs twice at once for a while: the
     // attempt tells the two executions apart, the job id alone would merge them.
     const token = `${job.id}:${String(job.attempt)}`;
@@ -64,9 +73,9 @@ export const startDispatcher = ({
   const dispatch = async (): Promise<void> => {
     let idleMs = pollIntervalMs;
     while (!halted) {
-      const job = await claim();
-      if (job !== undefined) {
-        start(job);
+      const claimed = await claim();
+      if (claimed !== undefined) {
+        start(claimed);
         idleMs = pollIntervalMs;
         continue;
       }

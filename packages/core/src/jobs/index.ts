@@ -13,6 +13,7 @@ export {
 export type { JobDeferral, JobFailure } from './execution.ts';
 export {
   handle,
+  type HandlerSet,
   type JobContext,
   type JobHandler,
   type JobRun,
