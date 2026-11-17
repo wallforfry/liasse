@@ -243,5 +243,13 @@ describe('the end of the onboarding', () => {
         'This address is refused.',
       );
     });
+
+    // Corrected, the account goes on to a summary that no longer shows the refusal.
+    await user.clear(account.getByLabelText('Email'));
+    await user.type(account.getByLabelText('Email'), 'other@example.test');
+    await next(user);
+    await next(user);
+    await next(user);
+    expect((await step('Summary')).queryByRole('alert')).not.toBeInTheDocument();
   });
 });

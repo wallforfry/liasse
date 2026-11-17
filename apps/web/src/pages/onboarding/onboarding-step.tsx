@@ -1,4 +1,5 @@
 import { AccountStep } from './account-step.tsx';
+import type { SettingsValues } from '../settings/settings-form.ts';
 import type { OnboardingStep } from './onboarding-steps.ts';
 import { EmbedderStep, LanguageModelsStep } from './settings-steps.tsx';
 import { SummaryStep } from './summary-step.tsx';
@@ -16,12 +17,17 @@ export const OnboardingStepView = ({ form, flow }: OnboardingStepViewProps) => {
   const go = (to: OnboardingStep) => () => {
     form.setStep(to);
   };
-  const settingsStep = {
+  const settingsStep = (check: SetupFlow['checks'][keyof SetupFlow['checks']]) => ({
     values: form.settings,
     issues: form.settingsIssues,
-    onChange: form.setSettings,
+    onChange: (values: SettingsValues) => {
+      form.setSettings(values);
+      check.reset();
+      flow.complete.reset();
+    },
     onIssues: form.setSettingsIssues,
-  };
+    check,
+  });
   switch (form.step) {
     case 'token':
       return (
@@ -30,6 +36,7 @@ export const OnboardingStepView = ({ form, flow }: OnboardingStepViewProps) => {
           onChange={form.setToken}
           refusal={form.tokenRefusal}
           onNext={(accepted) => {
+            flow.forgetCalls();
             form.setToken(accepted);
             form.setTokenRefusal(undefined);
             form.setStep('account');
@@ -41,7 +48,10 @@ export const OnboardingStepView = ({ form, flow }: OnboardingStepViewProps) => {
         <AccountStep
           values={form.accountValues}
           issues={form.accountIssues}
-          onChange={form.setAccountValues}
+          onChange={(values) => {
+            form.setAccountValues(values);
+            flow.complete.reset();
+          }}
           onIssues={form.setAccountIssues}
           onBack={go('token')}
           onNext={(accepted) => {
@@ -53,8 +63,7 @@ export const OnboardingStepView = ({ form, flow }: OnboardingStepViewProps) => {
     case 'llm':
       return (
         <LanguageModelsStep
-          {...settingsStep}
-          check={flow.checks.llm}
+          {...settingsStep(flow.checks.llm)}
           onBack={go('account')}
           onNext={go('embedding')}
         />
@@ -62,8 +71,7 @@ export const OnboardingStepView = ({ form, flow }: OnboardingStepViewProps) => {
     case 'embedding':
       return (
         <EmbedderStep
-          {...settingsStep}
-          check={flow.checks.embedding}
+          {...settingsStep(flow.checks.embedding)}
           onBack={go('llm')}
           onNext={go('summary')}
         />

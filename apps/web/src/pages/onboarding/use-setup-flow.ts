@@ -85,7 +85,13 @@ export const useSetupFlow = (form: OnboardingForm) => {
       },
     );
   };
-  return { checks, complete, finish };
+  // What a call answered stops being true once what it was sent with changes.
+  const forgetCalls = (): void => {
+    checks.llm.reset();
+    checks.embedding.reset();
+    complete.reset();
+  };
+  return { checks, complete, finish, forgetCalls };
 };
 
 export type SetupFlow = ReturnType<typeof useSetupFlow>;
