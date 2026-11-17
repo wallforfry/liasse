@@ -79,12 +79,52 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm exec prettier --check .
 
-  check:
-    name: Lint, typecheck, test, build
+  lint:
+    name: Lint
     needs: changes
     # `changes` is skipped on a push, which would skip this job too without `!cancelled()`.
     if: ${{ !cancelled() && (github.event_name != 'pull_request' || needs.changes.outputs.code == 'true') }}
     runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: package.json
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      # Typed linting holds one TypeScript program per package. The default heap of the
+      # runner is about 2 GB: main peaked near it, and the types of the MCP SDK passed it.
+      - run: pnpm lint
+        env:
+          NODE_OPTIONS: --max-old-space-size=4096
+
+  typecheck:
+    name: Typecheck
+    needs: changes
+    if: ${{ !cancelled() && (github.event_name != 'pull_request' || needs.changes.outputs.code == 'true') }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: package.json
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm typecheck
+
+  # Each shard has a runner and a Postgres server of its own. Unsharded, the test files of one
+  # run cumulated 292 s of test time for 503 s of wall time on the 4 vCPUs of a runner.
+  test:
+    name: Build, test (${{ matrix.shard }}/3)
+    needs: changes
+    if: ${{ !cancelled() && (github.event_name != 'pull_request' || needs.changes.outputs.code == 'true') }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3]
     services:
       postgres:
         image: pgvector/pgvector:pg16
@@ -132,15 +172,9 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - name: Install poppler-utils (pdfinfo and pdftoppm handle scanned PDFs in the tests)
         run: sudo apt-get update && sudo apt-get install --yes --no-install-recommends poppler-utils
-      # Typed linting holds one TypeScript program per package. The default heap of the
-      # runner is about 2 GB: main peaked near it, and the types of the MCP SDK passed it.
-      - run: pnpm lint
-        env:
-          NODE_OPTIONS: --max-old-space-size=4096
-      - run: pnpm typecheck
       # The tests start the real server, which refuses to start without the web UI build.
       - run: pnpm build
-      - run: pnpm test
+      - run: pnpm test --shard=${{ matrix.shard }}/3
 
   bm25:
     name: BM25 tests (ParadeDB)
