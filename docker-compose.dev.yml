@@ -6,6 +6,11 @@ services:
     # Parallel test files each migrate a database in one transaction, which holds a lock per
     # object; the default lock table (64 per connection) ran out with several suites at once.
     command: ['postgres', '-c', 'max_locks_per_transaction=256', '-c', 'shared_buffers=256MB']
+    # Without an init, the postmaster is PID 1 and adopts every orphaned `docker exec` process,
+    # such as a health check pg_isready whose shell was killed at the timeout under load. It
+    # takes the exit code 2 of that pg_isready ("no response") for a crashed backend, ends every
+    # session and runs crash recovery.
+    init: true
     environment:
       POSTGRES_USER: liasse
       POSTGRES_PASSWORD: liasse
@@ -43,6 +48,8 @@ services:
   paradedb:
     image: paradedb/paradedb:0.26.6-pg16
     profiles: ['paradedb']
+    # The postmaster must not be PID 1, as for `postgres` above.
+    init: true
     environment:
       POSTGRES_USER: liasse
       POSTGRES_PASSWORD: liasse

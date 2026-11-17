@@ -97,7 +97,9 @@ jobs:
           POSTGRES_INITDB_ARGS: -c max_locks_per_transaction=256 -c shared_buffers=256MB
         ports:
           - 54329:5432
+        # `--init`: the postmaster must not be PID 1, see the `init` of docker-compose.dev.yml.
         options: >-
+          --init
           --health-cmd "pg_isready -U liasse -d liasse_test"
           --health-interval 2s
           --health-timeout 3s
@@ -155,6 +157,7 @@ jobs:
         ports:
           - 54331:5432
         options: >-
+          --init
           --health-cmd "pg_isready -h 127.0.0.1 -U liasse -d liasse_test"
           --health-interval 2s
           --health-timeout 3s
