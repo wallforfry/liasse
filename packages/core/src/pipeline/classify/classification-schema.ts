@@ -4,12 +4,13 @@ const confidence = z.number().min(0).max(1);
 
 // The definitions are read as loosely as JSON allows: `createType` validates them and
 // answers with an error written for the model, which a refused output could not carry.
-const newTypeSchema = z.object({
+export const newTypeSchema = z.object({
   slug: z.string(),
   description: z.string(),
   parent_slug: z.string().nullable().optional(),
   fields: z.record(z.string(), z.looseObject({ type: z.string() })),
 });
+export type NewTypeProposal = z.output<typeof newTypeSchema>;
 
 const newDecisionSchema = z.object({
   decision: z.literal('new'),

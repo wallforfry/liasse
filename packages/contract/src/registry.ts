@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { MAX_TYPE_REQUEST_LENGTH } from './domain/limits.ts';
 import {
   changeKindSchema,
   entityIdentifierTypeSchema,
@@ -49,6 +50,26 @@ export const createTypeRequestSchema = z.strictObject({
   fields: z.record(z.string(), fieldDefinitionSchema).default({}),
 });
 export type CreateTypeRequest = z.input<typeof createTypeRequestSchema>;
+
+// What a person wants a type for, in their own words: the text model drafts the type.
+export const typeSuggestionRequestSchema = z.strictObject({
+  request: z
+    .string()
+    .trim()
+    .min(1)
+    .max(MAX_TYPE_REQUEST_LENGTH)
+    .describe('The documents the type is for and what to read from them, in free text.'),
+});
+export type TypeSuggestionRequest = z.input<typeof typeSuggestionRequestSchema>;
+
+// A draft, never stored: the registry judges it only when it is sent to create the type.
+export const typeSuggestionSchema = z.object({
+  slug: z.string(),
+  description: z.string(),
+  parent_slug: z.string().nullable(),
+  fields: z.record(z.string(), fieldDefinitionSchema),
+});
+export type TypeSuggestion = z.output<typeof typeSuggestionSchema>;
 
 export const createdTypeSchema = typeViewSchema.omit({ examples: true });
 export type CreatedType = z.output<typeof createdTypeSchema>;

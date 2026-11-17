@@ -35,6 +35,7 @@ import {
   failAbandonedDocuments,
   type PipelineDeps,
   type PipelineSettings,
+  suggestType,
 } from '@liasse/core/pipeline';
 import type { Storage } from '@liasse/core/storage';
 import type { Logger } from '../log.ts';
@@ -110,6 +111,7 @@ const pipelineDepsOf = (
 
 const featuresOf = (deps: PipelineDeps, hindsight: HindsightIntegration): ApiFeatures => ({
   correctDocument: (input) => correctDocument(deps, input),
+  suggestType: (request) => suggestType(deps, request),
   listSubjects: (options) => listSubjects({ db: deps.db }, options),
   upcoming: ({ current_only: currentOnly, ...window }) =>
     upcoming({ db: deps.db }, { ...window, currentOnly }),

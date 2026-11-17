@@ -1,6 +1,11 @@
 import { documents, entities, jobs } from '@liasse/core/db';
 import { syntheticPdf } from '@liasse/core/testing';
-import { createLiasseClient, LiasseApiError, type LiasseClient } from '@liasse/sdk';
+import {
+  createLiasseClient,
+  LiasseApiError,
+  type LiasseClient,
+  type TypeSuggestion,
+} from '@liasse/sdk';
 import { eq } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { type Listener, listen } from '../runtime/listen.ts';
@@ -177,6 +182,46 @@ describe('the TypeScript SDK', () => {
     expect(
       await refusal(client.createType({ slug: 'workshop_invoice', description: 'Again' })),
     ).toMatchObject({ status: 400, code: 'name_taken' });
+  });
+
+  it('drafts a type with the feature of the runtime, and answers 501 without it', async () => {
+    expect(await refusal(client.suggestType({ request: 'Invoices of a workshop' }))).toMatchObject({
+      status: 501,
+      code: 'not_implemented',
+    });
+    const draft: TypeSuggestion = {
+      slug: 'workshop_invoice',
+      description: 'Invoice of a workshop',
+      parent_slug: null,
+      fields: { hours: { type: 'number' } },
+    };
+    const requests: string[] = [];
+    const drafting = await listen({
+      fetch: harness.appWith({
+        features: {
+          suggestType: (request) => {
+            requests.push(request);
+            return Promise.resolve(draft);
+          },
+        },
+      }).fetch,
+      host: '127.0.0.1',
+      port: 0,
+    });
+    try {
+      const drafter = createLiasseClient({
+        baseUrl: `http://127.0.0.1:${String(drafting.port)}`,
+        token: harness.token,
+      });
+      expect(await drafter.suggestType({ request: 'Invoices of a workshop' })).toEqual(draft);
+      expect(requests).toEqual(['Invoices of a workshop']);
+      expect(await refusal(drafter.suggestType({ request: '' }))).toMatchObject({
+        status: 400,
+        code: 'invalid_request',
+      });
+    } finally {
+      await drafting.close(0);
+    }
   });
 
   it('serves the metrics and the OpenAPI document', async () => {

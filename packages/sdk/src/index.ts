@@ -35,6 +35,8 @@ export type {
   SearchResults,
   SubjectList,
   TypeList,
+  TypeSuggestion,
+  TypeSuggestionRequest,
   TypeView,
   Upcoming,
   UpcomingDate,

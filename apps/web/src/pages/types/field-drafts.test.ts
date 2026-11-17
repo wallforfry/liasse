@@ -4,6 +4,7 @@ import {
   emptyField,
   type FieldDraft,
   fieldDefinition,
+  fieldDraftOf,
   fieldsOf,
   hasUnnamedRow,
 } from './field-drafts.ts';
@@ -34,6 +35,19 @@ describe('field drafts', () => {
     const definition = fieldDefinition(draft(overrides));
     expect(definition).toEqual(expected);
     expect(fieldDefinitionSchema.parse(definition)).toEqual(expected);
+  });
+
+  it.each([
+    { type: 'money' },
+    { type: 'enum', values: ['gas', 'electricity'] },
+    { type: 'identifier', format: 'IBAN' },
+    { type: 'identifier' },
+    { type: 'list', items: { type: 'date' } },
+    { type: 'list', items: { type: 'enum', values: ['a', 'b'] } },
+  ] as const)('shows %o as a row that gives it back', (definition) => {
+    const row = fieldDraftOf(3, 'amount', definition);
+    expect(row).toMatchObject({ key: 3, name: 'amount' });
+    expect(fieldDefinition(row)).toEqual(definition);
   });
 
   it('trims the names', () => {

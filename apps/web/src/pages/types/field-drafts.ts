@@ -68,6 +68,25 @@ export const fieldDefinition = (draft: FieldDraft): FieldDefinition =>
     ? { type: 'list', items: scalarDefinition(draft.items, draft) }
     : scalarDefinition(draft.primitive, draft);
 
+const scalarParameters = (
+  definition: ScalarFieldDefinition,
+): Pick<FieldDraft, 'values' | 'format'> => ({
+  values: definition.type === 'enum' ? definition.values.join(', ') : '',
+  format: definition.type === 'identifier' ? (definition.format ?? '') : '',
+});
+
+/** The row that shows a definition, the inverse of `fieldDefinition`. */
+export const fieldDraftOf = (key: number, name: string, definition: FieldDefinition): FieldDraft =>
+  definition.type === 'list'
+    ? {
+        key,
+        name,
+        primitive: 'list',
+        items: definition.items.type,
+        ...scalarParameters(definition.items),
+      }
+    : { key, name, primitive: definition.type, items: 'text', ...scalarParameters(definition) };
+
 /** Names given to more than one row: an object keeps only one of them. */
 export const repeatedNames = (drafts: readonly FieldDraft[]): readonly string[] => {
   const names = drafts.map(({ name }) => name.trim());

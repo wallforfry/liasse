@@ -50,6 +50,11 @@ const cellsOf = async (slug: string): Promise<readonly (string | null)[]> => {
     .map((cell) => cell.textContent);
 };
 
+const openDefinition = async (): Promise<void> => {
+  await userEvent.click(await screen.findByRole('button', { name: 'Create type' }));
+  await userEvent.click(screen.getByRole('tab', { name: 'Define it' }));
+};
+
 describe('the types page', () => {
   it('lists the types, model descriptions as text', async () => {
     renderApp('/types', fakeServer(typesAnswer).fetch);
@@ -113,7 +118,7 @@ describe('the types page', () => {
     });
     const { router } = renderApp('/types', server.fetch);
 
-    await userEvent.click(await screen.findByRole('button', { name: 'Create type' }));
+    await openDefinition();
     await userEvent.type(screen.getByLabelText('Slug'), 'rent_receipt');
     await userEvent.type(screen.getByLabelText('Description'), 'Receipt of a rent');
     await userEvent.click(screen.getByRole('button', { name: 'Add field' }));
@@ -140,7 +145,7 @@ describe('the types page', () => {
     );
     renderApp('/types', server.fetch);
 
-    await userEvent.click(await screen.findByRole('button', { name: 'Create type' }));
+    await openDefinition();
     await userEvent.type(screen.getByLabelText('Slug'), 'Rent Receipt');
     await userEvent.type(screen.getByLabelText('Description'), 'Receipt of a rent');
     await userEvent.click(screen.getByRole('button', { name: 'Create' }));
@@ -152,7 +157,7 @@ describe('the types page', () => {
   it('refuses two fields of the same name before sending', async () => {
     renderApp('/types', fakeServer(typesAnswer).fetch);
 
-    await userEvent.click(await screen.findByRole('button', { name: 'Create type' }));
+    await openDefinition();
     await userEvent.type(screen.getByLabelText('Slug'), 'rent_receipt');
     await userEvent.type(screen.getByLabelText('Description'), 'Receipt of a rent');
     await userEvent.click(screen.getByRole('button', { name: 'Add field' }));
@@ -167,12 +172,73 @@ describe('the types page', () => {
   it('asks for the name of every field before sending', async () => {
     renderApp('/types', fakeServer(typesAnswer).fetch);
 
-    await userEvent.click(await screen.findByRole('button', { name: 'Create type' }));
+    await openDefinition();
     await userEvent.type(screen.getByLabelText('Slug'), 'rent_receipt');
     await userEvent.type(screen.getByLabelText('Description'), 'Receipt of a rent');
     await userEvent.click(screen.getByRole('button', { name: 'Add field' }));
 
     expect(screen.getByText('Name every field, or remove it.')).toBeTruthy();
     expect(screen.getByRole<HTMLButtonElement>('button', { name: 'Create' }).disabled).toBe(true);
+  });
+
+  it('drafts a type from a description, then creates it as reviewed', async () => {
+    const suggestion = {
+      slug: 'payslip',
+      description: 'Pay statement from an employer',
+      parent_slug: 'bill',
+      fields: {
+        gross_pay: { type: 'money' },
+        contract: { type: 'enum', values: ['permanent', 'fixed_term'] },
+      },
+    };
+    const server = fakeServer((request) => {
+      if (request.method === 'POST' && request.path === '/types/suggestion') {
+        return json(suggestion);
+      }
+      if (request.method === 'POST' && request.path === '/types') {
+        return json({ ...BILL, ...suggestion, slug: 'payslip', document_count: 0 }, 201);
+      }
+      return typesAnswer(request);
+    });
+    const { router } = renderApp('/types', server.fetch);
+
+    await userEvent.click(await screen.findByRole('button', { name: 'Create type' }));
+    await userEvent.type(screen.getByLabelText('What is the type for?'), 'My payslips');
+    await userEvent.click(screen.getByRole('button', { name: 'Draft the type' }));
+
+    expect(
+      await screen.findByText('Drafted by the text model: review it, then create the type.'),
+    ).toBeTruthy();
+    expect(screen.getByLabelText<HTMLInputElement>('Slug').value).toBe('payslip');
+    expect(screen.getByLabelText<HTMLInputElement>('Name of field 2').value).toBe('contract');
+    await userEvent.clear(screen.getByLabelText('Slug'));
+    await userEvent.type(screen.getByLabelText('Slug'), 'pay_slip');
+    await userEvent.click(screen.getByRole('button', { name: 'Create' }));
+
+    await waitFor(() => {
+      expect(router.state.location.pathname).toBe('/types/payslip');
+    });
+    const [drafting, creating] = server.requests.filter(({ method }) => method === 'POST');
+    expect(jsonBody(drafting)).toEqual({ request: 'My payslips' });
+    expect(jsonBody(creating)).toEqual({ ...suggestion, slug: 'pay_slip' });
+  });
+
+  it('shows why no type was drafted and keeps the description', async () => {
+    const message = 'The text model could not draft the type; try again or create it by hand.';
+    const server = fakeServer((request) =>
+      request.method === 'POST'
+        ? errorBody(503, 'model_unavailable', message)
+        : typesAnswer(request),
+    );
+    renderApp('/types', server.fetch);
+
+    await userEvent.click(await screen.findByRole('button', { name: 'Create type' }));
+    await userEvent.type(screen.getByLabelText('What is the type for?'), 'My payslips');
+    await userEvent.click(screen.getByRole('button', { name: 'Draft the type' }));
+
+    expect(await screen.findByText(message)).toBeTruthy();
+    expect(screen.getByLabelText<HTMLTextAreaElement>('What is the type for?').value).toBe(
+      'My payslips',
+    );
   });
 });

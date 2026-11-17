@@ -4,6 +4,7 @@ import type {
   DocumentPart,
   ListChangesOptions,
   ListSubjectsOptions,
+  TypeSuggestion,
   UpcomingOptions,
 } from '@liasse/contract';
 import type { JsonObject } from '../db/columns.ts';
@@ -29,6 +30,8 @@ export type CorrectionOutcome =
 export interface ApiFeatures extends KnowledgeFeatures {
   /** `correctDocument` of the pipeline, given `{ id, ...correction }`. */
   readonly correctDocument?: (input: JsonObject) => Promise<CorrectionOutcome>;
+  /** `suggestType` of the pipeline: a draft of a type from what a person wrote of it. */
+  readonly suggestType?: (request: string) => Promise<TypeSuggestion>;
   readonly listSubjects?: (options: ListSubjectsOptions) => Promise<JsonObject>;
   readonly upcoming?: (options: UpcomingOptions) => Promise<JsonObject>;
   readonly listChanges?: (options: ListChangesOptions) => Promise<JsonObject>;
