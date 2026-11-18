@@ -96,7 +96,7 @@ describe('a consolidation run asked for by hand', () => {
   it('says when the runs could not be read', async () => {
     const server = fakeServer((request) => {
       if (request.path === '/consolidation/runs') {
-        return errorBody(500, 'internal', 'The runs could not be listed.');
+        return errorBody(500, 'internal_error', 'The runs could not be listed.');
       }
       return request.path === '/changes' ? json({ changes: [], truncated: false }) : undefined;
     });

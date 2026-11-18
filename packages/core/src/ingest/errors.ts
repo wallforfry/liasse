@@ -1,5 +1,8 @@
-/** A file that ingestion refuses for what it is: trying it again cannot succeed. */
-export class IngestError extends Error {
+/**
+ * A file that ingestion refuses for what it is: trying it again cannot succeed. Each
+ * refusal is a subclass, which the API answers with a code of its own.
+ */
+export abstract class IngestError extends Error {
   override readonly name: string = 'IngestError';
 }
 

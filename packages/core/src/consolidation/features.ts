@@ -48,7 +48,6 @@ export const applyChange = async (
       return undefined;
     case 'already_decided':
       throw new ApiError(
-        'invalid',
         'change_already_decided',
         `This change was already ${result.change.status}.`,
         { status: result.change.status },

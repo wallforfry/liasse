@@ -7,7 +7,7 @@ import { recomputeDocumentStates } from './document-state.ts';
 import type { ValidLink } from './link-rules.ts';
 import { admitSupersedes } from './supersede-rules.ts';
 
-const LINK_LOCK = sql`SELECT pg_advisory_xact_lock(hashtext('liasse.document_links'))`;
+export const LINK_LOCK = sql`SELECT pg_advisory_xact_lock(hashtext('liasse.document_links'))`;
 
 const between = (left: string, right: string) =>
   or(

@@ -12,7 +12,6 @@ export const retryDocument = async ({ db }: Pick<ApiContext, 'db'>, id: string):
   if (outcome === 'not_found') throw documentNotFound();
   if (outcome === 'not_failed') {
     throw new ApiError(
-      'invalid',
       'document_not_failed',
       'Only a document whose processing failed can be processed again.',
     );

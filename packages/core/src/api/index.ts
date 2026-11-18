@@ -6,14 +6,7 @@ export { suggestType } from './suggest-type.ts';
 export { listDocumentEvents, type ListDocumentEventsOptions } from './document-events.ts';
 export { getDocumentStatus } from './document-status.ts';
 export { openDocumentFile, type OpenedFile, removeDocument } from './document-file.ts';
-export {
-  API_ERROR_KINDS,
-  ApiError,
-  type ApiErrorKind,
-  invalidRequest,
-  notImplemented,
-  toApiError,
-} from './errors.ts';
+export { ApiError, invalidRequest, notImplemented, toApiError } from './errors.ts';
 export {
   type ApiFeatures,
   applyChange,

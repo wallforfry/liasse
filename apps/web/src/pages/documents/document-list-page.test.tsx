@@ -1,3 +1,4 @@
+import type { ApiErrorCode } from '@liasse/contract';
 import { screen, waitFor } from '@testing-library/react';
 import { userEvent } from '@testing-library/user-event';
 import { describe, expect, it } from 'vitest';
@@ -170,8 +171,8 @@ describe('the document list', () => {
     expect(screen.queryByText('Unknown entity')).not.toBeInTheDocument();
   });
 
-  it.each([
-    [403, 'forbidden'],
+  it.each<readonly [number, ApiErrorCode]>([
+    [403, 'origin_refused'],
     [404, 'document_not_found'],
     [500, 'internal_error'],
   ])('keeps the list when the lookup of the entity fails with %i %s', async (status, code) => {

@@ -40,7 +40,6 @@ export const securityHeaders: MiddlewareHandler<AppEnv> = async (context, next) 
 };
 
 const NOT_CONFIGURED = failure(
-  503,
   'not_configured',
   'Liasse has no settings yet: save them with PUT /settings first.',
 );
@@ -74,7 +73,7 @@ export const requireMediaType =
   async (context, next) => {
     if (!accepted.includes(mediaTypeOf(context.req.header('Content-Type')))) {
       throw new HttpFailure(
-        failure(415, 'unsupported_media_type', `Expected a body of type ${accepted.join(' or ')}.`),
+        failure('unsupported_media_type', `Expected a body of type ${accepted.join(' or ')}.`),
       );
     }
     await next();
@@ -106,11 +105,7 @@ export const jsonDepth: MiddlewareHandler<AppEnv> = async (context, next) => {
   // Hono keeps the body it read: the validator that follows parses this same text.
   if (exceedsDepth(await context.req.text(), MAX_JSON_DEPTH)) {
     throw new HttpFailure(
-      failure(
-        400,
-        'invalid_body',
-        `The JSON body is nested deeper than ${String(MAX_JSON_DEPTH)}.`,
-      ),
+      failure('invalid_body', `The JSON body is nested deeper than ${String(MAX_JSON_DEPTH)}.`),
     );
   }
   await next();

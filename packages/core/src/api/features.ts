@@ -60,7 +60,7 @@ export const correctDocument = async (
   const outcome = await features.correctDocument({ id, ...correction });
   if (outcome.ok) return;
   if (outcome.errors.some(({ code }) => code === NOT_FOUND_CODE)) throw documentNotFound();
-  throw new ApiError('invalid', 'invalid_correction', 'The correction was refused.', {
+  throw new ApiError('invalid_correction', 'The correction was refused.', {
     errors: outcome.errors.map(({ code, message }) => ({ code, message })),
   });
 };
@@ -97,7 +97,7 @@ export const applyChange = async (
   if (features.applyChange === undefined) throw notImplemented('consolidation changes');
   const result = await features.applyChange(id, decision);
   if (result === undefined) {
-    throw new ApiError('not_found', 'change_not_found', 'No change has this id.');
+    throw new ApiError('change_not_found', 'No change has this id.');
   }
   return result;
 };

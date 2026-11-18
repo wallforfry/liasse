@@ -5,7 +5,6 @@ import { failure, HttpFailure } from '../errors.ts';
 const SAFE_METHODS: readonly string[] = ['GET', 'HEAD', 'OPTIONS'];
 
 const ORIGIN_REFUSED = failure(
-  403,
   'origin_refused',
   'A request of the web UI that changes something must come from its own origin.',
 );

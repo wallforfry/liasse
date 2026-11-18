@@ -35,8 +35,7 @@ export interface SourcesContext {
 // A check connects to a remote server: bounded apart from the deadline of the request.
 const CHECK_TIMEOUT_MS = 60_000;
 
-const sourceNotFound = (): ApiError =>
-  new ApiError('not_found', 'source_not_found', 'No source has this id.');
+const sourceNotFound = (): ApiError => new ApiError('source_not_found', 'No source has this id.');
 
 export const listSources = async ({ db, secrets }: SourcesContext): Promise<SourceList> => ({
   sources: (await readSources(db)).map((source) => sourceViewOf(secrets, source)),
@@ -103,7 +102,6 @@ export const updateSource = async (
     const config = patch.config ?? stored.config;
     if (sendsSecretElsewhere(stored, config, patch.secret)) {
       throw new ApiError(
-        'invalid',
         'source_secret_required',
         'A new host or connection security would receive the stored password: enter it again.',
       );
@@ -159,11 +157,10 @@ export const requestSourceRun = async (
   const source = await readSource(db, id);
   if (source === undefined) throw sourceNotFound();
   if (!source.enabled) {
-    throw new ApiError('conflict', 'source_disabled', 'The source is disabled: enable it first.');
+    throw new ApiError('source_disabled', 'The source is disabled: enable it first.');
   }
   if (source.needsAttention) {
     throw new ApiError(
-      'conflict',
       'source_needs_attention',
       'The credentials were refused: save the source with working ones first.',
     );

@@ -37,7 +37,6 @@ export const suggestType = async (
   } catch (error) {
     if (MODEL_FAILURES.some((failure) => error instanceof failure)) {
       throw new ApiError(
-        'unavailable',
         'model_unavailable',
         'The text model could not draft the type; try again or create it by hand.',
       );
