@@ -1,7 +1,13 @@
 import { screen, waitFor } from '@testing-library/react';
 import { userEvent } from '@testing-library/user-event';
 import { describe, expect, it } from 'vitest';
-import { fakeServer, json, jsonBody, renderApp } from '../../test/render.test-helper.tsx';
+import {
+  errorBody,
+  fakeServer,
+  json,
+  jsonBody,
+  renderApp,
+} from '../../test/render.test-helper.tsx';
 
 const SUMMARY = {
   id: 'doc_synthetic_list',
@@ -44,6 +50,10 @@ const ENTITY = {
 const library = () =>
   fakeServer((request) => {
     if (request.path.startsWith('/types')) return json({ types: [] });
+    if (request.path === `/entities/${ENTITY.id}`) return json(ENTITY);
+    if (request.path.startsWith('/entities/')) {
+      return errorBody(404, 'entity_not_found', 'No entity has this id.');
+    }
     if (request.path.startsWith('/entities')) return json({ entities: [ENTITY], total: 1 });
     if (request.path.startsWith('/documents')) {
       return json({ documents: [SUMMARY], total: 120, has_more: true });
@@ -133,6 +143,26 @@ describe('the document list', () => {
 
     await user.click(screen.getByRole('button', { name: 'Clear the entity' }));
     expect(router.state.location.search).toBe('?q=power');
+  });
+
+  it('says when the entity of the address is gone, and clears it on request', async () => {
+    const user = userEvent.setup();
+    const server = library();
+    const { router } = renderApp(
+      '/documents?type=energy_bill&entity=ent_synthetic_merged&entity_name=Volta+SA',
+      server.fetch,
+    );
+
+    expect(await screen.findByText('This entity no longer exists')).toBeInTheDocument();
+    expect(screen.getByText(/Volta SA was merged into another entity/)).toBeInTheDocument();
+    expect(screen.queryByText('No document matches.')).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'Listed bill' })).not.toBeInTheDocument();
+    expect(server.requests.map(({ path }) => path)).toContain('/entities/ent_synthetic_merged');
+
+    await user.click(screen.getByRole('button', { name: 'Clear the entity filter' }));
+    expect(router.state.location.search).toBe('?type=energy_bill');
+    expect(await screen.findByRole('link', { name: 'Listed bill' })).toBeInTheDocument();
+    expect(screen.queryByText('This entity no longer exists')).not.toBeInTheDocument();
   });
 
   it('offers to keep only private documents in the list, not in a search', async () => {

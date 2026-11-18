@@ -11,6 +11,8 @@ import {
   withFilter,
   withOffset,
 } from './list-params.ts';
+import { MissingEntityNotice } from './missing-entity-notice.tsx';
+import { useMissingEntity } from './use-missing-entity.ts';
 
 export interface DocumentListPageProps {
   readonly title: string;
@@ -23,6 +25,7 @@ export const DocumentListPage = ({ title, description, status }: DocumentListPag
   const [params, setParams] = useSearchParams();
   const read = readFilters(params);
   const filters = status === undefined ? read : { ...read, status };
+  const missingEntity = useMissingEntity(filters.entity);
 
   return (
     <>
@@ -45,7 +48,14 @@ export const DocumentListPage = ({ title, description, status }: DocumentListPag
           setParams(withEntity(params, entity));
         }}
       />
-      {filters.query === undefined ? (
+      {missingEntity !== undefined ? (
+        <MissingEntityNotice
+          entity={missingEntity}
+          onClear={() => {
+            setParams(withEntity(params, undefined));
+          }}
+        />
+      ) : filters.query === undefined ? (
         <DocumentListResults
           filters={filters}
           onOffset={(offset) => {
