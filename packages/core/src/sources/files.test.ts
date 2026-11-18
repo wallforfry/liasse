@@ -1,13 +1,16 @@
 import { buffer } from 'node:stream/consumers';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
-import { deleteSource } from '../api/sources.ts';
+import { deleteSource, updateSource } from '../api/sources.ts';
 import {
   getDocumentFile,
   SourceFileChangedError,
   SourceFileUnavailableError,
 } from '../ingest/document-file.ts';
 import { syntheticPdf } from '../testing/synthetic-files.ts';
+import { SourceCredentialsError } from './connector.ts';
 import { createDriveHarness, type DriveHarness } from './gdrive/gdrive.test-helper.ts';
+import { openSourceSecret } from './secret.ts';
+import { storedSource, TEST_SECRETS } from './sources.test-helper.ts';
 
 describe('the file of a document kept at its source', () => {
   let harness: DriveHarness;
@@ -68,6 +71,32 @@ describe('the file of a document kept at its source', () => {
     const { id, file, source } = await ingested();
     harness.google.drive.move(file, harness.google.drive.rootId);
     await harness.poll(source);
+    await expect((await fileOf(id)).stream()).rejects.toBeInstanceOf(SourceFileUnavailableError);
+  });
+
+  it('is out of reach, transiently, while its only source refuses its credentials', async () => {
+    const { id, source } = await ingested();
+    const { secret } = await storedSource(harness.ingest.database.db, source);
+    const token = openSourceSecret(TEST_SECRETS, source, secret);
+    await fetch(harness.google.endpoints.revoke, {
+      method: 'POST',
+      body: new URLSearchParams({ token: token.state === 'set' ? token.value : '' }),
+    });
+    await expect((await fileOf(id)).stream()).rejects.toBeInstanceOf(SourceCredentialsError);
+  });
+
+  it('keeps the token of a deleted source while another Drive source holds one', async () => {
+    const { source } = await ingested();
+    await harness.addDriveSource(harness.google.drive.folder('Another'));
+    await deleteSource(harness.context(), source);
+    expect(harness.google.revoked()).toEqual([]);
+  });
+
+  it('is removed from a source pointed at another folder, until that folder holds it', async () => {
+    const { id, source } = await ingested();
+    const other = harness.google.drive.folder('Other');
+    await updateSource(harness.context(), source, { kind: 'gdrive', config: { folder_id: other } });
+    expect((await harness.origins())[0]?.removedAt).toBeInstanceOf(Date);
     await expect((await fileOf(id)).stream()).rejects.toBeInstanceOf(SourceFileUnavailableError);
   });
 

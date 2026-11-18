@@ -127,6 +127,7 @@ describe('deleteDocument and the delete_file job', () => {
       noticePeriod: null,
       watchRequeues: 0,
       fileDeletedAt: null,
+      replacedBySource: false,
       // Kept: the only trace that Hindsight may still hold facts and owes a forget.
       hindsightHeldSince: new Date('2026-02-01T00:00:00Z'),
       hindsightSentHash: null,

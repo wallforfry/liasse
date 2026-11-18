@@ -35,6 +35,9 @@ export const documents = pgTable(
     // a Drive file is kept by reference, and any origin of the document may serve it.
     storageKey: text('storage_key'),
     fileAtSource: boolean('file_at_source').notNull().default(false),
+    // Set on a tombstone that a new version of its file at a source replaced: unlike one a
+    // person deleted, the source brings it back when the file returns to these bytes.
+    replacedBySource: boolean('replaced_by_source').notNull().default(false),
     mime: text('mime').notNull(),
     originalName: text('original_name').notNull(),
     // What the caller said about the file at ingestion: untrusted free text.

@@ -1,4 +1,9 @@
-import { errorBodySchema, googleConsentSchema, sourceSchema } from '@liasse/contract';
+import {
+  errorBodySchema,
+  googleConsentResultSchema,
+  googleConsentSchema,
+  sourceSchema,
+} from '@liasse/contract';
 import { SETTLED_STATUSES } from '@liasse/contract/domain';
 import { documents } from '@liasse/core/db';
 import {
@@ -53,15 +58,29 @@ describe('a Drive source of a running server', () => {
     });
     expect(authorize.status).toBe(200);
     const { url } = googleConsentSchema.parse(await authorize.json());
-    const answer = new URLSearchParams(google.consent(url));
-    const callback = await callAsPerson(runtime, `/sources/google/callback?${answer.toString()}`, {
-      redirect: 'manual',
-    });
-    expect(callback.status).toBe(302);
-    expect(callback.headers.get('Location')).toBe(
-      `/ui/sources?google=connected&source=${source.id}`,
-    );
+    const answer = google.consent(url);
+    expect(await complete(runtime, answer)).toEqual({ outcome: 'connected', source_id: source.id });
     return source.id;
+  };
+
+  // As a browser does: Google's redirect carries no cookie of Liasse (`SameSite=Strict`), and
+  // the page it lands on completes the consent with the session, from its own origin.
+  const complete = async (runtime: Runtime, answer: Record<string, string>) => {
+    const query = new URLSearchParams(answer).toString();
+    const callback = await fetch(
+      `http://127.0.0.1:${String(runtime.port)}/sources/google/callback?${query}`,
+      { redirect: 'manual' },
+    );
+    expect(callback.status).toBe(302);
+    const location = new URL(callback.headers.get('Location') ?? '', 'http://liasse.test');
+    expect(location.pathname).toBe('/ui/sources/google');
+    const completed = await callAsPerson(
+      runtime,
+      '/sources/google/complete',
+      json('POST', Object.fromEntries(location.searchParams)),
+    );
+    expect(completed.status).toBe(200);
+    return googleConsentResultSchema.parse(await completed.json());
   };
 
   const liveDocument = async () => {
@@ -116,15 +135,9 @@ describe('a Drive source of a running server', () => {
       method: 'POST',
     });
     const { url } = googleConsentSchema.parse(await authorize.json());
-    const tampered = new URLSearchParams({ ...google.consent(url), state: 'v1.forged' });
-    const callback = await callAsPerson(
-      runtime,
-      `/sources/google/callback?${tampered.toString()}`,
-      {
-        redirect: 'manual',
-      },
-    );
-    expect(callback.headers.get('Location')).toBe('/ui/sources?google=invalid');
+    expect(await complete(runtime, { ...google.consent(url), state: 'v1.forged' })).toEqual({
+      outcome: 'invalid',
+    });
     // An API key is not the session of the web UI: it can start no consent.
     const withKey = await call(runtime, `/sources/${id}/google/authorize`, { method: 'POST' });
     expect(withKey.status).toBe(401);

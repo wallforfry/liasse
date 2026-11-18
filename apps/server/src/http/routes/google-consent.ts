@@ -1,20 +1,27 @@
-import { googleConsentSchema } from '@liasse/contract';
+import {
+  googleConsentAnswerSchema,
+  googleConsentResultSchema,
+  googleConsentSchema,
+} from '@liasse/contract';
 import { completeGoogleConsent, type SourcesContext, startGoogleConsent } from '@liasse/core/api';
 import { Hono, type MiddlewareHandler } from 'hono';
 import { z } from 'zod';
 import { failures, jsonResponse, operation, SESSION_SCHEME, valid } from '../describe.ts';
 import type { AppEnv } from '../env.ts';
+import { jsonBody } from '../guards.ts';
 import { idParam } from '../query-params.ts';
 import { UI_ROOT } from '../ui/web-routes.ts';
 
 /** Where Google sends the browser back: the redirect URI to register in the Google client. */
 export const GOOGLE_CALLBACK_PATH = '/sources/google/callback';
 
+/** The page of the web UI that completes a consent with the session. */
+export const GOOGLE_CONSENT_PAGE = `${UI_ROOT}/sources/google`;
+
 const TAG = 'Sources';
 const CREDENTIALS = [SESSION_SCHEME];
 
-// What Google appends to the redirect URI (RFC 6749, 4.1.2), all of it optional: a
-// declined consent comes back with `error` and no code. Other parameters are ignored.
+// Google appends other parameters (`scope`, `authuser`, `prompt`), which nothing reads.
 const callbackQuery = z.object({
   code: z.string().max(4096).optional(),
   state: z.string().max(4096).optional(),
@@ -51,33 +58,50 @@ export const googleConsentRoutes = ({ sources, signedIn }: GoogleConsentRouteDep
           ),
         ),
     )
+    // The session cookie is `SameSite=Strict`: a browser withholds it from the navigation
+    // Google starts, so this route takes no credential and only hands the answer to a page of
+    // the web UI, whose own request completes the consent with the session.
     .get(
       GOOGLE_CALLBACK_PATH,
       operation({
         summary: 'Where Google sends the browser back after a consent',
         tag: TAG,
-        credentials: CREDENTIALS,
+        credentials: [],
         responses: {
           302: {
             description:
-              'To the Sources page of the web UI, with `google` set to how the consent ended ' +
-              'and `source` to the source it was for, once known.',
+              'To the page of the web UI that completes the consent, with the answer of Google.',
           },
           ...failures(400),
         },
       }),
-      signedIn,
       valid('query', callbackQuery),
-      async (context) => {
-        const { outcome, sourceId } = await completeGoogleConsent(
-          sources,
-          context.req.valid('query'),
-          context.get('sessionId'),
-        );
+      (context) => {
+        const { code, state, error } = context.req.valid('query');
         const query = new URLSearchParams({
-          google: outcome,
-          ...(sourceId === undefined ? {} : { source: sourceId }),
+          ...(code === undefined ? {} : { code }),
+          ...(state === undefined ? {} : { state }),
+          ...(error === undefined ? {} : { error }),
         });
-        return context.redirect(`${UI_ROOT}/sources?${query.toString()}`, 302);
+        return context.redirect(`${GOOGLE_CONSENT_PAGE}?${query.toString()}`, 302);
       },
+    )
+    .post(
+      '/sources/google/complete',
+      operation({
+        summary: 'Complete a consent of Google started by this session',
+        tag: TAG,
+        credentials: CREDENTIALS,
+        responses: {
+          200: jsonResponse('How the consent ended.', googleConsentResultSchema),
+          ...failures(400, 413, 415),
+        },
+      }),
+      signedIn,
+      jsonBody,
+      valid('json', googleConsentAnswerSchema),
+      async (context) =>
+        context.json(
+          await completeGoogleConsent(sources, context.req.valid('json'), context.get('sessionId')),
+        ),
     );

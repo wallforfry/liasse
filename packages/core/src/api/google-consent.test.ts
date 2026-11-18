@@ -76,7 +76,7 @@ describe('the consent of Google for a Drive source', () => {
       SESSION,
     );
 
-    expect(result).toEqual({ outcome: 'connected', sourceId: id });
+    expect(result).toEqual({ outcome: 'connected', source_id: id });
     expect((await tokenOf(id)).state).toBe('set');
     expect(await queuedPolls(db())).toHaveLength(1);
   });
@@ -99,7 +99,7 @@ describe('the consent of Google for a Drive source', () => {
     const answer = harness.google.consent(url, { deny: true });
     expect(await completeGoogleConsent(harness.context(), answer, SESSION)).toEqual({
       outcome: 'denied',
-      sourceId: id,
+      source_id: id,
     });
   });
 
@@ -109,7 +109,7 @@ describe('the consent of Google for a Drive source', () => {
     const answer = harness.google.consent(url, { scopes: ['openid'] });
     expect(await completeGoogleConsent(harness.context(), answer, SESSION)).toEqual({
       outcome: 'missing_scope',
-      sourceId: id,
+      source_id: id,
     });
     expect(harness.google.revoked()).toHaveLength(1);
     expect((await tokenOf(id)).state).toBe('unset');
@@ -126,20 +126,24 @@ describe('the consent of Google for a Drive source', () => {
     };
     expect(await completeGoogleConsent(harness.context(), answer, SESSION)).toEqual({
       outcome: 'refused',
-      sourceId: id,
+      source_id: id,
     });
   });
 
-  it('revokes the authorization a new consent replaces', async () => {
+  it('revokes no token another Drive source may share a grant with', async () => {
     const id = await unconnected();
     const connect = async () => {
       const { url } = await startGoogleConsent(harness.context(), id, SESSION);
       await completeGoogleConsent(harness.context(), harness.google.consent(url), SESSION);
     };
     await connect();
-    const first = await tokenOf(id);
     await connect();
-    expect(harness.google.revoked()).toEqual([first.state === 'set' ? first.value : '']);
+    expect(harness.google.revoked()).toEqual([]);
+    const other = await unconnected();
+    const { url } = await startGoogleConsent(harness.context(), other, SESSION);
+    const answer = harness.google.consent(url, { scopes: ['openid'] });
+    await completeGoogleConsent(harness.context(), answer, SESSION);
+    expect(harness.google.revoked()).toEqual([]);
   });
 
   it('needs the Google client in the settings, and a Drive source', async () => {

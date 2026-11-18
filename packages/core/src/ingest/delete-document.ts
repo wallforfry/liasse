@@ -57,6 +57,7 @@ const BLANK_CONTENT = {
   noticePeriod: null,
   watchRequeues: 0,
   fileDeletedAt: null,
+  replacedBySource: false,
   hindsightSentHash: null,
 } as const;
 
@@ -121,12 +122,17 @@ export interface DeleteDocumentOptions {
    * can change the document between its answer and the deletion.
    */
   readonly when?: (tx: Transaction) => Promise<boolean>;
+  /**
+   * The source that keeps the file now holds another version of it: the tombstone records
+   * it, and the same source may bring the document back if the file returns to these bytes.
+   */
+  readonly replacedBySource?: boolean;
 }
 
 export const deleteDocument = (
   { db, onDeleted }: DeleteDocumentDeps,
   id: string,
-  { when }: DeleteDocumentOptions = {},
+  { when, replacedBySource = false }: DeleteDocumentOptions = {},
 ): Promise<boolean> =>
   db.transaction(async (outer) => {
     const [live] = await outer
@@ -145,7 +151,7 @@ export const deleteDocument = (
         .where(eq(documents.id, id));
       const [tombstone] = await tx
         .update(documents)
-        .set(BLANK_CONTENT)
+        .set({ ...BLANK_CONTENT, replacedBySource })
         .where(and(eq(documents.id, id), isLiveDocument))
         .returning({ id: documents.id });
       if (tombstone === undefined) return false;

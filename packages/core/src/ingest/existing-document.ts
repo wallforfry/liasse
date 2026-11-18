@@ -47,6 +47,7 @@ export interface ExistingDocument {
   readonly id: string;
   readonly status: DocumentStatus;
   readonly fileAtSource: boolean;
+  readonly replacedBySource: boolean;
 }
 
 // Where a document's file is once these bytes are written to the storage.
@@ -75,7 +76,11 @@ const stillIn = async (tx: Transaction, { id, status }: ExistingDocument): Promi
 
 // A file still lying in the watched folder is seen again at every restart, and an email
 // carries its attachments again each time it is read: neither is a request to undo a
-// deletion. An upload or an MCP call of the file itself is one.
+// deletion. An upload or an MCP call of the file itself is one. So is a file kept at its
+// source returning to these bytes, when a newer version of it was what deleted them.
+const revives = (tombstone: ExistingDocument, file: IncomingFile): boolean =>
+  file.revivesDeleted || (file.byReference && tombstone.replacedBySource);
+
 const reviveTombstone = async (
   tx: Transaction,
   storage: Storage,
@@ -83,11 +88,11 @@ const reviveTombstone = async (
   file: IncomingFile,
 ): Promise<Attempt> => {
   const { id } = tombstone;
-  if (!file.revivesDeleted) {
+  if (!revives(tombstone, file)) {
     return { id, status: 'deleted', duplicate: true, fileRestored: false };
   }
   if (!(await stillIn(tx, tombstone))) return undefined;
-  await storage.put(file.storageKey, file.bytes);
+  if (!file.byReference) await storage.put(file.storageKey, file.bytes);
   await tx
     .update(documents)
     .set({
@@ -99,7 +104,8 @@ const reviveTombstone = async (
       private: file.private,
       watchRequeues: 0,
       fileDeletedAt: null,
-      ...storedFile(file),
+      replacedBySource: false,
+      ...(file.byReference ? { storageKey: null, fileAtSource: true } : storedFile(file)),
       ingestedAt: sql`now()`,
     })
     .where(and(eq(documents.id, id), eq(documents.status, tombstone.status)));
@@ -183,7 +189,12 @@ export const ingestExisting = async (
       : await reviveTombstone(tx, storage, current, file);
     if (result !== undefined) return result;
     [current] = await tx
-      .select({ id: documents.id, status: documents.status, fileAtSource: documents.fileAtSource })
+      .select({
+        id: documents.id,
+        status: documents.status,
+        fileAtSource: documents.fileAtSource,
+        replacedBySource: documents.replacedBySource,
+      })
       .from(documents)
       .where(eq(documents.id, existing.id));
   }

@@ -50,7 +50,7 @@ export const replaceOlderVersions = async (
   let deleted = 0;
   for (const { documentId } of older) {
     const when = onlyHeldBy(sourceId, externalId, documentId);
-    if (await deleteDocument(deps, documentId, { when })) deleted += 1;
+    if (await deleteDocument(deps, documentId, { when, replacedBySource: true })) deleted += 1;
   }
   return deleted;
 };

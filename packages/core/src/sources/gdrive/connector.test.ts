@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { deleteDocument } from '../../ingest/delete-document.ts';
 import { ingestFile } from '../../ingest/ingest-file.ts';
 import { syntheticPdf } from '../../testing/synthetic-files.ts';
 import { openSourceSecret } from '../secret.ts';
@@ -149,6 +150,44 @@ describe('a Drive source', () => {
     expect(live[0]?.id).not.toBe(first?.id);
     expect(await harness.lastRun(source)).toMatchObject({ ingested: 1, replaced: 1 });
     expect((await harness.origins()).map(({ documentId }) => documentId)).toEqual([live[0]?.id]);
+  });
+
+  it('brings back the document of an earlier version a file is restored to', async () => {
+    const { drive } = harness.google;
+    const folder = drive.folder('Restored');
+    const first = syntheticPdf('version 1');
+    const file = drive.file('contract.pdf', folder, first);
+    const source = await harness.addDriveSource(folder);
+    await harness.poll(source);
+    const [original] = await harness.liveDocuments();
+    drive.update(file, syntheticPdf('version 2'));
+    await harness.poll(source);
+
+    drive.update(file, first);
+    await harness.poll(source);
+
+    const live = await harness.liveDocuments();
+    expect(live.map(({ id, sha256 }) => [id, sha256])).toEqual([[original?.id, sha256Of(first)]]);
+    expect(live[0]).toMatchObject({ fileAtSource: true, storageKey: null });
+    expect((await harness.origins()).map(({ documentId }) => documentId)).toEqual([original?.id]);
+  });
+
+  it('leaves deleted the bytes a person deleted, even when Drive holds them again', async () => {
+    const { drive } = harness.google;
+    const folder = drive.folder('Deleted');
+    const first = syntheticPdf('deleted by a person');
+    const file = drive.file('letter.pdf', folder, first);
+    const source = await harness.addDriveSource(folder);
+    await harness.poll(source);
+    const [deleted] = await harness.liveDocuments();
+    await deleteDocument({ db: harness.ingest.database.db }, deleted?.id ?? '');
+    drive.update(file, syntheticPdf('a later version'));
+    await harness.poll(source);
+
+    drive.update(file, first);
+    await harness.poll(source);
+
+    expect((await harness.liveDocuments()).map(({ id }) => id)).not.toContain(deleted?.id);
   });
 
   it('keeps a document that a stored copy holds when its Drive file changes', async () => {

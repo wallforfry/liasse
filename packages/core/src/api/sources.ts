@@ -10,15 +10,15 @@ import {
   SOURCE_PASSWORD_UNREADABLE_MESSAGE,
 } from '@liasse/contract';
 import { SOURCE_CHECK_TIMEOUT_MS } from '@liasse/contract/domain';
-import { eq } from 'drizzle-orm';
+import { and, eq, isNull } from 'drizzle-orm';
 import type { Database } from '../db/client.ts';
-import { ingestionSources } from '../db/schema/sources.ts';
+import { documentOrigins, ingestionSources } from '../db/schema/sources.ts';
 import { ID_PREFIXES, newId } from '../domain/ids.ts';
 import type { SecretBox } from '../settings/secret-box.ts';
 import { checkSource as checkStoredSource } from '../sources/check.ts';
 import type { SourceConnectors } from '../sources/connector.ts';
 import { cancelPolls, queuePollNow } from '../sources/schedule.ts';
-import { bindConnector } from '../sources/connect.ts';
+import { forgetDriveToken } from '../sources/forget.ts';
 import type { GoogleClientReader } from '../sources/google/client.ts';
 import type { GoogleOAuth } from '../sources/google/oauth.ts';
 import { openSourceSecret, updateSourceSecret } from '../sources/secret.ts';
@@ -138,6 +138,11 @@ const sendsSecretElsewhere = (
   stored.secret !== null &&
   (config.host !== stored.config.host || config.security !== stored.config.security);
 
+// A Drive source pointed at another folder no longer reads the files of the former one:
+// they are removed, and those the new folder holds are found again by its first listing.
+const movesFolder = (stored: StoredSource, config: StoredSource['config']): boolean =>
+  stored.kind === 'gdrive' && 'folder_id' in config && config.folder_id !== stored.config.folder_id;
+
 // The kind of a source never changes: a patch names it, and must name the stored one.
 const configAfter = (stored: StoredSource, patch: SourcePatch): StoredSource['config'] => {
   if (patch.kind !== stored.kind) {
@@ -194,19 +199,23 @@ export const updateSource = async (
         updatedAt: new Date(),
       })
       .where(eq(ingestionSources.id, id));
+    if (movesFolder(stored, config)) {
+      await tx
+        .update(documentOrigins)
+        .set({ removedAt: new Date() })
+        .where(and(eq(documentOrigins.sourceId, id), isNull(documentOrigins.removedAt)));
+    }
     await cancelPolls(tx, id);
     if (enabled && secret !== null) await queuePollNow(tx, id);
   });
   return getSource(context, id);
 };
 
-const FORGET_TIMEOUT_MS = 30_000;
-
 /**
  * Deletes a source and its queued runs. Its documents stay; what said they came from it
  * goes, so a document whose file stayed at the source can no longer serve it. A run in
- * progress finishes the item it is on, then finds nothing to write to. The credentials of
- * a source that can revoke them, a Drive's authorization, are revoked at the source.
+ * progress finishes the item it is on, then finds nothing to write to. A Drive source's
+ * authorization is revoked at Google when no other Drive source holds one.
  */
 export const deleteSource = async (
   { db, secrets, connectors }: SourcesContext,
@@ -218,12 +227,10 @@ export const deleteSource = async (
     await cancelPolls(tx, id);
     return parseSourceRow(row);
   });
-  const { forget } = bindConnector(connectors, deleted);
   const secret = openSourceSecret(secrets, deleted.id, deleted.secret);
-  if (forget === undefined || secret.state !== 'set') return;
-  // Best effort: the token left Liasse with the row, and Google ends a refresh token
-  // that goes unused for six months.
-  await forget(secret.value, AbortSignal.timeout(FORGET_TIMEOUT_MS)).catch(() => undefined);
+  if (deleted.kind === 'gdrive' && secret.state === 'set') {
+    await forgetDriveToken(db, connectors, secret.value);
+  }
 };
 
 /** Tries the stored credentials and lists the first items the next run would take. */

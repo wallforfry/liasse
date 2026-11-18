@@ -58,9 +58,4 @@ export {
   type SourcesContext,
   updateSource,
 } from './sources.ts';
-export {
-  completeGoogleConsent,
-  type GoogleConsentAnswer,
-  type GoogleConsentResult,
-  startGoogleConsent,
-} from './google-consent.ts';
+export { completeGoogleConsent, startGoogleConsent } from './google-consent.ts';

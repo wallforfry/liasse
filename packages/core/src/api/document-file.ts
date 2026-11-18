@@ -5,6 +5,7 @@ import {
   SourceFileChangedError,
   SourceFileUnavailableError,
 } from '../ingest/document-file.ts';
+import { SourceCredentialsError } from '../sources/connector.ts';
 import { StorageObjectNotFoundError } from '../storage/errors.ts';
 import type { ApiContext } from './context.ts';
 import { ApiError, documentNotFound } from './errors.ts';
@@ -29,6 +30,12 @@ const fileError = (error: unknown): ApiError | undefined => {
         'reads the new version.',
     );
   }
+  if (error instanceof SourceCredentialsError) {
+    return new ApiError(
+      'source_needs_attention',
+      'The source that keeps this file refused its credentials: connect it again.',
+    );
+  }
   if (error instanceof SourceFileUnavailableError) {
     return new ApiError(
       'file_unavailable',
@@ -44,7 +51,8 @@ const fileError = (error: unknown): ApiError | undefined => {
  * keeps it. Rejects with `document_not_found` for an unknown or deleted document, with
  * `file_missing` when the storage lost the file (uploading the same bytes again restores
  * it), with `file_changed` when the source holds other bytes than those indexed, and
- * with `file_unavailable` when no source holds the file any more.
+ * with `file_unavailable` when no source holds the file any more, and with
+ * `source_needs_attention` when every source that keeps it refused its credentials.
  */
 export const openDocumentFile = async (
   { db, storage, sourceFiles }: Pick<ApiContext, 'db' | 'storage' | 'sourceFiles'>,

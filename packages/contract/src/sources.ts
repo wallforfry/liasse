@@ -9,7 +9,12 @@ import {
   MAX_SOURCE_SKIPPED_ITEMS,
   SOURCE_CHECK_SAMPLE,
 } from './domain/limits.ts';
-import { imapSecuritySchema, secretStateSchema, sourceErrorKindSchema } from './domain/schemas.ts';
+import {
+  googleConsentOutcomeSchema,
+  imapSecuritySchema,
+  secretStateSchema,
+  sourceErrorKindSchema,
+} from './domain/schemas.ts';
 import { idSchema } from './id.ts';
 import { keyUpdateSchema } from './settings.ts';
 
@@ -222,3 +227,18 @@ export const googleConsentSchema = z.strictObject({
   url: z.url().describe('The consent page of Google, for this source and this session only.'),
 });
 export type GoogleConsent = z.output<typeof googleConsentSchema>;
+
+// What Google appends to the redirect URI (RFC 6749, 4.1.2): a declined consent comes back
+// with `error` and no code.
+export const googleConsentAnswerSchema = z.strictObject({
+  code: z.string().min(1).max(4096).optional(),
+  state: z.string().min(1).max(4096).optional(),
+  error: z.string().min(1).max(256).optional(),
+});
+export type GoogleConsentAnswer = z.output<typeof googleConsentAnswerSchema>;
+
+export const googleConsentResultSchema = z.strictObject({
+  outcome: googleConsentOutcomeSchema,
+  source_id: idSchema.optional().describe('The source the consent was for, once known.'),
+});
+export type GoogleConsentResult = z.output<typeof googleConsentResultSchema>;

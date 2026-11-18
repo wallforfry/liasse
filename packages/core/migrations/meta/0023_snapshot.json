@@ -1,5 +1,5 @@
 {
-  "id": "ac5113cf-f40a-47d0-ac02-faa01c7b4c89",
+  "id": "e55b5ef2-26de-49ee-b7d1-e62daee0db1c",
   "prevId": "81a4b984-fdaf-4641-a450-36ea1bdf4041",
   "version": "7",
   "dialect": "postgresql",
@@ -1060,6 +1060,13 @@
         },
         "file_at_source": {
           "name": "file_at_source",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
+        },
+        "replaced_by_source": {
+          "name": "replaced_by_source",
           "type": "boolean",
           "primaryKey": false,
           "notNull": true,

@@ -29,15 +29,20 @@ const download = async (
   api: DriveApi,
   id: string,
   checksum: string,
+  signal: AbortSignal,
 ): Promise<AsyncIterable<Uint8Array>> => {
-  const body = await api.download(id);
+  const body = await api.download(id, signal);
   // Its removal is a later change of the listing, which the next changes report.
   if (body === undefined) throw new SourceItemError('The file left Drive before it was read.');
   return checked(body, checksum);
 };
 
 /** The item of a Drive file, or undefined for a type of Google's own, which has no bytes. */
-export const fileItem = (api: DriveApi, file: DriveFile): SourceItem | undefined => {
+export const fileItem = (
+  api: DriveApi,
+  file: DriveFile,
+  signal: AbortSignal,
+): SourceItem | undefined => {
   if (file.mimeType.startsWith(GOOGLE_TYPE_PREFIX)) return undefined;
   const described = {
     externalId: file.id,
@@ -51,5 +56,9 @@ export const fileItem = (api: DriveApi, file: DriveFile): SourceItem | undefined
       open: () => Promise.reject(new SourceItemError('Drive gives no checksum for this file.')),
     };
   }
-  return { ...described, reference: { checksum }, open: () => download(api, file.id, checksum) };
+  return {
+    ...described,
+    reference: { checksum },
+    open: () => download(api, file.id, checksum, signal),
+  };
 };

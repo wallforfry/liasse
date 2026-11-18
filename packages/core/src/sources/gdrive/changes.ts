@@ -66,7 +66,7 @@ async function* followShortcut(walk: DriveWalk, cursor: DriveCursor, shortcut: D
   if (previous !== undefined && previous !== next.shortcuts[shortcut.id]) {
     yield* targetDropped(walk, next, previous);
   }
-  const item = followed ? fileItem(walk.api, target) : undefined;
+  const item = followed ? fileItem(walk.api, target, walk.signal) : undefined;
   yield item === undefined ? { cursor: next } : { cursor: next, item };
   return next;
 }
@@ -92,7 +92,7 @@ async function* visit(walk: DriveWalk, cursor: DriveCursor, file: DriveFile): St
     return entered;
   }
   if (file.mimeType === SHORTCUT_TYPE) return yield* followShortcut(walk, cursor, file);
-  const item = fileItem(walk.api, file);
+  const item = fileItem(walk.api, file, walk.signal);
   yield item === undefined ? { cursor } : { cursor, item };
   return cursor;
 }

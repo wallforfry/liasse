@@ -100,7 +100,12 @@ export const ingestFile = async (
     // changes it waits for this transaction, or this one for that save.
     await holdEmbedderShared(tx);
     const [existing] = await tx
-      .select({ id: documents.id, status: documents.status, fileAtSource: documents.fileAtSource })
+      .select({
+        id: documents.id,
+        status: documents.status,
+        fileAtSource: documents.fileAtSource,
+        replacedBySource: documents.replacedBySource,
+      })
       .from(documents)
       .where(eq(documents.sha256, sha256));
     const result =

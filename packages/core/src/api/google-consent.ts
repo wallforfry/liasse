@@ -1,13 +1,12 @@
-import type { GoogleConsent } from '@liasse/contract';
-import type { GoogleConsentOutcome } from '@liasse/contract/domain';
+import type { GoogleConsent, GoogleConsentAnswer, GoogleConsentResult } from '@liasse/contract';
 import { eq } from 'drizzle-orm';
 import { ingestionSources } from '../db/schema/sources.ts';
 import { openConsentState, pkcePair, sealConsentState } from '../sources/google/consent.ts';
 import { DRIVE_READONLY_SCOPE, GoogleAuthorizationError } from '../sources/google/oauth.ts';
 import { cancelPolls, queuePollNow } from '../sources/schedule.ts';
-import { openSourceSecret, updateSourceSecret } from '../sources/secret.ts';
+import { forgetDriveToken } from '../sources/forget.ts';
+import { updateSourceSecret } from '../sources/secret.ts';
 import { readSource } from '../sources/store.ts';
-import type { StoredKey } from '../settings/keys.ts';
 import { ApiError } from './errors.ts';
 import type { SourcesContext } from './sources.ts';
 
@@ -48,34 +47,22 @@ export const startGoogleConsent = async (
   };
 };
 
-/** What Google put in the query of the redirect back to Liasse. */
-export interface GoogleConsentAnswer {
-  readonly code?: string | undefined;
-  readonly state?: string | undefined;
-  readonly error?: string | undefined;
-}
-
-export interface GoogleConsentResult {
-  readonly outcome: GoogleConsentOutcome;
-  /** The source the consent was for, once its `state` was found valid. */
-  readonly sourceId?: string;
-}
-
 // Stores the refresh token as the source's secret, which clears the flag of refused
-// credentials and runs an enabled source at once. Resolves to the secret it replaced, or
-// undefined when the source is gone or no longer a Drive source.
+// credentials and runs an enabled source at once. Resolves to false when the source is
+// gone or no longer a Drive source. The token it replaces is left to end on its own: it
+// may belong to the grant the new one is part of.
 const sealGrant = (
   { db, secrets }: Pick<SourcesContext, 'db' | 'secrets'>,
   sourceId: string,
   refreshToken: string,
-): Promise<StoredKey | undefined> =>
+): Promise<boolean> =>
   db.transaction(async (tx) => {
     const [row] = await tx
-      .select()
+      .select({ kind: ingestionSources.kind, enabled: ingestionSources.enabled })
       .from(ingestionSources)
       .where(eq(ingestionSources.id, sourceId))
       .for('update');
-    if (row?.kind !== 'gdrive') return undefined;
+    if (row?.kind !== 'gdrive') return false;
     await tx
       .update(ingestionSources)
       .set({
@@ -89,14 +76,14 @@ const sealGrant = (
       .where(eq(ingestionSources.id, sourceId));
     await cancelPolls(tx, sourceId);
     if (row.enabled) await queuePollNow(tx, sourceId);
-    return openSourceSecret(secrets, sourceId, row.secret);
+    return true;
   });
 
 /**
  * Ends a consent: exchanges the code for a refresh token and seals it in the source, which
  * then runs at once if enabled. A `state` this session did not start, or one older than ten
  * minutes, binds nothing. The person may untick the read access on the consent page: a grant
- * without it is revoked and refused.
+ * without it is refused, and revoked unless another Drive source holds a token.
  */
 export const completeGoogleConsent = async (
   { db, secrets, connectors, google }: SourcesContext,
@@ -108,10 +95,10 @@ export const completeGoogleConsent = async (
   if (request === undefined) return { outcome: 'invalid' };
   const { sourceId } = request;
   if (answer.error !== undefined || answer.code === undefined) {
-    return { outcome: 'denied', sourceId };
+    return { outcome: 'denied', source_id: sourceId };
   }
   const client = await google.client();
-  if (client === undefined) return { outcome: 'refused', sourceId };
+  if (client === undefined) return { outcome: 'refused', source_id: sourceId };
   const signal = AbortSignal.timeout(EXCHANGE_TIMEOUT_MS);
   const grant = await google.oauth
     .exchange(
@@ -123,19 +110,14 @@ export const completeGoogleConsent = async (
       if (error instanceof GoogleAuthorizationError) return undefined;
       throw error;
     });
-  if (grant === undefined) return { outcome: 'refused', sourceId };
-  // Best effort, as for a deleted source: an unused refresh token ends on its own.
-  const forget = (token: string) =>
-    connectors.gdrive.forget?.(token, signal).catch(() => undefined);
+  if (grant === undefined) return { outcome: 'refused', source_id: sourceId };
   if (!grant.scopes.includes(DRIVE_READONLY_SCOPE)) {
-    await forget(grant.refreshToken);
-    return { outcome: 'missing_scope', sourceId };
+    await forgetDriveToken(db, connectors, grant.refreshToken);
+    return { outcome: 'missing_scope', source_id: sourceId };
   }
-  const replaced = await sealGrant({ db, secrets }, sourceId, grant.refreshToken);
-  if (replaced === undefined) {
-    await forget(grant.refreshToken);
+  if (!(await sealGrant({ db, secrets }, sourceId, grant.refreshToken))) {
+    await forgetDriveToken(db, connectors, grant.refreshToken);
     return { outcome: 'invalid' };
   }
-  if (replaced.state === 'set') await forget(replaced.value);
-  return { outcome: 'connected', sourceId };
+  return { outcome: 'connected', source_id: sourceId };
 };

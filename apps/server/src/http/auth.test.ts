@@ -12,6 +12,8 @@ const PUBLIC_ROUTES = [
   'GET /api/setup',
   'POST /api/setup',
   'POST /api/setup/check',
+  // Google sends the browser back without a cookie of Liasse: it only forwards the answer.
+  'GET /sources/google/callback',
   'GET /',
   'GET /ui/*',
   'GET /api/auth/*',

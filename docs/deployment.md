@@ -112,7 +112,7 @@ Sources are configured on the **Sources** page of the web UI, never in the envir
 6. In Liasse, open **Settings**, give the client id and the client secret in the Google section, and save.
 7. On the **Sources** page, create a Google Drive source with the id of the folder (the last part of its address in Drive, `https://drive.google.com/drive/folders/<id>`, or `root` for the whole of My Drive), then connect it with Google. The consent page asks for read access to Drive; keep it ticked.
 
-Every source keeps its own authorization, sealed under `AUTH_SECRET`. Deleting a source revokes it. A new client id, or a client deleted in the console, ends the authorizations it gave: connect each Drive source again. Google also ends a refresh token unused for six months. A source whose authorization was refused shows as needing attention until it is connected again.
+Every source keeps its own authorization, sealed under `AUTH_SECRET`. Deleting the last Drive source revokes its authorization at Google; while other Drive sources remain, it is left to end on its own, since revoking one may end the grant of every source of the same Google account. A new client id, or a client deleted in the console, ends the authorizations it gave: connect each Drive source again. Google also ends a refresh token unused for six months. A source whose authorization was refused shows as needing attention until it is connected again.
 
 A file trashed, deleted or moved out of the folder leaves its document in Liasse, its file unavailable (a download answers 410); a file that changed on Drive becomes a new document, the old one deleted. Google Docs, Sheets and Slides are not read.
 

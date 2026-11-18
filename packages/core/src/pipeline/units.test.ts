@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { SourceFileChangedError, SourceFileUnavailableError } from '../ingest/document-file.ts';
 import { ModelOutputError, ModelProviderError } from '../models/errors.ts';
+import { SourceCredentialsError } from '../sources/connector.ts';
 import { PermanentJobError } from '../jobs/errors.ts';
 import { StorageObjectNotFoundError } from '../storage/errors.ts';
 import { TextExtractionError } from '../text/errors.ts';
@@ -62,6 +63,7 @@ describe('the error of a document', () => {
     [new StorageObjectNotFoundError(), 'file_missing', true],
     [new SourceFileChangedError('changed'), 'file_changed', true],
     [new SourceFileUnavailableError('gone'), 'file_unavailable', true],
+    [new SourceCredentialsError('refused'), 'source_credentials_refused', false],
     [new DocumentProcessingError('no_text'), 'no_text', true],
     [new PermanentJobError('anything'), 'internal_error', true],
     [new PipelineConflictError('doc_1'), 'processing_conflict', false],
