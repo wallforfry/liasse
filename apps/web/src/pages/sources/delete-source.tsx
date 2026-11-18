@@ -1,3 +1,5 @@
+import type { SourceKind } from '@liasse/contract/domain';
+import type { Source } from '@liasse/sdk';
 import { Trash2Icon } from 'lucide-react';
 import {
   AlertDialog,
@@ -13,8 +15,13 @@ import {
 import { Button } from '../../components/ui/button.tsx';
 import { useDeleteSource } from './use-source-actions.ts';
 
-export const DeleteSource = ({ id, name }: { readonly id: string; readonly name: string }) => {
-  const remove = useDeleteSource(id);
+const CREDENTIALS: Readonly<Record<SourceKind, string>> = {
+  imap: 'its password',
+  gdrive: 'its authorization at Google',
+};
+
+export const DeleteSource = ({ source }: { readonly source: Source }) => {
+  const remove = useDeleteSource(source.id);
   return (
     <AlertDialog>
       <AlertDialogTrigger asChild>
@@ -27,8 +34,8 @@ export const DeleteSource = ({ id, name }: { readonly id: string; readonly name:
         <AlertDialogHeader>
           <AlertDialogTitle>Delete this source?</AlertDialogTitle>
           <AlertDialogDescription>
-            {name} is no longer read, and its password is dropped. The documents it brought stay in
-            Liasse.
+            {source.name} is no longer read, and {CREDENTIALS[source.kind]} is dropped. The
+            documents it brought stay in Liasse.
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>

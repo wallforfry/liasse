@@ -12,7 +12,7 @@ import { SOURCES_QUERY_KEY } from './sources-query.ts';
 
 const NoSource = () => (
   <div className="flex max-w-2xl flex-col gap-2 text-sm text-muted-foreground">
-    <p>No source yet. Add a mailbox to bring in the documents it receives.</p>
+    <p>No source yet. Add a mailbox or a Google Drive folder to bring in its documents.</p>
     <p>
       The folder named by WATCH_DIR is not a source here: it stays configured in the environment of
       the server, and is read beside the sources.
@@ -45,7 +45,7 @@ export const SourcesPage = () => {
     <>
       <PageHeader
         title="Sources"
-        description="Mailboxes Liasse reads on its own, each at its own interval."
+        description="Mailboxes and Drive folders Liasse reads on its own, each at its own interval."
         actions={
           <Button asChild>
             <Link to={NEW_SOURCE_PATH}>

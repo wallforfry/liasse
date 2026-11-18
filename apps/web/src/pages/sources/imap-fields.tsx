@@ -13,14 +13,11 @@ import { describedBy } from '../settings/field-frame.ts';
 import { SettingsCard } from '../settings/settings-card.tsx';
 import { ChoiceField, Field, TextField } from '../settings/settings-fields.tsx';
 import { fieldSetter } from '../settings/settings-form.ts';
-import { type Issues, issueAt } from '../settings/settings-validation.ts';
-import { type ImapSourceValues, PASSWORD_AGAIN_MESSAGE } from './source-form.ts';
+import { issueAt } from '../settings/settings-validation.ts';
+import { type ImapSourceValues, PASSWORD_AGAIN_MESSAGE } from './imap-form.ts';
+import type { SourceFieldsProps } from './source-editor.tsx';
 
-export interface ImapFieldsProps {
-  readonly values: ImapSourceValues;
-  readonly issues: Issues;
-  readonly onChange: (values: ImapSourceValues) => void;
-}
+type ImapFieldsProps = SourceFieldsProps<ImapSourceValues>;
 
 const SECURITY_HINTS: Readonly<Record<ImapSecurity, string>> = {
   tls: 'TLS from the first byte, usually on port 993.',

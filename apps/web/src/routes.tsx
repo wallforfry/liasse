@@ -1,5 +1,6 @@
 import { Navigate, type RouteObject } from 'react-router';
 import { AppLayout } from './layout/app-layout.tsx';
+import { GOOGLE_CONSENT_PATH } from './layout/navigation.ts';
 import { RequireSession } from './layout/require-session.tsx';
 import { SetupGate } from './layout/setup-gate.tsx';
 import { ApiKeysPage } from './pages/account/api-keys-page.tsx';
@@ -13,6 +14,7 @@ import { GraphPage } from './pages/graph/graph-page.tsx';
 import { LoginPage } from './pages/login-page.tsx';
 import { NotFoundPage } from './pages/not-found-page.tsx';
 import { SettingsPage } from './pages/settings/settings-page.tsx';
+import { GoogleConsentPage } from './pages/sources/google-consent-page.tsx';
 import { EditSourcePage, NewSourcePage } from './pages/sources/source-editor-page.tsx';
 import { SourcesPage } from './pages/sources/sources-page.tsx';
 import { TypePage } from './pages/types/type-page.tsx';
@@ -61,6 +63,7 @@ const APPLICATION_ROUTES: RouteObject[] = [
           { path: '/upload', element: <UploadPage /> },
           { path: '/sources', element: <SourcesPage /> },
           { path: '/sources/new', element: <NewSourcePage /> },
+          { path: GOOGLE_CONSENT_PATH, element: <GoogleConsentPage /> },
           { path: '/sources/:id/edit', element: <EditSourcePage /> },
           { path: '/types', element: <TypesPage /> },
           { path: '/types/:slug', element: <TypePage /> },

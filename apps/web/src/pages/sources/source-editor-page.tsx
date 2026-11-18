@@ -2,19 +2,32 @@ import { useQuery } from '@tanstack/react-query';
 import { useParams } from 'react-router';
 import { useClient } from '../../api/session.ts';
 import { ErrorAlert } from '../../components/error-alert.tsx';
-import { Alert, AlertDescription, AlertTitle } from '../../components/ui/alert.tsx';
 import { PageHeader } from '../../components/page-header.tsx';
 import { Skeleton } from '../../components/ui/skeleton.tsx';
-import { SourceEditor } from './source-editor.tsx';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '../../components/ui/tabs.tsx';
+import { GdriveSourceEditor } from './gdrive-editor.tsx';
+import { ImapSourceEditor } from './imap-editor.tsx';
 import { sourceQueryKey } from './sources-query.ts';
 
 export const NewSourcePage = () => (
   <>
     <PageHeader
       title="New source"
-      description="An enabled source runs as soon as it is saved, then at its interval."
+      description="An enabled mailbox runs once saved, a Drive folder once connected with Google; then at its interval."
     />
-    <SourceEditor />
+    {/* Radix unmounts the inactive tab: a switch of kind drops what the other form held. */}
+    <Tabs defaultValue="imap" className="max-w-2xl">
+      <TabsList aria-label="Kind of source">
+        <TabsTrigger value="imap">IMAP mailbox</TabsTrigger>
+        <TabsTrigger value="gdrive">Google Drive folder</TabsTrigger>
+      </TabsList>
+      <TabsContent value="imap" className="pt-2">
+        <ImapSourceEditor />
+      </TabsContent>
+      <TabsContent value="gdrive" className="pt-2">
+        <GdriveSourceEditor />
+      </TabsContent>
+    </Tabs>
   </>
 );
 
@@ -31,17 +44,11 @@ export const EditSourcePage = () => {
   const body = (() => {
     if (source.isPending) return <Skeleton className="h-96 w-full max-w-2xl" />;
     if (source.isError) return <ErrorAlert error={source.error} title="Source not loaded" />;
-    if (source.data.kind !== 'imap') {
-      return (
-        <Alert className="max-w-2xl">
-          <AlertTitle>Not editable here yet</AlertTitle>
-          <AlertDescription>
-            A Google Drive source is edited through the REST API until its form ships.
-          </AlertDescription>
-        </Alert>
-      );
-    }
-    return <SourceEditor key={source.data.updated_at} source={source.data} />;
+    return source.data.kind === 'imap' ? (
+      <ImapSourceEditor key={source.data.updated_at} source={source.data} />
+    ) : (
+      <GdriveSourceEditor key={source.data.updated_at} source={source.data} />
+    );
   })();
 
   return (
