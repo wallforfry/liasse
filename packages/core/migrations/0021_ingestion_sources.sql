@@ -15,6 +15,8 @@ CREATE TABLE "ingestion_sources" (
 	"name" text NOT NULL,
 	"enabled" boolean DEFAULT true NOT NULL,
 	"poll_interval_minutes" integer NOT NULL,
+	"hint" text,
+	"private" boolean DEFAULT false NOT NULL,
 	"config" jsonb DEFAULT '{}'::jsonb NOT NULL,
 	"secret" text,
 	"cursor" jsonb,

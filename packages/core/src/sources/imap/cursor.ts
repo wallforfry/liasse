@@ -5,9 +5,15 @@ const mailboxCursorSchema = z.object({
   // A bigint on the wire: kept as its decimal text.
   uid_validity: z.string().regex(/^\d+$/),
   last_uid: z.int().min(0),
+  // False until a run read the mailbox to its end once: until then, the search keeps the
+  // start date, so a first pass cut short does not resume on older mail with higher UIDs.
+  caught_up: z.boolean(),
 });
 
-/** Per mailbox, the `UIDVALIDITY` the UIDs belong to and the last UID handled. */
+/**
+ * Per mailbox, the `UIDVALIDITY` the UIDs belong to, the last UID handled, and whether the
+ * first pass from the start date is over.
+ */
 export const imapCursorSchema = z.object({
   mailboxes: z.record(z.string(), mailboxCursorSchema),
 });
@@ -24,8 +30,14 @@ export const parseImapCursor = (cursor: JsonObject | null): ImapCursor => {
 export const advanceMailbox = (
   cursor: ImapCursor,
   mailbox: string,
-  uidValidity: string,
-  lastUid: number,
+  position: { readonly uidValidity: string; readonly lastUid: number; readonly caughtUp: boolean },
 ): ImapCursor => ({
-  mailboxes: { ...cursor.mailboxes, [mailbox]: { uid_validity: uidValidity, last_uid: lastUid } },
+  mailboxes: {
+    ...cursor.mailboxes,
+    [mailbox]: {
+      uid_validity: position.uidValidity,
+      last_uid: position.lastUid,
+      caught_up: position.caughtUp,
+    },
+  },
 });

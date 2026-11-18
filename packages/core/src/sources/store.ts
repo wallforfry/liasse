@@ -41,6 +41,8 @@ export const sourceViewOf = (secrets: SecretBox, source: StoredSource): Source =
   name: source.name,
   enabled: source.enabled,
   poll_interval_minutes: source.pollIntervalMinutes,
+  hint: source.hint,
+  private: source.private,
   config: source.config,
   secret: openSourceSecret(secrets, source.id, source.secret).state,
   needs_attention: source.needsAttention,

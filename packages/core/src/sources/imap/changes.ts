@@ -14,18 +14,18 @@ const batchesOf = (uids: readonly number[]): readonly (readonly number[])[] =>
     uids.slice(index * FETCH_BATCH, (index + 1) * FETCH_BATCH),
   );
 
-// A first run (or a mailbox whose UIDs were renumbered) starts from the start date; a later
-// one from the UID after the last handled, whatever the date, so a Gmail label put on an
-// old message later still brings it.
+// Until a first pass read the mailbox to its end, the search keeps the start date; after
+// it, the UIDs after the last handled, whatever their date, so a Gmail label put on an old
+// message later still brings it. A mailbox whose UIDs were renumbered starts over.
 const searchUids = async (
   client: ImapFlow,
   config: ImapSourceConfig,
   lastUid: number | undefined,
+  caughtUp: boolean,
 ): Promise<readonly number[]> => {
   const query: SearchObject = {
-    ...(lastUid === undefined
-      ? { since: new Date(`${config.start_date}T00:00:00Z`) }
-      : { uid: `${String(lastUid + 1)}:*` }),
+    ...(caughtUp ? {} : { since: new Date(`${config.start_date}T00:00:00Z`) }),
+    ...(lastUid === undefined ? {} : { uid: `${String(lastUid + 1)}:*` }),
     ...(config.from === undefined ? {} : { from: config.from }),
     ...(config.subject === undefined ? {} : { subject: config.subject }),
   };
@@ -94,20 +94,23 @@ export async function* imapChanges(
     const mailbox = await client.mailboxOpen(path, { readOnly: true });
     const uidValidity = mailbox.uidValidity.toString();
     const known = cursor.mailboxes[path];
-    const lastUid = known?.uid_validity === uidValidity ? known.last_uid : undefined;
-    const uids = await searchUids(client, config, lastUid);
+    const resumed = known?.uid_validity === uidValidity ? known : undefined;
+    const lastUid = resumed?.last_uid;
+    const caughtUp = resumed?.caught_up === true;
+    const uids = await searchUids(client, config, lastUid, caughtUp);
     for (const batch of batchesOf(uids)) {
       for (const message of await fetchSummaries(client, batch)) {
-        cursor = advanceMailbox(cursor, path, uidValidity, message.uid);
+        cursor = advanceMailbox(cursor, path, { uidValidity, lastUid: message.uid, caughtUp });
         if (config.include_messages_without_attachments || hasAttachment(message.bodyStructure)) {
           yield { cursor, item: itemOf(client, path, uidValidity, message) };
         }
       }
     }
     // Every UID below `uidNext` existed when the search ran: those it left out (older than
-    // the start date, or not matching the filters) are never wanted.
-    const handled = Math.max(lastUid ?? 0, uids.at(-1) ?? 0, mailbox.uidNext - 1);
-    cursor = advanceMailbox(cursor, path, uidValidity, handled);
+    // the start date, or not matching the filters) are never wanted. A server may omit it.
+    const below = Number.isSafeInteger(mailbox.uidNext) ? mailbox.uidNext - 1 : 0;
+    const handled = Math.max(lastUid ?? 0, uids.at(-1) ?? 0, below);
+    cursor = advanceMailbox(cursor, path, { uidValidity, lastUid: handled, caughtUp: true });
     yield { cursor };
   }
 }

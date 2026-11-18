@@ -18,6 +18,9 @@ export const ingestionSources = pgTable('ingestion_sources', {
   name: text('name').notNull(),
   enabled: boolean('enabled').notNull().default(true),
   pollIntervalMinutes: integer('poll_interval_minutes').notNull(),
+  // Given with every item to ingestion: untrusted free text, as the hint of an upload.
+  hint: text('hint'),
+  private: boolean('private').notNull().default(false),
   config: jsonObject('config'),
   secret: text('secret'),
   cursor: jsonb('cursor').$type<JsonObject>(),

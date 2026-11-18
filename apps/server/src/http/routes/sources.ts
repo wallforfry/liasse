@@ -89,7 +89,7 @@ export const sourceRoutes = ({
         credentials: CREDENTIALS,
         responses: {
           200: jsonResponse('The source as saved.', sourceSchema),
-          ...failures(400, 404, 409, 413, 415),
+          ...failures(400, 404, 413, 415),
         },
       }),
       signedIn,

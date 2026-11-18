@@ -10,7 +10,7 @@ import { createGate } from '../testing/async.ts';
 import { buildSyntheticEmail } from '../testing/synthetic-email.ts';
 import { syntheticPdf } from '../testing/synthetic-files.ts';
 import { createTestMailbox, type TestMailbox } from '../testing/test-mailbox.ts';
-import type { SourceConnectors } from './connector.ts';
+import { type SourceConnectors, SourceCredentialsError } from './connector.ts';
 import { SOURCE_CONNECTORS } from './connectors.ts';
 import { pollSource, type SourcePollDeps } from './poll.ts';
 import {
@@ -156,6 +156,58 @@ describe('a run of a source', () => {
     expect(await lastRunOf(id)).toMatchObject({ ingested: 0, skipped: 0 });
   });
 
+  it('gives every document of the source its hint and its private flag', async () => {
+    await mailbox.append(withPdf('flagged'), { date: SINCE_START });
+    const db = harness.database.db;
+    const id = await addSource(db, {
+      config: mailbox.config,
+      password: mailbox.password,
+      hint: 'Bank statements',
+      private: true,
+    });
+    await poll(id);
+    const [document] = await db.select().from(documents);
+    expect(document).toMatchObject({ hint: 'Bank statements', private: true });
+  });
+
+  it('skips an item the source says is too large without downloading it', async () => {
+    const id = await mailboxSource();
+    let opened = 0;
+    const connectors = fakeConnectors([
+      {
+        cursor: { at: 1 },
+        item: {
+          externalId: 'huge',
+          name: 'huge.eml',
+          size: harness.deps.maxFileSize + 1,
+          open: () => {
+            opened += 1;
+            return Promise.resolve(ReadableStream.from([syntheticPdf('huge')]));
+          },
+        },
+      },
+    ]);
+    await poll(id, connectors);
+    expect(opened).toBe(0);
+    expect(await lastRunOf(id)).toMatchObject({ skipped: 1, ingested: 0 });
+    expect((await storedSource(harness.database.db, id)).cursor).toEqual({ at: 1 });
+  });
+
+  it('leaves the flag of refused credentials to a run that read the source as last saved', async () => {
+    const db = harness.database.db;
+    const id = await mailboxSource();
+    const refused = fakeConnectors([], async () => {
+      // A person saves the source while the run is connecting with what it read before.
+      await db
+        .update(ingestionSources)
+        .set({ updatedAt: new Date(Date.now() + 1000) })
+        .where(eq(ingestionSources.id, id));
+      throw new SourceCredentialsError('Refused');
+    });
+    await poll(id, refused);
+    expect((await storedSource(db, id)).needsAttention).toBe(false);
+  });
+
   it('stops polling a source whose credentials are refused, until a person saves it', async () => {
     const db = harness.database.db;
     const id = await addSource(db, { config: mailbox.config, password: 'wrong-password' });
@@ -180,7 +232,7 @@ describe('a run of a source', () => {
         item: {
           externalId: 'one',
           name: 'one.pdf',
-          open: () => Promise.resolve([syntheticPdf('one')]),
+          open: () => Promise.resolve(ReadableStream.from([syntheticPdf('one')])),
         },
       },
       {

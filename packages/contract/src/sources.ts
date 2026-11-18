@@ -2,6 +2,7 @@ import { z } from 'zod';
 import {
   DEFAULT_SOURCE_POLL_MINUTES,
   MAX_FILENAME_LENGTH,
+  MAX_HINT_LENGTH,
   MAX_IMAP_MAILBOXES,
   MAX_SOURCE_NAME_LENGTH,
   MAX_SOURCE_POLL_MINUTES,
@@ -49,6 +50,15 @@ export type ImapSourceConfig = z.output<typeof imapSourceConfigSchema>;
 export type ImapSourceConfigInput = z.input<typeof imapSourceConfigSchema>;
 
 const sourceName = z.string().trim().min(1).max(MAX_SOURCE_NAME_LENGTH);
+const sourceHint = z
+  .string()
+  .trim()
+  .min(1)
+  .max(MAX_HINT_LENGTH)
+  .describe('Given with every document of the source, as the hint of an upload.');
+const sourcePrivate = z
+  .boolean()
+  .describe('Flags every document of the source private, as `private` of an upload does.');
 const pollInterval = z
   .int()
   .min(1)
@@ -90,6 +100,8 @@ const viewFields = {
   name: z.string(),
   enabled: z.boolean(),
   poll_interval_minutes: z.int(),
+  hint: z.string().nullable(),
+  private: z.boolean(),
   secret: secretStateSchema,
   needs_attention: z
     .boolean()
@@ -113,6 +125,8 @@ export const sourceCreateSchema = z.discriminatedUnion('kind', [
     name: sourceName,
     enabled: z.boolean().default(true),
     poll_interval_minutes: pollInterval.default(DEFAULT_SOURCE_POLL_MINUTES),
+    hint: sourceHint.optional(),
+    private: sourcePrivate.default(false),
     config: imapSourceConfigSchema,
     secret: keyUpdateSchema.describe('The password of the mailbox.'),
   }),
@@ -127,6 +141,8 @@ export const sourcePatchSchema = z.discriminatedUnion('kind', [
     name: sourceName.optional(),
     enabled: z.boolean().optional(),
     poll_interval_minutes: pollInterval.optional(),
+    hint: sourceHint.nullable().optional().describe('Null removes it.'),
+    private: sourcePrivate.optional(),
     config: imapSourceConfigSchema.optional(),
     secret: keyUpdateSchema.describe('The password of the mailbox.'),
   }),

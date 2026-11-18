@@ -1,4 +1,5 @@
 import type {
+  SecretUpdate,
   Source,
   SourceCheck,
   SourceCreate,
@@ -15,7 +16,13 @@ import { checkSource as checkStoredSource } from '../sources/check.ts';
 import type { SourceConnectors } from '../sources/connector.ts';
 import { cancelPolls, queuePollNow } from '../sources/schedule.ts';
 import { updateSourceSecret } from '../sources/secret.ts';
-import { parseSourceRow, readSource, readSources, sourceViewOf } from '../sources/store.ts';
+import {
+  parseSourceRow,
+  readSource,
+  readSources,
+  sourceViewOf,
+  type StoredSource,
+} from '../sources/store.ts';
 import { ApiError } from './errors.ts';
 
 /** What the source use cases need. They exist before any settings do. */
@@ -54,6 +61,8 @@ export const createSource = async (
       name: input.name,
       enabled: input.enabled,
       pollIntervalMinutes: input.poll_interval_minutes,
+      hint: input.hint ?? null,
+      private: input.private,
       config: input.config,
       secret: updateSourceSecret(context.secrets, id, null, input.secret),
     });
@@ -61,6 +70,17 @@ export const createSource = async (
   });
   return getSource(context, id);
 };
+
+// The stored password was given for one server and one way to reach it: it is not handed
+// to another host, nor sent over a weaker connection, without being entered again.
+const sendsSecretElsewhere = (
+  stored: StoredSource,
+  config: StoredSource['config'],
+  secret: SecretUpdate,
+): boolean =>
+  secret.action === 'keep' &&
+  stored.secret !== null &&
+  (config.host !== stored.config.host || config.security !== stored.config.security);
 
 /**
  * Saves a source. A save is a person acting on it: it clears the flag of refused
@@ -80,6 +100,14 @@ export const updateSource = async (
       .for('update');
     if (row === undefined) throw sourceNotFound();
     const stored = parseSourceRow(row);
+    const config = patch.config ?? stored.config;
+    if (sendsSecretElsewhere(stored, config, patch.secret)) {
+      throw new ApiError(
+        'invalid',
+        'source_secret_required',
+        'A new host or connection security would receive the stored password: enter it again.',
+      );
+    }
     const enabled = patch.enabled ?? stored.enabled;
     await tx
       .update(ingestionSources)
@@ -87,7 +115,9 @@ export const updateSource = async (
         name: patch.name ?? stored.name,
         enabled,
         pollIntervalMinutes: patch.poll_interval_minutes ?? stored.pollIntervalMinutes,
-        config: patch.config ?? stored.config,
+        hint: patch.hint === undefined ? stored.hint : patch.hint,
+        private: patch.private ?? stored.private,
+        config,
         secret: updateSourceSecret(context.secrets, id, stored.secret, patch.secret),
         needsAttention: false,
         updatedAt: new Date(),

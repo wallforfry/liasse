@@ -44,7 +44,7 @@ const MINUTE_MS = 60_000;
 // An item refused for what it is: the cursor moves past it, and no later run takes it.
 const takeItem = async (
   { db, storage, maxFileSize }: SourcePollDeps,
-  sourceId: string,
+  source: StoredSource,
   item: SourceItem,
 ): Promise<ItemOutcome> => {
   const skipped = (reason: string): ItemOutcome => ({
@@ -59,13 +59,15 @@ const takeItem = async (
     return skipped(new FileTooLargeError(maxFileSize).message);
   }
   try {
-    const origin = { sourceId, externalId: item.externalId, name: item.name };
+    const origin = { sourceId: source.id, externalId: item.externalId, name: item.name };
     const result = await ingestFile(
       { db, storage, maxFileSize },
       {
         stream: await item.open(),
         filename: item.name,
         source: 'connector',
+        hint: source.hint ?? undefined,
+        private: source.private,
         onIngested: (tx, ingested) => recordOrigin(tx, origin, ingested),
       },
     );
@@ -93,7 +95,7 @@ const readChanges = async (
   const session = await connectSource(deps.secrets, deps.connectors, source, signal);
   try {
     for await (const change of session.changes(source.cursor)) {
-      if (change.item !== undefined) onOutcome(await takeItem(deps, source.id, change.item));
+      if (change.item !== undefined) onOutcome(await takeItem(deps, source, change.item));
       await saveCursor(deps.db, source.id, change.cursor);
     }
   } finally {

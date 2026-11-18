@@ -10,6 +10,7 @@ import { syntheticPdf } from '../testing/synthetic-files.ts';
 import { createTestMailbox } from '../testing/test-mailbox.ts';
 import {
   addSource,
+  fakeConnectors,
   queuedPolls,
   sourcesContext,
   SYNTHETIC_IMAP_CONFIG,
@@ -59,6 +60,7 @@ describe('the source use cases', () => {
       name: 'Bills',
       enabled: true,
       poll_interval_minutes: 15,
+      private: false,
       config: SYNTHETIC_IMAP_CONFIG,
       secret: { action: 'replace', value: 'synthetic-secret-91f2' },
     });
@@ -114,6 +116,63 @@ describe('the source use cases', () => {
     });
     expect(disabled).toMatchObject({ enabled: false, secret: 'unset', name: 'Renamed' });
     expect(await queuedPolls(database.db)).toEqual([]);
+  });
+
+  it('asks for the password again before sending it to another host or over less security', async () => {
+    const id = await addSource(database.db);
+    const keep = { action: 'keep' } as const;
+    const elsewhere = { ...SYNTHETIC_IMAP_CONFIG, host: 'imap.elsewhere.example.test' };
+    expect(
+      await codeOf(updateSource(context(), id, { kind: 'imap', config: elsewhere, secret: keep })),
+    ).toBe('source_secret_required');
+    const clear = { ...SYNTHETIC_IMAP_CONFIG, security: 'none' as const };
+    expect(
+      await codeOf(updateSource(context(), id, { kind: 'imap', config: clear, secret: keep })),
+    ).toBe('source_secret_required');
+    const moved = await updateSource(context(), id, {
+      kind: 'imap',
+      config: elsewhere,
+      secret: { action: 'replace', value: 'entered-again' },
+    });
+    expect(moved).toMatchObject({ config: elsewhere, secret: 'set' });
+    const port = { ...elsewhere, port: 143 };
+    expect(
+      (await updateSource(context(), id, { kind: 'imap', config: port, secret: keep })).config,
+    ).toEqual(port);
+  });
+
+  it('keeps, changes and removes the hint and the private flag of a source', async () => {
+    const id = await addSource(database.db, { hint: 'Bank statements', private: true });
+    expect(await getSource(context(), id)).toMatchObject({
+      hint: 'Bank statements',
+      private: true,
+    });
+    const kept = await updateSource(context(), id, { kind: 'imap', secret: { action: 'keep' } });
+    expect(kept).toMatchObject({ hint: 'Bank statements', private: true });
+    const cleared = await updateSource(context(), id, {
+      kind: 'imap',
+      hint: null,
+      private: false,
+      secret: { action: 'keep' },
+    });
+    expect(cleared).toMatchObject({ hint: null, private: false });
+  });
+
+  it('names at most five items in a check', async () => {
+    const items = Array.from({ length: 7 }, (_, index) => ({
+      cursor: { at: index },
+      item: {
+        externalId: String(index),
+        name: `item-${String(index)}.eml`,
+        open: () => Promise.reject(new Error('A check never opens an item')),
+      },
+    }));
+    const id = await addSource(database.db);
+    const check = await checkSource(sourcesContext(database.db, fakeConnectors(items)), id);
+    expect(check).toEqual({
+      ok: true,
+      items: [0, 1, 2, 3, 4].map((index) => ({ name: `item-${String(index)}.eml` })),
+    });
   });
 
   it('answers not found for an unknown source and refuses a run of a disabled one', async () => {

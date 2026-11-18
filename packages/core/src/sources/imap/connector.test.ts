@@ -112,13 +112,39 @@ describe('the IMAP connector', () => {
     );
   });
 
+  it('keeps the start date when a first pass stopped before the end of the mailbox', async () => {
+    await mailbox.append(withPdf('first'), { date: READ_SINCE });
+    await mailbox.append(withPdf('second'), { date: READ_SINCE });
+    await mailbox.append(withPdf('old-labelled'), { date: BEFORE_START });
+    const firstPass = await changesOf(mailbox.config, mailbox.password);
+    const cutShort = firstPass.find((change) => change.item?.name === 'first.eml')?.cursor ?? null;
+    expect(cutShort).not.toBeNull();
+
+    const resumed = await changesOf(mailbox.config, mailbox.password, cutShort);
+
+    expect(namesOf(resumed)).toEqual(['second.eml']);
+  });
+
+  it('moves the cursor past the messages the search left out at the end of a mailbox', async () => {
+    await mailbox.append(withPdf('kept'), { date: READ_SINCE });
+    const older = await mailbox.append(withPdf('older'), { date: BEFORE_START });
+    const changes = await changesOf(mailbox.config, mailbox.password);
+    expect(namesOf(changes)).toEqual(['kept.eml']);
+    expect(imapCursorSchema.parse(lastCursor(changes)).mailboxes.INBOX).toMatchObject({
+      last_uid: older,
+      caught_up: true,
+    });
+  });
+
   it('restarts from the start date when the UIDVALIDITY of a mailbox changed', async () => {
     await mailbox.append(withPdf('before-start'), { date: BEFORE_START });
     await mailbox.append(withPdf('since-start'), { date: READ_SINCE });
     const first = await changesOf(mailbox.config, mailbox.password);
     const { mailboxes } = imapCursorSchema.parse(lastCursor(first));
     const renumbered = {
-      mailboxes: { INBOX: { uid_validity: '1', last_uid: mailboxes.INBOX?.last_uid ?? 0 } },
+      mailboxes: {
+        INBOX: { uid_validity: '1', last_uid: mailboxes.INBOX?.last_uid ?? 0, caught_up: true },
+      },
     };
 
     const again = await changesOf(mailbox.config, mailbox.password, renumbered);

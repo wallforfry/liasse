@@ -38,6 +38,8 @@ export interface SourceSeed {
   readonly config?: ImapSourceConfig;
   readonly password?: string;
   readonly enabled?: boolean;
+  readonly hint?: string;
+  readonly private?: boolean;
 }
 
 /** A source created through its use case: its first run is queued when it is enabled. */
@@ -47,6 +49,8 @@ export const addSource = async (
     config = SYNTHETIC_IMAP_CONFIG,
     password = 'synthetic-password',
     enabled = true,
+    hint,
+    private: isPrivate = false,
   }: SourceSeed = {},
 ): Promise<string> => {
   const source = await createSource(sourcesContext(db), {
@@ -54,6 +58,8 @@ export const addSource = async (
     name: 'Synthetic mailbox',
     enabled,
     poll_interval_minutes: 5,
+    ...(hint === undefined ? {} : { hint }),
+    private: isPrivate,
     config,
     secret: { action: 'replace', value: password },
   });
