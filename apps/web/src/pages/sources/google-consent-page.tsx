@@ -63,8 +63,9 @@ const answerOf = (search: string): GoogleConsentAnswer | 'unreadable' | undefine
 
 // A code is single use: one query per answer, and nothing that could send it twice. React
 // runs the effects of StrictMode twice, and the cache answers the second. A query without
-// data counts as stale whatever its `staleTime`: after a failed post, a reconnection or a
-// new mount would post the code again, unless both refetches are off.
+// data counts as stale whatever its `staleTime`: after a failed post, a reconnection would
+// post the code again, and so would a new mount unless a query in error is not retried on
+// mount (`refetchOnMount` only applies to a query that has data).
 const useCompleteConsent = (answer: GoogleConsentAnswer) => {
   const client = useClient();
   const queryClient = useQueryClient();
@@ -78,7 +79,7 @@ const useCompleteConsent = (answer: GoogleConsentAnswer) => {
     staleTime: Number.POSITIVE_INFINITY,
     gcTime: Number.POSITIVE_INFINITY,
     retry: false,
-    refetchOnMount: false,
+    retryOnMount: false,
     refetchOnReconnect: false,
     refetchOnWindowFocus: false,
   });

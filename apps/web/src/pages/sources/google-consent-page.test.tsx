@@ -80,6 +80,30 @@ describe('the return from the consent of Google', () => {
     expect(server.requests.filter(isComplete)).toHaveLength(1);
   });
 
+  it('never posts a code again when the page mounts anew after a failed post', async () => {
+    const server = fakeServer(
+      sourcesServer({
+        sources: [DRIVE_SOURCE],
+        complete: () => errorBody(500, 'internal_error', 'The exchange failed.'),
+      }),
+    );
+    const { router } = renderApp(RETURN, server.fetch);
+    expect(await screen.findByText('Consent not completed')).toBeInTheDocument();
+    await waitFor(() => {
+      expect(router.state.location.search).toBe('');
+    });
+
+    await router.navigate('/sources');
+    expect(await screen.findByRole('heading', { name: 'Sources' })).toBeInTheDocument();
+    await router.navigate(RETURN);
+
+    expect(await screen.findByText('Consent not completed')).toBeInTheDocument();
+    await waitFor(() => {
+      expect(router.state.location.search).toBe('');
+    });
+    expect(server.requests.filter(isComplete)).toHaveLength(1);
+  });
+
   it('says an answer it cannot read is unusable, and takes it out of the address', async () => {
     const server = answering('connected');
     const { router } = renderApp(
