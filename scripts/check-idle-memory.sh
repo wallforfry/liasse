@@ -44,7 +44,8 @@ wait_healthy() {
 
 docker network create "$network" >/dev/null
 
-docker run --detach --name "$database" --network "$network" \
+# --init: the postmaster must not be PID 1 (see the `postgres` service of docker-compose.yml).
+docker run --detach --init --name "$database" --network "$network" \
   --env POSTGRES_USER=liasse --env POSTGRES_PASSWORD=liasse --env POSTGRES_DB=liasse \
   --health-cmd 'pg_isready -U liasse -d liasse' --health-interval 1s \
   pgvector/pgvector:pg16 >/dev/null

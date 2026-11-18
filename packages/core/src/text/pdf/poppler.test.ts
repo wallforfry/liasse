@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { waitUntil } from '../../testing/async.ts';
-import { runPoppler } from './poppler.ts';
+import { runPoppler, runPopplerUntil } from './poppler.ts';
 
 const KEPT_STDERR_BYTES = 16 * 1024;
 const INVALID_GEOMETRY = 'Syntax Error: hDPI or vDPI values are invalid\n';
@@ -92,23 +92,40 @@ describe('runPoppler', () => {
     );
   });
 
-  // The timeout only has to outlast the start of the script, which then never ends. The
-  // grandchild holds the pipes for ten minutes: a report that waited for them to close
-  // would arrive after it died, and it is still alive when the report is read.
+  // The deadline passes once the grandchild runs, however long the shell took to start
+  // it. The grandchild holds the pipes for ten minutes: a report that waited for them to
+  // close would arrive after it died, and it is still alive when the report is read.
   it('reports a timeout when the command is killed, not when its pipes close', async () => {
     const { command, pidFile } = await forking('sleep 600');
-    const outcome = outcomeOf(runPoppler(command, [], { timeoutMs: 1000, signal: undefined }));
+    const deadline = new AbortController();
+    const outcome = outcomeOf(
+      runPopplerUntil(command, [], { ...UNLIMITED, deadline: deadline.signal }),
+    );
     const grandchild = await grandchildOf(pidFile);
+    deadline.abort();
     expect(await outcome).toMatchObject({ code: 'pdf_renderer_timeout', retryable: true });
     expect(isAlive(grandchild)).toBe(true);
   });
 
   it('lets go of the pipes on a timeout, which ends a process still writing to them', async () => {
     const { command, pidFile } = await forking('( while echo synthetic; do sleep 0.05; done )');
-    const outcome = outcomeOf(runPoppler(command, [], { timeoutMs: 1000, signal: undefined }));
+    const deadline = new AbortController();
+    const outcome = outcomeOf(
+      runPopplerUntil(command, [], { ...UNLIMITED, deadline: deadline.signal }),
+    );
     const grandchild = await grandchildOf(pidFile);
+    deadline.abort();
     expect(await outcome).toMatchObject({ code: 'pdf_renderer_timeout' });
     await waitUntil(() => !isAlive(grandchild));
+  });
+
+  // The command never ends on its own, so the outcome is a timeout whether the deadline
+  // passes before the shell starts or after.
+  it('kills the command once it has run for the given time', async () => {
+    const command = await script('exec sleep 600');
+    const failure = runPoppler(command, [], { timeoutMs: 50, signal: undefined });
+    await expect(failure).rejects.toMatchObject({ code: 'pdf_renderer_timeout' });
+    await expect(failure).rejects.toThrow('took longer than 50 ms');
   });
 
   it('reports a command without the execute bit as unavailable for good', async () => {
