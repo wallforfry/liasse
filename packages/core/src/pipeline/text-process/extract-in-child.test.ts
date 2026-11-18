@@ -1,7 +1,7 @@
-import { afterEach, beforeAll, describe, expect, it } from 'vitest';
+import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { ModelProviderError } from '../../models/errors.ts';
 import { z } from 'zod';
-import { createGate, sleep } from '../../testing/async.ts';
+import { createGate } from '../../testing/async.ts';
 import { createFakeVisionModel } from '../../testing/fake-vision-model.ts';
 import { buildSyntheticDocx } from '../../testing/synthetic-docx.ts';
 import { buildSyntheticPdf } from '../../testing/synthetic-pdf.ts';
@@ -242,14 +242,27 @@ describe('a failure of the extraction', () => {
     expect(error).toMatchObject({ code: 'text_process_timeout', retryable: true });
   });
 
+  // The idle deadline is a timer of this process, moved by hand: it passes while the vision
+  // call is held, and never because the child was slow to start or to answer.
   it('does not count the time a vision call takes as silence', async () => {
     const entry = new URL('./waiting-child.test-helper.ts', import.meta.url);
+    const asked = createGate();
+    const answer = createGate();
     const vision = createFakeVisionModel(async () => {
-      await sleep(1500);
+      asked.open();
+      await answer.opened;
       return 'Transcribed after a long wait';
     });
-    const text = await run(NATIVE, { vision, processLimits: { maxIdleMs: 1000 } }, entry);
-    expect(text.pages[0]?.text).toBe('Transcribed after a long wait');
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    try {
+      const text = run(NATIVE, { vision, processLimits: { maxIdleMs: 1000 } }, entry);
+      await asked.opened;
+      vi.advanceTimersByTime(1500);
+      answer.open();
+      expect((await text).pages[0]?.text).toBe('Transcribed after a long wait');
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('takes the reason of a child from its first verdict, however it then ends', async () => {

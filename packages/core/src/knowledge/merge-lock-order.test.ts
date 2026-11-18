@@ -1,6 +1,5 @@
-import { eq, sql } from 'drizzle-orm';
+import { eq } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { z } from 'zod';
 import { decideChange } from '../consolidation/apply-change.ts';
 import { seedChange, seedType } from '../consolidation/consolidation.test-helper.ts';
 import { documents } from '../db/schema/documents.ts';
@@ -9,11 +8,10 @@ import { mergeEntities } from '../entities/merge.ts';
 import { seedEntity } from '../entities/support.test-helper.ts';
 import { createGate, waitUntil } from '../testing/async.ts';
 import { insertSyntheticDocument, type NewDocumentRow } from '../testing/fixtures.ts';
+import { sessionsWaitingForALock } from '../testing/lock-waits.ts';
 import { createTestDatabase, type TestDatabase } from '../testing/test-database.ts';
 import { mergeSubjects } from './subject-merge.ts';
 import { seedSubject } from './support.test-helper.ts';
-
-const waitingSchema = z.tuple([z.object({ waiting: z.number() })]);
 
 // A writer of a row over two documents (`writeIfBothLive`) locks them in the order of
 // their ids. A merge rewrites every document that names the merged id: it must take
@@ -21,15 +19,7 @@ const waitingSchema = z.tuple([z.object({ waiting: z.number() })]);
 describe('the lock order of a merge', () => {
   let database: TestDatabase;
 
-  const lockWaiters = async (): Promise<number> => {
-    const [{ waiting }] = waitingSchema.parse(
-      await database.db.execute(sql`
-        SELECT count(*)::int AS waiting FROM pg_stat_activity
-        WHERE wait_event_type = 'Lock' AND datname = current_database()
-      `),
-    );
-    return waiting;
-  };
+  const lockWaiters = (): Promise<number> => sessionsWaitingForALock(database.db);
 
   const someoneWaits = async (): Promise<boolean> => (await lockWaiters()) > 0;
 

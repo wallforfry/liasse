@@ -81,9 +81,11 @@ describe('workers: running, retrying and limiting jobs', () => {
   it('retries a throwing handler, then fails the job for good', async () => {
     const attempts: number[] = [];
     const failures: JobFailure[] = [];
+    const LATER = 'queued later';
     await start({
       handlers: [
-        handle(labelJob, ({ attempt }) => {
+        handle(labelJob, ({ attempt, payload }) => {
+          if (payload.label === LATER) return Promise.resolve();
           attempts.push(attempt);
           return Promise.reject(new Error('synthetic failure'));
         }),
@@ -100,7 +102,10 @@ describe('workers: running, retrying and limiting jobs', () => {
     });
     expect(failures.map(({ willRetry }) => willRetry)).toEqual([true, true, false]);
     expect(failures[0]?.job).toMatchObject({ id, kind: 'test_label', attempt: 1 });
-    await sleep(100);
+    // The due job queued first is claimed first: once a job queued later has run, the
+    // workers have passed over the failed one.
+    const later = await queue(LATER);
+    await waitUntil(async () => (await statusOf(later)) === 'succeeded');
     expect(attempts).toHaveLength(3);
   });
 
