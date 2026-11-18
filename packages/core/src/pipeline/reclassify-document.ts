@@ -55,7 +55,12 @@ const storeReclassification = (
   writeFromStatus(db, payload.documentId, SETTLED_STATUSES, async (tx, current) => {
     if (current.typeId !== payload.rejectedTypeId) return;
     const type = await findTypeById(tx, decision.typeId);
-    if (type === undefined || !(await isCurrentType(tx, type))) {
+    // A type merge can make the decided type one of the rejected ones meanwhile.
+    if (
+      type === undefined ||
+      current.rejectedTypeIds.includes(type.id) ||
+      !(await isCurrentType(tx, type))
+    ) {
       throw new PipelineConflictError(payload.documentId);
     }
     await tx
@@ -91,9 +96,17 @@ const storeRefusal = (
     });
   });
 
+const typesOf = async (
+  { db }: PipelineDeps,
+  ids: readonly string[],
+): Promise<readonly RegisteredType[]> =>
+  (await Promise.all(ids.map((id) => findTypeById(db, id)))).filter(
+    (type): type is RegisteredType => type !== undefined,
+  );
+
 /**
- * `reclassify_document`: the classification of a settled document again, without the
- * type a person rejected, with what they said. A new type that cannot be created, past
+ * `reclassify_document`: the classification of a settled document again, without any
+ * type a person rejected for it since its type was last set by hand, with what they said. A new type that cannot be created, past
  * the quota or refused, leaves the document as it was, with a failed `classification`
  * event whose code says why: no other existing type is assigned in its place.
  */
@@ -104,12 +117,18 @@ export const reclassifyDocument = async (
 ): Promise<void> => {
   const document = await loadDocument(deps.db, payload.documentId);
   if (document === undefined || !stillRejected(document, payload)) return;
-  const { rejectedTypeId } = payload;
-  const rejected =
-    rejectedTypeId === null ? undefined : await findTypeById(deps.db, rejectedTypeId);
+  // The request added its type to the document's; a job queued before the list existed
+  // did not, and its type is rejected all the same.
+  const rejectedTypeIds = [
+    ...new Set([
+      ...document.rejectedTypeIds,
+      ...(payload.rejectedTypeId === null ? [] : [payload.rejectedTypeId]),
+    ]),
+  ];
+  const rejected = await typesOf(deps, rejectedTypeIds);
   const opening = openingOf(await loadPages(deps.db, document.id), CLASSIFICATION_OPENING_TOKENS);
   const candidates = (await findCandidates(deps, opening, document.private)).filter(
-    ({ type }) => type.id !== rejectedTypeId,
+    ({ type }) => !rejectedTypeIds.includes(type.id),
   );
   const decision = await decideType(
     deps,

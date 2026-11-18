@@ -20,6 +20,7 @@ const DOCUMENT_COLUMNS = {
   originalName: documents.originalName,
   hint: documents.hint,
   reclassificationHint: documents.reclassificationHint,
+  rejectedTypeIds: documents.rejectedTypeIds,
   private: documents.private,
   typeId: documents.typeId,
   schemaVersion: documents.schemaVersion,

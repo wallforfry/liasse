@@ -112,7 +112,8 @@ const RETRY_DESCRIPTION =
 
 const RECLASSIFY_DESCRIPTION =
   'Decides the type of an `indexed` or `needs_review` document again, because the one it ' +
-  'has is wrong: that type is not offered. `hint` says what the right type is, `new_type` ' +
+  'has is wrong: that type is not offered, nor any rejected by an earlier request since ' +
+  'its type was last set with `update_document`. `hint` says what the right type is, `new_type` ' +
   'asks for a new type only. Its fields are then extracted again for the type chosen. ' +
   'Refused while the document is processed. Returns its id and status; then call ' +
   '`get_status`. To set a type you know, use `update_document`; to keep the type and ' +

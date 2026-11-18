@@ -16,13 +16,17 @@ export interface ReclassificationRequest {
 
 export type ReclassificationOutcome = 'queued' | 'not_settled' | 'not_found';
 
+const withRejected = (rejected: readonly string[], typeId: string | null): readonly string[] =>
+  typeId === null || rejected.includes(typeId) ? rejected : [...rejected, typeId];
+
 /**
  * A person asking for the type of a settled document to be decided again, the type it
  * has now being the one rejected. A job of `hasPendingWrite` is about to change that type,
  * and each enqueues under the row lock of the document, which this holds too: two
  * requests, or a request and a correction, cannot both see the document free. The hint
  * goes on the document, replacing the one of an earlier request, and the job reads it
- * there.
+ * there. The rejected type joins those of earlier requests on the document, which no
+ * reclassification chooses until a person sets the type by hand.
  */
 export const requestReclassification = async (
   db: Database,
@@ -40,7 +44,10 @@ export const requestReclassification = async (
       }
       await tx
         .update(documents)
-        .set({ reclassificationHint: cleanHint(hint) ?? null })
+        .set({
+          reclassificationHint: cleanHint(hint) ?? null,
+          rejectedTypeIds: withRejected(document.rejectedTypeIds, document.typeId),
+        })
         .where(eq(documents.id, documentId));
       await enqueue(tx, {
         kind: reclassifyDocumentJob,

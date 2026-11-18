@@ -1,0 +1,1 @@
+ALTER TABLE "documents" ADD COLUMN "rejected_type_ids" text[] DEFAULT '{}'::text[] NOT NULL;

@@ -90,6 +90,34 @@ describe('applying a change to the type registry', () => {
       expect(listed.find(({ id }) => id === source.id)).toBeUndefined();
     });
 
+    it('makes a document that rejected the source reject the target, once', async () => {
+      const source = await seedType(db(), { slug: 'boiler_bill' });
+      const target = await seedType(db(), { slug: 'heat_bill' });
+      const other = await seedType(db(), { slug: 'sewer_bill' });
+      const rejectedSource = await seedDocument(db(), other.id, {
+        rejectedTypeIds: [source.id, other.id],
+      });
+      const rejectedBoth = await seedDocument(db(), other.id, {
+        rejectedTypeIds: [target.id, source.id],
+      });
+      const untouched = await seedDocument(db(), source.id, { rejectedTypeIds: [other.id] });
+      const change = await seedChange(db(), 'merge', {
+        source_id: source.id,
+        target_id: target.id,
+        field_mapping: {},
+        confidence: 0.95,
+      });
+      expect(await apply(change)).toMatchObject({ outcome: 'decided' });
+      expect(await documentOf(db(), rejectedSource)).toMatchObject({
+        rejectedTypeIds: [target.id, other.id],
+      });
+      expect(await documentOf(db(), rejectedBoth)).toMatchObject({ rejectedTypeIds: [target.id] });
+      expect(await documentOf(db(), untouched)).toMatchObject({
+        typeId: target.id,
+        rejectedTypeIds: [other.id],
+      });
+    });
+
     it('undoes the moves and rejects the change when the registry refuses the merge', async () => {
       // A source with a child under a target with a parent: three levels.
       await seedType(db(), { slug: 'bill_parent' });
