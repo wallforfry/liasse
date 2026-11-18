@@ -1,6 +1,7 @@
 # syntax=docker/dockerfile:1
 
-ARG NODE_VERSION=26
+# The Node CI runs: `volta.node` of package.json, which apps/server/src/engines.test.ts compares.
+ARG NODE_VERSION=26.13.1
 
 FROM node:${NODE_VERSION}-bookworm-slim AS base
 ENV PNPM_HOME=/pnpm
