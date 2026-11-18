@@ -64,4 +64,40 @@ describe('holdsBack', () => {
     }
     await Promise.all(inFlight);
   });
+
+  // `deadlock_timeout` is long on both sides, so the cycle lasts until the test cancels the
+  // waiter.
+  it('does not count the holder in a cycle that leads back to it', async () => {
+    const slowDetection = sql`SET LOCAL deadlock_timeout = '1h'`;
+    const holding = createGate<number>();
+    const closeCycle = createGate();
+    const holderTransaction = database.db.transaction(async (tx) => {
+      await tx.execute(slowDetection);
+      await tx.execute(lock(4));
+      holding.open(await backendPid(tx));
+      await closeCycle.opened;
+      await tx.execute(lock(5));
+    });
+    const holder = await holding.opened;
+    const waiting = createGate<number>();
+    const waiterTransaction = database.db.transaction(async (tx) => {
+      await tx.execute(slowDetection);
+      await tx.execute(lock(5));
+      waiting.open(await backendPid(tx));
+      await tx.execute(lock(4));
+    });
+    const waiter = await waiting.opened;
+    try {
+      await waitUntil(() => holdsBack(database.db, holder));
+      closeCycle.open();
+      await waitUntil(() => holdsBack(database.db, waiter));
+      expect(await holdsBack(database.db, holder, 2)).toBe(false);
+    } finally {
+      closeCycle.open();
+      await database.db.execute(sql`SELECT pg_cancel_backend(${waiter}::int)`);
+      await Promise.allSettled([holderTransaction, waiterTransaction]);
+    }
+    await holderTransaction;
+    await expect(waiterTransaction).rejects.toThrow();
+  });
 });

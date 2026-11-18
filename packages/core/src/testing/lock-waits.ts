@@ -26,7 +26,7 @@ export const holdsBack = async (db: Database, holder: number, sessions = 1): Pro
         SELECT waiter.pid FROM pg_stat_activity AS waiter
         JOIN blocked ON blocked.pid = ANY (pg_blocking_pids(waiter.pid))
       )
-      SELECT count(*)::int AS blocked FROM blocked
+      SELECT count(*)::int AS blocked FROM blocked WHERE pid <> ${holder}::int
     `),
   );
   return blocked >= sessions;
