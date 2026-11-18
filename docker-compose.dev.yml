@@ -64,7 +64,7 @@ services:
 
   # S3-compatible server for the tests of the s3 storage driver.
   s3:
-    image: rustfs/rustfs:1.0.1
+    image: rustfs/rustfs:1.0.5
     environment:
       RUSTFS_ACCESS_KEY: liasse
       RUSTFS_SECRET_KEY: liasse-secret
