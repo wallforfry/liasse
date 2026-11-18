@@ -109,12 +109,15 @@ describe('job store', () => {
     const claim = claimJob(database.db, KINDS).finally(() => {
       returned = true;
     });
-    await waitUntil(async () => {
-      const [activity] = await database.db.execute<{ waiting: number }>(sql`
+    await waitUntil(
+      async () => {
+        const [activity] = await database.db.execute<{ waiting: number }>(sql`
         SELECT count(*)::int AS waiting FROM pg_stat_activity
         WHERE datname = current_database() AND wait_event_type = 'Lock'`);
-      return returned || (activity?.waiting ?? 0) > 0;
-    }, 60_000);
+        return returned || (activity?.waiting ?? 0) > 0;
+      },
+      { timeoutMs: 60_000 },
+    );
     const skipped = returned;
     release.open();
     await holder;
