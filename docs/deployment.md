@@ -69,7 +69,7 @@ The `Image` workflow publishes it to GHCR:
 | `edge`, `sha-<commit>`                   | every push to `main`             |
 | `<version>`, `<major>.<minor>`, `latest` | every release (`v<version>` tag) |
 
-`latest` is the most recent release; set `LIASSE_VERSION=edge` to follow `main`. `docker compose up -d --build` always builds from the checkout. While the repository is private, so is the package: `docker login ghcr.io` with a token that can read it first.
+`latest` is the most recent release; set `LIASSE_VERSION=edge` to follow `main`. `docker compose up -d --build` always builds from the checkout.
 
 ## Upgrades
 
