@@ -160,6 +160,23 @@ describe('the sources page', () => {
     expect(jsonBody(server.requests.find(isPatch))).toEqual({ kind: 'imap', enabled: false });
   });
 
+  it('shows why the server refuses to enable a source', async () => {
+    const message =
+      'The stored password no longer opens under the current AUTH_SECRET: enter it again, or ' +
+      'disable the source.';
+    const server = fakeServer(
+      sourcesServer({
+        sources: [{ ...SOURCE, enabled: false, secret: 'unreadable' }],
+        saved: () => errorBody(400, 'source_secret_required', message),
+      }),
+    );
+    renderApp('/sources', server.fetch);
+
+    await userEvent.setup().click((await card()).getByRole('switch', { name: 'Enabled' }));
+
+    expect(await screen.findByText(message)).toBeInTheDocument();
+  });
+
   it('deletes a source once confirmed', async () => {
     const server = fakeServer(sourcesServer());
     renderApp('/sources', server.fetch);

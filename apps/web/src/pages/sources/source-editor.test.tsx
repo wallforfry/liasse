@@ -161,7 +161,7 @@ describe('the form of a source', () => {
     expect(server.requests.some(isCreate)).toBe(false);
   });
 
-  it('refuses to keep a stored password that no longer opens', async () => {
+  it('refuses to keep a stored password that no longer opens while enabled', async () => {
     const server = fakeServer(sourcesServer({ sources: [{ ...SOURCE, secret: 'unreadable' }] }));
     renderApp(`/sources/${SOURCE.id}/edit`, server.fetch);
     const user = userEvent.setup();
@@ -171,13 +171,25 @@ describe('the form of a source', () => {
 
     expect(
       await screen.findByText(
-        'The stored password no longer opens under the current AUTH_SECRET: enter it again.',
+        'The stored password no longer opens under the current AUTH_SECRET: enter it again, ' +
+          'or disable the source.',
       ),
     ).toBeInTheDocument();
     expect(server.requests.some(isPatch)).toBe(false);
+
+    await user.click(screen.getByRole('checkbox', { name: 'Enabled' }));
+    await save(user);
+    await waitFor(() => {
+      expect(server.requests.some(isPatch)).toBe(true);
+    });
+    expect(jsonBody(server.requests.find(isPatch))).toEqual({
+      kind: 'imap',
+      enabled: false,
+      secret: { action: 'keep' },
+    });
   });
 
-  it('edits a source, its password kept when untouched', async () => {
+  it('edits a source: sends the fields it changed, its password kept when untouched', async () => {
     const server = fakeServer(sourcesServer());
     renderApp(`/sources/${SOURCE.id}/edit`, server.fetch);
     const user = userEvent.setup();
@@ -197,13 +209,58 @@ describe('the form of a source', () => {
     });
     expect(jsonBody(server.requests.find(isPatch))).toEqual({
       kind: 'imap',
-      name: SOURCE.name,
-      enabled: true,
       poll_interval_minutes: 30,
-      config: { ...SOURCE.config },
       secret: { action: 'keep' },
       hint: null,
-      private: false,
+    });
+  });
+
+  it('leaves the fields it did not change to what another tab saved', async () => {
+    const server = fakeServer(sourcesServer());
+    renderApp(`/sources/${SOURCE.id}/edit`, server.fetch);
+    const user = userEvent.setup();
+
+    await screen.findByDisplayValue('imap.example.test');
+    await type(user, 'Name', 'Renamed bills');
+    await type(user, 'Mailboxes', 'INBOX');
+    await save(user);
+
+    await waitFor(() => {
+      expect(server.requests.some(isPatch)).toBe(true);
+    });
+    expect(jsonBody(server.requests.find(isPatch))).toEqual({
+      kind: 'imap',
+      name: 'Renamed bills',
+      config: { ...SOURCE.config, mailboxes: ['INBOX'] },
+      secret: { action: 'keep' },
+    });
+  });
+
+  it('refuses to clear the password of an enabled source, not of a disabled one', async () => {
+    const server = fakeServer(sourcesServer());
+    renderApp(`/sources/${SOURCE.id}/edit`, server.fetch);
+    const user = userEvent.setup();
+
+    await screen.findByDisplayValue('imap.example.test');
+    await user.click(screen.getByRole('button', { name: 'Clear the mailbox password' }));
+    await save(user);
+
+    expect(
+      await screen.findByText(
+        'An enabled source connects with its password: enter it, or disable the source.',
+      ),
+    ).toBeInTheDocument();
+    expect(server.requests.some(isPatch)).toBe(false);
+
+    await user.click(screen.getByRole('checkbox', { name: 'Enabled' }));
+    await save(user);
+    await waitFor(() => {
+      expect(server.requests.some(isPatch)).toBe(true);
+    });
+    expect(jsonBody(server.requests.find(isPatch))).toEqual({
+      kind: 'imap',
+      enabled: false,
+      secret: { action: 'clear' },
     });
   });
 
@@ -271,7 +328,7 @@ describe('the form of a source', () => {
         {
           error: {
             code: 'source_secret_required',
-            message: 'A new host or connection security would receive the stored password.',
+            message: 'The stored password no longer opens: enter it again.',
             request_id: 'req_synthetic',
           },
         },
@@ -285,9 +342,7 @@ describe('the form of a source', () => {
 
     const password = within(screen.getByRole('group', { name: 'Password' }));
     expect(
-      await password.findByText(
-        'The stored password was given for the former server: enter it again.',
-      ),
+      await password.findByText('The stored password no longer opens: enter it again.'),
     ).toBeInTheDocument();
   });
 });

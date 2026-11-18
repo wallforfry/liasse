@@ -1,12 +1,15 @@
-import type {
-  SecretUpdate,
-  Source,
-  SourceCheck,
-  SourceCreate,
-  SourceList,
-  SourcePatch,
-  SourceRunRequest,
+import {
+  type SecretUpdate,
+  type Source,
+  type SourceCheck,
+  type SourceCreate,
+  type SourceList,
+  type SourcePatch,
+  type SourceRunRequest,
+  SOURCE_PASSWORD_MISSING_MESSAGE,
+  SOURCE_PASSWORD_UNREADABLE_MESSAGE,
 } from '@liasse/contract';
+import { SOURCE_CHECK_TIMEOUT_MS } from '@liasse/contract/domain';
 import { eq } from 'drizzle-orm';
 import type { Database } from '../db/client.ts';
 import { ingestionSources } from '../db/schema/sources.ts';
@@ -15,7 +18,7 @@ import type { SecretBox } from '../settings/secret-box.ts';
 import { checkSource as checkStoredSource } from '../sources/check.ts';
 import type { SourceConnectors } from '../sources/connector.ts';
 import { cancelPolls, queuePollNow } from '../sources/schedule.ts';
-import { updateSourceSecret } from '../sources/secret.ts';
+import { openSourceSecret, updateSourceSecret } from '../sources/secret.ts';
 import {
   parseSourceRow,
   readSource,
@@ -32,10 +35,35 @@ export interface SourcesContext {
   readonly connectors: SourceConnectors;
 }
 
-// A check connects to a remote server: bounded apart from the deadline of the request.
-const CHECK_TIMEOUT_MS = 60_000;
-
 const sourceNotFound = (): ApiError => new ApiError('source_not_found', 'No source has this id.');
+
+type SecretState = Source['secret'];
+
+const secretStateAfter = (
+  secrets: SecretBox,
+  id: string,
+  sealed: string | null,
+  update: SecretUpdate,
+): SecretState => {
+  switch (update.action) {
+    case 'replace':
+      return 'set';
+    case 'clear':
+      return 'unset';
+    case 'keep':
+      return openSourceSecret(secrets, id, sealed).state;
+  }
+};
+
+// An enabled source runs at once with what was saved: without a password that opens, the run
+// would only meet refused credentials.
+const requireUsableSecret = (enabled: boolean, state: SecretState): void => {
+  if (!enabled || state === 'set') return;
+  throw new ApiError(
+    'source_secret_required',
+    state === 'unset' ? SOURCE_PASSWORD_MISSING_MESSAGE : SOURCE_PASSWORD_UNREADABLE_MESSAGE,
+  );
+};
 
 export const listSources = async ({ db, secrets }: SourcesContext): Promise<SourceList> => ({
   sources: (await readSources(db)).map((source) => sourceViewOf(secrets, source)),
@@ -47,12 +75,13 @@ export const getSource = async ({ db, secrets }: SourcesContext, id: string): Pr
   return sourceViewOf(secrets, source);
 };
 
-/** Creates a source; an enabled one runs at once. */
+/** Creates a source; an enabled one runs at once, and needs its password. */
 export const createSource = async (
   context: SourcesContext,
   input: SourceCreate,
 ): Promise<Source> => {
   const id = newId(ID_PREFIXES.ingestionSource);
+  requireUsableSecret(input.enabled, secretStateAfter(context.secrets, id, null, input.secret));
   await context.db.transaction(async (tx) => {
     await tx.insert(ingestionSources).values({
       id,
@@ -83,8 +112,9 @@ const sendsSecretElsewhere = (
 
 /**
  * Saves a source. A save is a person acting on it: it clears the flag of refused
- * credentials, and an enabled source runs at once with what was saved. The cursor stays:
- * a mailbox added starts from the start date, the others where they were.
+ * credentials, and an enabled source runs at once with what was saved, so it needs a password
+ * that opens. The cursor stays: a mailbox added starts from the start date, the others where
+ * they were.
  */
 export const updateSource = async (
   context: SourcesContext,
@@ -107,6 +137,10 @@ export const updateSource = async (
       );
     }
     const enabled = patch.enabled ?? stored.enabled;
+    requireUsableSecret(
+      enabled,
+      secretStateAfter(context.secrets, id, stored.secret, patch.secret),
+    );
     await tx
       .update(ingestionSources)
       .set({
@@ -146,7 +180,7 @@ export const deleteSource = async ({ db }: SourcesContext, id: string): Promise<
 export const checkSource = async (context: SourcesContext, id: string): Promise<SourceCheck> => {
   const source = await readSource(context.db, id);
   if (source === undefined) throw sourceNotFound();
-  return checkStoredSource(context, source, AbortSignal.timeout(CHECK_TIMEOUT_MS));
+  return checkStoredSource(context, source, AbortSignal.timeout(SOURCE_CHECK_TIMEOUT_MS));
 };
 
 /** Queues a run due at once, unless one is. */
