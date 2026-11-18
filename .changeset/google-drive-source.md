@@ -1,0 +1,9 @@
+---
+'@liasse/contract': minor
+'@liasse/core': minor
+'@liasse/server': minor
+'@liasse/mcp': patch
+'@liasse/web': patch
+---
+
+A Google Drive source reads one folder and its subfolders through the operator's own Google OAuth client, its files kept by reference: Liasse stores their text and knowledge, Drive their bytes. The settings gain a `google` section (`client_id`, `client_secret`, sealed in a slot of its own). `POST /sources/:id/google/authorize` answers the consent page of Google (`drive.readonly`, offline, PKCE, `state` bound to the session) and `GET /sources/google/callback` seals the refresh token in the source and redirects to the Sources page; deleting a source revokes it. Runs list the tree, then read `changes.list` from a saved page token, with shared drives; native Google files are left out and shortcuts are followed once. `documents.storage_key` may be null (`file_at_source`), and `document_origins` gain `checksum` and `removed_at`. `GET /documents/:id/file` and the signed URLs of MCP stream such a file from Drive once its `md5Checksum` matches, and answer the new codes `file_changed` (409) and `file_unavailable` (410, of the new kind `gone`). A changed file becomes a new document and the old one is deleted; a file trashed, deleted or moved out keeps its document, marked removed, until it is restored. A stored copy always wins over a reference. The summary of a run counts `removed` and `replaced`, and a source without credentials is not run until it has some. `SourceChange` of the connector port may carry `removed`, a `SourceItem` a `reference`, and a connector `openFile` and `forget`; `SOURCE_CONNECTORS` is replaced by `createSourceRuntime`, and `ApiContext` and `PipelineDeps` take `sourceFiles`.
