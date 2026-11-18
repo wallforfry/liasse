@@ -38,7 +38,7 @@ The MVP covers ingestion, extraction, the evolving type registry, the knowledge 
 
 - Multi-user, organizations, sharing.
 - Full admin UI: only the minimal UI is included.
-- Ingestion by email address (IMAP), mobile apps, scanning.
+- Ingestion by email address (mail sent to an address of Liasse), mobile apps, scanning. Reading a mailbox over IMAP is a planned ingestion source, see the decision table.
 - PDF editing or annotation.
 - Workflows (approval, signature, reminders): that is the agents' job.
 - Application-managed encryption at rest (delegated to storage).
@@ -609,6 +609,11 @@ v0.1 is useful on its own: an archive searchable by agents, before classificatio
 | Application settings | Stored in the database, one versioned row, applied without a restart; their environment variables are removed and refused at startup, with no seeding from the environment ([design](superpowers/specs/2026-11-17-onboarding-and-settings-design.md)) |
 | Embedder | Chosen in the settings, then locked once a live document exists; `EMBEDDING_DIM` stays in the environment, for the first migration |
 | Who changes the settings | Any signed-in account, through the session of the web UI only, never an API key or an OAuth token |
+| Ingestion sources (planned, after the MVP) | Several sources configured from the web UI, each a row with sealed credentials and a cursor, synchronized by a recurring job, with no history per item; IMAP first (any mailbox, Gmail through an app password), then Google Drive, then the Gmail API if it proves more useful, then SFTP/FTPS. `WATCH_DIR` stays in the environment ([study](superpowers/specs/2026-11-18-ingestion-sources-study.md)) |
+| Mail from a mailbox | The whole `.eml`, only for messages with at least one non-inline attachment unless the source includes the others; Liasse never sets a flag or moves a message |
+| Google Drive files | Kept by reference (the Drive file id), never copied to the storage of Liasse: an exception to files addressed by their hash. Scope `drive.readonly`, through the operator's own OAuth client. Native Google files are excluded at first |
+| Drive file changed | A changed `md5Checksum` makes a new document and deletes the old one; a download first checks the checksum and answers 409 on a mismatch |
+| Drive file removed | The document and its knowledge stay; its file is marked unavailable and a download answers 410 |
 
 Still open:
 
