@@ -130,12 +130,18 @@ describe('runPoppler', () => {
 
   // Only the timers are faked, and only for the run: the child process and its pipes are
   // real, and the helpers of this file poll with real timers.
-  it('clears its deadline once the command has ended', async () => {
-    const command = await script('exit 0');
+  it.each([
+    { outcome: 'succeeds', body: 'exit 0', abort: false },
+    { outcome: 'fails', body: 'exit 1', abort: false },
+    { outcome: 'is aborted by its caller', body: 'exec sleep 600', abort: true },
+  ])('clears its deadline once the command $outcome', async ({ body, abort }) => {
+    const command = await script(body);
+    const caller = new AbortController();
     vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
     try {
-      const run = runPoppler(command, [], UNLIMITED);
+      const run = outcomeOf(runPoppler(command, [], { ...UNLIMITED, signal: caller.signal }));
       expect(vi.getTimerCount()).toBe(1);
+      if (abort) caller.abort();
       await run;
       expect(vi.getTimerCount()).toBe(0);
     } finally {
