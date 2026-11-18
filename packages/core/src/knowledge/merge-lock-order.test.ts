@@ -8,7 +8,7 @@ import { mergeEntities } from '../entities/merge.ts';
 import { seedEntity } from '../entities/support.test-helper.ts';
 import { createGate, waitUntil } from '../testing/async.ts';
 import { insertSyntheticDocument, type NewDocumentRow } from '../testing/fixtures.ts';
-import { sessionsWaitingForALock } from '../testing/lock-waits.ts';
+import { backendPid, holdsBack } from '../testing/lock-waits.ts';
 import { createTestDatabase, type TestDatabase } from '../testing/test-database.ts';
 import { mergeSubjects } from './subject-merge.ts';
 import { seedSubject } from './support.test-helper.ts';
@@ -19,27 +19,28 @@ import { seedSubject } from './support.test-helper.ts';
 describe('the lock order of a merge', () => {
   let database: TestDatabase;
 
-  const lockWaiters = (): Promise<number> => sessionsWaitingForALock(database.db);
-
-  const someoneWaits = async (): Promise<boolean> => (await lockWaiters()) > 0;
-
-  // Holds the row of one document until the returned release is called.
-  const holdRow = async (id: string): Promise<() => Promise<void>> => {
-    const holding = createGate();
+  // Holds the row of one document until `release` is called; `holder` is the server
+  // process of the session that holds it.
+  const holdRow = async (
+    id: string,
+  ): Promise<{ readonly holder: number; readonly release: () => Promise<void> }> => {
+    const holding = createGate<number>();
     const release = createGate();
-    const holder = database.db.transaction(async (tx) => {
+    const transaction = database.db.transaction(async (tx) => {
       await tx
         .select({ id: documents.id })
         .from(documents)
         .where(eq(documents.id, id))
         .for('no key update');
-      holding.open();
+      holding.open(await backendPid(tx));
       await release.opened;
     });
-    await holding.opened;
-    return async () => {
-      release.open();
-      await holder;
+    return {
+      holder: await holding.opened,
+      release: async () => {
+        release.open();
+        await transaction;
+      },
     };
   };
 
@@ -61,7 +62,7 @@ describe('the lock order of a merge', () => {
     [first, second]: readonly [string, string],
     merge: () => Promise<unknown>,
   ): Promise<unknown> => {
-    const holding = createGate();
+    const holding = createGate<number>();
     const proceed = createGate();
     const writer = database.db.transaction(async (tx) => {
       const lock = (id: string) =>
@@ -71,14 +72,18 @@ describe('the lock order of a merge', () => {
           .where(eq(documents.id, id))
           .for('no key update');
       await lock(first);
-      holding.open();
+      holding.open(await backendPid(tx));
       await proceed.opened;
       await lock(second);
     });
-    await holding.opened;
+    const holder = await holding.opened;
     const merged = merge();
-    await waitUntil(someoneWaits);
-    proceed.open();
+    try {
+      await waitUntil(() => holdsBack(database.db, holder));
+    } finally {
+      proceed.open();
+      await Promise.allSettled([writer, merged]);
+    }
     await writer;
     return merged;
   };
@@ -176,7 +181,7 @@ describe('the lock order of a merge', () => {
       confidence: 0.95,
     });
 
-    const holding = createGate();
+    const holding = createGate<number>();
     const proceed = createGate();
     const checker = database.db.transaction(async (tx) => {
       await tx
@@ -184,7 +189,7 @@ describe('the lock order of a merge', () => {
         .from(documents)
         .where(eq(documents.id, second))
         .for('key share');
-      holding.open();
+      holding.open(await backendPid(tx));
       await proceed.opened;
       await tx
         .select({ id: documents.id })
@@ -192,14 +197,18 @@ describe('the lock order of a merge', () => {
         .where(eq(documents.id, first))
         .for('no key update');
     });
-    await holding.opened;
+    const holder = await holding.opened;
     let done = false;
     const merged = decideChange(database.db, change, 'apply', null).finally(() => {
       done = true;
     });
     // Without a wait, the merge ends on its own; with one, the checker goes on.
-    await waitUntil(async () => done || (await someoneWaits()));
-    proceed.open();
+    try {
+      await waitUntil(async () => done || (await holdsBack(database.db, holder)));
+    } finally {
+      proceed.open();
+      await Promise.allSettled([checker, merged]);
+    }
     await checker;
     expect(await merged).toMatchObject({
       outcome: 'decided',
@@ -230,12 +239,17 @@ describe('the lock order of a merge', () => {
       field: 'rate',
     });
 
-    const release = await holdRow(pair[1]);
+    const { holder, release } = await holdRow(pair[1]);
     const merged = mergeEntities({ db: database.db }, { sourceId: source, targetId: target });
-    await waitUntil(async () => (await lockWaiters()) === 1);
-    const decided = decideChange(database.db, change, 'apply', null);
-    await waitUntil(async () => (await lockWaiters()) === 2);
-    await release();
+    let decided: ReturnType<typeof decideChange> | undefined;
+    try {
+      await waitUntil(() => holdsBack(database.db, holder));
+      decided = decideChange(database.db, change, 'apply', null);
+      await waitUntil(() => holdsBack(database.db, holder, 2));
+    } finally {
+      await release();
+      await Promise.allSettled([merged, decided]);
+    }
 
     expect(await merged).toMatchObject({ ok: true });
     expect(await decided).toMatchObject({

@@ -1,5 +1,13 @@
 import { describe, expect, it } from 'vitest';
-import { waitUntil } from './async.ts';
+import { createGate, waitUntil } from './async.ts';
+
+describe('createGate', () => {
+  it('hands the value it is opened with to whoever waits on it', async () => {
+    const gate = createGate<number>();
+    gate.open(42);
+    expect(await gate.opened).toBe(42);
+  });
+});
 
 describe('waitUntil', () => {
   it('resolves once the condition holds', async () => {

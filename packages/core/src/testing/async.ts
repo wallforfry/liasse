@@ -31,15 +31,16 @@ export const waitUntil = async (
 export const sleep = (milliseconds: number): Promise<void> =>
   new Promise((resolve) => setTimeout(resolve, milliseconds));
 
-export interface Gate {
-  readonly opened: Promise<void>;
-  readonly open: () => void;
+export interface Gate<T = void> {
+  readonly opened: Promise<T>;
+  readonly open: (value: T) => void;
 }
 
 // Holds a concurrent step at a chosen point, so a test decides the interleaving.
-export const createGate = (): Gate => {
-  let open: () => void = () => undefined;
-  const opened = new Promise<void>((resolve) => {
+// The step that opens it can hand a value over, such as the server process of its session.
+export const createGate = <T = void>(): Gate<T> => {
+  let open: (value: T) => void = () => undefined;
+  const opened = new Promise<T>((resolve) => {
     open = resolve;
   });
   return { opened, open };
