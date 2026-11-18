@@ -6,7 +6,7 @@ import { docTypes, entities } from '../db/schema/registry.ts';
 import { PIPELINE_PROVENANCE_KEY } from '../domain/provenance.ts';
 import { deleteDocument } from '../ingest/delete-document.ts';
 import { createGate, waitUntil } from '../testing/async.ts';
-import { sessionsWaitingForALock } from '../testing/lock-waits.ts';
+import { backendPid, holdsBack } from '../testing/lock-waits.ts';
 import { createFakeEmbedder } from '../testing/fake-embedder.ts';
 import {
   createPipelineHarness,
@@ -700,12 +700,18 @@ describe('processDocument', () => {
     const racing: typeof harness.entities = {
       ...harness.entities,
       missingIds: async (tx, ids) => {
+        const writer = await backendPid(tx);
         deletions.push(deleteDocument({ db: harness.db }, id));
-        await waitUntil(async () => (await sessionsWaitingForALock(harness.db)) === 1);
+        await waitUntil(() => holdsBack(harness.db, writer));
         return harness.entities.missingIds(tx, ids);
       },
     };
-    await processDocument(depsFor(OUTPUT, { entities: racing }), id, live());
+    try {
+      await processDocument(depsFor(OUTPUT, { entities: racing }), id, live());
+    } finally {
+      // A failed wait rolls the write back: the deletion then ends within this test.
+      await Promise.allSettled(deletions);
+    }
     expect(await Promise.all(deletions)).toEqual([true]);
     expect(await harness.document(id)).toMatchObject({ status: 'deleted', core: {} });
     expect(await harness.db.select().from(facts)).toEqual([]);

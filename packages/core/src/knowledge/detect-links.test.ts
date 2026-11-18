@@ -13,7 +13,7 @@ import {
   type FakeTextScript,
 } from '../testing/fake-text-model.ts';
 import { insertSyntheticDocument, type NewDocumentRow } from '../testing/fixtures.ts';
-import { sessionsWaitingForALock } from '../testing/lock-waits.ts';
+import { backendPid, holdsBack } from '../testing/lock-waits.ts';
 import { createTestDatabase, type TestDatabase } from '../testing/test-database.ts';
 import { detectLinks } from './detect-links.ts';
 import { createKnowledgeHandlers, detectLinksJob } from './jobs.ts';
@@ -406,29 +406,29 @@ describe('link detection', () => {
     it('makes a deletion wait for a link being written, then remove it and its effect', async () => {
       const older = await insert('Older');
       const newer = await insert('Newer');
+      let write: ReturnType<typeof replaceLinksBetween> | undefined;
       let deletion: Promise<boolean> | undefined;
-      const writing = await database.db.transaction(async (holder) => {
-        // The writer takes both rows, then waits here for the lock of the links.
-        await holder.execute(sql`SELECT pg_advisory_xact_lock(hashtext('liasse.document_links'))`);
-        const write = replaceLinksBetween(
-          database.db,
-          [newer, older],
-          [supersedes(newer, older)],
-          'm',
-        );
-        await waitUntil(() => waiting(1));
-        deletion = deleteDocument({ db: database.db }, newer);
-        await waitUntil(() => waiting(2));
-        return { write };
-      });
-      expect(await writing.write).toEqual({ written: true, links: 1 });
+      try {
+        await database.db.transaction(async (holder) => {
+          // The writer takes both rows, then waits here for the lock of the links; the
+          // deletion waits for the writer.
+          await holder.execute(
+            sql`SELECT pg_advisory_xact_lock(hashtext('liasse.document_links'))`,
+          );
+          const linksLock = await backendPid(holder);
+          write = replaceLinksBetween(database.db, [newer, older], [supersedes(newer, older)], 'm');
+          await waitUntil(() => holdsBack(database.db, linksLock));
+          deletion = deleteDocument({ db: database.db }, newer);
+          await waitUntil(() => holdsBack(database.db, linksLock, 2));
+        });
+      } finally {
+        await Promise.allSettled([write, deletion]);
+      }
+      expect(await write).toEqual({ written: true, links: 1 });
       expect(await deletion).toBe(true);
       expect(await linksOf(database.db)).toEqual([]);
       expect(await stateOf(older)).toBe('current');
     });
-
-    const waiting = async (sessions: number): Promise<boolean> =>
-      (await sessionsWaitingForALock(database.db)) >= sessions;
 
     it('gives a document its state back when what superseded or terminated it is deleted', async () => {
       const contract = await insert('Contract');
