@@ -24,7 +24,10 @@ import {
   type DocumentView,
   entityListSchema,
   type EntityListView,
+  type EntityView,
+  entityViewSchema,
   type GetDocumentOptions,
+  type GetEntityRequest,
   type Graph,
   type GraphRequest,
   graphSchema,
@@ -132,6 +135,8 @@ export interface LiasseClient {
   /** A draft of a type by the text model, from free text; nothing is created. */
   readonly suggestType: (request: TypeSuggestionRequest) => Promise<TypeSuggestion>;
   readonly listEntities: (options?: ListEntitiesRequest) => Promise<EntityListView>;
+  /** Rejects with `entity_not_found` once a merge has deleted the entity. */
+  readonly getEntity: (id: string, options?: GetEntityRequest) => Promise<EntityView>;
   readonly listSubjects: (options?: ListSubjectsRequest) => Promise<SubjectList>;
   /** The most recent documents with their types, subjects and entities, and their edges. */
   readonly graph: (options?: GraphRequest) => Promise<Graph>;
@@ -222,6 +227,8 @@ export const createLiasseClient = (options: ClientOptions): LiasseClient => {
     createType: async (request) => post(createdTypeSchema, '/types', request),
     suggestType: async (request) => post(typeSuggestionSchema, '/types/suggestion', request),
     listEntities: async (query = {}) => get(entityListSchema, '/entities', query),
+    getEntity: async (id, query = {}) =>
+      get(entityViewSchema, `/entities/${encodeURIComponent(id)}`, query),
     listSubjects: async (query = {}) => get(listSubjectsOutputSchema, '/subjects', query),
     graph: async (query = {}) => get(graphSchema, '/graph', query),
     upcoming: async (query) => get(upcomingOutputSchema, '/upcoming', query),
