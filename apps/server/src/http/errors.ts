@@ -1,9 +1,5 @@
-import {
-  type ApiError,
-  type ApiErrorKind,
-  invalidRequest as invalidApiRequest,
-  toApiError,
-} from '@liasse/core/api';
+import { type ApiErrorCode, type ApiErrorKind, apiErrorKindOf } from '@liasse/contract';
+import { type ApiError, invalidRequest as invalidApiRequest, toApiError } from '@liasse/core/api';
 import { HTTPException } from 'hono/http-exception';
 import type { ContentfulStatusCode } from 'hono/utils/http-status';
 import { describeError, type Logger } from '../log.ts';
@@ -11,11 +7,15 @@ import type { AppContext } from './env.ts';
 
 const STATUS_OF_KIND: Readonly<Record<ApiErrorKind, ContentfulStatusCode>> = {
   invalid: 400,
+  unauthenticated: 401,
   forbidden: 403,
   not_found: 404,
+  method_not_allowed: 405,
   conflict: 409,
   too_large: 413,
   unsupported: 415,
+  rate_limited: 429,
+  internal: 500,
   timeout: 504,
   unavailable: 503,
   not_implemented: 501,
@@ -23,17 +23,22 @@ const STATUS_OF_KIND: Readonly<Record<ApiErrorKind, ContentfulStatusCode>> = {
 
 export interface Failure {
   readonly status: ContentfulStatusCode;
-  readonly code: string;
+  readonly code: ApiErrorCode;
   readonly message: string;
   readonly details?: Readonly<Record<string, unknown>>;
 }
 
+/** A failure answered with the status of the kind of its code. */
 export const failure = (
-  status: ContentfulStatusCode,
-  code: string,
+  code: ApiErrorCode,
   message: string,
   details?: Readonly<Record<string, unknown>>,
-): Failure => ({ status, code, message, ...(details === undefined ? {} : { details }) });
+): Failure => ({
+  status: STATUS_OF_KIND[apiErrorKindOf(code)],
+  code,
+  message,
+  ...(details === undefined ? {} : { details }),
+});
 
 /** Thrown by a guard or a route to answer with a failure. */
 export class HttpFailure extends Error {
@@ -56,20 +61,20 @@ export const respondWith = (
     status,
   );
 
-const ofApiError = ({ kind, code, message, details }: ApiError): Failure =>
-  failure(STATUS_OF_KIND[kind], code, message, details);
+const ofApiError = ({ code, message, details }: ApiError): Failure =>
+  failure(code, message, details);
 
 export const invalidRequest = (issues: Parameters<typeof invalidApiRequest>[0]): Failure =>
   ofApiError(invalidApiRequest(issues));
 
 // What Hono itself refuses: a body that is not JSON, a multipart body it cannot read.
 const OF_HTTP_STATUS: Readonly<Partial<Record<number, Failure>>> = {
-  400: failure(400, 'invalid_body', 'The request body could not be read.'),
-  413: failure(413, 'body_too_large', 'The request body is too large.'),
-  504: failure(504, 'request_timeout', 'The request took too long and was abandoned.'),
+  400: failure('invalid_body', 'The request body could not be read.'),
+  413: failure('body_too_large', 'The request body is too large.'),
+  504: failure('request_timeout', 'The request took too long and was abandoned.'),
 };
 
-export const INTERNAL = failure(500, 'internal_error', 'The server failed to answer this request.');
+export const INTERNAL = failure('internal_error', 'The server failed to answer this request.');
 
 /** The failure a known error answers with; the web UI shows the same ones as pages. */
 export const failureOf = (error: unknown): Failure | undefined => {
@@ -96,4 +101,4 @@ export const createErrorHandler =
   };
 
 export const notFound = (context: AppContext): Response =>
-  respondWith(context, failure(404, 'not_found', 'No such route.'));
+  respondWith(context, failure('not_found', 'No such route.'));

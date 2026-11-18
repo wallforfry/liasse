@@ -154,20 +154,12 @@ describe('a save of the settings', () => {
 
   it('marks what the server refuses in place', async () => {
     const refused: Answer = () =>
-      json(
-        {
-          error: {
-            code: 'invalid_request',
-            message: 'The request is not valid.',
-            request_id: 'req_synthetic',
-            issues: [
-              { path: 'hindsight.api_key', message: 'required by this server' },
-              { path: 'settings.llm.text_model', message: 'refused by this server' },
-            ],
-          },
-        },
-        400,
-      );
+      errorBody(400, 'invalid_request', 'The request is not valid.', {
+        issues: [
+          { path: 'hindsight.api_key', message: 'required by this server' },
+          { path: 'settings.llm.text_model', message: 'refused by this server' },
+        ],
+      });
     renderApp('/account/settings', fakeServer(settingsServer({ saved: refused })).fetch);
     const user = userEvent.setup();
 

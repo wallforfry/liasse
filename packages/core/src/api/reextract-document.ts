@@ -17,7 +17,6 @@ export const reextractDocument = async (
   if (outcome === 'not_found') throw documentNotFound();
   if (outcome === 'not_settled') {
     throw new ApiError(
-      'invalid',
       'document_not_settled',
       'Only an indexed document, or one flagged for review, with no processing pending can have its values extracted again.',
     );

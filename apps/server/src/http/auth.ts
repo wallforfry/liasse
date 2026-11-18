@@ -27,7 +27,7 @@ export const signedFileUrl =
 
 export const DEFAULT_CHALLENGE = 'Bearer realm="liasse"';
 
-const UNAUTHORIZED = failure(401, 'unauthorized', 'A valid Bearer token is required.');
+const UNAUTHORIZED = failure('unauthorized', 'A valid Bearer token is required.');
 
 /**
  * Lets a request through when one of the credentials accepts it. All of them are asked. A

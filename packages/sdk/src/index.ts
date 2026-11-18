@@ -1,4 +1,5 @@
 export type {
+  ApiErrorCode,
   ChangeDecisionResult,
   ChangeList,
   ChangeView,
@@ -59,6 +60,7 @@ export type {
   UpcomingDate,
   UploadResult,
 } from '@liasse/contract';
+export { API_ERROR_CODES } from '@liasse/contract';
 import packageJson from '../package.json' with { type: 'json' };
 
 export const SDK_VERSION: string = packageJson.version;

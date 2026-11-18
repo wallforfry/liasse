@@ -1,9 +1,10 @@
 import { z } from 'zod';
+import { API_ERROR_CODES } from './api-errors.ts';
 
 // The body of every failure. No stack, no statement, no file path.
 export const errorBodySchema = z.object({
   error: z.looseObject({
-    code: z.string().describe('Stable, for programs.'),
+    code: z.enum(API_ERROR_CODES).describe('Stable, for programs.'),
     message: z.string().describe('For people; may change.'),
     request_id: z.string(),
   }),

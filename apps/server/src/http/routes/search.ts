@@ -53,7 +53,7 @@ export const searchRoutes = ({ authenticated }: RouteDeps): Hono<AppEnv> =>
       jsonBody,
       async (context) => {
         const body: unknown = await context.req.json().catch(() => {
-          throw new HttpFailure(failure(400, 'invalid_body', 'The request body is not JSON.'));
+          throw new HttpFailure(failure('invalid_body', 'The request body is not JSON.'));
         });
         return context.json(await queryDocuments(context.var.api, body));
       },

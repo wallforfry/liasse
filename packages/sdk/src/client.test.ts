@@ -258,6 +258,20 @@ describe('createLiasseClient', () => {
     });
   });
 
+  it('refuses an error body whose code the API does not list', async () => {
+    const server = answering(() =>
+      json({ error: { code: 'unlisted_code', message: 'Refused.', request_id: 'req_01' } }, 400),
+    );
+    const client = createLiasseClient({
+      baseUrl: 'http://x.test',
+      token: 't',
+      fetch: server.fetch,
+    });
+    const error: unknown = await client.listDocuments({}).catch((e: unknown) => e);
+    expect(error).toBeInstanceOf(LiasseResponseError);
+    expect(error).toMatchObject({ status: 400 });
+  });
+
   it('rejects a failure without the error body of the API as a LiasseResponseError', async () => {
     const server = answering(() => new Response('<html>Bad gateway</html>', { status: 502 }));
     const client = createLiasseClient({

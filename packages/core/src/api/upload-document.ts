@@ -21,15 +21,14 @@ export type UploadInput = FileContent & {
 
 const toApiError = (error: IngestError): ApiError => {
   if (error instanceof FileTooLargeError) {
-    return new ApiError('too_large', 'file_too_large', error.message, {
+    return new ApiError('file_too_large', error.message, {
       max_file_size: error.maxFileSize,
     });
   }
   if (error instanceof UnsupportedFormatError) {
-    return new ApiError('unsupported', 'unsupported_format', error.message);
+    return new ApiError('unsupported_format', error.message);
   }
   return new ApiError(
-    'invalid',
     error instanceof EmptyFileError ? 'empty_file' : 'invalid_file',
     error.message,
   );

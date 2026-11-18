@@ -49,7 +49,7 @@ describe('the setup gate', () => {
   });
 
   it.each([
-    ['refuses', () => Promise.resolve(errorBody(500, 'internal', 'Unexpected.'))],
+    ['refuses', () => Promise.resolve(errorBody(500, 'internal_error', 'Unexpected.'))],
     ['cannot be reached', () => Promise.reject(new TypeError('Failed to fetch'))],
   ])('shows the application when the setup status %s', async (_, answer) => {
     const server = signedOut();
