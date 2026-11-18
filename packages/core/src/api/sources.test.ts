@@ -1,4 +1,8 @@
 import { eq } from 'drizzle-orm';
+import {
+  SOURCE_PASSWORD_MISSING_MESSAGE,
+  SOURCE_PASSWORD_UNREADABLE_MESSAGE,
+} from '@liasse/contract';
 import { SOURCE_CHECK_TIMEOUT_MS } from '@liasse/contract/domain';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { jobs } from '../db/schema/jobs.ts';
@@ -27,15 +31,20 @@ import {
   updateSource,
 } from './sources.ts';
 
-const codeOf = async (promise: Promise<unknown>): Promise<string | undefined> => {
+const refusalOf = async (
+  promise: Promise<unknown>,
+): Promise<{ readonly code: string; readonly message: string } | undefined> => {
   try {
     await promise;
     return undefined;
   } catch (error) {
-    if (error instanceof ApiError) return error.code;
+    if (error instanceof ApiError) return { code: error.code, message: error.message };
     throw error;
   }
 };
+
+const codeOf = async (promise: Promise<unknown>): Promise<string | undefined> =>
+  (await refusalOf(promise))?.code;
 
 describe('the source use cases', () => {
   let database: TestDatabase;
@@ -158,19 +167,20 @@ describe('the source use cases', () => {
         config: SYNTHETIC_IMAP_CONFIG,
         secret: keep,
       });
-    expect(await codeOf(create(true))).toBe('source_secret_required');
+    const missing = { code: 'source_secret_required', message: SOURCE_PASSWORD_MISSING_MESSAGE };
+    expect(await refusalOf(create(true))).toEqual(missing);
     const disabled = await create(false);
     expect(disabled).toMatchObject({ enabled: false, secret: 'unset' });
     expect(
-      await codeOf(
+      await refusalOf(
         updateSource(context(), disabled.id, { kind: 'imap', enabled: true, secret: keep }),
       ),
-    ).toBe('source_secret_required');
+    ).toEqual(missing);
 
     const id = await addSource(database.db);
     expect(
-      await codeOf(updateSource(context(), id, { kind: 'imap', secret: { action: 'clear' } })),
-    ).toBe('source_secret_required');
+      await refusalOf(updateSource(context(), id, { kind: 'imap', secret: { action: 'clear' } })),
+    ).toEqual(missing);
     const [other] = await database.db
       .select({ secret: ingestionSources.secret })
       .from(ingestionSources)
@@ -180,8 +190,8 @@ describe('the source use cases', () => {
       .set({ secret: other?.secret })
       .where(eq(ingestionSources.id, id));
     expect(
-      await codeOf(updateSource(context(), id, { kind: 'imap', name: 'Renamed', secret: keep })),
-    ).toBe('source_secret_required');
+      await refusalOf(updateSource(context(), id, { kind: 'imap', name: 'Renamed', secret: keep })),
+    ).toEqual({ code: 'source_secret_required', message: SOURCE_PASSWORD_UNREADABLE_MESSAGE });
     expect(
       await updateSource(context(), id, { kind: 'imap', enabled: false, secret: keep }),
     ).toMatchObject({ enabled: false, secret: 'unreadable' });
