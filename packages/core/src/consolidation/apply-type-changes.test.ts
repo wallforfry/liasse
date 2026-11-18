@@ -4,6 +4,7 @@ import { jobs } from '../db/schema/jobs.ts';
 import { docTypes } from '../db/schema/registry.ts';
 import { MANUAL_PROVENANCE } from '../domain/provenance.ts';
 import { listTypes } from '../registry/read-types.ts';
+import { columnsHolding } from '../testing/column-scan.ts';
 import { createTestDatabase, type TestDatabase } from '../testing/test-database.ts';
 import { decideChange } from './apply-change.ts';
 import {
@@ -88,6 +89,60 @@ describe('applying a change to the type registry', () => {
         aliases: ['power_bill'],
       });
       expect(listed.find(({ id }) => id === source.id)).toBeUndefined();
+    });
+
+    it('makes a document that rejected the source reject the target, once', async () => {
+      const source = await seedType(db(), { slug: 'boiler_bill' });
+      const target = await seedType(db(), { slug: 'heat_bill' });
+      const other = await seedType(db(), { slug: 'sewer_bill' });
+      const rejectedSource = await seedDocument(db(), other.id, {
+        rejectedTypeIds: [source.id, other.id],
+      });
+      const rejectedBoth = await seedDocument(db(), other.id, {
+        rejectedTypeIds: [target.id, source.id],
+      });
+      const untouched = await seedDocument(db(), source.id, { rejectedTypeIds: [other.id] });
+      const change = await seedChange(db(), 'merge', {
+        source_id: source.id,
+        target_id: target.id,
+        field_mapping: {},
+        confidence: 0.95,
+      });
+      expect(await apply(change)).toMatchObject({ outcome: 'decided' });
+      expect(await documentOf(db(), rejectedSource)).toMatchObject({
+        rejectedTypeIds: [target.id, other.id],
+      });
+      expect(await documentOf(db(), rejectedBoth)).toMatchObject({ rejectedTypeIds: [target.id] });
+      expect(await documentOf(db(), untouched)).toMatchObject({
+        typeId: target.id,
+        rejectedTypeIds: [other.id],
+      });
+    });
+
+    // Every column is scanned for the id of the source: a new place that holds a type id
+    // shows up here, and is listed in `type-references.ts` with what a merge does to it.
+    it('leaves the id of the source only where `type-references.ts` says it stays', async () => {
+      const source = await seedType(db(), { slug: 'scan_source_bill' });
+      const target = await seedType(db(), { slug: 'scan_target_bill' });
+      await seedDocument(db(), source.id);
+      await seedDocument(db(), target.id, { rejectedTypeIds: [source.id] });
+      const change = await seedChange(db(), 'merge', {
+        source_id: source.id,
+        target_id: target.id,
+        field_mapping: {},
+        confidence: 0.95,
+      });
+      expect(await columnsHolding(db(), source.id)).toEqual([
+        'doc_types.id',
+        'documents.rejected_type_ids',
+        'documents.type_id',
+        'type_changes.payload',
+      ]);
+      expect(await apply(change)).toMatchObject({ outcome: 'decided' });
+      expect(await columnsHolding(db(), source.id)).toEqual([
+        'doc_types.id',
+        'type_changes.payload',
+      ]);
     });
 
     it('undoes the moves and rejects the change when the registry refuses the merge', async () => {

@@ -39,6 +39,9 @@ export class ApiError extends Error {
 export const documentNotFound = (): ApiError =>
   new ApiError('not_found', 'document_not_found', 'No document has this id.');
 
+export const entityNotFound = (): ApiError =>
+  new ApiError('not_found', 'entity_not_found', 'No entity has this id.');
+
 export const notImplemented = (feature: string): ApiError =>
   new ApiError(
     'not_implemented',

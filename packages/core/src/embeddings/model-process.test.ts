@@ -2,7 +2,7 @@ import { execFile, spawn } from 'node:child_process';
 import { once } from 'node:events';
 import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { z } from 'zod';
 import {
   EmbeddingCacheDirError,
@@ -10,12 +10,19 @@ import {
   LocalModelRequestError,
   LocalModelTimeoutError,
 } from './errors.ts';
+import { waitUntil } from '../testing/async.ts';
 import type { LocalModel } from './local-model.ts';
 import { loadModelInChildProcess, startModelProcess } from './model-process.ts';
 
 const run = promisify(execFile);
 const FIXTURE = new URL('./model-child.fixture.ts', import.meta.url);
 const SOURCE_FLAGS = ['--experimental-strip-types', '--disable-warning=ExperimentalWarning'];
+
+// The deadline of a request is a timer of the parent: moved by hand, it passes when the test
+// says so, never because a process was slow to start or to answer on a loaded machine.
+const holdDeadlines = (): void => {
+  vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+};
 
 const isRunning = (pid: number): boolean => {
   try {
@@ -46,6 +53,7 @@ describe('startModelProcess', () => {
   };
 
   afterEach(async () => {
+    vi.useRealTimers();
     await Promise.all(started.splice(0).map((model) => model.dispose()));
   });
 
@@ -100,25 +108,29 @@ describe('startModelProcess', () => {
   });
 
   it('ends a process that does not answer in time, and rejects what it was asked', async () => {
-    // Long enough for the process to start and answer a first request on a loaded machine.
+    holdDeadlines();
     const model = start(2000);
     const pid = await pidOf(model);
     const stuck = model.embed(['hang']);
     const waiting = model.countTokens(['hang']);
+    vi.advanceTimersByTime(2000);
+    vi.useRealTimers();
     await expect(stuck).rejects.toBeInstanceOf(LocalModelTimeoutError);
     await expect(stuck).rejects.toMatchObject({ retryable: true });
     await expect(stuck).rejects.toThrow('did not answer within 2000 ms and was ended');
     await expect(waiting).rejects.toBeInstanceOf(LocalModelProcessError);
-    await expect.poll(() => isRunning(pid), { timeout: 5000 }).toBe(false);
+    await waitUntil(() => !isRunning(pid));
   });
 
   // The deadline of the first request passes first: it alone timed out. The embedder runs
   // again what was lost with a process, and never what a process did not answer.
   it('reports as timed out only the request whose deadline passed', async () => {
+    holdDeadlines();
     const model = start(2000);
     await pidOf(model);
     const stuck = model.embed(['hang']);
     const bystander = model.countTokens(['hang']);
+    vi.advanceTimersByTime(2000);
     await expect(stuck).rejects.toBeInstanceOf(LocalModelTimeoutError);
     await expect(bystander).rejects.toMatchObject({ name: 'LocalModelProcessError' });
     await expect(bystander).rejects.toThrow('it did not answer another request');
@@ -126,9 +138,10 @@ describe('startModelProcess', () => {
   });
 
   it('leaves alone a process that answered before the deadline', async () => {
+    holdDeadlines();
     const model = start(2000);
     expect(await model.embed(['slow'])).toHaveLength(1);
-    await new Promise((resolve) => setTimeout(resolve, 2100));
+    vi.advanceTimersByTime(2000);
     expect(await model.countTokens(['still alive'])).toEqual([2]);
   });
 
@@ -171,7 +184,9 @@ describe('a server with a model process', () => {
     process.stdout.write(JSON.stringify({ child: vector[1] }));
   `;
 
-  it('exits while its idle model process is alive, takes it down, and keeps its stdout clean', async () => {
+  it('exits while its idle model process is alive, takes it down, and keeps its stdout clean', async ({
+    signal,
+  }) => {
     const { stdout } = await run(
       process.execPath,
       [
@@ -183,10 +198,10 @@ describe('a server with a model process', () => {
         fileURLToPath(new URL('./model-process.ts', import.meta.url)),
         FIXTURE.href,
       ],
-      { timeout: 10_000 },
+      { signal },
     );
     const { child } = z.object({ child: z.number().int() }).parse(JSON.parse(stdout));
-    await expect.poll(() => isRunning(child), { timeout: 5000 }).toBe(false);
+    await waitUntil(() => !isRunning(child));
   });
 });
 
@@ -203,7 +218,7 @@ describe('a server that stops its model process', () => {
     process.stdout.write('stopped');
   `;
 
-  it('stays alive until the process has ended', async () => {
+  it('stays alive until the process has ended', async ({ signal }) => {
     const { stdout } = await run(
       process.execPath,
       [
@@ -215,7 +230,7 @@ describe('a server that stops its model process', () => {
         fileURLToPath(new URL('./model-process.ts', import.meta.url)),
         FIXTURE.href,
       ],
-      { timeout: 10_000 },
+      { signal },
     );
     expect(stdout).toBe('stopped');
   });
@@ -260,7 +275,7 @@ describe('a model process whose server is killed', () => {
     server.kill('SIGKILL');
     await silence;
     // The pipe closes when the process ends; on Linux its entry stays until it is reaped.
-    await expect.poll(() => isRunning(child), { timeout: 5000 }).toBe(false);
+    await waitUntil(() => !isRunning(child));
     expect(errors.join('')).toBe('');
   });
 });

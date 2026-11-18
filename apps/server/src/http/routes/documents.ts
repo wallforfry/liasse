@@ -163,7 +163,7 @@ export const documentRoutes = ({ authenticated }: RouteDeps): Hono<AppEnv> =>
     .post(
       '/documents/:id/reclassify',
       operation({
-        summary: 'Decide the type of a settled document again, without the one it has',
+        summary: 'Decide the type of a settled document again, without any type rejected for it',
         tag: TAG,
         responses: {
           202: jsonResponse('The document, queued for its type.', documentSchema),

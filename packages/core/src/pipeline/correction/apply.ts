@@ -82,6 +82,9 @@ const reviewed = (stored: PipelineDocument, correction: Correction, touched: num
  * What a correction makes of a document. A corrected field is recorded in
  * `manual_fields`, cleared ones included, so no extraction writes it again.
  *
+ * A type given by hand ends the reclassifications a person asked for: the types they
+ * rejected for the document no longer bind a later one.
+ *
  * A change of type owes an extraction for the new type. Until one succeeds the document
  * carries no `schema_version` and no `confidence`: it is behind its type for
  * consolidation, unvouched for the review, and `process_document` extracts it again.
@@ -108,6 +111,7 @@ export const applyCorrection = (stored: PipelineDocument, correction: Correction
     manualFields: [
       ...new Set([...stored.manualFields, ...touched, ...(typeGiven ? [MANUAL_TYPE_FIELD] : [])]),
     ],
+    rejectedTypeIds: typeGiven ? [] : stored.rejectedTypeIds,
     private: correction.private ?? stored.private,
     ...reviewed(stored, correction, touched.length),
   };

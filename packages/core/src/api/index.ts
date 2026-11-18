@@ -36,7 +36,7 @@ export {
 export { getDocument } from './get-document.ts';
 export { getSubject, type KnowledgeFeatures, recall, timeline } from './knowledge.ts';
 export { listDocuments } from './list-documents.ts';
-export { listEntities } from './list-entities.ts';
+export { getEntity, listEntities } from './list-entities.ts';
 export { queryDocuments } from './query-documents.ts';
 export { reclassifyDocument } from './reclassify-document.ts';
 export { reextractDocument } from './reextract-document.ts';

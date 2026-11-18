@@ -23,9 +23,13 @@ import { CallToolResultSchema, type JSONRPCMessage } from '@modelcontextprotocol
 import { describe, expect, it } from 'vitest';
 import { z } from 'zod';
 import { startModelStub } from './model-stub.test-helper.ts';
+import {
+  PROCESS_TEST_LIMIT_MS,
+  PROCESS_WAIT_LIMIT_MS,
+  untilWritten,
+} from './process-waits.test-helper.ts';
 import { LETTER } from './synthetic-documents.fixture.ts';
 
-const STEP_TIMEOUT_MS = 15_000;
 const SERVING = 'Liasse is serving MCP on stdio\n';
 
 // The client side of the stdio transport over a child this test spawned itself, so that
@@ -96,6 +100,7 @@ interface StdioServer {
 
 // The real binary and the real entry point, as an MCP client would start it.
 const withStdioServer = async (
+  signal: AbortSignal,
   env: Readonly<Record<string, string>>,
   use: (server: StdioServer) => Promise<void>,
   settings: SettingsOverrides = {},
@@ -151,25 +156,24 @@ const withStdioServer = async (
   child.stderr.setEncoding('utf8').on('data', (chunk: string) => stderr.push(chunk));
   const closed = once(child, 'close');
   try {
-    await waitUntil(() => {
-      if (child.exitCode !== null) throw new Error(`the server exited: ${stderr.join('')}`);
-      return stderr.join('').includes(SERVING);
-    });
+    await untilWritten(child, child.stderr, () => stderr.join(''), SERVING, signal);
+    // The SDK bounds every request by 60 s of its own unless told otherwise.
+    const requests = { signal, timeout: PROCESS_WAIT_LIMIT_MS };
     const client = new Client({ name: 'liasse-test', version: '0.0.0' });
-    await guarded(client.connect(childTransport(child, errors)));
+    await guarded(client.connect(childTransport(child, errors), requests));
     await use({
       client,
       database,
       callTool: async (name, args = {}) => {
         const result = CallToolResultSchema.parse(
-          await guarded(client.callTool({ name, arguments: { ...args } })),
+          await guarded(client.callTool({ name, arguments: { ...args } }, undefined, requests)),
         );
         const [{ text }] = textAnswer.parse(result).content;
         const body: unknown = JSON.parse(text);
         return body;
       },
       end: async () => {
-        const exited = once(child, 'close', { signal: AbortSignal.timeout(STEP_TIMEOUT_MS) });
+        const exited = once(child, 'close', { signal });
         await client.close();
         const [code] = z.tuple([z.number().nullable(), z.unknown()]).parse(await guarded(exited));
         return code;
@@ -194,14 +198,16 @@ const status = z.object({ status: z.string() });
 describe('MCP over stdio', () => {
   it(
     'serves the tools on the standard streams and exits with 0 when its input ends',
-    async () => {
-      await withStdioServer({}, async ({ client, database, callTool, end, ...server }) => {
+    async ({ signal }) => {
+      await withStdioServer(signal, {}, async ({ client, database, callTool, end, ...server }) => {
         const { id: publicId } = await insertSyntheticDocument(database.db, { status: 'indexed' });
         const { id: privateId } = await insertSyntheticDocument(database.db, {
           status: 'indexed',
           private: true,
         });
-        expect((await client.listTools()).tools).toHaveLength(25);
+        expect(
+          (await client.listTools(undefined, { signal, timeout: PROCESS_WAIT_LIMIT_MS })).tools,
+        ).toHaveLength(25);
         const idsOf = async (args: Readonly<Record<string, unknown>>) =>
           rows.parse(await callTool('query', args)).rows.map(({ id }) => id);
         expect(await idsOf({})).toEqual([publicId]);
@@ -215,14 +221,14 @@ describe('MCP over stdio', () => {
         expect(server.stderr()).not.toContain('Liasse is listening on');
       });
     },
-    4 * STEP_TIMEOUT_MS,
+    PROCESS_TEST_LIMIT_MS,
   );
 
   // The text of a PDF is read in a child process; pdfjs writes its warnings on the stdout
   // of whatever runs it, and here that stdout carries the protocol.
   it(
     'keeps stdout to the protocol while a first PDF goes through extraction',
-    async () => {
+    async ({ signal }) => {
       const models = await startModelStub(TEST_EMBEDDING_DIM);
       const settings = {
         llm: { base_url: models.url },
@@ -231,6 +237,7 @@ describe('MCP over stdio', () => {
       const env = { EMBEDDING_DIM: String(TEST_EMBEDDING_DIM) };
       try {
         await withStdioServer(
+          signal,
           env,
           async ({ callTool, end, ...server }) => {
             const pdf = buildSyntheticPdf([{ lines: [...LETTER.lines] }]);
@@ -242,6 +249,7 @@ describe('MCP over stdio', () => {
             );
             await waitUntil(
               async () => status.parse(await callTool('get_status', { id })).status === 'indexed',
+              { timeoutMs: PROCESS_WAIT_LIMIT_MS, signal },
             );
             expect(models.requests.map(({ path }) => path)).toContain('/v1/chat/completions');
 
@@ -255,6 +263,6 @@ describe('MCP over stdio', () => {
         await models.close();
       }
     },
-    4 * STEP_TIMEOUT_MS,
+    PROCESS_TEST_LIMIT_MS,
   );
 });

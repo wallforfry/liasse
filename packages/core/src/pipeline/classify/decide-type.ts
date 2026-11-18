@@ -43,8 +43,8 @@ export interface TypeQuestion {
 
 /** What a person said when asking for the type of a document to be decided again. */
 export interface Reclassification {
-  /** The type they said is wrong for the document, never chosen; absent for an untyped one. */
-  readonly rejected: RegisteredType | undefined;
+  /** The types a person said are wrong for the document, never chosen. */
+  readonly rejected: readonly RegisteredType[];
   readonly hint: string | null;
   /** Only a new type will do: the candidates are listed as parents and to avoid duplicates. */
   readonly requireNew: boolean;
@@ -68,8 +68,7 @@ interface Refusal {
 type Settled = Assigned | { readonly refused: Refusal };
 
 const promptOf = ({ rejected, hint, requireNew }: Reclassification): ReclassificationLine => ({
-  rejected:
-    rejected === undefined ? null : { slug: rejected.slug, description: rejected.description },
+  rejected: rejected.map(({ slug, description }) => ({ slug, description })),
   hint,
   requireNew,
 });
@@ -151,15 +150,17 @@ const chosenOf = async (
   return { type: chosen.type, outcome: 'existing' };
 };
 
-// A new slug can name the rejected type, under its name or an alias: that is no answer.
+// A new slug can name a rejected type, under its name or an alias: that is no answer.
 const settle = async (
   deps: PipelineDeps,
   question: TypeQuestion,
   decision: Classification,
 ): Promise<Settled> => {
   const settled = await chosenOf(deps, question, decision);
-  const rejected = question.reclassification?.rejected;
-  return 'type' in settled && settled.type.id === rejected?.id
+  if (!('type' in settled)) return settled;
+  const { id } = settled.type;
+  const rejected = question.reclassification?.rejected.find((type) => type.id === id);
+  return rejected !== undefined
     ? {
         refused: {
           code: 'rejected_type',
