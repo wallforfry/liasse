@@ -1,4 +1,5 @@
-import { describe, expect, it } from 'vitest';
+import { SOURCE_CHECK_TIMEOUT_MS } from '@liasse/contract/domain';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createLiasseClient } from './client.ts';
 import { LiasseApiError, LiasseResponseError } from './errors.ts';
 
@@ -541,5 +542,39 @@ describe('createLiasseClient', () => {
       timeoutMs: 1,
     });
     await expect(client.listDocuments()).rejects.toMatchObject({ name: 'TimeoutError' });
+  });
+
+  describe('the deadline of a source check', () => {
+    afterEach(() => {
+      vi.restoreAllMocks();
+    });
+
+    const checkAnswer = json({ ok: true, items: [] });
+
+    it('outlasts the bound the server puts on the check, whatever the timeout of the client', async () => {
+      const timeout = vi.spyOn(AbortSignal, 'timeout');
+      const client = createLiasseClient({
+        baseUrl: 'http://x.test',
+        session: true,
+        fetch: () => Promise.resolve(checkAnswer.clone()),
+        timeoutMs: 1,
+      });
+      await client.checkSource('src_01');
+      const [deadline] = timeout.mock.lastCall ?? [];
+      expect(deadline).toBeGreaterThan(SOURCE_CHECK_TIMEOUT_MS);
+    });
+
+    it('keeps a timeout of the client longer than it', async () => {
+      const timeout = vi.spyOn(AbortSignal, 'timeout');
+      const longer = 10 * SOURCE_CHECK_TIMEOUT_MS;
+      const client = createLiasseClient({
+        baseUrl: 'http://x.test',
+        session: true,
+        fetch: () => Promise.resolve(checkAnswer.clone()),
+        timeoutMs: longer,
+      });
+      await client.checkSource('src_01');
+      expect(timeout.mock.lastCall).toEqual([longer]);
+    });
   });
 });

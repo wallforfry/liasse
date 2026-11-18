@@ -1,5 +1,6 @@
 import { eq } from 'drizzle-orm';
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { SOURCE_CHECK_TIMEOUT_MS } from '@liasse/contract/domain';
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { jobs } from '../db/schema/jobs.ts';
 import { documentOrigins, ingestionSources } from '../db/schema/sources.ts';
 import { documents } from '../db/schema/documents.ts';
@@ -50,6 +51,10 @@ describe('the source use cases', () => {
   beforeEach(async () => {
     await database.db.delete(jobs);
     await database.db.delete(ingestionSources);
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
   });
 
   const context = () => sourcesContext(database.db);
@@ -141,6 +146,48 @@ describe('the source use cases', () => {
     ).toEqual(port);
   });
 
+  it('refuses an enabled source without a password that opens', async () => {
+    const keep = { action: 'keep' } as const;
+    const create = (enabled: boolean) =>
+      createSource(context(), {
+        kind: 'imap',
+        name: 'No password',
+        enabled,
+        poll_interval_minutes: 5,
+        private: false,
+        config: SYNTHETIC_IMAP_CONFIG,
+        secret: keep,
+      });
+    expect(await codeOf(create(true))).toBe('source_secret_required');
+    const disabled = await create(false);
+    expect(disabled).toMatchObject({ enabled: false, secret: 'unset' });
+    expect(
+      await codeOf(
+        updateSource(context(), disabled.id, { kind: 'imap', enabled: true, secret: keep }),
+      ),
+    ).toBe('source_secret_required');
+
+    const id = await addSource(database.db);
+    expect(
+      await codeOf(updateSource(context(), id, { kind: 'imap', secret: { action: 'clear' } })),
+    ).toBe('source_secret_required');
+    const [other] = await database.db
+      .select({ secret: ingestionSources.secret })
+      .from(ingestionSources)
+      .where(eq(ingestionSources.id, await addSource(database.db, { enabled: false })));
+    await database.db
+      .update(ingestionSources)
+      .set({ secret: other?.secret })
+      .where(eq(ingestionSources.id, id));
+    expect(
+      await codeOf(updateSource(context(), id, { kind: 'imap', name: 'Renamed', secret: keep })),
+    ).toBe('source_secret_required');
+    expect(
+      await updateSource(context(), id, { kind: 'imap', enabled: false, secret: keep }),
+    ).toMatchObject({ enabled: false, secret: 'unreadable' });
+    expect(await queuedPolls(database.db)).toEqual([]);
+  });
+
   it('keeps, changes and removes the hint and the private flag of a source', async () => {
     const id = await addSource(database.db, { hint: 'Bank statements', private: true });
     expect(await getSource(context(), id)).toMatchObject({
@@ -212,10 +259,12 @@ describe('the source use cases', () => {
         config: mailbox.config,
         password: mailbox.password,
       });
+      const timeout = vi.spyOn(AbortSignal, 'timeout');
       expect(await checkSource(context(), id)).toEqual({
         ok: true,
         items: [{ name: 'checked.eml' }],
       });
+      expect(timeout).toHaveBeenCalledWith(SOURCE_CHECK_TIMEOUT_MS);
       expect((await getSource(context(), id)).last_run).toBeNull();
       const [row] = await database.db.select().from(ingestionSources);
       expect(row?.cursor).toBeNull();

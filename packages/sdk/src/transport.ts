@@ -43,6 +43,8 @@ export interface RequestSpec {
   readonly form?: FormData;
   /** Statuses besides 2xx answered with the body of the route rather than an error. */
   readonly accept?: readonly number[];
+  /** A route that answers within a bound of its own raises the timeout of the client to it. */
+  readonly minimumTimeoutMs?: number;
 }
 
 export type Send = (spec: RequestSpec) => Promise<Response>;
@@ -159,7 +161,7 @@ export const createSend = (options: ClientOptions): Send => {
     const credentials = credentialsOf(options);
     const response = await fetchImpl(url, {
       method,
-      signal: AbortSignal.timeout(timeoutMs),
+      signal: AbortSignal.timeout(Math.max(timeoutMs, spec.minimumTimeoutMs ?? 0)),
       headers: { ...headers, ...credentials.headers },
       ...(credentials.credentials === undefined ? {} : { credentials: credentials.credentials }),
       ...(body === undefined ? {} : { body }),
