@@ -1,3 +1,4 @@
+import { GOOGLE_CALLBACK_PATH } from '@liasse/contract';
 import { createFileUrls, type SettingsContext } from '@liasse/core/api';
 import type { Config } from '@liasse/core/config';
 import { createDb, migrate } from '@liasse/core/db';
@@ -15,7 +16,6 @@ import { createLogger, type Logger } from '../log.ts';
 import { runShutdown, type ShutdownStep } from '../shutdown.ts';
 import { type Bind, bindFeatures } from './bindings.ts';
 import { type Front, startFront, type Transport } from './front.ts';
-import { GOOGLE_CALLBACK_PATH } from '../http/routes/google-consent.ts';
 import { applyStored, createSettingsFollower } from './follow.ts';
 import { createLiveRuntime } from './live.ts';
 import { startupNotices, UNCONFIGURED_NOTICE } from './notices.ts';

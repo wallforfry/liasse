@@ -1,4 +1,6 @@
 import {
+  GOOGLE_CALLBACK_PATH,
+  GOOGLE_CONSENT_UI_PATH,
   googleConsentAnswerSchema,
   googleConsentResultSchema,
   googleConsentSchema,
@@ -12,11 +14,8 @@ import { jsonBody } from '../guards.ts';
 import { idParam } from '../query-params.ts';
 import { UI_ROOT } from '../ui/web-routes.ts';
 
-/** Where Google sends the browser back: the redirect URI to register in the Google client. */
-export const GOOGLE_CALLBACK_PATH = '/sources/google/callback';
-
 /** The page of the web UI that completes a consent with the session. */
-export const GOOGLE_CONSENT_PAGE = `${UI_ROOT}/sources/google`;
+const GOOGLE_CONSENT_PAGE = `${UI_ROOT}${GOOGLE_CONSENT_UI_PATH}`;
 
 const TAG = 'Sources';
 const CREDENTIALS = [SESSION_SCHEME];
