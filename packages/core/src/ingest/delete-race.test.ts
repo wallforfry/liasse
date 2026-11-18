@@ -6,7 +6,8 @@ import { documents } from '../db/schema/documents.ts';
 import { jobs } from '../db/schema/jobs.ts';
 import { storageKeyOf } from '../storage/key.ts';
 import type { Storage } from '../storage/port.ts';
-import { createGate, sleep } from '../testing/async.ts';
+import { createGate, waitUntil } from '../testing/async.ts';
+import { sessionsWaitingForALock } from '../testing/lock-waits.ts';
 import { syntheticPdf } from '../testing/synthetic-files.ts';
 import { deleteDocument } from './delete-document.ts';
 import { createDeleteFileHandler } from './delete-file-job.ts';
@@ -81,10 +82,7 @@ describe('a deletion racing the ingestion of the same bytes', () => {
     const ingestion = await heldIngestion(bytes, 'watch');
 
     const deletion = deleteDocument(harness.deps, id);
-    const answeredDuringTheIngestion = await Promise.race([
-      deletion.then(() => true),
-      sleep(300).then(() => false),
-    ]);
+    await waitUntil(async () => (await sessionsWaitingForALock(harness.database.db)) === 1);
     ingestion.release();
     await ingestion.result;
     expect(await deletion).toBe(true);
@@ -93,7 +91,6 @@ describe('a deletion racing the ingestion of the same bytes', () => {
       { signal: new AbortController().signal, attempt: 1 },
     );
 
-    expect(answeredDuringTheIngestion).toBe(false);
     expect(await statusOf(id)).toBe('deleted');
     expect(await processingJobs()).toEqual([]);
     expect(await harness.storage.exists(keyOf(bytes))).toBe(false);

@@ -86,6 +86,7 @@ describe('workers: locks, wake-up and stop', () => {
 
   it('aborts a handler whose job was taken over', async () => {
     const reasons: unknown[] = [];
+    const errors: unknown[] = [];
     await harness.start({
       visibilityTimeoutMs: OUT_OF_REACH_MS,
       lockRenewalMs: 50,
@@ -95,6 +96,7 @@ describe('workers: locks, wake-up and stop', () => {
           reasons.push(signal.reason);
         }),
       ],
+      onError: (error) => errors.push(error),
     });
     const id = await harness.queue('taken over');
     await waitUntil(async () => (await harness.statusOf(id)) === 'running');
@@ -106,7 +108,10 @@ describe('workers: locks, wake-up and stop', () => {
       .where(eq(jobs.id, id));
     await waitUntil(() => reasons.length === 1);
     expect(reasons[0]).toBeInstanceOf(JobLockLostError);
-    await sleep(100);
+    // Reported once the worker found, as it wrote the outcome back, that the job is no
+    // longer its own.
+    await waitUntil(() => errors.length === 1);
+    expect(errors[0]).toBeInstanceOf(JobLockLostError);
     expect(await jobById(harness.database.db, id)).toMatchObject({
       status: 'running',
       attempts: 2,

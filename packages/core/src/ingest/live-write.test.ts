@@ -2,7 +2,8 @@ import { eq } from 'drizzle-orm';
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 import { documentPages, documents } from '../db/schema/documents.ts';
 import { documentLinks } from '../db/schema/knowledge.ts';
-import { createGate, sleep } from '../testing/async.ts';
+import { createGate, waitUntil } from '../testing/async.ts';
+import { sessionsWaitingForALock } from '../testing/lock-waits.ts';
 import { syntheticPdf } from '../testing/synthetic-files.ts';
 import { deleteDocument } from './delete-document.ts';
 import type { Transaction } from './existing-document.ts';
@@ -87,14 +88,10 @@ describe('writeIfLive', () => {
     });
     await writing.opened;
     const deletion = deleteDocument(harness.deps, id);
-    const deletedDuringTheWrite = await Promise.race([
-      deletion.then(() => true),
-      sleep(300).then(() => false),
-    ]);
+    await waitUntil(async () => (await sessionsWaitingForALock(harness.database.db)) === 1);
     proceed.open();
     expect(await write).toEqual({ written: true, result: 'done' });
     expect(await deletion).toBe(true);
-    expect(deletedDuringTheWrite).toBe(false);
     expect(await row(id)).toMatchObject({ status: 'deleted', title: null });
     expect(await harness.database.db.select().from(documentPages)).toEqual([]);
   });
@@ -122,14 +119,10 @@ describe('writeIfLive', () => {
     });
     await written.opened;
     const deletion = deleteDocument(harness.deps, id);
-    const deletedBeforeTheEnd = await Promise.race([
-      deletion.then(() => true),
-      sleep(300).then(() => false),
-    ]);
+    await waitUntil(async () => (await sessionsWaitingForALock(harness.database.db)) === 1);
     proceed.open();
     expect(await outer).toEqual({ written: true, result: 'done' });
     expect(await deletion).toBe(true);
-    expect(deletedBeforeTheEnd).toBe(false);
     expect(await harness.database.db.select().from(documentPages)).toEqual([]);
   });
 });
@@ -205,14 +198,10 @@ describe('writeIfBothLive', () => {
     });
     await writing.opened;
     const deletion = deleteDocument(harness.deps, c);
-    const deletedDuringTheWrite = await Promise.race([
-      deletion.then(() => true),
-      sleep(300).then(() => false),
-    ]);
+    await waitUntil(async () => (await sessionsWaitingForALock(harness.database.db)) === 1);
     proceed.open();
     await write;
     expect(await deletion).toBe(true);
-    expect(deletedDuringTheWrite).toBe(false);
     expect(await links()).toEqual([]);
   });
 

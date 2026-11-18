@@ -1,6 +1,7 @@
 import { createServer, type Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { waitUntil } from '../testing/async.ts';
 import { createTestBucket, type TestBucket } from '../testing/test-bucket.ts';
 import { StorageError, StorageMisconfiguredError, StorageObjectNotFoundError } from './errors.ts';
 import { createS3Storage } from './s3.ts';
@@ -78,10 +79,16 @@ describe('s3 storage', () => {
     await expect(storage.check()).rejects.toBeInstanceOf(StorageError);
   });
 
-  it('gives an upload a deadline that grows with its size', async () => {
+  // The server answers the large upload only once the small one, whose deadline was armed
+  // after it, gave up: with the deadline of the small one, the large one would have given up
+  // first. Its own deadline, 100 s, outlasts the test, so how fast the server answers it
+  // decides nothing.
+  it('gives an upload a deadline that grows with its size', async ({ signal }) => {
+    const held = new Map<string, () => void>();
     const server = createServer((request, response) => {
-      request.resume();
-      setTimeout(() => response.writeHead(200).end(), 500);
+      request.resume().on('end', () => {
+        held.set(request.url ?? '', () => response.writeHead(200).end());
+      });
     });
     const endpoint = await listen(server);
     try {
@@ -91,10 +98,14 @@ describe('s3 storage', () => {
         requestTimeoutMs: 100,
         minUploadBytesPerSecond: 1000,
       });
-      const large = new Uint8Array(8000).fill(7);
-      await expect(storage.put(keyOf(large), large)).resolves.toBeUndefined();
+      const large = new Uint8Array(100_000).fill(7);
+      const largeUpload = storage.put(keyOf(large), large);
       const small = bytesOf('synthetic small upload');
       await expect(storage.put(keyOf(small), small)).rejects.toBeInstanceOf(StorageError);
+      const largeUrl = `/${bucket.options.bucket}/${keyOf(large)}`;
+      await waitUntil(() => held.has(largeUrl), { signal });
+      held.get(largeUrl)?.();
+      await expect(largeUpload).resolves.toBeUndefined();
     } finally {
       server.closeAllConnections();
       server.close();
