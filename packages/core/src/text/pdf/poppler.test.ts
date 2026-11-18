@@ -1,7 +1,7 @@
 import { chmod, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { waitUntil } from '../../testing/async.ts';
 import { runPoppler, runPopplerUntil } from './poppler.ts';
 
@@ -126,6 +126,21 @@ describe('runPoppler', () => {
     const failure = runPoppler(command, [], { timeoutMs: 50, signal: undefined });
     await expect(failure).rejects.toMatchObject({ code: 'pdf_renderer_timeout' });
     await expect(failure).rejects.toThrow('took longer than 50 ms');
+  });
+
+  // Only the timers are faked, and only for the run: the child process and its pipes are
+  // real, and the helpers of this file poll with real timers.
+  it('clears its deadline once the command has ended', async () => {
+    const command = await script('exit 0');
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    try {
+      const run = runPoppler(command, [], UNLIMITED);
+      expect(vi.getTimerCount()).toBe(1);
+      await run;
+      expect(vi.getTimerCount()).toBe(0);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('reports a command without the execute bit as unavailable for good', async () => {

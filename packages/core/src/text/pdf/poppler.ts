@@ -132,16 +132,21 @@ export const runPopplerUntil = (
   });
 
 // The deadline is a signal rather than the `timeout` option of `spawn`, whose timer starts
-// at spawn time out of any caller's reach: a test fires it once the command is ready.
-export const runPoppler = (
+// at spawn time out of any caller's reach: a test fires it once the command is ready. Its
+// timer is cleared once the command settles, which `AbortSignal.timeout` would leave armed.
+export const runPoppler = async (
   command: string,
   args: readonly string[],
   options: PopplerRunOptions,
   onStdout: (chunk: Uint8Array) => void = ignore,
-): Promise<void> =>
-  runPopplerUntil(
-    command,
-    args,
-    { ...options, deadline: AbortSignal.timeout(options.timeoutMs) },
-    onStdout,
-  );
+): Promise<void> => {
+  const deadline = new AbortController();
+  const timer = setTimeout(() => {
+    deadline.abort();
+  }, options.timeoutMs);
+  try {
+    await runPopplerUntil(command, args, { ...options, deadline: deadline.signal }, onStdout);
+  } finally {
+    clearTimeout(timer);
+  }
+};
