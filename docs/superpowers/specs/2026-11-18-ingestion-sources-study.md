@@ -1,6 +1,6 @@
 # Ingestion sources: study
 
-Status: decided, not implemented. Date: 2026-11-18. The decisions are recorded in the decision table of the spec (`docs/spec.md`); section 7 lists them.
+Status: decided; steps 1 (sources and IMAP) and 2 (Google OAuth and Drive by reference) are implemented. Date: 2026-11-18. The decisions are recorded in the decision table of the spec (`docs/spec.md`); section 7 lists them.
 
 Question: can Liasse ingest from several sources configured in the web UI (an FTP or SFTP folder under watch, Gmail attachments, a Google Drive), and can a Drive be ingested without keeping a second copy of its files in our storage?
 
