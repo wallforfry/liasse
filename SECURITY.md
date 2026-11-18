@@ -28,6 +28,6 @@ In scope: the server, the web UI, the MCP server, the SDK, the Docker image and 
 - a sensitive identifier (IBAN, tax number, social security number) stored or returned unmasked outside the document's full text;
 - a secret or a document's content written to a log.
 
-Out of scope: an instance published without TLS or with a misconfigured `TRUSTED_PROXIES` (see [`docs/deployment.md`](docs/deployment.md)), what a model provider does with the data it is sent, and denial of service by an authenticated user.
+Out of scope: an instance published without TLS or with a misconfigured `TRUSTED_PROXIES` (see [`docs/deployment.md`](docs/deployment.md)), the server connecting to a host a signed-in account named for an ingestion source (internal addresses included: it is what a source is for), what a model provider does with the data it is sent, and denial of service by an authenticated user.
 
 The security model is described in [`docs/spec.md`](docs/spec.md#safeguards-security-and-privacy).

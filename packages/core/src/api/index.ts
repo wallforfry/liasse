@@ -54,3 +54,13 @@ export { retryDocument } from './retry-document.ts';
 export { readGraph } from './read-graph.ts';
 export { readStats, type Stats } from './stats.ts';
 export { uploadDocument, type UploadInput } from './upload-document.ts';
+export {
+  checkSource,
+  createSource,
+  deleteSource,
+  getSource,
+  listSources,
+  requestSourceRun,
+  type SourcesContext,
+  updateSource,
+} from './sources.ts';

@@ -7,3 +7,4 @@ export * from './knowledge.ts';
 export * from './oauth.ts';
 export * from './registry.ts';
 export * from './settings.ts';
+export * from './sources.ts';

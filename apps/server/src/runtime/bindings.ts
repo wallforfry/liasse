@@ -37,7 +37,13 @@ import {
   type PipelineSettings,
   suggestType,
 } from '@liasse/core/pipeline';
-import type { PipelineConfig, ResolvedSettings } from '@liasse/core/settings';
+import { createSecretBox, type PipelineConfig, type ResolvedSettings } from '@liasse/core/settings';
+import {
+  createSourceHandlers,
+  SOURCE_CONCURRENCY,
+  SOURCE_CONNECTORS,
+  seedSourcePolls,
+} from '@liasse/core/sources';
 import type { Storage } from '@liasse/core/storage';
 import type { Logger } from '../log.ts';
 
@@ -158,13 +164,25 @@ export const bindFeatures: Bind = (parts) => {
         schemaLanguage: settings.pipeline.schemaLanguage,
       }),
       ...hindsight.handlers,
+      ...createSourceHandlers({
+        db,
+        storage,
+        maxFileSize: settings.pipeline.maxFileSize,
+        secrets: createSecretBox(parts.config.auth.secret),
+        connectors: SOURCE_CONNECTORS,
+      }),
     ],
-    perKindConcurrency: { ...hindsight.perKindConcurrency, ...CONSOLIDATION_CONCURRENCY },
+    perKindConcurrency: {
+      ...hindsight.perKindConcurrency,
+      ...CONSOLIDATION_CONCURRENCY,
+      ...SOURCE_CONCURRENCY,
+    },
     features: featuresOf(pipeline, hindsight),
     startupTasks: [
       { name: 'queueing the file removals still owed', run: () => requeueFileDeletions({ db }) },
       { name: 'failing the documents no job will process', run: () => failAbandonedDocuments(db) },
       { name: 'queueing the nightly consolidation', run: () => scheduleNightlyRun(db) },
+      { name: 'queueing the runs of the ingestion sources', run: () => seedSourcePolls(db) },
       ...(hindsight.enabled
         ? [{ name: 'queueing the Hindsight forgets still owed', run: hindsight.requeueForgets }]
         : []),

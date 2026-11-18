@@ -12,6 +12,7 @@ import { indexDocument, rankByFullText } from '@liasse/core/search';
 import type { Auth } from '@liasse/core/auth';
 import { NO_TRUSTED_PROXIES } from '@liasse/core/network';
 import { createSecretBox } from '@liasse/core/settings';
+import { SOURCE_CONNECTORS } from '@liasse/core/sources';
 import { createFsStorage } from '@liasse/core/storage';
 import {
   createFakeEmbedder,
@@ -125,6 +126,7 @@ export const createHttpHarness = async (): Promise<HttpHarness> => {
       api: () => current,
       base: api,
       settings,
+      sources: { db: database.db, secrets: settings.secrets, connectors: SOURCE_CONNECTORS },
       auth,
       setupToken: undefined,
       publicUrl: TEST_PUBLIC_URL,

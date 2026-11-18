@@ -94,6 +94,12 @@ Inside the container, `127.0.0.1` is the container itself: an Ollama server on t
 
 `WATCH_DIR` needs a volume that mounts the host folder at that path, for instance `/srv/scans:/watch:ro` with `WATCH_DIR=/watch`. Liasse only reads the folder; see [Watched folder](spec.md#api-configuration-and-deployment) in the specification for what it ingests and when.
 
+## Ingestion sources
+
+Sources are configured on the **Sources** page of the web UI, never in the environment; see [Ingestion sources](spec.md#ingestion-sources) in the specification. Their passwords are sealed under `AUTH_SECRET`: rotating it makes them unreadable, and each source then needs its password again. The server connects to whatever host a signed-in account names, internal addresses included.
+
+**A Gmail mailbox over IMAP.** Turn on 2-Step Verification on the Google account, create an app password (Google account, Security, App passwords), then create an IMAP source with host `imap.gmail.com`, port `993`, security `tls`, the full address as user name and the app password. A label is read as a folder of the same name (`INBOX`, `Invoices`, `[Gmail]/All Mail`). Liasse opens folders read-only and never marks a message as read.
+
 ## Coolify
 
 [`docker-compose.coolify.yml`](../docker-compose.coolify.yml) is the same stack for a Coolify Docker Compose application built from this repository. Coolify generates the database password, `AUTH_SECRET` and `FILE_URL_SECRET`, and routes the domain set on the `liasse` service to port 8080.

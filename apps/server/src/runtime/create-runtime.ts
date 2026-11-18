@@ -4,6 +4,7 @@ import { createDb, migrate } from '@liasse/core/db';
 import type { CreateEmbedderOptions } from '@liasse/core/embeddings';
 import { prepareFullTextRanking } from '@liasse/core/search';
 import { createSecretBox, type ModelFactories, providerFactories } from '@liasse/core/settings';
+import { SOURCE_CONNECTORS } from '@liasse/core/sources';
 import { createStorage } from '@liasse/core/storage';
 import { createLogger, type Logger } from '../log.ts';
 import { runShutdown, type ShutdownStep } from '../shutdown.ts';
@@ -124,6 +125,7 @@ export const createRuntime = async (
       api: live.api,
       base: { db, storage, fileUrls },
       settings,
+      sources: { db, secrets: settings.secrets, connectors: SOURCE_CONNECTORS },
       config,
       ping: database.ping,
       logger,

@@ -75,6 +75,25 @@ services:
       timeout: 3s
       retries: 30
 
+  # IMAP server for the tests of the IMAP connector. Plain IMAP on 3143; its REST API creates
+  # one throwaway account per test (`createTestMailbox` of `@liasse/core/testing`).
+  imap:
+    image: greenmail/standalone:2.1.3
+    environment:
+      GREENMAIL_OPTS: >-
+        -Dgreenmail.setup.test.imap -Dgreenmail.hostname=0.0.0.0
+        -Dgreenmail.api.port=8080 -Dgreenmail.api.hostname=0.0.0.0
+    ports:
+      - '127.0.0.1:54333:3143'
+      - '127.0.0.1:54334:8080'
+    healthcheck:
+      # The image has neither curl nor wget.
+      test:
+        ['CMD', 'bash', '-c', 'exec 3<>/dev/tcp/127.0.0.1/3143 && exec 4<>/dev/tcp/127.0.0.1/8080']
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
   # Postgres with ParadeDB pg_search, for the BM25 tests of `pnpm test:paradedb`. Not started by
   # `pnpm db:up`: BM25 is optional, and the tests of `pnpm test` run on `postgres-test`.
   # Started alone by `pnpm db:up:paradedb`; its databases have pg_search through template1.

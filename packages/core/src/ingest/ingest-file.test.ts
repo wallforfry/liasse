@@ -144,6 +144,56 @@ describe('ingestFile', () => {
     ]);
   });
 
+  it('leaves a failed document failed when a connector reads its bytes again', async () => {
+    const bytes = syntheticPdf('failed, read again by a connector');
+    const first = await ingestFile(harness.deps, { bytes, filename: 'a.eml', source: 'connector' });
+    await harness.database.db
+      .update(documents)
+      .set({ status: 'failed', error: 'synthetic failure' })
+      .where(eq(documents.id, first.id));
+    await harness.database.db.delete(jobs);
+    const again = await ingestFile(harness.deps, { bytes, filename: 'a.eml', source: 'connector' });
+    expect(again).toMatchObject({ id: first.id, status: 'failed', duplicate: true });
+    expect(await jobRows()).toEqual([]);
+  });
+
+  it('does not bring a deleted document back from a connector', async () => {
+    const bytes = syntheticPdf('deleted, read again by a connector');
+    const first = await ingestFile(harness.deps, { bytes, filename: 'a.eml', source: 'connector' });
+    await deleteDocument(harness.deps, first.id);
+    await harness.database.db.delete(jobs);
+    const again = await ingestFile(harness.deps, { bytes, filename: 'a.eml', source: 'connector' });
+    expect(again).toMatchObject({ id: first.id, status: 'deleted', duplicate: true });
+    expect(await jobRows()).toEqual([]);
+  });
+
+  it('runs the hook of the caller in the transaction, with the document', async () => {
+    const bytes = syntheticPdf('hooked');
+    const seen: string[] = [];
+    const result = await ingestFile(harness.deps, {
+      bytes,
+      filename: 'a.pdf',
+      source: 'api',
+      onIngested: async (tx, ingested) => {
+        const [row] = await tx
+          .select({ id: documents.id })
+          .from(documents)
+          .where(eq(documents.id, ingested.id));
+        seen.push(row?.id ?? 'not visible');
+      },
+    });
+    expect(seen).toEqual([result.id]);
+    await expect(
+      ingestFile(harness.deps, {
+        bytes: syntheticPdf('hook failed'),
+        filename: 'b.pdf',
+        source: 'api',
+        onIngested: () => Promise.reject(new Error('synthetic hook failure')),
+      }),
+    ).rejects.toThrow('synthetic hook failure');
+    expect(await documentRows()).toHaveLength(1);
+  });
+
   describe('a document that keeps failing', () => {
     const bytes = syntheticPdf('keeps failing');
 

@@ -80,3 +80,16 @@ export {
 } from './test-database.ts';
 export { DEFAULT_TEST_DATABASE_URL } from './test-server.ts';
 export { privateTemplateName } from './test-template.ts';
+export {
+  buildSyntheticEmail,
+  type SyntheticAttachment,
+  type SyntheticEmailOptions,
+} from './synthetic-email.ts';
+export {
+  type AppendOptions,
+  createTestMailbox,
+  DEFAULT_TEST_IMAP_API,
+  DEFAULT_TEST_IMAP_HOST,
+  DEFAULT_TEST_IMAP_PORT,
+  type TestMailbox,
+} from './test-mailbox.ts';

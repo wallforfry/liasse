@@ -11,6 +11,7 @@ import {
   ENTITY_IDENTIFIER_TYPES,
   ENTITY_KINDS,
   ENTITY_MATCH_RULES,
+  IMAP_SECURITY_MODES,
   GRAPH_EDGE_KINDS,
   GRAPH_NODE_KINDS,
   JOB_STATUSES,
@@ -22,6 +23,8 @@ import {
   PROCESSING_STAGES,
   SCHEMA_LANGUAGES,
   SECRET_STATES,
+  SOURCE_ERROR_KINDS,
+  SOURCE_KINDS,
   STORAGE_DRIVERS,
   SUBJECT_IDENTIFIER_TYPES,
   SUBJECT_KINDS,
@@ -61,6 +64,9 @@ export const autoApplyModeSchema = z.enum(AUTO_APPLY_MODES);
 export const schemaLanguageSchema = z.enum(SCHEMA_LANGUAGES);
 export const supportedMimeSchema = z.enum(SUPPORTED_MIMES);
 export const secretStateSchema = z.enum(SECRET_STATES);
+export const sourceKindSchema = z.enum(SOURCE_KINDS);
+export const sourceErrorKindSchema = z.enum(SOURCE_ERROR_KINDS);
+export const imapSecuritySchema = z.enum(IMAP_SECURITY_MODES);
 // A client sends the key in a header and appends its paths to the base URL, so
 // credentials, a query string or a fragment in the URL cannot work; they would only end up
 // in logs or in broken paths. The value is searched as written: a bare `?` or `#` leaves

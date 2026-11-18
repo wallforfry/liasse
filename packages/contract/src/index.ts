@@ -230,3 +230,28 @@ export {
 } from './system.ts';
 export { AUTH_BASE_PATH, CSP_NONCE_META_PROPERTY } from './web-ui.ts';
 export { type QueryDsl, queryDslSchema } from './query/dsl.ts';
+export {
+  type ImapSourceConfig,
+  type ImapSourceConfigInput,
+  imapSourceConfigSchema,
+  type Source,
+  type SourceCheck,
+  sourceCheckSchema,
+  type SourceCreate,
+  type SourceCreateInput,
+  sourceCreateSchema,
+  type SourceError,
+  sourceErrorSchema,
+  type SourceList,
+  sourceListSchema,
+  type SourcePatch,
+  type SourcePatchInput,
+  sourcePatchSchema,
+  type SourceRun,
+  type SourceRunRequest,
+  sourceRunRequestSchema,
+  sourceRunSchema,
+  sourceSchema,
+  type SourceSkippedItem,
+  sourceSkippedItemSchema,
+} from './sources.ts';

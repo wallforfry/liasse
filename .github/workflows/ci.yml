@@ -159,9 +159,27 @@ jobs:
           --health-interval 2s
           --health-timeout 3s
           --health-retries 30
+      # Same image and options as the `imap` service of docker-compose.dev.yml.
+      imap:
+        image: greenmail/standalone:2.1.3
+        env:
+          GREENMAIL_OPTS: >-
+            -Dgreenmail.setup.test.imap -Dgreenmail.hostname=0.0.0.0
+            -Dgreenmail.api.port=8080 -Dgreenmail.api.hostname=0.0.0.0
+        ports:
+          - 54333:3143
+          - 54334:8080
+        options: >-
+          --health-cmd "bash -c 'exec 3<>/dev/tcp/127.0.0.1/3143 && exec 4<>/dev/tcp/127.0.0.1/8080'"
+          --health-interval 2s
+          --health-timeout 3s
+          --health-retries 30
     env:
       TEST_DATABASE_URL: postgres://liasse:liasse@127.0.0.1:54332/liasse_test
       TEST_S3_ENDPOINT: http://127.0.0.1:54330
+      TEST_IMAP_HOST: 127.0.0.1
+      TEST_IMAP_PORT: 54333
+      TEST_IMAP_API: http://127.0.0.1:54334
     steps:
       - uses: actions/checkout@v7
       - uses: pnpm/action-setup@v6

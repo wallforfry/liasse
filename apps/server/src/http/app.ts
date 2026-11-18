@@ -1,4 +1,4 @@
-import type { ApiContext, SettingsContext } from '@liasse/core/api';
+import type { ApiContext, SettingsContext, SourcesContext } from '@liasse/core/api';
 import { type Auth, createMcpGrantCheck, mcpResourceOf } from '@liasse/core/auth';
 import { createClientAddressResolver, type TrustedProxies } from '@liasse/core/network';
 import type { SetupToken } from '@liasse/core/setup';
@@ -26,6 +26,7 @@ import { registryRoutes } from './routes/registry.ts';
 import { searchRoutes } from './routes/search.ts';
 import { settingsRoutes } from './routes/settings.ts';
 import { setupRoutes } from './routes/setup.ts';
+import { sourceRoutes } from './routes/sources.ts';
 import { systemRoutes } from './routes/system.ts';
 import { uploadRoutes } from './routes/upload.ts';
 import type { WebAssets } from './ui/web-assets.ts';
@@ -41,6 +42,8 @@ export interface AppDependencies {
   /** What exists before any settings: the database, the files and their signed URLs. */
   readonly base: Pick<ApiContext, 'db' | 'storage' | 'fileUrls'>;
   readonly settings: SettingsContext;
+  /** The ingestion sources: they exist before any settings, as their routes do. */
+  readonly sources: SourcesContext;
   /** Accounts, sessions, API keys and the OAuth authorization server of MCP. */
   readonly auth: Auth;
   /** The token of the onboarding, issued at startup while no account existed. */
@@ -91,6 +94,7 @@ export const createApp = ({
   api,
   base,
   settings,
+  sources,
   auth,
   setupToken,
   publicUrl,
@@ -153,6 +157,14 @@ export const createApp = ({
     '/',
     settingsRoutes({
       settings,
+      signedIn: credentialed(requestTimeoutMs, [session]),
+      signedInToCheck: credentialed(uploadTimeoutMs, [session]),
+    }),
+  );
+  app.route(
+    '/',
+    sourceRoutes({
+      sources,
       signedIn: credentialed(requestTimeoutMs, [session]),
       signedInToCheck: credentialed(uploadTimeoutMs, [session]),
     }),
