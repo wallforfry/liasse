@@ -107,10 +107,16 @@ export async function* imapChanges(
       }
     }
     // Every UID below `uidNext` existed when the search ran: those it left out (older than
-    // the start date, or not matching the filters) are never wanted. A server may omit it.
-    const below = Number.isSafeInteger(mailbox.uidNext) ? mailbox.uidNext - 1 : 0;
+    // the start date, or not matching the filters) are never wanted. A server that omits it
+    // leaves them unknown: the first pass is not over, and the start date stays.
+    const toldUidNext = Number.isSafeInteger(mailbox.uidNext);
+    const below = toldUidNext ? mailbox.uidNext - 1 : 0;
     const handled = Math.max(lastUid ?? 0, uids.at(-1) ?? 0, below);
-    cursor = advanceMailbox(cursor, path, { uidValidity, lastUid: handled, caughtUp: true });
+    cursor = advanceMailbox(cursor, path, {
+      uidValidity,
+      lastUid: handled,
+      caughtUp: caughtUp || toldUidNext,
+    });
     yield { cursor };
   }
 }

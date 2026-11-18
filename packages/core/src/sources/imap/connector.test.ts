@@ -1,5 +1,6 @@
 import type { ImapSourceConfig } from '@liasse/contract';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { ImapFlow } from 'imapflow';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { JsonObject } from '../../db/columns.ts';
 import { buildSyntheticEmail } from '../../testing/synthetic-email.ts';
 import { syntheticPdf, syntheticPng } from '../../testing/synthetic-files.ts';
@@ -123,6 +124,27 @@ describe('the IMAP connector', () => {
     const resumed = await changesOf(mailbox.config, mailbox.password, cutShort);
 
     expect(namesOf(resumed)).toEqual(['second.eml']);
+  });
+
+  it('keeps the start date on a server that does not tell its next UID', async () => {
+    // eslint-disable-next-line @typescript-eslint/unbound-method -- applied to its client below
+    const open = ImapFlow.prototype.mailboxOpen;
+    const withoutUidNext = vi
+      .spyOn(ImapFlow.prototype, 'mailboxOpen')
+      .mockImplementation(async function (this: ImapFlow, ...args) {
+        const mailboxObject = await open.apply(this, args);
+        return { ...mailboxObject, uidNext: Number.NaN };
+      });
+    try {
+      await mailbox.append(withPdf('since-start'), { date: READ_SINCE });
+      const first = await changesOf(mailbox.config, mailbox.password);
+      expect(namesOf(first)).toEqual(['since-start.eml']);
+      await mailbox.append(withPdf('old'), { date: BEFORE_START });
+      const next = await changesOf(mailbox.config, mailbox.password, lastCursor(first));
+      expect(namesOf(next)).toEqual([]);
+    } finally {
+      withoutUidNext.mockRestore();
+    }
   });
 
   it('moves the cursor past the messages the search left out at the end of a mailbox', async () => {
