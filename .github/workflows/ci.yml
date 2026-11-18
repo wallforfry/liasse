@@ -135,6 +135,8 @@ jobs:
     env:
       LIASSE_POSTGRES_TEST_PORT: ''
       LIASSE_S3_PORT: ''
+      LIASSE_IMAP_PORT: ''
+      LIASSE_IMAP_API_PORT: ''
     steps:
       - uses: actions/checkout@v7
       - uses: pnpm/action-setup@v6
@@ -144,13 +146,18 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       # The services of `pnpm db:up` the tests use, from the compose file Dependabot updates.
-      - run: docker compose -f docker-compose.dev.yml up -d --wait postgres-test s3
+      - run: docker compose -f docker-compose.dev.yml up -d --wait postgres-test s3 imap
       - name: Point the tests at the host ports Docker picked
         run: |
           pg=$(docker compose -f docker-compose.dev.yml port postgres-test 5432)
           s3=$(docker compose -f docker-compose.dev.yml port s3 9000)
+          imap=$(docker compose -f docker-compose.dev.yml port imap 3143)
+          imap_api=$(docker compose -f docker-compose.dev.yml port imap 8080)
           echo "TEST_DATABASE_URL=postgres://liasse:liasse@$pg/liasse_test" >> "$GITHUB_ENV"
           echo "TEST_S3_ENDPOINT=http://$s3" >> "$GITHUB_ENV"
+          echo "TEST_IMAP_HOST=${imap%:*}" >> "$GITHUB_ENV"
+          echo "TEST_IMAP_PORT=${imap##*:}" >> "$GITHUB_ENV"
+          echo "TEST_IMAP_API=http://$imap_api" >> "$GITHUB_ENV"
       - name: Install poppler-utils (pdfinfo and pdftoppm handle scanned PDFs in the tests)
         run: sudo apt-get update && sudo apt-get install --yes --no-install-recommends poppler-utils
       # The tests start the real server, which refuses to start without the web UI build.

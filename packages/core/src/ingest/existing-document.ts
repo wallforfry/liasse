@@ -134,7 +134,8 @@ const repairLiveDocument = async (
   if (!(await stillIn(tx, existing))) return undefined;
   if (fileMissing) await storage.put(file.storageKey, file.bytes);
   const unchanged = { id, status, duplicate: true, fileRestored: fileMissing };
-  if (status !== 'failed') return unchanged;
+  // A connector reads an item again only when its server renumbered it: not a request to try.
+  if (status !== 'failed' || file.source === 'connector') return unchanged;
   const requeued = await requeueFailed(tx, id, {
     watchRequeues: requeueCount(file.source),
     condition: mayRequeue(file.source),

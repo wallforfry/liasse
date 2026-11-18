@@ -7,11 +7,20 @@ import { storageKeyOf } from '../storage/key.ts';
 import type { Storage } from '../storage/port.ts';
 import { UnsupportedFormatError } from './errors.ts';
 import { holdEmbedderShared } from '../settings/embedder-lock.ts';
-import { type IngestResult, ingestExisting, ingestNew } from './existing-document.ts';
+import {
+  type IngestResult,
+  ingestExisting,
+  ingestNew,
+  type Transaction,
+} from './existing-document.ts';
 import { lockFile } from './file-lock.ts';
 import { detectMimeType } from './mime.ts';
 import { type FileContent, readContent } from './read-content.ts';
 import { cleanFilename, cleanHint } from './untrusted-text.ts';
+
+// The sources through which a person hands a file over: only they revive a deleted
+// document. The watched folder and a connector hand back whatever they still hold.
+const PERSON_SOURCES: ReadonlySet<DocumentSource> = new Set(['api', 'mcp']);
 
 export interface IngestDeps {
   readonly db: Database;
@@ -33,10 +42,16 @@ export type IngestInput = FileContent & {
   /**
    * Whether bytes of a deleted document bring it back. Only a person handing the file
    * itself over asks for that: true by default for the API and MCP, never for the
-   * watched folder. A file found inside another one, such as an email attachment,
-   * passes false.
+   * watched folder or a connector. A file found inside another one, such as an email
+   * attachment, passes false.
    */
   readonly revivesDeleted?: boolean;
+  /**
+   * Runs in the transaction of the ingestion, under the lock of the hash, once the
+   * document is known: what it writes commits with the document, and a deletion of the
+   * same bytes waits for it.
+   */
+  readonly onIngested?: (tx: Transaction, result: IngestResult) => Promise<void>;
 };
 
 /**
@@ -45,8 +60,8 @@ export type IngestInput = FileContent & {
  *
  * Bytes that already have a document return it (`duplicate`), after restoring its
  * stored file if it was lost and queueing it again if it had failed. Bytes of a deleted
- * document are left alone when they come from the watched folder, and revive it under
- * the same id when they come through the API or MCP.
+ * document are left alone when they come from the watched folder or a connector, and
+ * revive it under the same id when they come through the API or MCP.
  *
  * The file is written before its row: a crash in between leaves a file without a
  * document, which the next ingestion of the same bytes overwrites, and never a
@@ -69,7 +84,7 @@ export const ingestFile = async (
     source: input.source,
     hint: cleanHint(input.hint),
     private: input.private ?? false,
-    revivesDeleted: input.source !== 'watch' && input.revivesDeleted !== false,
+    revivesDeleted: PERSON_SOURCES.has(input.source) && input.revivesDeleted !== false,
   };
 
   return db.transaction(async (tx) => {
@@ -81,8 +96,11 @@ export const ingestFile = async (
       .select({ id: documents.id, status: documents.status })
       .from(documents)
       .where(eq(documents.sha256, sha256));
-    return existing === undefined
-      ? ingestNew(tx, storage, file)
-      : ingestExisting(tx, storage, existing, file);
+    const result =
+      existing === undefined
+        ? await ingestNew(tx, storage, file)
+        : await ingestExisting(tx, storage, existing, file);
+    await input.onIngested?.(tx, result);
+    return result;
   });
 };

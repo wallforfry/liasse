@@ -66,6 +66,15 @@ describe('GET /openapi.json', () => {
     expect(answer('/subjects')).toContain('truncated');
   });
 
+  it('documents the statuses the source routes answer, and no other', () => {
+    const { paths } = documentSchema.parse(raw);
+    const statuses = (path: string, method: string) =>
+      Object.keys(z.record(z.string(), z.unknown()).parse(paths[path]?.[method]?.responses));
+    expect(statuses('/sources', 'post')).toEqual(['201', '400', '401', '413', '415']);
+    expect(statuses('/sources/{id}', 'patch')).toEqual(['200', '400', '401', '404', '413', '415']);
+    expect(statuses('/sources/{id}/run', 'post')).toEqual(['202', '400', '401', '404', '409']);
+  });
+
   it('declares the three credentials and marks /health and the onboarding as public', () => {
     const { paths, components } = documentSchema.parse(raw);
     expect(Object.keys(components.securitySchemes).toSorted()).toEqual([

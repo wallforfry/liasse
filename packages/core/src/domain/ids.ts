@@ -12,6 +12,7 @@ export const ID_PREFIXES = {
   subject: 'sub',
   fact: 'fct',
   documentEvent: 'evt',
+  ingestionSource: 'src',
   user: 'usr',
   session: 'ses',
   account: 'acc',

@@ -10,6 +10,7 @@ import {
   LINK_KINDS,
   PROCESSING_OUTCOMES,
   PROCESSING_STAGES,
+  SOURCE_KINDS,
   SUBJECT_KINDS,
   TYPE_STATUSES,
 } from '@liasse/contract/domain';
@@ -37,10 +38,12 @@ const TABLES = [
   'document_dates',
   'document_events',
   'document_links',
+  'document_origins',
   'document_pages',
   'documents',
   'entities',
   'facts',
+  'ingestion_sources',
   'jobs',
   'oauth_access_tokens',
   'oauth_client_assertions',
@@ -92,7 +95,7 @@ describe('migrate', () => {
     await database.dispose();
   });
 
-  it('creates the twenty-eight tables on an empty database', async () => {
+  it('creates the thirty tables on an empty database', async () => {
     expect(await publicTables(database)).toEqual(TABLES);
   });
 
@@ -162,6 +165,7 @@ describe('migrate', () => {
       link_kind: LINK_KINDS,
       processing_outcome: PROCESSING_OUTCOMES,
       processing_stage: PROCESSING_STAGES,
+      source_kind: SOURCE_KINDS,
       subject_kind: SUBJECT_KINDS,
       type_status: TYPE_STATUSES,
     });

@@ -128,8 +128,23 @@ export type ProcessingStage = (typeof PROCESSING_STAGES)[number];
 export const PROCESSING_OUTCOMES = ['succeeded', 'retrying', 'failed'] as const;
 export type ProcessingOutcome = (typeof PROCESSING_OUTCOMES)[number];
 
-export const DOCUMENT_SOURCES = ['watch', 'api', 'mcp'] as const;
+// `connector`: an ingestion source configured in the web UI; `document_origins` says which.
+export const DOCUMENT_SOURCES = ['watch', 'api', 'mcp', 'connector'] as const;
 export type DocumentSource = (typeof DOCUMENT_SOURCES)[number];
+
+// The protocols an ingestion source reads from.
+export const SOURCE_KINDS = ['imap'] as const;
+export type SourceKind = (typeof SOURCE_KINDS)[number];
+
+// How the IMAP connection is secured: TLS from the first byte, STARTTLS required on a plain
+// connection, or none (the password crosses the network in clear).
+export const IMAP_SECURITY_MODES = ['tls', 'starttls', 'none'] as const;
+export type ImapSecurity = (typeof IMAP_SECURITY_MODES)[number];
+
+// What ended the last run of a source early: its credentials were refused (polling stops
+// until a person acts), or a failure that the next attempt may not meet.
+export const SOURCE_ERROR_KINDS = ['credentials', 'transient'] as const;
+export type SourceErrorKind = (typeof SOURCE_ERROR_KINDS)[number];
 
 export const DOCUMENT_STATES = ['current', 'superseded', 'terminated'] as const;
 export type DocumentState = (typeof DOCUMENT_STATES)[number];

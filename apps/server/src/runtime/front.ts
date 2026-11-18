@@ -1,4 +1,4 @@
-import type { ApiContext, SettingsContext } from '@liasse/core/api';
+import type { ApiContext, SettingsContext, SourcesContext } from '@liasse/core/api';
 import type { Config } from '@liasse/core/config';
 import { StartupError } from '@liasse/core/domain';
 import { serveStdio } from '@liasse/mcp';
@@ -19,6 +19,7 @@ export interface FrontOptions {
   readonly api: () => ApiContext | undefined;
   readonly base: Pick<ApiContext, 'db' | 'storage' | 'fileUrls'>;
   readonly settings: SettingsContext;
+  readonly sources: SourcesContext;
   readonly config: Config;
   readonly ping: () => Promise<void>;
   readonly logger: Logger;
@@ -50,6 +51,7 @@ export const startFront = async ({
   api,
   base,
   settings,
+  sources,
   config,
   ping,
   logger,
@@ -71,6 +73,7 @@ export const startFront = async ({
     api,
     base,
     settings,
+    sources,
     ...(await startAuth({ db: base.db, config, logger })),
     publicUrl: config.server.publicUrl,
     trustedProxies: config.server.trustedProxies,

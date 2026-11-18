@@ -203,3 +203,12 @@ export const MAX_LISTED_CONSOLIDATION_RUNS = 10;
 export const MIN_PASSWORD_LENGTH = 12;
 export const MAX_PASSWORD_LENGTH = 128;
 export const MAX_ACCOUNT_NAME_LENGTH = 128;
+
+// Ingestion sources. A source is polled every `poll_interval_minutes`; a run names at most
+// this many items it skipped in its summary, and a check lists at most this many.
+export const DEFAULT_SOURCE_POLL_MINUTES = 5;
+export const MAX_SOURCE_POLL_MINUTES = 24 * 60;
+export const MAX_SOURCE_NAME_LENGTH = 100;
+export const MAX_SOURCE_SKIPPED_ITEMS = 20;
+export const SOURCE_CHECK_SAMPLE = 5;
+export const MAX_IMAP_MAILBOXES = 20;

@@ -4,6 +4,7 @@ import { documentEvents } from '../db/schema/document-events.ts';
 import { chunks, documentPages, documents, isLiveDocument } from '../db/schema/documents.ts';
 import { jobs, unfinishedJobOfDocument } from '../db/schema/jobs.ts';
 import { documentDates, documentLinks, facts } from '../db/schema/knowledge.ts';
+import { documentOrigins } from '../db/schema/sources.ts';
 import { enqueue } from '../jobs/enqueue.ts';
 import { lockLinkedDocuments, recomputeDocumentStates } from '../knowledge/document-state.ts';
 import { withSubjectLock } from '../knowledge/subject-lock.ts';
@@ -72,6 +73,7 @@ export const DOCUMENT_REFERENCES = [
   documentLinks.fromDocumentId,
   documentLinks.toDocumentId,
   documentEvents.documentId,
+  documentOrigins.documentId,
 ] as const;
 
 const deleteDerivedRows = async (tx: Transaction, id: string): Promise<void> => {

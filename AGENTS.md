@@ -12,27 +12,27 @@ Guidance for AI coding agents working in this repository.
 
 Node 22.12 or later on the 22 line, 24.22.3 or later on the 24 line, or 26.5.1 or later (the `engines` range of `package.json`: earlier Node 24, 25 and 26 releases bundle an undici that can end the process on a reset connection, nodejs/undici#5547, and `apps/server/src/main.ts` refuses to start on them), and pnpm (version pinned in `package.json`). Run everything from the repository root.
 
-| Command                                            | Purpose                                                          |
-| -------------------------------------------------- | ---------------------------------------------------------------- |
-| `pnpm install`                                     | Install the workspace                                            |
-| `pnpm db:up`                                       | Start Postgres `:54329`, test Postgres `:54332`, S3 `:54330`     |
-| `pnpm db:down`                                     | Stop the services of `pnpm db:up` and `pnpm db:up:paradedb`      |
-| `pnpm db:migrate`                                  | Apply migrations to `DATABASE_URL` (reads `.env`)                |
-| `pnpm db:clean-test`                               | Drop the test databases and templates left by killed test runs   |
-| `pnpm db:generate`                                 | Generate a migration from the Drizzle schema                     |
-| `pnpm lint`                                        | ESLint with zero warnings allowed, then Prettier check           |
-| `pnpm format`                                      | Format with Prettier                                             |
-| `pnpm typecheck`                                   | `tsc --noEmit` on every package                                  |
-| `pnpm test`                                        | Vitest, all packages (needs `pnpm db:up` and `pnpm build`)       |
-| `pnpm test:models`                                 | Tests that download and run the real local embedding model       |
-| `pnpm db:up:paradedb`                              | Start Postgres with ParadeDB `pg_search` (`:54331`), for BM25    |
-| `pnpm test:paradedb`                               | BM25 tests, on the ParadeDB server of `pnpm db:up:paradedb`      |
-| `pnpm eval:run --settings <file> [--label <name>]` | Evaluation run with the configured models (calls them; not CI)   |
-| `pnpm eval:compare <reports...>`                   | Evaluation reports side by side, as Markdown                     |
-| `pnpm eval:calibrate`                              | Entity similarity thresholds measured with the configured model  |
-| `pnpm build`                                       | Compile every package with `tsc`, and the web UI with Vite       |
-| `pnpm --filter @liasse/server dev`                 | Run the server from source (copy `.env.example` to `.env` first) |
-| `pnpm changeset`                                   | Describe a user-facing change for the changelog                  |
+| Command                                            | Purpose                                                                     |
+| -------------------------------------------------- | --------------------------------------------------------------------------- |
+| `pnpm install`                                     | Install the workspace                                                       |
+| `pnpm db:up`                                       | Start Postgres `:54329`, test Postgres `:54332`, S3 `:54330`, IMAP `:54333` |
+| `pnpm db:down`                                     | Stop the services of `pnpm db:up` and `pnpm db:up:paradedb`                 |
+| `pnpm db:migrate`                                  | Apply migrations to `DATABASE_URL` (reads `.env`)                           |
+| `pnpm db:clean-test`                               | Drop the test databases and templates left by killed test runs              |
+| `pnpm db:generate`                                 | Generate a migration from the Drizzle schema                                |
+| `pnpm lint`                                        | ESLint with zero warnings allowed, then Prettier check                      |
+| `pnpm format`                                      | Format with Prettier                                                        |
+| `pnpm typecheck`                                   | `tsc --noEmit` on every package                                             |
+| `pnpm test`                                        | Vitest, all packages (needs `pnpm db:up` and `pnpm build`)                  |
+| `pnpm test:models`                                 | Tests that download and run the real local embedding model                  |
+| `pnpm db:up:paradedb`                              | Start Postgres with ParadeDB `pg_search` (`:54331`), for BM25               |
+| `pnpm test:paradedb`                               | BM25 tests, on the ParadeDB server of `pnpm db:up:paradedb`                 |
+| `pnpm eval:run --settings <file> [--label <name>]` | Evaluation run with the configured models (calls them; not CI)              |
+| `pnpm eval:compare <reports...>`                   | Evaluation reports side by side, as Markdown                                |
+| `pnpm eval:calibrate`                              | Entity similarity thresholds measured with the configured model             |
+| `pnpm build`                                       | Compile every package with `tsc`, and the web UI with Vite                  |
+| `pnpm --filter @liasse/server dev`                 | Run the server from source (copy `.env.example` to `.env` first)            |
+| `pnpm changeset`                                   | Describe a user-facing change for the changelog                             |
 
 Before pushing, `pnpm lint`, `pnpm typecheck`, `pnpm test` and `pnpm build` must all pass. CI runs the same four, plus commitlint and a `Signed-off-by` check on every commit of the pull request. A pull request that changes Markdown files only runs commitlint, the sign-off check, the tests of the release scripts and `prettier --check .`, and builds no Docker image.
 
@@ -74,6 +74,7 @@ Inside `packages/core/src`, one directory per concern. A new concern gets its ow
 | `search/`         | Chunking sized to the embedder's window, `indexDocument`, hybrid `search` (full text + vector, RRF)               |
 | `settings/`       | The settings of the database: their resolution, the secret box of their keys, the store, the check                |
 | `setup/`          | The setup token of the onboarding, and the count of attempts at it per client address                             |
+| `sources/`        | Ingestion sources: the connector port, the `source_poll` job, origins; `imap/` reads mailboxes                    |
 | `storage/`        | The file storage port and its `fs` and `s3` drivers                                                               |
 | `testing/`        | Test database and bucket helpers, model fakes and synthetic document builders                                     |
 | `text/`           | `extractText`: native text of PDF, DOCX and email, vision transcription otherwise                                 |
@@ -87,8 +88,9 @@ Tests sit next to the code they cover, as `*.test.ts`. A helper that only the te
 - **Test databases are copies.** A migrated database is a copy (`CREATE DATABASE … TEMPLATE`) of a template, `liasse_template_<migrations digest>_<dimension>`, which the first test that needs it builds and the others wait for under an advisory lock. A changed migration names a new template. Every suite on the server copies that template, so a test that drops or rebuilds one works on a template of its own, `privateTemplateName(dimension)` passed as `template` to `createTestDatabase`. Test databases are named `liasse_test_<random>` and carry the name of their template as their comment; a killed run never reaches `dispose()` and leaves its database behind. `pnpm db:clean-test` drops, on `TEST_DATABASE_URL`, every test database without a session that is more than 15 minutes old (so a suite still setting one up keeps it), then every template no test is copying and no remaining test database was copied from. It never forces a drop: a database someone connected to in the meantime is kept.
 - **Real poppler.** Scanned PDFs are measured and rendered by the real `pdfinfo` and `pdftoppm` (`poppler-utils`), which must be in `PATH`; a missing binary fails the tests.
 - **Real S3.** The `s3` storage driver is tested against the S3-compatible server of `docker-compose.dev.yml` (RustFS, started by `pnpm db:up`), never a mock. `createTestBucket()` creates one throwaway bucket per call. It connects to `TEST_S3_ENDPOINT` (default `http://127.0.0.1:54330`).
+- **Real IMAP.** The IMAP connector is tested against the IMAP server of `docker-compose.dev.yml` (GreenMail, started by `pnpm db:up`: IMAP on `127.0.0.1:54333`, its REST API on `:54334`), never a mock. `createTestMailbox()` creates one throwaway account per call, and `buildSyntheticEmail` the messages appended to it. It connects to `TEST_IMAP_HOST`, `TEST_IMAP_PORT` and `TEST_IMAP_API`.
 - **Real ParadeDB for BM25.** BM25 ranking needs ParadeDB `pg_search`, which the server of `pnpm test` does not have: its tests are `*.paradedbtest.ts`, run by `pnpm test:paradedb` against the `paradedb` service of `docker-compose.dev.yml` (`127.0.0.1:54331`, or `TEST_PARADEDB_URL`, set by `vitest.paradedb.config.ts` over any `TEST_DATABASE_URL`), and by a CI job of their own. Its databases have `pg_search` through `template1`; a test that needs the plain path drops the extension in its own database.
-- **No fixed host port in CI.** The host ports of `postgres-test`, `s3` and `paradedb` in `docker-compose.dev.yml` read `LIASSE_POSTGRES_TEST_PORT`, `LIASSE_S3_PORT` and `LIASSE_PARADEDB_PORT`. CI sets them empty, so Docker picks free ones (a fixed port in the ephemeral range can already be held), and reads them back with `docker compose port`; a new CI service does the same. A developer who moves a port also sets the matching `TEST_*` URL.
+- **No fixed host port in CI.** The host ports of `postgres-test`, `s3`, `imap` (IMAP and its REST API) and `paradedb` in `docker-compose.dev.yml` read `LIASSE_POSTGRES_TEST_PORT`, `LIASSE_S3_PORT`, `LIASSE_IMAP_PORT` and `LIASSE_IMAP_API_PORT`, and `LIASSE_PARADEDB_PORT`. CI sets them empty, so Docker picks free ones (a fixed port in the ephemeral range can already be held), and reads them back with `docker compose port`; a new CI service does the same. A developer who moves a port also sets the matching `TEST_*` URL.
 - **An unreachable database or S3 server fails the tests.** Never skip such a test or guard it behind a condition.
 - **Asynchronous effects are awaited, not slept for.** Use `waitUntil` and `createGate` from `@liasse/core/testing` to wait for a job or a watcher and to order concurrent steps.
 - **Fakes for models.** Tests never call a provider. Use `createFakeEmbedder`, `createFakeTextModel` and `createFakeVisionModel` from `@liasse/core/testing`. The one exception is `pnpm test:models`, which downloads the local embedding model (about 120 MB, cached in `packages/core/node_modules/.cache/liasse-models` or `EMBEDDING_CACHE_DIR`) and is not part of `pnpm test` or of CI.

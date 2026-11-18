@@ -51,10 +51,14 @@ docker run --detach --init --name "$database" --network "$network" \
   pgvector/pgvector:pg16 >/dev/null
 wait_healthy "$database" 120
 
+# The health check is a Node process started inside the container's cgroup: run every second, it
+# landed in the samples and added 4 to 18 MB to some of them. It runs every second until the
+# server is healthy (after the restart below too), then no more during the measure. Needs Docker
+# Engine 25 or later for --health-start-interval.
 docker run --detach --name "$server" --network "$network" \
   --env DATABASE_URL="postgres://liasse:liasse@$database:5432/liasse" \
   --env AUTH_SECRET="$secret" --env FILE_URL_SECRET="$secret" \
-  --health-interval 1s --health-start-period 0s \
+  --health-interval 300s --health-start-period 300s --health-start-interval 1s \
   "$image" >/dev/null
 wait_healthy "$server" 120
 

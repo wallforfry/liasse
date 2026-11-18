@@ -10,6 +10,7 @@ import {
   LINK_KINDS,
   PROCESSING_OUTCOMES,
   PROCESSING_STAGES,
+  SOURCE_KINDS,
   SUBJECT_KINDS,
   TYPE_STATUSES,
 } from '@liasse/contract/domain';
@@ -28,3 +29,4 @@ export const linkKind = pgEnum('link_kind', LINK_KINDS);
 export const subjectKind = pgEnum('subject_kind', SUBJECT_KINDS);
 export const processingStage = pgEnum('processing_stage', PROCESSING_STAGES);
 export const processingOutcome = pgEnum('processing_outcome', PROCESSING_OUTCOMES);
+export const sourceKind = pgEnum('source_kind', SOURCE_KINDS);
