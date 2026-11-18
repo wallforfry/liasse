@@ -49,6 +49,10 @@ export interface SettingsValues {
     readonly bank: string;
     readonly api_key: SecretValue;
   };
+  readonly google: {
+    readonly client_id: string;
+    readonly client_secret: SecretValue;
+  };
 }
 
 export type SettingsSection = keyof SettingsValues;
@@ -75,6 +79,7 @@ const unsavedView = (): SettingsView => ({
   embedding: { ...draftShape.embedding.parse(undefined), api_key_state: 'unset' },
   pipeline: pipelineSettingsSchema.parse({}),
   hindsight: { ...draftShape.hindsight.parse(undefined), api_key_state: 'unset' },
+  google: { client_secret_state: 'unset' },
 });
 
 /** The form showing `view`, every key kept; the schema defaults when nothing was saved. */
@@ -113,6 +118,10 @@ export const valuesOf = (saved: SettingsView | null): SettingsValues => {
       bank: view.hindsight.bank,
       api_key: keyField(view.hindsight.api_key_state),
     },
+    google: {
+      client_id: text(view.google.client_id),
+      client_secret: keyField(view.google.client_secret_state),
+    },
   };
 };
 
@@ -149,7 +158,7 @@ export const embeddingModelsRequest = ({
     : { section: 'embedding', provider, base_url: optionalText(base_url), api_key: api_key.update };
 
 /** The document the form sends, before the schema reads it. */
-export const draftOf = ({ llm, embedding, pipeline, hindsight }: SettingsValues) => {
+export const draftOf = ({ llm, embedding, pipeline, hindsight, google }: SettingsValues) => {
   const local = isLocalEmbedder(embedding.provider);
   return {
     llm: {
@@ -184,6 +193,10 @@ export const draftOf = ({ llm, embedding, pipeline, hindsight }: SettingsValues)
       url: optionalText(hindsight.url),
       bank: hindsight.bank,
       api_key: hindsight.api_key.update,
+    },
+    google: {
+      client_id: optionalText(google.client_id),
+      client_secret: google.client_secret.update,
     },
   } satisfies SettingsDraftInput;
 };

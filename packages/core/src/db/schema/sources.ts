@@ -48,6 +48,12 @@ export const documentOrigins = pgTable(
     // What the source calls the item, in a form of its connector.
     externalId: text('external_id').notNull(),
     name: text('name').notNull(),
+    // What the source says of the bytes, for a source that keeps the file (Drive's md5):
+    // a later read compares it before serving them.
+    checksum: text('checksum'),
+    // When the source stopped holding the item where the configuration points: trashed,
+    // deleted or moved out. A document whose file is at a source then cannot serve it.
+    removedAt: instant('removed_at'),
     firstSeenAt: instant('first_seen_at').notNull().defaultNow(),
   },
   (table) => [

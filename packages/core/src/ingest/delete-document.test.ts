@@ -100,6 +100,8 @@ describe('deleteDocument and the delete_file job', () => {
       id,
       sha256: sha256Of(bytes),
       storageKey: keyOf(bytes),
+      // Kept with the storage key: where the file was, for its removal.
+      fileAtSource: false,
       mime: 'application/pdf',
       source: 'api',
       ingestedAt: before.ingestedAt,

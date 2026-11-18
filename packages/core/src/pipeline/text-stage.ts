@@ -52,7 +52,8 @@ const storeText = (
   });
 
 /**
- * `received` to `extracted`: reads the stored file, extracts its text outside the
+ * `received` to `extracted`: reads the file, from the storage or from the source that keeps
+ * it (checked against the hash of the document, on every attempt), extracts its text outside the
  * server's process, ingests the attachments of an email and stores the pages.
  *
  * The attachments are ingested before the status moves: a crash between the two redoes
@@ -74,7 +75,7 @@ export const runTextStage = async (
       ...(textProcessLimits === undefined ? {} : { processLimits: textProcessLimits }),
     });
   const text = await (deps.extractText ?? outOfProcess)(
-    { bytes: await file.bytes(), mime: mime.data },
+    { bytes: await file.bytes(signal), mime: mime.data },
     {
       vision: deps.visionModel,
       signal,

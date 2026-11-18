@@ -4,6 +4,7 @@ import type { Database } from '../db/client.ts';
 import type { JsonObject } from '../db/columns.ts';
 import { ingestionSources } from '../db/schema/sources.ts';
 import { withSessionAdvisoryLock } from '../db/session-lock.ts';
+import type { DeleteDocumentDeps } from '../ingest/delete-document.ts';
 import { FileTooLargeError, IngestError } from '../ingest/errors.ts';
 import { ingestFile } from '../ingest/ingest-file.ts';
 import { cleanFilename } from '../ingest/untrusted-text.ts';
@@ -15,7 +16,8 @@ import {
   type SourceItem,
   SourceItemError,
 } from './connector.ts';
-import { recordOrigin } from './origins.ts';
+import { markOriginsRemoved, recordOrigin } from './origins.ts';
+import { replaceOlderVersions } from './versions.ts';
 import {
   countOutcome,
   EMPTY_TALLY,
@@ -35,6 +37,8 @@ export interface SourcePollDeps {
   readonly maxFileSize: number;
   readonly secrets: SecretBox;
   readonly connectors: SourceConnectors;
+  /** What a deletion of a replaced version runs in its transaction, as any deletion does. */
+  readonly onDocumentDeleted?: DeleteDocumentDeps['onDeleted'];
 }
 
 const lockKey = (sourceId: string) => sql`hashtextextended(${`liasse.source-run:${sourceId}`}, 0)`;
@@ -43,7 +47,7 @@ const MINUTE_MS = 60_000;
 
 // An item refused for what it is: the cursor moves past it, and no later run takes it.
 const takeItem = async (
-  { db, storage, maxFileSize }: SourcePollDeps,
+  { db, storage, maxFileSize, onDocumentDeleted }: SourcePollDeps,
   source: StoredSource,
   item: SourceItem,
 ): Promise<ItemOutcome> => {
@@ -59,7 +63,13 @@ const takeItem = async (
     return skipped(new FileTooLargeError(maxFileSize).message);
   }
   try {
-    const origin = { sourceId: source.id, externalId: item.externalId, name: item.name };
+    const { reference } = item;
+    const origin = {
+      sourceId: source.id,
+      externalId: item.externalId,
+      name: item.name,
+      checksum: reference?.checksum ?? null,
+    };
     const result = await ingestFile(
       { db, storage, maxFileSize },
       {
@@ -68,10 +78,20 @@ const takeItem = async (
         source: 'connector',
         hint: source.hint ?? undefined,
         private: source.private,
+        byReference: reference !== undefined,
         onIngested: (tx, ingested) => recordOrigin(tx, origin, ingested),
       },
     );
-    return { kind: result.duplicate ? 'duplicate' : 'ingested' };
+    const replaced =
+      reference === undefined
+        ? 0
+        : await replaceOlderVersions(
+            onDocumentDeleted === undefined ? { db } : { db, onDeleted: onDocumentDeleted },
+            source.id,
+            item.externalId,
+            result.id,
+          );
+    return { kind: result.duplicate ? 'duplicate' : 'ingested', replaced };
   } catch (error) {
     if (error instanceof IngestError || error instanceof SourceItemError) {
       return skipped(error.message);
@@ -96,6 +116,10 @@ const readChanges = async (
   try {
     for await (const change of session.changes(source.cursor)) {
       if (change.item !== undefined) onOutcome(await takeItem(deps, source, change.item));
+      if (change.removed !== undefined) {
+        const count = await markOriginsRemoved(deps.db, source.id, change.removed);
+        onOutcome({ kind: 'removed', count });
+      }
       await saveCursor(deps.db, source.id, change.cursor);
     }
   } finally {

@@ -67,3 +67,30 @@ describe('sameEmbedder', () => {
     ).toBe(false);
   });
 });
+
+describe('the Google client of the settings', () => {
+  const withGoogle = (google: unknown) =>
+    settingsDraftSchema.parse({
+      llm: { provider: 'ollama', text_model: 'text-model', vision_model: 'vision-model' },
+      google,
+    });
+
+  it('needs its secret with its client id, and gives only the state of the secret', () => {
+    const missing = settingsFromDraft(withGoogle({ client_id: 'client.synthetic' }), NO_KEYS);
+    expect(missing.ok ? [] : missing.issues.map(({ path }) => path.join('.'))).toEqual([
+      'google.client_secret',
+    ]);
+    const draft = withGoogle({
+      client_id: 'client.synthetic',
+      client_secret: { action: 'replace', value: 'client-secret-9b2c' },
+    });
+    const outcome = settingsFromDraft(draft, NO_KEYS);
+    expect(outcome.ok ? outcome.settings.google : undefined).toEqual({
+      client_id: 'client.synthetic',
+      client_secret: 'client-secret-9b2c',
+    });
+    const view = settingsViewOf(draft, outcome.ok ? keysOf(outcome.settings) : NO_KEYS);
+    expect(view.google).toEqual({ client_id: 'client.synthetic', client_secret_state: 'set' });
+    expect(JSON.stringify(view)).not.toContain('client-secret-9b2c');
+  });
+});

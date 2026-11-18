@@ -23,6 +23,10 @@ export {
   type FakeVisionHandler,
   type FakeVisionModel,
 } from './fake-vision-model.ts';
+export { createFakeDriveState, type FakeDriveState, md5Of } from './fake-drive.ts';
+export { type FakeGoogle, startFakeGoogle } from './fake-google.ts';
+export { type ConsentChoice } from './fake-oauth.ts';
+export { NO_SOURCE_FILES } from './no-source-files.ts';
 export { type DocumentRow, insertSyntheticDocument, type NewDocumentRow } from './fixtures.ts';
 export {
   buildSyntheticDocx,

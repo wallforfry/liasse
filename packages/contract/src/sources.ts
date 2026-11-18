@@ -49,6 +49,19 @@ export const imapSourceConfigSchema = z.strictObject({
 export type ImapSourceConfig = z.output<typeof imapSourceConfigSchema>;
 export type ImapSourceConfigInput = z.input<typeof imapSourceConfigSchema>;
 
+// A Drive id is letters, digits, `-` and `_`; `root` names the top of My Drive.
+const DRIVE_ID = /^[\w-]{1,200}$/;
+
+export const gdriveSourceConfigSchema = z.strictObject({
+  folder_id: z
+    .string()
+    .trim()
+    .regex(DRIVE_ID, 'a Drive folder id: the last part of the address of the folder')
+    .describe('The folder read with its subfolders; `root` for the whole of My Drive.'),
+});
+export type GdriveSourceConfig = z.output<typeof gdriveSourceConfigSchema>;
+export type GdriveSourceConfigInput = z.input<typeof gdriveSourceConfigSchema>;
+
 const sourceName = z.string().trim().min(1).max(MAX_SOURCE_NAME_LENGTH);
 const sourceHint = z
   .string()
@@ -87,6 +100,16 @@ export const sourceRunSchema = z.strictObject({
     .min(0)
     .describe('Items whose bytes already had a document, deleted ones included.'),
   skipped: z.int().min(0).describe('Items refused for good; the next runs do not take them.'),
+  removed: z
+    .int()
+    .min(0)
+    .default(0)
+    .describe('Documents whose file the source no longer holds; they and their knowledge stay.'),
+  replaced: z
+    .int()
+    .min(0)
+    .default(0)
+    .describe('Documents deleted because the source now holds a new version of their file.'),
   skipped_items: z
     .array(sourceSkippedItemSchema)
     .max(MAX_SOURCE_SKIPPED_ITEMS)
@@ -113,6 +136,7 @@ const viewFields = {
 
 export const sourceSchema = z.discriminatedUnion('kind', [
   z.strictObject({ kind: z.literal('imap'), config: imapSourceConfigSchema, ...viewFields }),
+  z.strictObject({ kind: z.literal('gdrive'), config: gdriveSourceConfigSchema, ...viewFields }),
 ]);
 export type Source = z.output<typeof sourceSchema>;
 
@@ -130,6 +154,15 @@ export const sourceCreateSchema = z.discriminatedUnion('kind', [
     config: imapSourceConfigSchema,
     secret: keyUpdateSchema.describe('The password of the mailbox.'),
   }),
+  z.strictObject({
+    kind: z.literal('gdrive'),
+    name: sourceName,
+    enabled: z.boolean().default(true),
+    poll_interval_minutes: pollInterval.default(DEFAULT_SOURCE_POLL_MINUTES),
+    hint: sourceHint.optional(),
+    private: sourcePrivate.default(false),
+    config: gdriveSourceConfigSchema,
+  }),
 ]);
 export type SourceCreate = z.output<typeof sourceCreateSchema>;
 export type SourceCreateInput = z.input<typeof sourceCreateSchema>;
@@ -145,6 +178,15 @@ export const sourcePatchSchema = z.discriminatedUnion('kind', [
     private: sourcePrivate.optional(),
     config: imapSourceConfigSchema.optional(),
     secret: keyUpdateSchema.describe('The password of the mailbox.'),
+  }),
+  z.strictObject({
+    kind: z.literal('gdrive'),
+    name: sourceName.optional(),
+    enabled: z.boolean().optional(),
+    poll_interval_minutes: pollInterval.optional(),
+    hint: sourceHint.nullable().optional().describe('Null removes it.'),
+    private: sourcePrivate.optional(),
+    config: gdriveSourceConfigSchema.optional(),
   }),
 ]);
 export type SourcePatch = z.output<typeof sourcePatchSchema>;
@@ -166,3 +208,9 @@ export const sourceRunRequestSchema = z.strictObject({
   queued: z.boolean().describe('False when a run was already due at once.'),
 });
 export type SourceRunRequest = z.output<typeof sourceRunRequestSchema>;
+
+/** Where to send the browser for the consent of Google; the answer comes back to Liasse. */
+export const googleConsentSchema = z.strictObject({
+  url: z.url().describe('The consent page of Google, for this source and this session only.'),
+});
+export type GoogleConsent = z.output<typeof googleConsentSchema>;

@@ -26,6 +26,7 @@ import { registryRoutes } from './routes/registry.ts';
 import { searchRoutes } from './routes/search.ts';
 import { settingsRoutes } from './routes/settings.ts';
 import { setupRoutes } from './routes/setup.ts';
+import { googleConsentRoutes } from './routes/google-consent.ts';
 import { sourceRoutes } from './routes/sources.ts';
 import { systemRoutes } from './routes/system.ts';
 import { uploadRoutes } from './routes/upload.ts';
@@ -40,7 +41,7 @@ export interface AppDependencies {
   /** The context of the settings in force, read per request; undefined while none are saved. */
   readonly api: () => ApiContext | undefined;
   /** What exists before any settings: the database, the files and their signed URLs. */
-  readonly base: Pick<ApiContext, 'db' | 'storage' | 'fileUrls'>;
+  readonly base: Pick<ApiContext, 'db' | 'storage' | 'fileUrls' | 'sourceFiles'>;
   readonly settings: SettingsContext;
   /** The ingestion sources: they exist before any settings, as their routes do. */
   readonly sources: SourcesContext;
@@ -160,6 +161,10 @@ export const createApp = ({
       signedIn: credentialed(requestTimeoutMs, [session]),
       signedInToCheck: credentialed(uploadTimeoutMs, [session]),
     }),
+  );
+  app.route(
+    '/',
+    googleConsentRoutes({ sources, signedIn: credentialed(requestTimeoutMs, [session]) }),
   );
   app.route(
     '/',

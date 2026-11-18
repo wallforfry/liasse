@@ -26,6 +26,7 @@ export const STATE = {
       entity_arbitration_similarity: 0.8,
     },
     hindsight: { url: 'http://hindsight.example.test', bank: 'documents', api_key_state: 'unset' },
+    google: { client_secret_state: 'unset' },
   },
   embedder_locked: false,
 };

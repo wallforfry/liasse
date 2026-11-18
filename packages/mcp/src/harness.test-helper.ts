@@ -9,6 +9,7 @@ import {
   createFakeEmbedder,
   createTestDatabase,
   insertSyntheticDocument,
+  NO_SOURCE_FILES,
   type NewDocumentRow,
   type TestDatabase,
 } from '@liasse/core/testing';
@@ -53,6 +54,7 @@ export const createMcpHarness = async (): Promise<McpHarness> => {
   const api: ApiContext = {
     db: database.db,
     storage: createFsStorage(root),
+    sourceFiles: NO_SOURCE_FILES,
     embedder,
     fullText: rankByFullText,
     schemaLanguage: 'en',

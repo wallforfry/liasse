@@ -17,7 +17,7 @@ export interface FrontOptions {
   readonly transport: Transport;
   /** The context of the settings in force, undefined while none are saved. */
   readonly api: () => ApiContext | undefined;
-  readonly base: Pick<ApiContext, 'db' | 'storage' | 'fileUrls'>;
+  readonly base: Pick<ApiContext, 'db' | 'storage' | 'fileUrls' | 'sourceFiles'>;
   readonly settings: SettingsContext;
   readonly sources: SourcesContext;
   readonly config: Config;

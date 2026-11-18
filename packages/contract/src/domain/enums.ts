@@ -132,9 +132,22 @@ export type ProcessingOutcome = (typeof PROCESSING_OUTCOMES)[number];
 export const DOCUMENT_SOURCES = ['watch', 'api', 'mcp', 'connector'] as const;
 export type DocumentSource = (typeof DOCUMENT_SOURCES)[number];
 
-// The protocols an ingestion source reads from.
-export const SOURCE_KINDS = ['imap'] as const;
+// The protocols an ingestion source reads from. A `gdrive` source keeps its files by
+// reference: Drive holds the bytes, Liasse their text and knowledge.
+export const SOURCE_KINDS = ['imap', 'gdrive'] as const;
 export type SourceKind = (typeof SOURCE_KINDS)[number];
+
+// How a consent at Google ended, as the browser comes back to the web UI: the source got
+// its authorization, the person declined, the answer did not belong to this session or
+// came too late, Google refused the code, or the person unticked the read access to Drive.
+export const GOOGLE_CONSENT_OUTCOMES = [
+  'connected',
+  'denied',
+  'invalid',
+  'refused',
+  'missing_scope',
+] as const;
+export type GoogleConsentOutcome = (typeof GOOGLE_CONSENT_OUTCOMES)[number];
 
 // How the IMAP connection is secured: TLS from the first byte, STARTTLS required on a plain
 // connection, or none (the password crosses the network in clear).

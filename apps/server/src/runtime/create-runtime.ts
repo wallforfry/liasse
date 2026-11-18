@@ -4,12 +4,18 @@ import { createDb, migrate } from '@liasse/core/db';
 import type { CreateEmbedderOptions } from '@liasse/core/embeddings';
 import { prepareFullTextRanking } from '@liasse/core/search';
 import { createSecretBox, type ModelFactories, providerFactories } from '@liasse/core/settings';
-import { SOURCE_CONNECTORS } from '@liasse/core/sources';
+import {
+  createSourceFiles,
+  createSourceRuntime,
+  type GoogleEndpoints,
+  storedGoogleClient,
+} from '@liasse/core/sources';
 import { createStorage } from '@liasse/core/storage';
 import { createLogger, type Logger } from '../log.ts';
 import { runShutdown, type ShutdownStep } from '../shutdown.ts';
 import { type Bind, bindFeatures } from './bindings.ts';
 import { type Front, startFront, type Transport } from './front.ts';
+import { GOOGLE_CALLBACK_PATH } from '../http/routes/google-consent.ts';
 import { applyStored, createSettingsFollower } from './follow.ts';
 import { createLiveRuntime } from './live.ts';
 import { startupNotices, UNCONFIGURED_NOTICE } from './notices.ts';
@@ -29,6 +35,8 @@ export interface RuntimeOptions {
   readonly shutdownGraceMs?: number;
   /** `http` by default; `stdio` serves MCP on the standard streams and listens on nothing. */
   readonly transport?: Transport;
+  /** Google itself by default; a test serves the HTTP contract of Google on a local port. */
+  readonly google?: GoogleEndpoints;
 }
 
 export interface Runtime extends Omit<Front, 'stop'> {
@@ -53,6 +61,7 @@ export const createRuntime = async (
     embedder: embedderOptions,
     shutdownGraceMs = DEFAULT_SHUTDOWN_GRACE_MS,
     transport = 'http',
+    google,
   }: RuntimeOptions = {},
 ): Promise<Runtime> => {
   // Filled as the parts start, in the order they must stop.
@@ -82,13 +91,20 @@ export const createRuntime = async (
       secret: config.auth.fileUrlSecret,
       publicUrl: config.server.publicUrl,
     });
+    const secrets = createSecretBox(config.auth.secret);
+    const { connectors, oauth } = createSourceRuntime({
+      db,
+      secrets,
+      ...(google === undefined ? {} : { google }),
+    });
+    const sourceFiles = createSourceFiles({ db, secrets, connectors });
     const factories = models ?? providerFactories(embedderOptions);
     // The holder, its follower and the settings use cases need one another: the workers of
     // the holder catch up through the follower, which, like a save, puts settings in force
     // in the holder. Each is called only once all three exist.
     const settings: SettingsContext = {
       db,
-      secrets: createSecretBox(config.auth.secret),
+      secrets,
       embedding: config.embedding,
       factories,
       prepare: (...args) => live.prepare(...args),
@@ -107,6 +123,7 @@ export const createRuntime = async (
       storage,
       fullText: fullTextRanking.ranker,
       fileUrls,
+      sources: { connectors, files: sourceFiles },
       factories,
       bind,
       logger,
@@ -123,9 +140,18 @@ export const createRuntime = async (
     const { stop: stopFront, ...front } = await startFront({
       transport,
       api: live.api,
-      base: { db, storage, fileUrls },
+      base: { db, storage, fileUrls, sourceFiles },
       settings,
-      sources: { db, secrets: settings.secrets, connectors: SOURCE_CONNECTORS },
+      sources: {
+        db,
+        secrets,
+        connectors,
+        google: {
+          oauth,
+          client: storedGoogleClient(db, secrets),
+          redirectUri: new URL(GOOGLE_CALLBACK_PATH, config.server.publicUrl).toString(),
+        },
+      },
       config,
       ping: database.ping,
       logger,

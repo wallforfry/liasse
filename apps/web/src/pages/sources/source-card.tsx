@@ -23,7 +23,12 @@ import { SourceCheckResult } from './source-check-result.tsx';
 import { SourceLastRun } from './source-last-run.tsx';
 import { useCheckSource, useRunSource, useToggleSource } from './use-source-actions.ts';
 
-const KIND_LABELS: Readonly<Record<SourceKind, string>> = { imap: 'IMAP' };
+const KIND_LABELS: Readonly<Record<SourceKind, string>> = { imap: 'IMAP', gdrive: 'Google Drive' };
+
+const readsWhat = (source: Source): string =>
+  source.kind === 'imap'
+    ? `${source.config.username} on ${source.config.host}, reading ${source.config.mailboxes.join(', ')}`
+    : `Drive folder ${source.config.folder_id}`;
 
 const PasswordState = ({ source }: { readonly source: Source }) => {
   if (source.needs_attention) {
@@ -58,7 +63,6 @@ export const SourceCard = ({ source }: { readonly source: Source }) => {
   const check = useCheckSource(source.id);
   const titleId = `source-${source.id}-title`;
   const switchId = `source-${source.id}-enabled`;
-  const { host, username, mailboxes } = source.config;
   return (
     <Card role="region" aria-labelledby={titleId}>
       <CardHeader>
@@ -74,8 +78,7 @@ export const SourceCard = ({ source }: { readonly source: Source }) => {
               Private
             </Badge>
           ) : null}
-          {username} on {host}, reading {mailboxes.join(', ')}, every{' '}
-          {plural(source.poll_interval_minutes, 'minute')}.
+          {readsWhat(source)}, every {plural(source.poll_interval_minutes, 'minute')}.
         </CardDescription>
         <CardAction className="flex items-center gap-2">
           <Switch

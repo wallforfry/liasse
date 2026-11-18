@@ -15,7 +15,10 @@ import type { SecretBox } from '../settings/secret-box.ts';
 import { checkSource as checkStoredSource } from '../sources/check.ts';
 import type { SourceConnectors } from '../sources/connector.ts';
 import { cancelPolls, queuePollNow } from '../sources/schedule.ts';
-import { updateSourceSecret } from '../sources/secret.ts';
+import { bindConnector } from '../sources/connect.ts';
+import type { GoogleClientReader } from '../sources/google/client.ts';
+import type { GoogleOAuth } from '../sources/google/oauth.ts';
+import { openSourceSecret, updateSourceSecret } from '../sources/secret.ts';
 import {
   parseSourceRow,
   readSource,
@@ -25,12 +28,27 @@ import {
 } from '../sources/store.ts';
 import { ApiError } from './errors.ts';
 
+/** What a Drive source needs to be connected to Google. */
+export interface GoogleConsentContext {
+  readonly oauth: GoogleOAuth;
+  readonly client: GoogleClientReader;
+  /** `PUBLIC_URL/sources/google/callback`, registered in the Google client. */
+  readonly redirectUri: string;
+}
+
 /** What the source use cases need. They exist before any settings do. */
 export interface SourcesContext {
   readonly db: Database;
   readonly secrets: SecretBox;
   readonly connectors: SourceConnectors;
+  readonly google: GoogleConsentContext;
 }
+
+const KEEP: SecretUpdate = { action: 'keep' };
+
+// A Drive source gets its secret from the consent at Google, never from a request.
+const secretUpdateOf = (input: SourceCreate | SourcePatch): SecretUpdate =>
+  input.kind === 'imap' ? input.secret : KEEP;
 
 // A check connects to a remote server: bounded apart from the deadline of the request.
 const CHECK_TIMEOUT_MS = 60_000;
@@ -47,12 +65,13 @@ export const getSource = async ({ db, secrets }: SourcesContext, id: string): Pr
   return sourceViewOf(secrets, source);
 };
 
-/** Creates a source; an enabled one runs at once. */
+/** Creates a source; an enabled one with credentials runs at once. */
 export const createSource = async (
   context: SourcesContext,
   input: SourceCreate,
 ): Promise<Source> => {
   const id = newId(ID_PREFIXES.ingestionSource);
+  const secret = updateSourceSecret(context.secrets, id, null, secretUpdateOf(input));
   await context.db.transaction(async (tx) => {
     await tx.insert(ingestionSources).values({
       id,
@@ -63,9 +82,10 @@ export const createSource = async (
       hint: input.hint ?? null,
       private: input.private,
       config: input.config,
-      secret: updateSourceSecret(context.secrets, id, null, input.secret),
+      secret,
     });
-    if (input.enabled) await queuePollNow(tx, id);
+    // A source without credentials would only fail: it runs once it has them.
+    if (input.enabled && secret !== null) await queuePollNow(tx, id);
   });
   return getSource(context, id);
 };
@@ -77,13 +97,24 @@ const sendsSecretElsewhere = (
   config: StoredSource['config'],
   secret: SecretUpdate,
 ): boolean =>
+  stored.kind === 'imap' &&
+  'host' in config &&
   secret.action === 'keep' &&
   stored.secret !== null &&
   (config.host !== stored.config.host || config.security !== stored.config.security);
 
+// The kind of a source never changes: a patch names it, and must name the stored one.
+const configAfter = (stored: StoredSource, patch: SourcePatch): StoredSource['config'] => {
+  if (patch.kind !== stored.kind) {
+    throw new ApiError('source_kind_mismatch', `The source is of kind ${stored.kind}.`);
+  }
+  return patch.config ?? stored.config;
+};
+
 /**
  * Saves a source. A save is a person acting on it: it clears the flag of refused
- * credentials, and an enabled source runs at once with what was saved. The cursor stays:
+ * credentials, and an enabled source with credentials runs at once with what was saved. A
+ * Drive source keeps its authorization, which only a consent at Google replaces. The cursor stays:
  * a mailbox added starts from the start date, the others where they were.
  */
 export const updateSource = async (
@@ -99,14 +130,16 @@ export const updateSource = async (
       .for('update');
     if (row === undefined) throw sourceNotFound();
     const stored = parseSourceRow(row);
-    const config = patch.config ?? stored.config;
-    if (sendsSecretElsewhere(stored, config, patch.secret)) {
+    const config = configAfter(stored, patch);
+    const update = secretUpdateOf(patch);
+    if (sendsSecretElsewhere(stored, config, update)) {
       throw new ApiError(
         'source_secret_required',
         'A new host or connection security would receive the stored password: enter it again.',
       );
     }
     const enabled = patch.enabled ?? stored.enabled;
+    const secret = updateSourceSecret(context.secrets, id, stored.secret, update);
     await tx
       .update(ingestionSources)
       .set({
@@ -116,30 +149,41 @@ export const updateSource = async (
         hint: patch.hint === undefined ? stored.hint : patch.hint,
         private: patch.private ?? stored.private,
         config,
-        secret: updateSourceSecret(context.secrets, id, stored.secret, patch.secret),
+        secret,
         needsAttention: false,
         updatedAt: new Date(),
       })
       .where(eq(ingestionSources.id, id));
     await cancelPolls(tx, id);
-    if (enabled) await queuePollNow(tx, id);
+    if (enabled && secret !== null) await queuePollNow(tx, id);
   });
   return getSource(context, id);
 };
 
+const FORGET_TIMEOUT_MS = 30_000;
+
 /**
  * Deletes a source and its queued runs. Its documents stay; what said they came from it
- * goes. A run in progress finishes the item it is on, then finds nothing to write to.
+ * goes, so a document whose file stayed at the source can no longer serve it. A run in
+ * progress finishes the item it is on, then finds nothing to write to. The credentials of
+ * a source that can revoke them, a Drive's authorization, are revoked at the source.
  */
-export const deleteSource = async ({ db }: SourcesContext, id: string): Promise<void> => {
-  await db.transaction(async (tx) => {
-    const deleted = await tx
-      .delete(ingestionSources)
-      .where(eq(ingestionSources.id, id))
-      .returning({ id: ingestionSources.id });
-    if (deleted.length === 0) throw sourceNotFound();
+export const deleteSource = async (
+  { db, secrets, connectors }: SourcesContext,
+  id: string,
+): Promise<void> => {
+  const deleted = await db.transaction(async (tx) => {
+    const [row] = await tx.delete(ingestionSources).where(eq(ingestionSources.id, id)).returning();
+    if (row === undefined) throw sourceNotFound();
     await cancelPolls(tx, id);
+    return parseSourceRow(row);
   });
+  const { forget } = bindConnector(connectors, deleted);
+  const secret = openSourceSecret(secrets, deleted.id, deleted.secret);
+  if (forget === undefined || secret.state !== 'set') return;
+  // Best effort: the token left Liasse with the row, and Google ends a refresh token
+  // that goes unused for six months.
+  await forget(secret.value, AbortSignal.timeout(FORGET_TIMEOUT_MS)).catch(() => undefined);
 };
 
 /** Tries the stored credentials and lists the first items the next run would take. */

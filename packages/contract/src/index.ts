@@ -244,6 +244,11 @@ export {
 export { AUTH_BASE_PATH, CSP_NONCE_META_PROPERTY } from './web-ui.ts';
 export { type QueryDsl, queryDslSchema } from './query/dsl.ts';
 export {
+  type GdriveSourceConfig,
+  type GdriveSourceConfigInput,
+  gdriveSourceConfigSchema,
+  type GoogleConsent,
+  googleConsentSchema,
   type ImapSourceConfig,
   type ImapSourceConfigInput,
   imapSourceConfigSchema,

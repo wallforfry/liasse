@@ -46,14 +46,15 @@ const split = (box: SecretBox, settings: Settings): SplitSettings => {
     llm: { api_key: _llmKey, ...llm },
     embedding: { api_key: _embeddingKey, ...embedding },
     hindsight: { api_key: _hindsightKey, ...hindsight },
+    google: { client_secret: _googleSecret, ...google },
     pipeline,
   } = settings;
   return {
-    document: { llm, embedding, pipeline, hindsight },
+    document: { llm, embedding, pipeline, hindsight, google },
     secrets: Object.fromEntries(
       SECRET_SLOTS.flatMap((slot) => {
-        const key = settings[slot].api_key;
-        return key === undefined ? [] : [[slot, box.seal(slot, key)]];
+        const key = keysOf(settings)[slot];
+        return key.state === 'set' ? [[slot, box.seal(slot, key.value)]] : [];
       }),
     ),
   };
@@ -101,6 +102,7 @@ const storedOf = (box: SecretBox, row: Row): StoredSettings => {
       llm: opened(box, 'llm', sealed.data.llm),
       embedding: opened(box, 'embedding', sealed.data.embedding),
       hindsight: opened(box, 'hindsight', sealed.data.hindsight),
+      google: opened(box, 'google', sealed.data.google),
     },
   };
 };

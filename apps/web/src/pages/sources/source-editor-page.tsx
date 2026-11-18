@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useParams } from 'react-router';
 import { useClient } from '../../api/session.ts';
 import { ErrorAlert } from '../../components/error-alert.tsx';
+import { Alert, AlertDescription, AlertTitle } from '../../components/ui/alert.tsx';
 import { PageHeader } from '../../components/page-header.tsx';
 import { Skeleton } from '../../components/ui/skeleton.tsx';
 import { SourceEditor } from './source-editor.tsx';
@@ -30,6 +31,16 @@ export const EditSourcePage = () => {
   const body = (() => {
     if (source.isPending) return <Skeleton className="h-96 w-full max-w-2xl" />;
     if (source.isError) return <ErrorAlert error={source.error} title="Source not loaded" />;
+    if (source.data.kind !== 'imap') {
+      return (
+        <Alert className="max-w-2xl">
+          <AlertTitle>Not editable here yet</AlertTitle>
+          <AlertDescription>
+            A Google Drive source is edited through the REST API until its form ships.
+          </AlertDescription>
+        </Alert>
+      );
+    }
     return <SourceEditor key={source.data.updated_at} source={source.data} />;
   })();
 

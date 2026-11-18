@@ -1,10 +1,18 @@
 export {
   deleteDocument,
   type DeleteDocumentDeps,
+  type DeleteDocumentOptions,
   type DeletedDocument,
 } from './delete-document.ts';
 export { createDeleteFileHandler, type DeleteFileDeps, deleteFileJob } from './delete-file-job.ts';
-export { type DocumentFile, type DocumentFileDeps, getDocumentFile } from './document-file.ts';
+export {
+  type DocumentFile,
+  type DocumentFileDeps,
+  getDocumentFile,
+  SourceFileChangedError,
+  type SourceFiles,
+  SourceFileUnavailableError,
+} from './document-file.ts';
 export {
   EmptyFileError,
   FileTooLargeError,

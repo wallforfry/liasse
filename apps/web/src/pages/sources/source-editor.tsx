@@ -3,7 +3,6 @@ import {
   MAX_SOURCE_NAME_LENGTH,
   MAX_SOURCE_POLL_MINUTES,
 } from '@liasse/contract/domain';
-import type { Source } from '@liasse/sdk';
 import { type SubmitEvent, useState } from 'react';
 import { Link } from 'react-router';
 import { ErrorAlert } from '../../components/error-alert.tsx';
@@ -19,6 +18,7 @@ import { type ImapFieldsProps, ImapSelectionFields, ImapServerFields } from './i
 import {
   type ImapSourceValues,
   followServerChange,
+  type ImapSource,
   imapValuesOf,
   needsPasswordAgain,
   newImapValues,
@@ -84,7 +84,7 @@ const GeneralFields = ({ values, issues, onChange }: ImapFieldsProps) => {
 /** The source a valid form saves, or the issues of an invalid one. */
 const saveOf = (
   values: ImapSourceValues,
-  source: Source | undefined,
+  source: ImapSource | undefined,
 ): { readonly save: SourceSave } | { readonly issues: Issues } => {
   if (source === undefined) {
     const created = validateCreate(values);
@@ -99,7 +99,7 @@ const saveOf = (
 };
 
 /** The form of a new source, or of `source`: a new reading of it gives a new form. */
-export const SourceEditor = ({ source }: { readonly source?: Source }) => {
+export const SourceEditor = ({ source }: { readonly source?: ImapSource }) => {
   const [values, setValues] = useState<ImapSourceValues>(() =>
     source === undefined ? newImapValues() : imapValuesOf(source),
   );

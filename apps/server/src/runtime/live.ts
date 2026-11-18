@@ -4,9 +4,11 @@ import type { ApiContext, FileUrls, PreparedSettings } from '@liasse/core/api';
 import type { Config } from '@liasse/core/config';
 import type { Database } from '@liasse/core/db';
 import type { ConfiguredEmbedder } from '@liasse/core/embeddings';
+import type { SourceFiles } from '@liasse/core/ingest';
 import type { HandlerSet } from '@liasse/core/jobs';
 import type { ChunkRanker } from '@liasse/core/search';
 import { type ModelFactories, type ResolvedSettings, resolveSettings } from '@liasse/core/settings';
+import type { SourceConnectors } from '@liasse/core/sources';
 import type { Storage } from '@liasse/core/storage';
 import type { Logger } from '../log.ts';
 import type { ShutdownStep } from '../shutdown.ts';
@@ -23,6 +25,8 @@ export interface LiveRuntimeOptions {
   readonly storage: Storage;
   readonly fullText: ChunkRanker;
   readonly fileUrls: FileUrls;
+  /** The connectors of the ingestion sources, and the files that stay at a source. */
+  readonly sources: { readonly connectors: SourceConnectors; readonly files: SourceFiles };
   readonly factories: ModelFactories;
   readonly bind: Bind;
   readonly logger: Logger;
@@ -139,11 +143,14 @@ export const createLiveRuntime = (options: LiveRuntimeOptions): LiveRuntime => {
       embedder: embedder.embedder,
       textModel,
       visionModel,
+      sourceConnectors: options.sources.connectors,
+      sourceFiles: options.sources.files,
       logger,
     });
     const api: ApiContext = {
       db,
       storage,
+      sourceFiles: options.sources.files,
       embedder: embedder.embedder,
       fullText: options.fullText,
       schemaLanguage: settings.pipeline.schemaLanguage,
