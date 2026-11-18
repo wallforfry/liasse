@@ -31,7 +31,13 @@ export const documents = pgTable(
       .primaryKey()
       .$defaultFn(() => newId(ID_PREFIXES.document)),
     sha256: text('sha256').notNull().unique(),
-    storageKey: text('storage_key').notNull(),
+    // Where our storage holds the file, or null when it stays at a source (`file_at_source`):
+    // a Drive file is kept by reference, and any origin of the document may serve it.
+    storageKey: text('storage_key'),
+    fileAtSource: boolean('file_at_source').notNull().default(false),
+    // Set on a tombstone that a new version of its file at a source replaced: unlike one a
+    // person deleted, the source brings it back when the file returns to these bytes.
+    replacedBySource: boolean('replaced_by_source').notNull().default(false),
     mime: text('mime').notNull(),
     originalName: text('original_name').notNull(),
     // What the caller said about the file at ingestion: untrusted free text.
@@ -88,6 +94,7 @@ export const documents = pgTable(
     index('documents_status_idx').on(table.status),
     index('documents_type_id_idx').on(table.typeId),
     index('documents_subject_ids_idx').using('gin', table.subjectIds),
+    check('documents_file_location', sql`(${table.storageKey} IS NULL) = ${table.fileAtSource}`),
     check(
       'documents_confidence_range',
       sql`${table.confidence} IS NULL OR ${table.confidence} BETWEEN 0 AND 1`,

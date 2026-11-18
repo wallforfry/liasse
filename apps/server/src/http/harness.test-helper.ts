@@ -6,13 +6,14 @@ import {
   type ApiFeatures,
   createFileUrls,
   type SettingsContext,
+  type SourcesContext,
 } from '@liasse/core/api';
 import { documentPages } from '@liasse/core/db';
 import { indexDocument, rankByFullText } from '@liasse/core/search';
 import type { Auth } from '@liasse/core/auth';
 import { NO_TRUSTED_PROXIES } from '@liasse/core/network';
 import { createSecretBox } from '@liasse/core/settings';
-import { SOURCE_CONNECTORS } from '@liasse/core/sources';
+import { createSourceFiles, createSourceRuntime, storedGoogleClient } from '@liasse/core/sources';
 import { createFsStorage } from '@liasse/core/storage';
 import {
   createFakeEmbedder,
@@ -21,7 +22,9 @@ import {
   createTestAuth,
   createTestDatabase,
   insertSyntheticDocument,
+  type FakeGoogle,
   type NewDocumentRow,
+  startFakeGoogle,
   SYNTHETIC_EMBEDDING_ENVIRONMENT,
   TEST_AUTH_SECRET,
   type TestDatabase,
@@ -30,6 +33,7 @@ import type { Hono } from 'hono';
 import { createLogger } from '../log.ts';
 import { type AppDependencies, createApp } from './app.ts';
 import type { AppEnv } from './env.ts';
+import { GOOGLE_CALLBACK_PATH } from './routes/google-consent.ts';
 import { testAssets } from './ui/ui.test-helper.ts';
 
 export const TEST_PUBLIC_URL = 'https://liasse.example.com';
@@ -43,6 +47,9 @@ type AppOverrides = Partial<Omit<AppDependencies, 'api' | 'base'>> & {
 
 export interface HttpHarness {
   readonly database: TestDatabase;
+  /** The Google that the Drive sources of the app reach. */
+  readonly google: FakeGoogle;
+  readonly sources: SourcesContext;
   readonly api: ApiContext;
   /** The settings use cases of the app: fake models, and a preparation that changes nothing. */
   readonly settings: SettingsContext;
@@ -89,9 +96,27 @@ export const createHttpHarness = async (): Promise<HttpHarness> => {
   const auth = await createTestAuth(database.db, TEST_PUBLIC_URL);
   const token = await createTestApiKey(auth, 'test');
   const otherToken = await createTestApiKey(auth, 'other');
+  const secrets = createSecretBox(TEST_AUTH_SECRET);
+  const google = await startFakeGoogle();
+  const { connectors, oauth } = createSourceRuntime({
+    db: database.db,
+    secrets,
+    google: google.endpoints,
+  });
+  const sources: SourcesContext = {
+    db: database.db,
+    secrets,
+    connectors,
+    google: {
+      oauth,
+      client: storedGoogleClient(database.db, secrets),
+      redirectUri: new URL(GOOGLE_CALLBACK_PATH, TEST_PUBLIC_URL).toString(),
+    },
+  };
   const api: ApiContext = {
     db: database.db,
     storage: createFsStorage(root),
+    sourceFiles: createSourceFiles({ db: database.db, secrets, connectors }),
     embedder,
     fullText: rankByFullText,
     schemaLanguage: 'en',
@@ -106,7 +131,7 @@ export const createHttpHarness = async (): Promise<HttpHarness> => {
   };
   const settings: SettingsContext = {
     db: database.db,
-    secrets: createSecretBox(TEST_AUTH_SECRET),
+    secrets,
     embedding: SYNTHETIC_EMBEDDING_ENVIRONMENT,
     factories: createFakeModelFactories(),
     prepare: () =>
@@ -126,7 +151,7 @@ export const createHttpHarness = async (): Promise<HttpHarness> => {
       api: () => current,
       base: api,
       settings,
-      sources: { db: database.db, secrets: settings.secrets, connectors: SOURCE_CONNECTORS },
+      sources,
       auth,
       setupToken: undefined,
       publicUrl: TEST_PUBLIC_URL,
@@ -142,6 +167,8 @@ export const createHttpHarness = async (): Promise<HttpHarness> => {
     withBearer(init, presented);
   return {
     database,
+    google,
+    sources,
     api,
     settings,
     auth,
@@ -167,6 +194,7 @@ export const createHttpHarness = async (): Promise<HttpHarness> => {
       return id;
     },
     dispose: async () => {
+      await google.close();
       await rm(root, { recursive: true, force: true });
       await database.dispose();
     },

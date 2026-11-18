@@ -100,6 +100,8 @@ describe('deleteDocument and the delete_file job', () => {
       id,
       sha256: sha256Of(bytes),
       storageKey: keyOf(bytes),
+      // Kept with the storage key: where the file was, for its removal.
+      fileAtSource: false,
       mime: 'application/pdf',
       source: 'api',
       ingestedAt: before.ingestedAt,
@@ -125,6 +127,7 @@ describe('deleteDocument and the delete_file job', () => {
       noticePeriod: null,
       watchRequeues: 0,
       fileDeletedAt: null,
+      replacedBySource: false,
       // Kept: the only trace that Hindsight may still hold facts and owes a forget.
       hindsightHeldSince: new Date('2026-02-01T00:00:00Z'),
       hindsightSentHash: null,

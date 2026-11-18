@@ -27,7 +27,8 @@ export interface DeleteFileDeps {
 
 /**
  * The handler the server registers for `deleteFileJob`. It removes the stored file of
- * a tombstone and is safe to run any number of times.
+ * a tombstone and is safe to run any number of times. A document whose file stayed at its
+ * source has none: the job only records that nothing is owed.
  *
  * It looks at the document again under the lock of its hash: the same bytes may have
  * been ingested again since the deletion, which revives the row, and their file must
@@ -47,7 +48,8 @@ export const createDeleteFileHandler = ({ db, storage }: DeleteFileDeps): Regist
         .from(documents)
         .where(eq(documents.id, payload.documentId));
       if (current === undefined || isLiveStatus(current.status)) return;
-      await storage.delete(parseStorageKey(document.storageKey));
+      // A file kept at a source is never ours to delete.
+      if (document.storageKey !== null) await storage.delete(parseStorageKey(document.storageKey));
       // What `requeueFileDeletions` reads: without it the removal is still owed.
       await tx
         .update(documents)

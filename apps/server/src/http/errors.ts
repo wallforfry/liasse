@@ -10,6 +10,7 @@ const STATUS_OF_KIND: Readonly<Record<ApiErrorKind, ContentfulStatusCode>> = {
   unauthenticated: 401,
   forbidden: 403,
   not_found: 404,
+  gone: 410,
   method_not_allowed: 405,
   conflict: 409,
   too_large: 413,

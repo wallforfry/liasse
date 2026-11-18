@@ -1,4 +1,4 @@
-import type { ImapSourceConfig } from '@liasse/contract';
+import type { GdriveSourceConfig, ImapSourceConfig } from '@liasse/contract';
 import { eq } from 'drizzle-orm';
 import { type SourcesContext, createSource } from '../api/sources.ts';
 import type { Database } from '../db/client.ts';
@@ -13,16 +13,45 @@ import type {
   SourceConnectors,
   SourceSession,
 } from './connector.ts';
-import { SOURCE_CONNECTORS } from './connectors.ts';
+import { createSourceRuntime } from './connectors.ts';
+import { storedGoogleClient } from './google/client.ts';
+import type { GoogleEndpoints } from './google/oauth.ts';
 import { sourcePollJob } from './schedule.ts';
 import { readSource, type StoredSource } from './store.ts';
 
 export const TEST_SECRETS = createSecretBox(TEST_AUTH_SECRET);
 
+// Tests never reach Google: nothing listens on the discard port, which refuses at once.
+const NO_GOOGLE: GoogleEndpoints = {
+  consent: 'http://127.0.0.1:9/consent',
+  token: 'http://127.0.0.1:9/token',
+  revoke: 'http://127.0.0.1:9/revoke',
+  drive: 'http://127.0.0.1:9/drive/v3',
+};
+
+export const TEST_REDIRECT_URI = 'http://liasse.test/sources/google/callback';
+
+/** The connectors of a test: Google is the fake at `google`, or unreachable. */
+export const testConnectors = (db: Database, google: GoogleEndpoints = NO_GOOGLE) =>
+  createSourceRuntime({ db, secrets: TEST_SECRETS, google });
+
 export const sourcesContext = (
   db: Database,
-  connectors: SourceConnectors = SOURCE_CONNECTORS,
-): SourcesContext => ({ db, secrets: TEST_SECRETS, connectors });
+  connectors?: SourceConnectors,
+  google: GoogleEndpoints = NO_GOOGLE,
+): SourcesContext => {
+  const runtime = testConnectors(db, google);
+  return {
+    db,
+    secrets: TEST_SECRETS,
+    connectors: connectors ?? runtime.connectors,
+    google: {
+      oauth: runtime.oauth,
+      client: storedGoogleClient(db, TEST_SECRETS),
+      redirectUri: TEST_REDIRECT_URI,
+    },
+  };
+};
 
 export const SYNTHETIC_IMAP_CONFIG: ImapSourceConfig = {
   host: 'imap.example.test',
@@ -92,5 +121,11 @@ export const fakeConnectors = (
       return { changes: () => ReadableStream.from(changes), close: () => Promise.resolve() };
     },
   };
-  return { imap };
+  const gdrive: SourceConnector<GdriveSourceConfig> = {
+    connect: async (): Promise<SourceSession> => {
+      await connect();
+      return { changes: () => ReadableStream.from(changes), close: () => Promise.resolve() };
+    },
+  };
+  return { imap, gdrive };
 };

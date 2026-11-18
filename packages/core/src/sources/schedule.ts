@@ -1,4 +1,4 @@
-import { and, eq, lte, notExists, type SQLWrapper, sql } from 'drizzle-orm';
+import { and, eq, isNotNull, lte, notExists, type SQLWrapper, sql } from 'drizzle-orm';
 import { z } from 'zod';
 import type { Database } from '../db/client.ts';
 import { jobs } from '../db/schema/jobs.ts';
@@ -65,8 +65,8 @@ export const cancelPolls = async (tx: Executor, sourceId: string): Promise<void>
 };
 
 /**
- * Queues a run due at once for every enabled source that has none queued and does not wait
- * for a person. Called at startup: it restarts a chain that a run failed for good broke.
+ * Queues a run due at once for every enabled source that has credentials, has none queued
+ * and does not wait for a person. Called at startup: it restarts a chain that a run failed for good broke.
  */
 export const seedSourcePolls = (db: Database): Promise<number> =>
   db.transaction(async (tx) => {
@@ -77,6 +77,7 @@ export const seedSourcePolls = (db: Database): Promise<number> =>
         and(
           eq(ingestionSources.enabled, true),
           eq(ingestionSources.needsAttention, false),
+          isNotNull(ingestionSources.secret),
           notExists(tx.select({ id: jobs.id }).from(jobs).where(queuedPollOf(ingestionSources.id))),
         ),
       );

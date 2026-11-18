@@ -1,3 +1,4 @@
+import { NO_SOURCE_FILES } from '../testing/no-source-files.ts';
 import { eq } from 'drizzle-orm';
 import type { Database } from '../db/client.ts';
 import { chunks, documentPages, documents } from '../db/schema/documents.ts';
@@ -121,6 +122,7 @@ export const createPipelineHarness = async (): Promise<PipelineHarness> => {
   const base: PipelineDeps = {
     db,
     storage: ingestHarness.storage,
+    sourceFiles: NO_SOURCE_FILES,
     textModel: scriptedModel({}),
     visionModel: createFakeVisionModel(),
     embedder: createFakeEmbedder(),

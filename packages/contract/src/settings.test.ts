@@ -27,6 +27,7 @@ describe('the settings schema', () => {
         entity_arbitration_similarity: 0.8,
       },
       hindsight: { bank: 'documents' },
+      google: {},
     });
   });
 

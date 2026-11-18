@@ -25,6 +25,7 @@ import {
   SECRET_STATES,
   SOURCE_ERROR_KINDS,
   SOURCE_KINDS,
+  GOOGLE_CONSENT_OUTCOMES,
   STORAGE_DRIVERS,
   SUBJECT_IDENTIFIER_TYPES,
   SUBJECT_KINDS,
@@ -65,6 +66,7 @@ export const schemaLanguageSchema = z.enum(SCHEMA_LANGUAGES);
 export const supportedMimeSchema = z.enum(SUPPORTED_MIMES);
 export const secretStateSchema = z.enum(SECRET_STATES);
 export const sourceKindSchema = z.enum(SOURCE_KINDS);
+export const googleConsentOutcomeSchema = z.enum(GOOGLE_CONSENT_OUTCOMES);
 export const sourceErrorKindSchema = z.enum(SOURCE_ERROR_KINDS);
 export const imapSecuritySchema = z.enum(IMAP_SECURITY_MODES);
 // A client sends the key in a header and appends its paths to the base URL, so

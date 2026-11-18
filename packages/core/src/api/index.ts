@@ -54,6 +54,8 @@ export {
   getSource,
   listSources,
   requestSourceRun,
+  type GoogleConsentContext,
   type SourcesContext,
   updateSource,
 } from './sources.ts';
+export { completeGoogleConsent, startGoogleConsent } from './google-consent.ts';

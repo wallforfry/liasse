@@ -21,6 +21,8 @@ export interface IncomingFile {
   readonly bytes: Uint8Array;
   readonly sha256: string;
   readonly storageKey: StorageKey;
+  /** The source keeps the file: nothing is written to the storage for it. */
+  readonly byReference: boolean;
   readonly mime: SupportedMime;
   readonly filename: string;
   readonly source: DocumentSource;
@@ -44,7 +46,12 @@ export interface IngestResult {
 export interface ExistingDocument {
   readonly id: string;
   readonly status: DocumentStatus;
+  readonly fileAtSource: boolean;
+  readonly replacedBySource: boolean;
 }
+
+// Where a document's file is once these bytes are written to the storage.
+const storedFile = (file: IncomingFile) => ({ storageKey: file.storageKey, fileAtSource: false });
 
 const queueProcessing = (tx: Transaction, documentId: string): Promise<string> =>
   enqueue(tx, { kind: processDocumentJob, payload: { documentId } });
@@ -69,7 +76,11 @@ const stillIn = async (tx: Transaction, { id, status }: ExistingDocument): Promi
 
 // A file still lying in the watched folder is seen again at every restart, and an email
 // carries its attachments again each time it is read: neither is a request to undo a
-// deletion. An upload or an MCP call of the file itself is one.
+// deletion. An upload or an MCP call of the file itself is one. So is a file kept at its
+// source returning to these bytes, when a newer version of it was what deleted them.
+const revives = (tombstone: ExistingDocument, file: IncomingFile): boolean =>
+  file.revivesDeleted || (file.byReference && tombstone.replacedBySource);
+
 const reviveTombstone = async (
   tx: Transaction,
   storage: Storage,
@@ -77,11 +88,11 @@ const reviveTombstone = async (
   file: IncomingFile,
 ): Promise<Attempt> => {
   const { id } = tombstone;
-  if (!file.revivesDeleted) {
+  if (!revives(tombstone, file)) {
     return { id, status: 'deleted', duplicate: true, fileRestored: false };
   }
   if (!(await stillIn(tx, tombstone))) return undefined;
-  await storage.put(file.storageKey, file.bytes);
+  if (!file.byReference) await storage.put(file.storageKey, file.bytes);
   await tx
     .update(documents)
     .set({
@@ -93,6 +104,8 @@ const reviveTombstone = async (
       private: file.private,
       watchRequeues: 0,
       fileDeletedAt: null,
+      replacedBySource: false,
+      ...(file.byReference ? { storageKey: null, fileAtSource: true } : storedFile(file)),
       ingestedAt: sql`now()`,
     })
     .where(and(eq(documents.id, id), eq(documents.status, tombstone.status)));
@@ -110,6 +123,16 @@ const mayRequeue = (source: DocumentSource) =>
 const requeueCount = (source: DocumentSource) =>
   source === 'watch' ? sql`${documents.watchRequeues} + 1` : 0;
 
+// Whether the bytes at hand go to the storage: a stored copy always wins over a reference,
+// so a document kept at a source takes the bytes of a copy, and a stored file that was
+// lost is written again from whatever brought its bytes back.
+const writesBytes = async (
+  storage: Storage,
+  existing: ExistingDocument,
+  file: IncomingFile,
+): Promise<boolean> =>
+  existing.fileAtSource ? !file.byReference : !(await storage.exists(file.storageKey));
+
 // The bytes at hand are those of the document, by their hash: handing them back is
 // the way to repair a stored file that was lost, and to try a failed document again.
 const repairLiveDocument = async (
@@ -125,15 +148,23 @@ const repairLiveDocument = async (
       .set({ private: true })
       .where(and(eq(documents.id, id), isLiveDocument));
   }
-  const fileMissing = !(await storage.exists(file.storageKey));
-  if (!fileMissing && status !== 'failed') {
+  const writes = await writesBytes(storage, existing, file);
+  if (!writes && status !== 'failed') {
     return { id, status, duplicate: true, fileRestored: false };
   }
   // The storage was asked without any lock on the row: a deletion may have committed
   // meanwhile, and its tombstone must neither get its file back nor be queued again.
   if (!(await stillIn(tx, existing))) return undefined;
-  if (fileMissing) await storage.put(file.storageKey, file.bytes);
-  const unchanged = { id, status, duplicate: true, fileRestored: fileMissing };
+  if (writes) {
+    await storage.put(file.storageKey, file.bytes);
+    await tx.update(documents).set(storedFile(file)).where(eq(documents.id, id));
+  }
+  const unchanged = {
+    id,
+    status,
+    duplicate: true,
+    fileRestored: writes && !existing.fileAtSource,
+  };
   // A connector reads an item again only when its server renumbered it: not a request to try.
   if (status !== 'failed' || file.source === 'connector') return unchanged;
   const requeued = await requeueFailed(tx, id, {
@@ -158,7 +189,12 @@ export const ingestExisting = async (
       : await reviveTombstone(tx, storage, current, file);
     if (result !== undefined) return result;
     [current] = await tx
-      .select({ id: documents.id, status: documents.status })
+      .select({
+        id: documents.id,
+        status: documents.status,
+        fileAtSource: documents.fileAtSource,
+        replacedBySource: documents.replacedBySource,
+      })
       .from(documents)
       .where(eq(documents.id, existing.id));
   }
@@ -170,12 +206,12 @@ export const ingestNew = async (
   storage: Storage,
   file: IncomingFile,
 ): Promise<IngestResult> => {
-  await storage.put(file.storageKey, file.bytes);
+  if (!file.byReference) await storage.put(file.storageKey, file.bytes);
   const [document] = await tx
     .insert(documents)
     .values({
       sha256: file.sha256,
-      storageKey: file.storageKey,
+      ...(file.byReference ? { storageKey: null, fileAtSource: true } : storedFile(file)),
       mime: file.mime,
       originalName: file.filename,
       source: file.source,

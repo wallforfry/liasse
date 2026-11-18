@@ -29,7 +29,8 @@ export interface DeleteDocumentDeps {
 }
 
 // Everything that says what the document was. The hash and the storage key stay: the
-// first recognises the same bytes later, the second is what `delete_file` removes.
+// first recognises the same bytes later, the second is what `delete_file` removes, or
+// null with `file_at_source` for a file that stayed at its source, which nothing removes.
 // `hindsight_held_since` stays as well: it says nothing of the content, and it is the
 // only trace that Hindsight may still hold facts of the document and owes a forget.
 // `hindsight_retain_until` stays with it: a retain in flight may still land.
@@ -56,6 +57,7 @@ const BLANK_CONTENT = {
   noticePeriod: null,
   watchRequeues: 0,
   fileDeletedAt: null,
+  replacedBySource: false,
   hindsightSentHash: null,
 } as const;
 
@@ -113,9 +115,24 @@ const cancelQueuedProcessing = async (tx: Transaction, id: string): Promise<void
  * document rows: they run under the subject lock, taken after the lock of the hash and
  * before any row, as every writer of a document and its subjects takes them.
  */
+export interface DeleteDocumentOptions {
+  /**
+   * Asked once the lock of the hash is held, before anything changes: false leaves the
+   * document as it is, and what the callback wrote commits. No ingestion of the same bytes
+   * can change the document between its answer and the deletion.
+   */
+  readonly when?: (tx: Transaction) => Promise<boolean>;
+  /**
+   * The source that keeps the file now holds another version of it: the tombstone records
+   * it, and a source that keeps the file may bring the document back if it returns to these bytes.
+   */
+  readonly replacedBySource?: boolean;
+}
+
 export const deleteDocument = (
   { db, onDeleted }: DeleteDocumentDeps,
   id: string,
+  { when, replacedBySource = false }: DeleteDocumentOptions = {},
 ): Promise<boolean> =>
   db.transaction(async (outer) => {
     const [live] = await outer
@@ -124,6 +141,7 @@ export const deleteDocument = (
       .where(and(eq(documents.id, id), isLiveDocument));
     if (live === undefined) return false;
     await lockFile(outer, live.sha256);
+    if (when !== undefined && !(await when(outer))) return false;
     return withSubjectLock(outer, async (tx) => {
       const linked = await lockLinkedDocuments(tx, id);
       // The row is held from here on: what it says it concerns stays so until the commit.
@@ -133,7 +151,7 @@ export const deleteDocument = (
         .where(eq(documents.id, id));
       const [tombstone] = await tx
         .update(documents)
-        .set(BLANK_CONTENT)
+        .set({ ...BLANK_CONTENT, replacedBySource })
         .where(and(eq(documents.id, id), isLiveDocument))
         .returning({ id: documents.id });
       if (tombstone === undefined) return false;

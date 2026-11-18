@@ -2,6 +2,8 @@ import { DOCUMENT_JOB_FAILURE_CODES } from '@liasse/contract/domain';
 import { EntityResolutionContendedError } from '../entities/resolve.ts';
 import { PermanentJobError } from '../jobs/errors.ts';
 import { ModelOutputError, ModelProviderError } from '../models/errors.ts';
+import { SourceFileChangedError, SourceFileUnavailableError } from '../ingest/document-file.ts';
+import { SourceCredentialsError } from '../sources/connector.ts';
 import { StorageObjectNotFoundError } from '../storage/errors.ts';
 import { IndexingConflictError } from '../search/indexing.ts';
 import { TextExtractionError } from '../text/errors.ts';
@@ -12,6 +14,9 @@ import { TextProcessError } from './text-process/extract-in-child.ts';
 // document.
 export const PIPELINE_ERROR_CODES = [
   'file_missing',
+  'file_changed',
+  'file_unavailable',
+  'source_credentials_refused',
   'no_text',
   'model_provider_failed',
   'model_output_invalid',
@@ -49,6 +54,9 @@ export const documentErrorCode = (error: unknown): string => {
   if (error instanceof ModelProviderError) return 'model_provider_failed';
   if (error instanceof ModelOutputError) return 'model_output_invalid';
   if (error instanceof StorageObjectNotFoundError) return 'file_missing';
+  if (error instanceof SourceFileChangedError) return 'file_changed';
+  if (error instanceof SourceFileUnavailableError) return 'file_unavailable';
+  if (error instanceof SourceCredentialsError) return 'source_credentials_refused';
   if (
     error instanceof PipelineConflictError ||
     error instanceof IndexingConflictError ||
@@ -68,4 +76,6 @@ const hasRetryable = (error: unknown): error is { readonly retryable: boolean } 
 export const isPermanentFailure = (error: unknown): boolean =>
   error instanceof PermanentJobError ||
   error instanceof StorageObjectNotFoundError ||
+  error instanceof SourceFileChangedError ||
+  error instanceof SourceFileUnavailableError ||
   (hasRetryable(error) && !error.retryable);

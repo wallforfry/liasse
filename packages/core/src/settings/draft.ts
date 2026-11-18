@@ -5,7 +5,7 @@ import {
   settingsSchema,
   type SettingsView,
 } from '@liasse/contract';
-import { SECRET_SLOTS, stateOfKey, type StoredKey, type StoredKeys } from './keys.ts';
+import { KEY_FIELDS, SECRET_SLOTS, stateOfKey, type StoredKey, type StoredKeys } from './keys.ts';
 
 export interface SettingsIssue {
   readonly path: readonly PropertyKey[];
@@ -46,12 +46,13 @@ export const settingsFromDraft = (draft: SettingsDraft, stored: StoredKeys): Dra
     llm: keyAfter(draft.llm.api_key, stored.llm),
     embedding: keyAfter(draft.embedding.api_key, stored.embedding),
     hindsight: keyAfter(draft.hindsight.api_key, stored.hindsight),
+    google: keyAfter(draft.google.client_secret, stored.google),
   };
   const kept = SECRET_SLOTS.filter((slot) => keys[slot] === undefined);
   if (kept.length > 0) {
     return {
       ok: false,
-      issues: kept.map((slot) => ({ path: [slot, 'api_key'], message: UNREADABLE_KEPT })),
+      issues: kept.map((slot) => ({ path: [slot, KEY_FIELDS[slot]], message: UNREADABLE_KEPT })),
     };
   }
   const parsed = settingsSchema.safeParse({
@@ -59,6 +60,7 @@ export const settingsFromDraft = (draft: SettingsDraft, stored: StoredKeys): Dra
     embedding: { ...draft.embedding, api_key: keys.embedding?.key },
     pipeline: draft.pipeline,
     hindsight: { ...draft.hindsight, api_key: keys.hindsight?.key },
+    google: { ...draft.google, client_secret: keys.google?.key },
   });
   return parsed.success
     ? { ok: true, settings: parsed.data }
@@ -67,17 +69,19 @@ export const settingsFromDraft = (draft: SettingsDraft, stored: StoredKeys): Dra
 
 /** The settings as they may be shown: the state of each key, never the key. */
 export const settingsViewOf = (
-  { llm, embedding, pipeline, hindsight }: SettingsDraft,
+  { llm, embedding, pipeline, hindsight, google }: SettingsDraft,
   keys: StoredKeys,
 ): SettingsView => {
   const { api_key: _llmKey, ...llmView } = llm;
   const { api_key: _embeddingKey, ...embeddingView } = embedding;
   const { api_key: _hindsightKey, ...hindsightView } = hindsight;
+  const { client_secret: _googleSecret, ...googleView } = google;
   return {
     llm: { ...llmView, api_key_state: stateOfKey(keys.llm) },
     embedding: { ...embeddingView, api_key_state: stateOfKey(keys.embedding) },
     pipeline,
     hindsight: { ...hindsightView, api_key_state: stateOfKey(keys.hindsight) },
+    google: { ...googleView, client_secret_state: stateOfKey(keys.google) },
   };
 };
 

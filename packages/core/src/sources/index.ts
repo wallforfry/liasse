@@ -9,7 +9,19 @@ export {
   SourceItemError,
   type SourceSession,
 } from './connector.ts';
-export { SOURCE_CONNECTORS } from './connectors.ts';
+export {
+  createSourceRuntime,
+  type SourceConnectorsDeps,
+  type SourceRuntime,
+} from './connectors.ts';
+export { createSourceFiles, type SourceFilesDeps } from './files.ts';
+export { type GoogleClientReader, storedGoogleClient } from './google/client.ts';
+export {
+  GOOGLE_ENDPOINTS,
+  type GoogleClient,
+  type GoogleEndpoints,
+  type GoogleOAuth,
+} from './google/oauth.ts';
 export { createSourceHandlers, SOURCE_CONCURRENCY } from './handlers.ts';
 export { pollSource, type SourcePollDeps } from './poll.ts';
 export {

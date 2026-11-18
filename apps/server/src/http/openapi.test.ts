@@ -75,7 +75,7 @@ describe('GET /openapi.json', () => {
     expect(statuses('/sources/{id}/run', 'post')).toEqual(['202', '400', '401', '404', '409']);
   });
 
-  it('declares the three credentials and marks /health and the onboarding as public', () => {
+  it('declares the three credentials and marks /health, the onboarding and the return from Google as public', () => {
     const { paths, components } = documentSchema.parse(raw);
     expect(Object.keys(components.securitySchemes).toSorted()).toEqual([
       'bearerAuth',
@@ -90,6 +90,7 @@ describe('GET /openapi.json', () => {
     expect(open.toSorted()).toEqual([
       'get /api/setup',
       'get /health',
+      'get /sources/google/callback',
       'post /api/setup',
       'post /api/setup/check',
     ]);

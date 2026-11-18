@@ -13,7 +13,7 @@ The compose file reads `.env` next to it, written from [`.env.example`](../.env.
 | `LIASSE_LISTEN`     | `127.0.0.1:8080`        | Host address and port the container is published on                              |
 | `LIASSE_VERSION`    | `latest`                | Tag of `ghcr.io/wallforfry/liasse`                                               |
 
-The compose file sets `DATABASE_URL`, `HOST`, `PORT`, `STORAGE_PATH` and `EMBEDDING_CACHE_DIR` itself, over the values of `.env`, which suit a server run from source. Files and the local embedding model live in the `liasse-data` volume, the database in `postgres-data`: back up both.
+The compose file sets `DATABASE_URL`, `HOST`, `PORT`, `STORAGE_PATH` and `EMBEDDING_CACHE_DIR` itself, over the values of `.env`, which suit a server run from source. Files and the local embedding model live in the `liasse-data` volume, the database in `postgres-data`: back up both. The files of a Google Drive source are not among them: they stay on Drive, and a backup of Liasse holds their text and knowledge but not their bytes.
 
 Postgres runs under an init (`init: true`), so the postmaster is not PID 1. Keep it on a Postgres container of your own: a postmaster that is PID 1 adopts an orphaned health check, such as a `pg_isready` killed at its timeout under load, takes its exit code for a crashed backend, ends every session and runs crash recovery.
 
@@ -101,6 +101,20 @@ Inside the container, `127.0.0.1` is the container itself: an Ollama server on t
 Sources are configured on the **Sources** page of the web UI, never in the environment; see [Ingestion sources](spec.md#ingestion-sources) in the specification. Their passwords are sealed under `AUTH_SECRET`: rotating it makes them unreadable, and each source then needs its password again. The server connects to whatever host a signed-in account names, internal addresses included.
 
 **A Gmail mailbox over IMAP.** Turn on 2-Step Verification on the Google account, create an app password (Google account, Security, App passwords), then create an IMAP source with host `imap.gmail.com`, port `993`, security `tls`, the full address as user name and the app password. A label is read as a folder of the same name (`INBOX`, `Invoices`, `[Gmail]/All Mail`). Liasse opens folders read-only and never marks a message as read.
+
+**A Google Drive folder.** Liasse signs in to Google with an OAuth client of your own Google Cloud project; it ships none, since a self-hosted server cannot keep the secret of a shared one. The client reads Drive with `drive.readonly`, never writes to it, and Liasse keeps the files on Drive: it stores their text and knowledge, not their bytes.
+
+1. In the [Google Cloud console](https://console.cloud.google.com/), create a project (or pick one), then enable the **Google Drive API** (APIs and services, Library).
+2. Configure the consent screen (Google Auth Platform, Branding and Audience): user type **External** for a personal account, or **Internal** on a Google Workspace account whose users are the only ones to connect. Give an app name and your address.
+3. Under Data access, add the scope `https://www.googleapis.com/auth/drive.readonly`.
+4. Under Audience, **publish the app: move it to "In production"**, without asking for verification. In "Testing" status, Google ends the refresh token after 7 days and the source stops every week. Unverified and in production, the consent page shows a warning ("Google hasn't verified this app"): choose Advanced, then go on to the app. It works for up to 100 accounts, which is enough for one person. An Internal client needs neither step.
+5. Create the client (Clients, Create client): type **Web application**, authorized redirect URI `PUBLIC_URL/sources/google/callback`, for instance `https://liasse.example.com/sources/google/callback`. `PUBLIC_URL` must be the address the browser uses, the scheme included.
+6. In Liasse, open **Settings**, give the client id and the client secret in the Google section, and save.
+7. On the **Sources** page (the Drive form ships with the next release of the web UI; until then, `POST /sources` with `kind: gdrive`), create a Google Drive source with the id of the folder (the last part of its address in Drive, `https://drive.google.com/drive/folders/<id>`, or `root` for the whole of My Drive), then connect it with Google. The consent page asks for read access to Drive; keep it ticked.
+
+Every source keeps its own authorization, sealed under `AUTH_SECRET`. Deleting the last Drive source revokes its authorization at Google; while other Drive sources remain, it is left to end on its own, since revoking one may end the grant of every source of the same Google account. A new client id, or a client deleted in the console, ends the authorizations it gave: connect each Drive source again. Google also ends a refresh token unused for six months. A source whose authorization was refused shows as needing attention until it is connected again.
+
+A file trashed, deleted or moved out of the folder leaves its document in Liasse, its file unavailable (a download answers 410); a file that changed on Drive becomes a new document, the old one deleted. Google Docs, Sheets and Slides are not read.
 
 ## Coolify
 

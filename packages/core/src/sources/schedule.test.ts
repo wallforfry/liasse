@@ -62,4 +62,16 @@ describe('the schedule of the sources', () => {
       [{ sourceId: waiting }, { sourceId: idle }].toSorted(),
     );
   });
+
+  it('seeds no run for a source without credentials, such as a Drive not connected yet', async () => {
+    const unconnected = await addSource(database.db);
+    await database.db
+      .update(ingestionSources)
+      .set({ secret: null })
+      .where(eq(ingestionSources.id, unconnected));
+    await cancelPolls(database.db, unconnected);
+
+    expect(await seedSourcePolls(database.db)).toBe(0);
+    expect(await queuedPolls(database.db)).toEqual([]);
+  });
 });

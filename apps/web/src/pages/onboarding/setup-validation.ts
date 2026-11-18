@@ -73,6 +73,7 @@ export const validateSetupSettings = (values: SettingsValues): Validation => {
     llm: { ...input.llm, api_key: keyOf(input.llm.api_key) },
     embedding: { ...input.embedding, api_key: keyOf(input.embedding.api_key) },
     hindsight: { ...input.hindsight, api_key: keyOf(input.hindsight.api_key) },
+    google: { ...input.google, client_secret: keyOf(input.google.client_secret) },
   });
   if (drafted.valid && settings.success) return drafted;
   return {

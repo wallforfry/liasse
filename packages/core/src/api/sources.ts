@@ -10,14 +10,17 @@ import {
   SOURCE_PASSWORD_UNREADABLE_MESSAGE,
 } from '@liasse/contract';
 import { SOURCE_CHECK_TIMEOUT_MS } from '@liasse/contract/domain';
-import { eq } from 'drizzle-orm';
+import { and, eq, isNull } from 'drizzle-orm';
 import type { Database } from '../db/client.ts';
-import { ingestionSources } from '../db/schema/sources.ts';
+import { documentOrigins, ingestionSources } from '../db/schema/sources.ts';
 import { ID_PREFIXES, newId } from '../domain/ids.ts';
 import type { SecretBox } from '../settings/secret-box.ts';
 import { checkSource as checkStoredSource } from '../sources/check.ts';
 import type { SourceConnectors } from '../sources/connector.ts';
 import { cancelPolls, queuePollNow } from '../sources/schedule.ts';
+import { forgetDriveToken } from '../sources/forget.ts';
+import type { GoogleClientReader } from '../sources/google/client.ts';
+import type { GoogleOAuth } from '../sources/google/oauth.ts';
 import { openSourceSecret, updateSourceSecret } from '../sources/secret.ts';
 import {
   parseSourceRow,
@@ -28,12 +31,27 @@ import {
 } from '../sources/store.ts';
 import { ApiError } from './errors.ts';
 
+/** What a Drive source needs to be connected to Google. */
+export interface GoogleConsentContext {
+  readonly oauth: GoogleOAuth;
+  readonly client: GoogleClientReader;
+  /** `PUBLIC_URL/sources/google/callback`, registered in the Google client. */
+  readonly redirectUri: string;
+}
+
 /** What the source use cases need. They exist before any settings do. */
 export interface SourcesContext {
   readonly db: Database;
   readonly secrets: SecretBox;
   readonly connectors: SourceConnectors;
+  readonly google: GoogleConsentContext;
 }
+
+const KEEP: SecretUpdate = { action: 'keep' };
+
+// A Drive source gets its secret from the consent at Google, never from a request.
+const secretUpdateOf = (input: SourceCreate | SourcePatch): SecretUpdate =>
+  input.kind === 'imap' ? input.secret : KEEP;
 
 const sourceNotFound = (): ApiError => new ApiError('source_not_found', 'No source has this id.');
 
@@ -55,10 +73,15 @@ const secretStateAfter = (
   }
 };
 
-// An enabled source runs at once with what was saved: without a password that opens, the run
-// would only meet refused credentials.
-const requireUsableSecret = (enabled: boolean, state: SecretState): void => {
-  if (!enabled || state === 'set') return;
+// An enabled mailbox runs at once with what was saved: without a password that opens, the
+// run would only meet refused credentials. A Drive source is saved before its consent at
+// Google, and runs once that gives it an authorization.
+const requireUsableSecret = (
+  input: SourceCreate | SourcePatch,
+  enabled: boolean,
+  state: SecretState,
+): void => {
+  if (input.kind !== 'imap' || !enabled || state === 'set') return;
   throw new ApiError(
     'source_secret_required',
     state === 'unset' ? SOURCE_PASSWORD_MISSING_MESSAGE : SOURCE_PASSWORD_UNREADABLE_MESSAGE,
@@ -75,13 +98,15 @@ export const getSource = async ({ db, secrets }: SourcesContext, id: string): Pr
   return sourceViewOf(secrets, source);
 };
 
-/** Creates a source; an enabled one runs at once, and needs its password. */
+/** Creates a source; an enabled one runs at once once it has credentials. */
 export const createSource = async (
   context: SourcesContext,
   input: SourceCreate,
 ): Promise<Source> => {
   const id = newId(ID_PREFIXES.ingestionSource);
-  requireUsableSecret(input.enabled, secretStateAfter(context.secrets, id, null, input.secret));
+  const update = secretUpdateOf(input);
+  requireUsableSecret(input, input.enabled, secretStateAfter(context.secrets, id, null, update));
+  const secret = updateSourceSecret(context.secrets, id, null, update);
   await context.db.transaction(async (tx) => {
     await tx.insert(ingestionSources).values({
       id,
@@ -92,9 +117,10 @@ export const createSource = async (
       hint: input.hint ?? null,
       private: input.private,
       config: input.config,
-      secret: updateSourceSecret(context.secrets, id, null, input.secret),
+      secret,
     });
-    if (input.enabled) await queuePollNow(tx, id);
+    // A source without credentials would only fail: it runs once it has them.
+    if (input.enabled && secret !== null) await queuePollNow(tx, id);
   });
   return getSource(context, id);
 };
@@ -106,15 +132,30 @@ const sendsSecretElsewhere = (
   config: StoredSource['config'],
   secret: SecretUpdate,
 ): boolean =>
+  stored.kind === 'imap' &&
+  'host' in config &&
   secret.action === 'keep' &&
   stored.secret !== null &&
   (config.host !== stored.config.host || config.security !== stored.config.security);
 
+// A Drive source pointed at another folder no longer reads the files of the former one:
+// they are removed, and those the new folder holds are found again by its first listing.
+const movesFolder = (stored: StoredSource, config: StoredSource['config']): boolean =>
+  stored.kind === 'gdrive' && 'folder_id' in config && config.folder_id !== stored.config.folder_id;
+
+// The kind of a source never changes: a patch names it, and must name the stored one.
+const configAfter = (stored: StoredSource, patch: SourcePatch): StoredSource['config'] => {
+  if (patch.kind !== stored.kind) {
+    throw new ApiError('source_kind_mismatch', `The source is of kind ${stored.kind}.`);
+  }
+  return patch.config ?? stored.config;
+};
+
 /**
  * Saves a source. A save is a person acting on it: it clears the flag of refused
- * credentials, and an enabled source runs at once with what was saved, so it needs a password
- * that opens. The cursor stays: a mailbox added starts from the start date, the others where
- * they were.
+ * credentials, and an enabled source with credentials runs at once with what was saved. A
+ * Drive source keeps its authorization, which only a consent at Google replaces. The cursor stays:
+ * a mailbox added starts from the start date, the others where they were.
  */
 export const updateSource = async (
   context: SourcesContext,
@@ -129,8 +170,9 @@ export const updateSource = async (
       .for('update');
     if (row === undefined) throw sourceNotFound();
     const stored = parseSourceRow(row);
-    const config = patch.config ?? stored.config;
-    if (sendsSecretElsewhere(stored, config, patch.secret)) {
+    const config = configAfter(stored, patch);
+    const update = secretUpdateOf(patch);
+    if (sendsSecretElsewhere(stored, config, update)) {
       throw new ApiError(
         'source_secret_required',
         'A new host or connection security would receive the stored password: enter it again.',
@@ -138,9 +180,11 @@ export const updateSource = async (
     }
     const enabled = patch.enabled ?? stored.enabled;
     requireUsableSecret(
+      patch,
       enabled,
-      secretStateAfter(context.secrets, id, stored.secret, patch.secret),
+      secretStateAfter(context.secrets, id, stored.secret, update),
     );
+    const secret = updateSourceSecret(context.secrets, id, stored.secret, update);
     await tx
       .update(ingestionSources)
       .set({
@@ -150,30 +194,43 @@ export const updateSource = async (
         hint: patch.hint === undefined ? stored.hint : patch.hint,
         private: patch.private ?? stored.private,
         config,
-        secret: updateSourceSecret(context.secrets, id, stored.secret, patch.secret),
+        secret,
         needsAttention: false,
         updatedAt: new Date(),
       })
       .where(eq(ingestionSources.id, id));
+    if (movesFolder(stored, config)) {
+      await tx
+        .update(documentOrigins)
+        .set({ removedAt: new Date() })
+        .where(and(eq(documentOrigins.sourceId, id), isNull(documentOrigins.removedAt)));
+    }
     await cancelPolls(tx, id);
-    if (enabled) await queuePollNow(tx, id);
+    if (enabled && secret !== null) await queuePollNow(tx, id);
   });
   return getSource(context, id);
 };
 
 /**
  * Deletes a source and its queued runs. Its documents stay; what said they came from it
- * goes. A run in progress finishes the item it is on, then finds nothing to write to.
+ * goes, so a document whose file stayed at the source can no longer serve it. A run in
+ * progress finishes the item it is on, then finds nothing to write to. A Drive source's
+ * authorization is revoked at Google when no other Drive source holds one.
  */
-export const deleteSource = async ({ db }: SourcesContext, id: string): Promise<void> => {
-  await db.transaction(async (tx) => {
-    const deleted = await tx
-      .delete(ingestionSources)
-      .where(eq(ingestionSources.id, id))
-      .returning({ id: ingestionSources.id });
-    if (deleted.length === 0) throw sourceNotFound();
+export const deleteSource = async (
+  { db, secrets, connectors }: SourcesContext,
+  id: string,
+): Promise<void> => {
+  const deleted = await db.transaction(async (tx) => {
+    const [row] = await tx.delete(ingestionSources).where(eq(ingestionSources.id, id)).returning();
+    if (row === undefined) throw sourceNotFound();
     await cancelPolls(tx, id);
+    return parseSourceRow(row);
   });
+  const secret = openSourceSecret(secrets, deleted.id, deleted.secret);
+  if (deleted.kind === 'gdrive' && secret.state === 'set') {
+    await forgetDriveToken(db, connectors, secret.value);
+  }
 };
 
 /** Tries the stored credentials and lists the first items the next run would take. */

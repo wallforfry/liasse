@@ -1,3 +1,4 @@
+import { NO_SOURCE_FILES } from '../testing/no-source-files.ts';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -35,6 +36,7 @@ export const createApiHarness = async (): Promise<ApiHarness> => {
   const context: ApiContext = {
     db: database.db,
     storage: createFsStorage(root),
+    sourceFiles: NO_SOURCE_FILES,
     embedder,
     fullText: rankByFullText,
     schemaLanguage: 'en',

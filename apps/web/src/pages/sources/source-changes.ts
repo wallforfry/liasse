@@ -1,5 +1,8 @@
 import type { Source, SourcePatch } from '@liasse/contract';
 
+type ImapPatch = Extract<SourcePatch, { readonly kind: 'imap' }>;
+type ImapSource = Extract<Source, { readonly kind: 'imap' }>;
+
 const isRecord = (value: unknown): value is Readonly<Record<string, unknown>> =>
   typeof value === 'object' && value !== null && !Array.isArray(value);
 
@@ -19,7 +22,7 @@ const differs = (value: unknown, stored: unknown): boolean =>
  * password, which a patch always names. A field the form left as it was is not sent, so what
  * another tab saved to it in the meantime stays; the configuration is one field.
  */
-export const changesOf = (patch: SourcePatch, source: Source): SourcePatch => ({
+export const changesOf = (patch: ImapPatch, source: ImapSource): ImapPatch => ({
   kind: patch.kind,
   secret: patch.secret,
   ...(patch.name !== undefined && differs(patch.name, source.name) ? { name: patch.name } : {}),

@@ -23,6 +23,7 @@ const FAILURES: Readonly<Record<number, string>> = {
   404: 'Not found.',
   405: 'The route does not serve this method.',
   409: 'The request conflicts with the current state.',
+  410: 'The file is no longer at the source that kept it.',
   413: 'The body is too large.',
   415: 'The body has an unsupported media type or format.',
   429: 'Too many attempts from this client address; retry after `Retry-After` seconds.',

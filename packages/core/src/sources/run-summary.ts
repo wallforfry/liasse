@@ -4,25 +4,45 @@ import { MAX_SOURCE_SKIPPED_ITEMS } from '@liasse/contract/domain';
 const MAX_MESSAGE_LENGTH = 1000;
 
 export type ItemOutcome =
-  | { readonly kind: 'ingested' }
-  | { readonly kind: 'duplicate' }
+  | { readonly kind: 'ingested'; readonly replaced: number }
+  | { readonly kind: 'duplicate'; readonly replaced: number }
+  | { readonly kind: 'removed'; readonly count: number }
   | { readonly kind: 'skipped'; readonly item: SourceSkippedItem };
 
 export interface RunTally {
   readonly ingested: number;
   readonly duplicates: number;
   readonly skipped: number;
+  readonly removed: number;
+  readonly replaced: number;
   readonly skippedItems: readonly SourceSkippedItem[];
 }
 
-export const EMPTY_TALLY: RunTally = { ingested: 0, duplicates: 0, skipped: 0, skippedItems: [] };
+export const EMPTY_TALLY: RunTally = {
+  ingested: 0,
+  duplicates: 0,
+  skipped: 0,
+  removed: 0,
+  replaced: 0,
+  skippedItems: [],
+};
 
 export const countOutcome = (tally: RunTally, outcome: ItemOutcome): RunTally => {
   switch (outcome.kind) {
     case 'ingested':
-      return { ...tally, ingested: tally.ingested + 1 };
+      return {
+        ...tally,
+        ingested: tally.ingested + 1,
+        replaced: tally.replaced + outcome.replaced,
+      };
     case 'duplicate':
-      return { ...tally, duplicates: tally.duplicates + 1 };
+      return {
+        ...tally,
+        duplicates: tally.duplicates + 1,
+        replaced: tally.replaced + outcome.replaced,
+      };
+    case 'removed':
+      return { ...tally, removed: tally.removed + outcome.count };
     case 'skipped':
       return {
         ...tally,
@@ -49,6 +69,8 @@ export const summaryOf = (
   ingested: tally.ingested,
   duplicates: tally.duplicates,
   skipped: tally.skipped,
+  removed: tally.removed,
+  replaced: tally.replaced,
   skipped_items: [...tally.skippedItems],
   error,
 });
