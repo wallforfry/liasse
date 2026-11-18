@@ -1,4 +1,5 @@
-import { type ApiError, type ApiErrorKind, toApiError } from '@liasse/core/api';
+import type { ApiErrorCode, ApiErrorKind } from '@liasse/contract';
+import { type ApiError, toApiError } from '@liasse/core/api';
 import { type CallToolResult, ErrorCode, McpError } from '@modelcontextprotocol/sdk/types.js';
 
 /**
@@ -8,10 +9,10 @@ import { type CallToolResult, ErrorCode, McpError } from '@modelcontextprotocol/
  */
 export type ReportFailure = (operation: string, error: unknown) => void;
 
-const INTERNAL_ERROR = {
+const INTERNAL_ERROR: { readonly code: ApiErrorCode; readonly message: string } = {
   code: 'internal_error',
   message: 'The server failed to answer this request.',
-} as const;
+};
 
 // The body of a failure, as REST writes it: the details first, so none of them can
 // replace the code or the message.

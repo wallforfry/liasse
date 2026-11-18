@@ -49,12 +49,7 @@ export const createType = async (
     { db, embedder, schemaLanguage, maxNewTypesPerDay: Number.POSITIVE_INFINITY },
   );
   if (!created.ok) {
-    throw new ApiError(
-      'invalid',
-      created.error.code,
-      created.error.message,
-      detailsOf(created.error),
-    );
+    throw new ApiError(created.error.code, created.error.message, detailsOf(created.error));
   }
   return typeView(created.value, 0);
 };

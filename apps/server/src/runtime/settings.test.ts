@@ -1,7 +1,9 @@
 import { settingsStateSchema } from '@liasse/contract';
 import { jobs, settings as settingsTable } from '@liasse/core/db';
 import { defineJobKind, enqueue, handle } from '@liasse/core/jobs';
+import { StartupError } from '@liasse/core/domain';
 import {
+  createFakeEmbedder,
   createFakeModelFactories,
   createFakeTextModel,
   createGate,
@@ -151,6 +153,26 @@ describe('the settings of a running server', () => {
     expect(stale.status).toBe(409);
     expect(errorSchema.parse(await stale.json()).error.code).toBe('settings_conflict');
     expect((await stateOf(runtime)).settings?.llm.text_model).toBe('model-b');
+  });
+
+  it('refuses settings it cannot apply with 400 settings_not_applicable', async () => {
+    const message = 'The embedding model has another dimension than the stored vectors.';
+    const refusing = createFakeModelFactories({
+      embedder: (embedding) => {
+        if (embedding.model === 'other-dimension-model') throw new StartupError(message);
+        return createFakeEmbedder({ dimension: embedding.dimension });
+      },
+    });
+    const runtime = await harness.start({}, { models: refusing });
+    const before = await stateOf(runtime);
+    const remote = { provider: 'ollama', model: 'other-dimension-model', base_url: 'http://x' };
+
+    const refused = await save(runtime, { llm: llmOf('model-a'), embedding: remote });
+    expect(refused.status).toBe(400);
+    expect(await refused.json()).toMatchObject({
+      error: { code: 'settings_not_applicable', message },
+    });
+    expect(await stateOf(runtime)).toEqual(before);
   });
 
   it('locks the embedder once a live document exists, and nothing else', async () => {

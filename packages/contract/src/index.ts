@@ -38,6 +38,8 @@ export {
   DEFAULT_DOCUMENT_LIST_LIMIT,
   DEFAULT_PAGE_COUNT,
   DEFAULT_TEXT_LENGTH,
+  CORRECTION_ERROR_CODES,
+  type CorrectionErrorCode,
   type DocumentCorrection,
   documentCorrectionSchema,
   type DocumentList,
@@ -225,6 +227,13 @@ export {
   type SetupStatus,
   setupStatusSchema,
 } from './setup.ts';
+export {
+  API_ERROR_CODES,
+  API_ERROR_KINDS,
+  type ApiErrorCode,
+  apiErrorKindOf,
+  type ApiErrorKind,
+} from './api-errors.ts';
 export {
   type ErrorBody,
   errorBodySchema,

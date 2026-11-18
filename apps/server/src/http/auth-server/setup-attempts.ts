@@ -7,7 +7,6 @@ import { failure, respondWith } from '../errors.ts';
 import { clientAddressOf } from './client-address.ts';
 
 const TOO_MANY = failure(
-  429,
   'too_many_attempts',
   'Too many attempts at the setup token from this address. Wait, then try again.',
 );

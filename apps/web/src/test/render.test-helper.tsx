@@ -1,4 +1,4 @@
-import { AUTH_BASE_PATH, SETUP_BASE_PATH } from '@liasse/contract';
+import { type ApiErrorCode, AUTH_BASE_PATH, SETUP_BASE_PATH } from '@liasse/contract';
 import { render, type RenderResult } from '@testing-library/react';
 import { createMemoryRouter } from 'react-router';
 import { RouterProvider } from 'react-router/dom';
@@ -21,8 +21,12 @@ export type Answer = (request: Request) => Response | undefined;
 
 export const json = (body: unknown, status = 200): Response => Response.json(body, { status });
 
-export const errorBody = (status: number, code: string, message: string): Response =>
-  json({ error: { code, message, request_id: 'req_synthetic' } }, status);
+export const errorBody = (
+  status: number,
+  code: ApiErrorCode,
+  message: string,
+  details: Readonly<Record<string, unknown>> = {},
+): Response => json({ error: { ...details, code, message, request_id: 'req_synthetic' } }, status);
 
 /** A refusal of the auth server, as better-auth writes it. */
 export const authError = (status: number, code: string, message: string): Response =>

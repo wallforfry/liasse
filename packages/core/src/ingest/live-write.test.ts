@@ -3,7 +3,7 @@ import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 import { documentPages, documents } from '../db/schema/documents.ts';
 import { documentLinks } from '../db/schema/knowledge.ts';
 import { createGate, waitUntil } from '../testing/async.ts';
-import { sessionsWaitingForALock } from '../testing/lock-waits.ts';
+import { backendPid, holdsBack } from '../testing/lock-waits.ts';
 import { syntheticPdf } from '../testing/synthetic-files.ts';
 import { deleteDocument } from './delete-document.ts';
 import type { Transaction } from './existing-document.ts';
@@ -76,20 +76,24 @@ describe('writeIfLive', () => {
 
   it('makes a deletion wait for the write, then delete what was written', async () => {
     const id = await ingest('deleted during the write');
-    const writing = createGate();
+    const writing = createGate<number>();
     const proceed = createGate();
     // The write touches a derived table only: nothing but the lock taken by
     // `writeIfLive` stands between it and the deletion.
     const write = writeIfLive(harness.database.db, id, async (tx) => {
       await tx.insert(documentPages).values({ documentId: id, page: 1, text: 'synthetic page' });
-      writing.open();
+      writing.open(await backendPid(tx));
       await proceed.opened;
       return 'done';
     });
-    await writing.opened;
+    const writer = await writing.opened;
     const deletion = deleteDocument(harness.deps, id);
-    await waitUntil(async () => (await sessionsWaitingForALock(harness.database.db)) === 1);
-    proceed.open();
+    try {
+      await waitUntil(() => holdsBack(harness.database.db, writer));
+    } finally {
+      proceed.open();
+      await Promise.allSettled([write, deletion]);
+    }
     expect(await write).toEqual({ written: true, result: 'done' });
     expect(await deletion).toBe(true);
     expect(await row(id)).toMatchObject({ status: 'deleted', title: null });
@@ -109,18 +113,22 @@ describe('writeIfLive', () => {
 
   it('runs inside a transaction of the caller, which keeps the row until it ends', async () => {
     const id = await ingest('inside a transaction');
-    const written = createGate();
+    const written = createGate<number>();
     const proceed = createGate();
     const outer = harness.database.db.transaction(async (tx) => {
       const outcome = await writeIfLive(tx, id, writeResult(id));
-      written.open();
+      written.open(await backendPid(tx));
       await proceed.opened;
       return outcome;
     });
-    await written.opened;
+    const writer = await written.opened;
     const deletion = deleteDocument(harness.deps, id);
-    await waitUntil(async () => (await sessionsWaitingForALock(harness.database.db)) === 1);
-    proceed.open();
+    try {
+      await waitUntil(() => holdsBack(harness.database.db, writer));
+    } finally {
+      proceed.open();
+      await Promise.allSettled([outer, deletion]);
+    }
     expect(await outer).toEqual({ written: true, result: 'done' });
     expect(await deletion).toBe(true);
     expect(await harness.database.db.select().from(documentPages)).toEqual([]);
@@ -189,17 +197,21 @@ describe('writeIfBothLive', () => {
 
   it('makes the deletion of either document wait, then remove the row', async () => {
     const [a, c] = [await ingest('a'), await ingest('c')];
-    const writing = createGate();
+    const writing = createGate<number>();
     const proceed = createGate();
     const write = writeIfBothLive(harness.database.db, [a, c], async (tx) => {
       await link(a, c)(tx);
-      writing.open();
+      writing.open(await backendPid(tx));
       await proceed.opened;
     });
-    await writing.opened;
+    const writer = await writing.opened;
     const deletion = deleteDocument(harness.deps, c);
-    await waitUntil(async () => (await sessionsWaitingForALock(harness.database.db)) === 1);
-    proceed.open();
+    try {
+      await waitUntil(() => holdsBack(harness.database.db, writer));
+    } finally {
+      proceed.open();
+      await Promise.allSettled([write, deletion]);
+    }
     await write;
     expect(await deletion).toBe(true);
     expect(await links()).toEqual([]);

@@ -12,7 +12,7 @@ import {
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { buffer } from 'node:stream/consumers';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createGate, sleep, waitUntil } from '../testing/async.ts';
 import { UnsupportedFormatError } from './errors.ts';
 import type { WatchedFile } from './watch-visitor.ts';
@@ -65,6 +65,22 @@ describe('startWatcher', () => {
     await waitUntil(sentinelSeen);
   };
 
+  // On a clock faked by `holdTime`, the watcher holds exactly one timer, the delay before its
+  // next scan, while it waits between two scans: it has none while a scan runs.
+  const holdTime = (): void => {
+    vi.useFakeTimers({ toFake: ['Date', 'setTimeout', 'clearTimeout'] });
+  };
+  const betweenScans = (): Promise<void> => waitUntil(() => vi.getTimerCount() === 1);
+  // Moves the clock, then waits until the scan it started, if any, is over. The timer that
+  // fired is gone and the next one is set only at the end of the scan, so a step that started
+  // a scan leaves no timer behind it: that is what it returns.
+  const elapse = async (delayMs: number): Promise<boolean> => {
+    vi.advanceTimersByTime(delayMs);
+    const scanned = vi.getTimerCount() === 0;
+    await betweenScans();
+    return scanned;
+  };
+
   beforeEach(async () => {
     dir = await mkdtemp(join(tmpdir(), 'liasse-watch-'));
     seen = [];
@@ -72,6 +88,7 @@ describe('startWatcher', () => {
   });
 
   afterEach(async () => {
+    vi.useRealTimers();
     await Promise.all(watchers.splice(0).map((watcher) => watcher.stop()));
     await rm(dir, { recursive: true, force: true });
   });
@@ -95,14 +112,24 @@ describe('startWatcher', () => {
     expect(errors).toEqual([]);
   });
 
-  // The watcher must be idle when the file is dropped, and nothing tells that it is: a
-  // sentinel read at start would leave it scanning on the late events of its creation.
+  // The watcher is idle once the delay before its next scan outlasts a step of the stability
+  // delay. From then on, only an event can make it scan before the rescan interval: a watcher
+  // that waits for its rescan never reads the file, and the bound of `waitUntil` fails it long
+  // before the clock, moved one stability step at a time, reaches the rescan interval.
   it('ingests a file dropped later, without waiting for a rescan', async () => {
+    holdTime();
     start();
-    await sleep(3 * STABILITY_MS);
+    await waitUntil(() => {
+      if (vi.getTimerCount() !== 1) return false;
+      vi.advanceTimersByTime(STABILITY_MS);
+      return vi.getTimerCount() === 1;
+    });
     await mkdir(join(dir, 'late'));
     await writeFile(join(dir, 'late', 'dropped.pdf'), 'dropped');
-    await waitUntil(() => seen.length === 1);
+    await waitUntil(() => {
+      if (vi.getTimerCount() === 1) vi.advanceTimersByTime(STABILITY_MS);
+      return seen.length === 1;
+    });
     expect(seen).toEqual([{ filename: 'dropped.pdf', content: 'dropped' }]);
   });
 
@@ -126,19 +153,26 @@ describe('startWatcher', () => {
     expect(names()).toEqual([]);
   });
 
+  // The time is the test's: each scan sees the file grown since the one before, however late
+  // the append, and the file holds still for exactly the stability delay before it is read.
   it('waits for a file that is still being written', async () => {
-    start({ stabilityMs: 300 });
+    holdTime();
     const path = join(dir, 'growing.pdf');
     await writeFile(path, 'part-0');
+    start({ fsEvents: false, stabilityMs: 300 });
+    await betweenScans();
     for (const part of [1, 2, 3, 4, 5, 6]) {
-      await sleep(100);
       await appendFile(path, ` part-${String(part)}`);
+      expect(await elapse(300)).toBe(true);
       expect(seen).toEqual([]);
     }
-    await waitUntil(() => seen.length === 1);
-    expect(seen[0]?.content).toBe('part-0 part-1 part-2 part-3 part-4 part-5 part-6');
-    await afterAWholeScan();
-    expect(others()).toHaveLength(1);
+    expect(await elapse(300)).toBe(true);
+    expect(seen).toEqual([
+      { filename: 'growing.pdf', content: 'part-0 part-1 part-2 part-3 part-4 part-5 part-6' },
+    ]);
+    expect(await elapse(NEVER_MS)).toBe(true);
+    expect(await elapse(300)).toBe(false);
+    expect(seen).toHaveLength(1);
   });
 
   it('ignores dotfiles, hidden directories and temporary files', async () => {
@@ -309,7 +343,11 @@ describe('startWatcher', () => {
     const stopping = watcher.stop();
     const stoppedEarly = await Promise.race([
       stopping.then(() => true),
-      sleep(100).then(() => false),
+      new Promise<boolean>((resolve) => {
+        setImmediate(() => {
+          resolve(false);
+        });
+      }),
     ]);
     expect(stoppedEarly).toBe(false);
     proceed.open();

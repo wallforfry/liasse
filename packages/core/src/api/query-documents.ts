@@ -12,8 +12,8 @@ const TIMEOUT_CODE = 'timeout' satisfies QueryError['code'];
 const refusal = (errors: readonly QueryError[]): ApiError => {
   const timedOut = errors.find(({ code }) => code === TIMEOUT_CODE);
   return timedOut === undefined
-    ? new ApiError('invalid', 'invalid_query', 'The query was refused.', { errors })
-    : new ApiError('timeout', 'query_timeout', timedOut.message);
+    ? new ApiError('invalid_query', 'The query was refused.', { errors })
+    : new ApiError('query_timeout', timedOut.message);
 };
 
 // SQLSTATE class 22, data exception: the database refused a value the query carried.
@@ -23,8 +23,8 @@ const DATA_EXCEPTION_CLASS = '22';
 /** What a database failure during a query tells the caller, without the statement. */
 export const executionFailure = ({ sqlState }: QueryExecutionError): ApiError =>
   sqlState?.startsWith(DATA_EXCEPTION_CLASS) === true
-    ? new ApiError('invalid', 'invalid_query', 'The query holds a value the database refused.')
-    : new ApiError('unavailable', 'query_failed', 'The query could not be run.');
+    ? new ApiError('invalid_query', 'The query holds a value the database refused.')
+    : new ApiError('query_failed', 'The query could not be run.');
 
 /**
  * Runs a structured query. The input is untrusted and parsed by the DSL itself.
