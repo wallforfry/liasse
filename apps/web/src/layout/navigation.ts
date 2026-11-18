@@ -4,6 +4,7 @@ import {
   InboxIcon,
   KeyRoundIcon,
   LockKeyholeIcon,
+  MailIcon,
   type LucideIcon,
   NetworkIcon,
   PlugIcon,
@@ -19,10 +20,15 @@ export interface NavigationItem {
   readonly icon: LucideIcon;
 }
 
+export const SOURCES_PATH = '/sources';
+export const NEW_SOURCE_PATH = '/sources/new';
+export const editSourcePath = (id: string): string => `/sources/${encodeURIComponent(id)}/edit`;
+
 export const NAVIGATION: readonly NavigationItem[] = [
   { label: 'Documents', path: '/documents', icon: FileTextIcon },
   { label: 'Review', path: '/review', icon: InboxIcon },
   { label: 'Upload', path: '/upload', icon: UploadIcon },
+  { label: 'Sources', path: SOURCES_PATH, icon: MailIcon },
   { label: 'Types', path: '/types', icon: ShapesIcon },
   { label: 'Graph', path: '/graph', icon: NetworkIcon },
   { label: 'Changes', path: '/changes', icon: GitPullRequestArrowIcon },

@@ -2,7 +2,7 @@ import { EMBEDDING_PROVIDERS } from '@liasse/contract/domain';
 import { LockKeyholeIcon } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from '../../components/ui/alert.tsx';
 import { SectionCheck, type SettingsCheckMutation } from './check-results.tsx';
-import { SecretField } from './secret-field.tsx';
+import { SecretField } from '../../components/secret-field.tsx';
 import { SettingsCard } from './settings-card.tsx';
 import { ChoiceField, TextField } from './settings-fields.tsx';
 import { ModelOrTextField } from './model-field.tsx';
@@ -84,6 +84,8 @@ export const EmbedderSection = ({
             error={issueAt(issues, 'embedding.base_url')}
           />
           <SecretField
+            title="API key"
+            noun="key"
             id="embedding-api-key"
             label="embedder API key"
             field={values.api_key}

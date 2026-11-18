@@ -2,7 +2,8 @@ import type { SetupAccount } from '@liasse/contract';
 import type { SubmitEvent } from 'react';
 import { ErrorAlert } from '../../components/error-alert.tsx';
 import { SettingsCard } from '../settings/settings-card.tsx';
-import { isLocalEmbedder, type KeyField, type SettingsValues } from '../settings/settings-form.ts';
+import type { SecretValue } from '../../components/secret-field.tsx';
+import { isLocalEmbedder, type SettingsValues } from '../settings/settings-form.ts';
 import { StepActions } from './step-actions.tsx';
 
 interface SummaryStepProps {
@@ -16,7 +17,7 @@ interface SummaryStepProps {
 }
 
 // A key is never shown back, not even here: only whether one was given.
-const keyText = ({ update }: KeyField): string =>
+const keyText = ({ update }: SecretValue): string =>
   update.action === 'replace' && update.value !== '' ? 'Given' : 'None';
 
 const orDefault = (value: string, fallback: string): string =>

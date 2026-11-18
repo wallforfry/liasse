@@ -13,6 +13,8 @@ import { GraphPage } from './pages/graph/graph-page.tsx';
 import { LoginPage } from './pages/login-page.tsx';
 import { NotFoundPage } from './pages/not-found-page.tsx';
 import { SettingsPage } from './pages/settings/settings-page.tsx';
+import { EditSourcePage, NewSourcePage } from './pages/sources/source-editor-page.tsx';
+import { SourcesPage } from './pages/sources/sources-page.tsx';
 import { TypePage } from './pages/types/type-page.tsx';
 import { TypesPage } from './pages/types/types-page.tsx';
 import { UploadPage } from './pages/upload/upload-page.tsx';
@@ -57,6 +59,9 @@ const APPLICATION_ROUTES: RouteObject[] = [
             ),
           },
           { path: '/upload', element: <UploadPage /> },
+          { path: '/sources', element: <SourcesPage /> },
+          { path: '/sources/new', element: <NewSourcePage /> },
+          { path: '/sources/:id/edit', element: <EditSourcePage /> },
           { path: '/types', element: <TypesPage /> },
           { path: '/types/:slug', element: <TypePage /> },
           { path: '/graph', element: <GraphPage /> },

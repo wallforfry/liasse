@@ -37,7 +37,7 @@ export const Field = ({
 interface TextFieldProps extends FieldFrame {
   readonly value: string;
   readonly onChange: (value: string) => void;
-  readonly kind?: 'text' | 'number' | 'url' | 'email' | 'password';
+  readonly kind?: 'text' | 'number' | 'url' | 'email' | 'password' | 'date';
   readonly autoComplete?: string;
   readonly maxLength?: number;
   readonly disabled?: boolean;

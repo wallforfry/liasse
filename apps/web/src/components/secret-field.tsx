@@ -1,9 +1,15 @@
+import type { SecretUpdate } from '@liasse/contract';
 import { MAX_API_KEY_LENGTH, type SecretState } from '@liasse/contract/domain';
-import { Badge } from '../../components/ui/badge.tsx';
-import { Button } from '../../components/ui/button.tsx';
-import { Input } from '../../components/ui/input.tsx';
-import { Label } from '../../components/ui/label.tsx';
-import type { KeyField } from './settings-form.ts';
+import { Badge } from './ui/badge.tsx';
+import { Button } from './ui/button.tsx';
+import { Input } from './ui/input.tsx';
+import { Label } from './ui/label.tsx';
+
+/** A stored secret as edited: what the save does with it. */
+export interface SecretValue {
+  readonly state: SecretState;
+  readonly update: SecretUpdate;
+}
 
 const STATE_LABELS: Readonly<Record<SecretState, string>> = {
   set: 'Set',
@@ -19,15 +25,27 @@ const STATE_BADGES = {
 
 interface SecretFieldProps {
   readonly id: string;
-  /** Names the key in its controls, such as `Hindsight API key`; the label shows `API key`. */
+  /** What the label shows, such as `API key`. */
+  readonly title: string;
+  /** The secret in a sentence, such as `key`. */
+  readonly noun: string;
+  /** Names the secret in its controls, such as `Hindsight API key`. */
   readonly label: string;
-  readonly field: KeyField;
-  readonly onChange: (field: KeyField) => void;
+  readonly field: SecretValue;
+  readonly onChange: (field: SecretValue) => void;
   readonly error?: string | undefined;
 }
 
-/** A stored key is never shown: it is kept, replaced by a new value, or cleared. */
-export const SecretField = ({ id, label, field, onChange, error }: SecretFieldProps) => {
+/** A stored secret is never shown: it is kept, replaced by a new value, or cleared. */
+export const SecretField = ({
+  id,
+  title,
+  noun,
+  label,
+  field,
+  onChange,
+  error,
+}: SecretFieldProps) => {
   const { state, update } = field;
   const replaceVerb = state === 'unset' ? 'Set' : 'Replace';
   const keep = () => {
@@ -38,19 +56,19 @@ export const SecretField = ({ id, label, field, onChange, error }: SecretFieldPr
       <div className="flex items-center gap-2">
         {update.action === 'replace' ? (
           <Label id={`${id}-label`} htmlFor={id}>
-            API key
+            {title}
           </Label>
         ) : (
           // No input to label while the key is kept or cleared: the text names the group.
           <span id={`${id}-label`} className="text-sm leading-none font-medium">
-            API key
+            {title}
           </span>
         )}
         <Badge variant={STATE_BADGES[state]}>{STATE_LABELS[state]}</Badge>
       </div>
       {state === 'unreadable' && update.action === 'keep' ? (
         <p className="text-sm text-muted-foreground">
-          The stored key was sealed under another AUTH_SECRET: replace or clear it.
+          The stored {noun} was sealed under another AUTH_SECRET: replace or clear it.
         </p>
       ) : null}
       {update.action === 'keep' ? (
@@ -109,7 +127,7 @@ export const SecretField = ({ id, label, field, onChange, error }: SecretFieldPr
       ) : null}
       {update.action === 'clear' ? (
         <div className="flex items-center gap-2">
-          <p className="text-sm text-muted-foreground">Cleared when the settings are saved.</p>
+          <p className="text-sm text-muted-foreground">Cleared on save.</p>
           <Button
             type="button"
             variant="ghost"
