@@ -269,7 +269,12 @@ describe('createLiasseClient', () => {
     });
     const error: unknown = await client.listDocuments({}).catch((e: unknown) => e);
     expect(error).toBeInstanceOf(LiasseResponseError);
-    expect(error).toMatchObject({ status: 400 });
+    expect(error).toMatchObject({
+      status: 400,
+      message:
+        'HTTP 400 with the code "unlisted_code" (request req_01), which this SDK does not know.',
+      cause: { name: 'ZodError' },
+    });
   });
 
   it('rejects a failure without the error body of the API as a LiasseResponseError', async () => {
