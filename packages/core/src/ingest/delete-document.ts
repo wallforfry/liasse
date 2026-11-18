@@ -38,6 +38,7 @@ const BLANK_CONTENT = {
   originalName: '',
   hint: null,
   reclassificationHint: null,
+  rejectedTypeIds: [],
   typeId: null,
   schemaVersion: null,
   core: {},

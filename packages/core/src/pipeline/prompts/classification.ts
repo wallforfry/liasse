@@ -45,8 +45,8 @@ export interface CandidateLine {
 
 /** A person asked for the type of the document to be decided again. */
 export interface ReclassificationLine {
-  /** The type they said is wrong; null for a document that had none. */
-  readonly rejected: { readonly slug: string; readonly description: string } | null;
+  /** The types they said are wrong, the one it has now included; none for an untyped one. */
+  readonly rejected: readonly { readonly slug: string; readonly description: string }[];
   readonly hint: string | null;
   readonly requireNew: boolean;
 }
@@ -83,11 +83,11 @@ const reclassificationSection = ({
   hint,
   requireNew,
 }: ReclassificationLine): readonly string[] => [
-  ...(rejected === null
+  ...(rejected.length === 0
     ? []
     : [
-        `A person said this document is not of the following type, which is therefore not offered:\n${wrapUntrusted(
-          `- ${rejected.slug}: ${rejected.description}`,
+        `A person said this document is not of the following ${rejected.length === 1 ? 'type, which is' : 'types, which are'} therefore not offered:\n${wrapUntrusted(
+          rejected.map(({ slug, description }) => `- ${slug}: ${description}`).join('\n'),
         )}`,
       ]),
   ...(hint === null

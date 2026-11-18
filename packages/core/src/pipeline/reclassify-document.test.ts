@@ -15,6 +15,7 @@ import { enqueue } from '../jobs/enqueue.ts';
 import { createType } from '../registry/create-type.ts';
 import { columnsHolding } from '../testing/column-scan.ts';
 import { createFakeEmbedder } from '../testing/fake-embedder.ts';
+import { correctDocument } from './correct-document.ts';
 import type { FakeTextRequest } from '../testing/fake-text-model.ts';
 import { insertSyntheticDocument } from '../testing/fixtures.ts';
 import {
@@ -25,6 +26,7 @@ import {
   type PipelineHarness,
   scriptedModel,
 } from './harness.test-helper.ts';
+import { PipelineConflictError } from './errors.ts';
 import { reextractDocumentJob, type ReclassifyPayload } from './jobs.ts';
 import { reextractDocument } from './process-document.ts';
 import { reclassifyDocument } from './reclassify-document.ts';
@@ -71,10 +73,12 @@ describe('reclassifying a document', () => {
     water: await seedType('water_bill', { volume: { type: 'number' } }),
   });
 
+  // A typed document rejects its type, as the request of a reclassification leaves it.
   const settled = async (typeId: string | null, overrides = {}): Promise<string> => {
     const { id } = await insertSyntheticDocument(harness.db, {
       status: 'indexed',
       typeId,
+      rejectedTypeIds: typeId === null ? [] : [typeId],
       schemaVersion: 1,
       confidence: 0.9,
       core: { reference: 'SYN-2026-001' },
@@ -154,6 +158,19 @@ describe('reclassifying a document', () => {
       expect(await columnsHolding(harness.db, HINT)).toEqual(['documents.reclassification_hint']);
       await deleteDocument({ db: harness.db }, id);
       expect(await columnsHolding(harness.db, HINT)).toEqual([]);
+    });
+
+    it('adds the rejected type to those of earlier requests, once, and none for an untyped one', async () => {
+      const { energy, water } = await seedTypes();
+      const id = await settled(energy.id, { rejectedTypeIds: [water.id] });
+      expect(await requestReclassification(harness.db, id, {})).toBe('queued');
+      expect(await harness.document(id)).toMatchObject({ rejectedTypeIds: [water.id, energy.id] });
+      await harness.db.update(jobs).set({ status: 'succeeded' });
+      expect(await requestReclassification(harness.db, id, {})).toBe('queued');
+      expect(await harness.document(id)).toMatchObject({ rejectedTypeIds: [water.id, energy.id] });
+      const untyped = await settled(null, { status: 'needs_review' });
+      expect(await requestReclassification(harness.db, untyped, {})).toBe('queued');
+      expect(await harness.document(untyped)).toMatchObject({ rejectedTypeIds: [] });
     });
 
     it.each(['received', 'classified', 'failed'] as const)(
@@ -358,6 +375,84 @@ describe('reclassifying a document', () => {
       await expectUnchanged(id, energy.id, 'invalid_proposal');
     });
 
+    describe('after earlier reclassifications', () => {
+      const seedThreeTypes = async () => ({
+        ...(await seedTypes()),
+        gas: await seedType('gas_bill', { volume: { type: 'number' } }),
+      });
+
+      // The request, then its job with the model given, as a person clicking twice would.
+      const reclassify = async (id: string, textModel: ReturnType<typeof choosing>) => {
+        await harness.db.update(jobs).set({ status: 'succeeded' });
+        expect(await requestReclassification(harness.db, id, {})).toBe('queued');
+        const { typeId } = await harness.document(id);
+        await reclassifyDocument(harness.deps({ textModel }), payloadOf(id, typeId), live());
+      };
+
+      // Real use: two requests in a row bounced between two wrong types, the second one
+      // rejecting only the type the first one had decided.
+      it('never offers again a type a person rejected for the document', async () => {
+        const { energy, water, gas } = await seedThreeTypes();
+        const id = await settled(energy.id);
+        await reclassify(id, choosing('water_bill'));
+        expect(await harness.document(id)).toMatchObject({ typeId: water.id });
+        const calls: FakeTextRequest[] = [];
+        await reclassify(id, choosing('gas_bill', calls));
+        const [request] = calls.filter(isClassification);
+        if (request === undefined) throw new Error('The model was not asked');
+        const answer = (slug: string) =>
+          request.schema.safeParse({ decision: 'existing', slug, confidence: 0.9 }).success;
+        expect([answer('energy_bill'), answer('water_bill'), answer('gas_bill')]).toEqual([
+          false,
+          false,
+          true,
+        ]);
+        expect(request.prompt).toContain('is not of the following types, which are');
+        expect(request.prompt).toMatch(
+          delimited('- energy_bill: Synthetic energy_bill\n- water_bill: Synthetic water_bill'),
+        );
+        expect(await harness.document(id)).toMatchObject({
+          typeId: gas.id,
+          rejectedTypeIds: [energy.id, water.id],
+        });
+      });
+
+      it('never lands on an earlier rejected type through a new slug', async () => {
+        const { energy, water } = await seedThreeTypes();
+        const id = await settled(energy.id);
+        await reclassify(id, choosing('water_bill'));
+        await harness.db.delete(documentEvents);
+        const textModel = scriptedModel({
+          classify: () => ({
+            ...NEW_TYPE,
+            new_type: { ...NEW_TYPE.new_type, slug: 'energy_bill' },
+          }),
+        });
+        await reclassify(id, textModel);
+        expect(textModel.calls[1]?.prompt).toContain('"energy_bill", which a person said is wrong');
+        expect(await harness.document(id)).toMatchObject({ typeId: water.id });
+        expect(await eventsOf(id)).toEqual([
+          expect.objectContaining({ outcome: 'failed', errorCode: 'rejected_type' }),
+        ]);
+      });
+
+      it('forgets them once a person sets the type by hand, and not before', async () => {
+        const { energy, water } = await seedThreeTypes();
+        const id = await settled(energy.id);
+        await reclassify(id, choosing('water_bill'));
+        await harness.db.update(jobs).set({ status: 'succeeded' });
+        await correctDocument(harness.deps(), { id, core: { reference: 'SYN-2' } });
+        expect(await harness.document(id)).toMatchObject({ rejectedTypeIds: [energy.id] });
+        await correctDocument(harness.deps(), { id, type: 'water_bill' });
+        expect(await harness.document(id)).toMatchObject({ typeId: water.id, rejectedTypeIds: [] });
+        await reclassify(id, choosing('energy_bill'));
+        expect(await harness.document(id)).toMatchObject({
+          typeId: energy.id,
+          rejectedTypeIds: [water.id],
+        });
+      });
+    });
+
     it('writes nothing when the type changed after the request', async () => {
       const { energy, water } = await seedTypes();
       const id = await settled(energy.id);
@@ -366,6 +461,28 @@ describe('reclassifying a document', () => {
       await reclassifyDocument(harness.deps({ textModel }), payloadOf(id, energy.id), live());
       expect(textModel.calls).toEqual([]);
       expect(await harness.document(id)).toMatchObject({ typeId: water.id, confidence: 0.9 });
+      expect(await queued()).toEqual([]);
+      expect(await eventsOf(id)).toEqual([]);
+    });
+
+    // A merge of a rejected type into the type the model decides rewrites the list, as
+    // `rewriteRejectedTypes` does, while the model answers.
+    it('writes nothing, and runs again, when the decided type becomes a rejected one', async () => {
+      const { energy, water } = await seedTypes();
+      const id = await settled(energy.id);
+      const textModel = scriptedModel({
+        classify: async () => {
+          await harness.db
+            .update(documents)
+            .set({ rejectedTypeIds: [energy.id, water.id] })
+            .where(eq(documents.id, id));
+          return { decision: 'existing', slug: 'water_bill', confidence: 0.9 };
+        },
+      });
+      await expect(
+        reclassifyDocument(harness.deps({ textModel }), payloadOf(id, energy.id), live()),
+      ).rejects.toBeInstanceOf(PipelineConflictError);
+      expect(await harness.document(id)).toMatchObject({ typeId: energy.id, confidence: 0.9 });
       expect(await queued()).toEqual([]);
       expect(await eventsOf(id)).toEqual([]);
     });

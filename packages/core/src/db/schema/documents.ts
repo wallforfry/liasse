@@ -39,6 +39,10 @@ export const documents = pgTable(
     // What a person said with the last request to decide the type again: untrusted free
     // text, read by the `reclassify_document` job, whose payload holds none.
     reclassificationHint: text('reclassification_hint'),
+    // Every type a person rejected for the document by asking for its type again, none of
+    // which a later reclassification may choose, until a person sets the type by hand.
+    // Type ids without a foreign key: a type merge rewrites them (`type-references.ts`).
+    rejectedTypeIds: textArray('rejected_type_ids'),
     source: documentSource('source').notNull(),
     status: documentStatus('status').notNull().default('received'),
     state: documentState('state').notNull().default('current'),
