@@ -172,8 +172,9 @@ describe('the document list', () => {
 
   it.each([
     [403, 'forbidden'],
+    [404, 'document_not_found'],
     [500, 'internal_error'],
-  ])('keeps the list when the lookup of the entity fails with %i', async (status, code) => {
+  ])('keeps the list when the lookup of the entity fails with %i %s', async (status, code) => {
     const server = library(() => errorBody(status, code, 'The lookup failed.'));
     renderApp('/documents?entity=ent_synthetic_volta&entity_name=Volta', server.fetch);
 
