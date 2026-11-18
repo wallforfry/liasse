@@ -86,23 +86,27 @@ export const listEntitiesRequestSchema = z.strictObject({
 });
 export type ListEntitiesRequest = z.input<typeof listEntitiesRequestSchema>;
 
-export const entityListSchema = z.object({
-  entities: z.array(
+export const getEntityRequestSchema = listEntitiesRequestSchema.pick({ include_private: true });
+export type GetEntityRequest = z.input<typeof getEntityRequestSchema>;
+
+export const entityViewSchema = z.object({
+  id: z.string(),
+  kind: entityKindSchema,
+  canonical_name: z.string(),
+  aliases: z.array(z.string()),
+  identifiers: z.array(
     z.object({
-      id: z.string(),
-      kind: entityKindSchema,
-      canonical_name: z.string(),
-      aliases: z.array(z.string()),
-      identifiers: z.array(
-        z.object({
-          type: entityIdentifierTypeSchema,
-          value: z.string().describe('Masked for an IBAN or a card number.'),
-          format: z.string().optional(),
-        }),
-      ),
-      document_count: z.int(),
+      type: entityIdentifierTypeSchema,
+      value: z.string().describe('Masked for an IBAN or a card number.'),
+      format: z.string().optional(),
     }),
   ),
+  document_count: z.int(),
+});
+export type EntityView = z.output<typeof entityViewSchema>;
+
+export const entityListSchema = z.object({
+  entities: z.array(entityViewSchema),
   total: z.int(),
 });
 export type EntityListView = z.output<typeof entityListSchema>;

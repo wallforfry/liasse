@@ -318,6 +318,44 @@ describe('createLiasseClient', () => {
     expect(refused).toBeInstanceOf(LiasseResponseError);
   });
 
+  it('reads an entity on its path, and rejects one a merge deleted with its code', async () => {
+    const entity = {
+      id: 'ent_01',
+      kind: 'org',
+      canonical_name: 'Atelier Zircon',
+      aliases: [],
+      identifiers: [],
+      document_count: 2,
+    };
+    const server = answering((url) =>
+      url.includes('ent_gone')
+        ? json(
+            {
+              error: {
+                code: 'entity_not_found',
+                message: 'No entity has this id.',
+                request_id: 'req_01',
+              },
+            },
+            404,
+          )
+        : json(entity),
+    );
+    const client = createLiasseClient({
+      baseUrl: 'http://x.test',
+      token: 't',
+      fetch: server.fetch,
+    });
+    expect(await client.getEntity('ent/01', { include_private: true })).toEqual(entity);
+    const refused: unknown = await client.getEntity('ent_gone').catch((caught: unknown) => caught);
+    expect(refused).toBeInstanceOf(LiasseApiError);
+    expect(refused).toMatchObject({ status: 404, code: 'entity_not_found' });
+    expect(server.sent.map(({ url }) => url)).toEqual([
+      'http://x.test/entities/ent%2F01?include_private=true',
+      'http://x.test/entities/ent_gone',
+    ]);
+  });
+
   it('holds the answers of subjects and key dates to their schemas', async () => {
     const server = answering(() => json({ dates: [] }));
     const client = createLiasseClient({
