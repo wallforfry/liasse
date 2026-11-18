@@ -11,8 +11,8 @@ const canonical = (value: unknown): string | undefined =>
       : inner,
   );
 
-const differs = <Value>(value: Value | undefined, stored: unknown): value is Value =>
-  value !== undefined && canonical(value) !== canonical(stored);
+const differs = (value: unknown, stored: unknown): boolean =>
+  canonical(value) !== canonical(stored);
 
 /**
  * The fields of `patch` that differ from `source` as the form read it, with the kind and the
@@ -22,12 +22,19 @@ const differs = <Value>(value: Value | undefined, stored: unknown): value is Val
 export const changesOf = (patch: SourcePatch, source: Source): SourcePatch => ({
   kind: patch.kind,
   secret: patch.secret,
-  ...(differs(patch.name, source.name) ? { name: patch.name } : {}),
-  ...(differs(patch.enabled, source.enabled) ? { enabled: patch.enabled } : {}),
-  ...(differs(patch.poll_interval_minutes, source.poll_interval_minutes)
+  ...(patch.name !== undefined && differs(patch.name, source.name) ? { name: patch.name } : {}),
+  ...(patch.enabled !== undefined && differs(patch.enabled, source.enabled)
+    ? { enabled: patch.enabled }
+    : {}),
+  ...(patch.poll_interval_minutes !== undefined &&
+  differs(patch.poll_interval_minutes, source.poll_interval_minutes)
     ? { poll_interval_minutes: patch.poll_interval_minutes }
     : {}),
-  ...(differs(patch.hint, source.hint) ? { hint: patch.hint } : {}),
-  ...(differs(patch.private, source.private) ? { private: patch.private } : {}),
-  ...(differs(patch.config, source.config) ? { config: patch.config } : {}),
+  ...(patch.hint !== undefined && differs(patch.hint, source.hint) ? { hint: patch.hint } : {}),
+  ...(patch.private !== undefined && differs(patch.private, source.private)
+    ? { private: patch.private }
+    : {}),
+  ...(patch.config !== undefined && differs(patch.config, source.config)
+    ? { config: patch.config }
+    : {}),
 });

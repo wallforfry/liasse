@@ -6,6 +6,8 @@ import {
   type SourceCreateInput,
   type SourcePatch,
   sourcePatchSchema,
+  SOURCE_PASSWORD_MISSING_MESSAGE,
+  SOURCE_PASSWORD_UNREADABLE_MESSAGE,
 } from '@liasse/contract';
 import { DEFAULT_SOURCE_POLL_MINUTES, type ImapSecurity } from '@liasse/contract/domain';
 import type { z } from 'zod';
@@ -109,11 +111,7 @@ export const followServerChange = (
 
 export const PASSWORD_AGAIN_MESSAGE =
   'The stored password was given for the former server: enter it again.';
-export const PASSWORD_UNREADABLE_MESSAGE =
-  'The stored password no longer opens under the current AUTH_SECRET: enter it again.';
 export const PASSWORD_REQUIRED_MESSAGE = 'A mailbox is read with its password: enter it.';
-export const PASSWORD_NEEDED_MESSAGE =
-  'An enabled source connects with its password: enter it, or disable the source.';
 
 // Blank lines between mailboxes are layout; a name keeps its inner spaces.
 const mailboxesOf = (lines: string): readonly string[] =>
@@ -194,8 +192,11 @@ const passwordIssueOf = (values: ImapSourceValues, source: Source): string | und
   if (action === 'replace') return undefined;
   if (action === 'keep' && needsPasswordAgain(values, source)) return PASSWORD_AGAIN_MESSAGE;
   if (!values.enabled) return undefined;
-  if (action === 'keep' && source.secret === 'unreadable') return PASSWORD_UNREADABLE_MESSAGE;
-  return action === 'clear' || source.secret === 'unset' ? PASSWORD_NEEDED_MESSAGE : undefined;
+  if (action === 'keep' && source.secret === 'unreadable')
+    return SOURCE_PASSWORD_UNREADABLE_MESSAGE;
+  return action === 'clear' || source.secret === 'unset'
+    ? SOURCE_PASSWORD_MISSING_MESSAGE
+    : undefined;
 };
 
 /**

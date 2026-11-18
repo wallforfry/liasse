@@ -171,7 +171,8 @@ describe('the form of a source', () => {
 
     expect(
       await screen.findByText(
-        'The stored password no longer opens under the current AUTH_SECRET: enter it again.',
+        'The stored password no longer opens under the current AUTH_SECRET: enter it again, ' +
+          'or disable the source.',
       ),
     ).toBeInTheDocument();
     expect(server.requests.some(isPatch)).toBe(false);

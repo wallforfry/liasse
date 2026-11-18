@@ -150,6 +150,14 @@ export const sourcePatchSchema = z.discriminatedUnion('kind', [
 export type SourcePatch = z.output<typeof sourcePatchSchema>;
 export type SourcePatchInput = z.input<typeof sourcePatchSchema>;
 
+// Why `source_secret_required` refuses an enabled source, which runs at once: the server
+// answers with these, and the web UI says them before sending.
+export const SOURCE_PASSWORD_MISSING_MESSAGE =
+  'An enabled source connects with its password: enter it, or disable the source.';
+export const SOURCE_PASSWORD_UNREADABLE_MESSAGE =
+  'The stored password no longer opens under the current AUTH_SECRET: enter it again, or ' +
+  'disable the source.';
+
 export const sourceCheckSchema = z.discriminatedUnion('ok', [
   z.strictObject({
     ok: z.literal(true),

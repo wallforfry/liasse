@@ -1,11 +1,13 @@
-import type {
-  SecretUpdate,
-  Source,
-  SourceCheck,
-  SourceCreate,
-  SourceList,
-  SourcePatch,
-  SourceRunRequest,
+import {
+  type SecretUpdate,
+  type Source,
+  type SourceCheck,
+  type SourceCreate,
+  type SourceList,
+  type SourcePatch,
+  type SourceRunRequest,
+  SOURCE_PASSWORD_MISSING_MESSAGE,
+  SOURCE_PASSWORD_UNREADABLE_MESSAGE,
 } from '@liasse/contract';
 import { SOURCE_CHECK_TIMEOUT_MS } from '@liasse/contract/domain';
 import { eq } from 'drizzle-orm';
@@ -53,19 +55,13 @@ const secretStateAfter = (
   }
 };
 
-const PASSWORD_MISSING =
-  'An enabled source connects with its password: enter it, or disable the source.';
-const PASSWORD_UNREADABLE =
-  'The stored password no longer opens under the current AUTH_SECRET: enter it again, or ' +
-  'disable the source.';
-
 // An enabled source runs at once with what was saved: without a password that opens, the run
 // would only meet refused credentials.
 const requireUsableSecret = (enabled: boolean, state: SecretState): void => {
   if (!enabled || state === 'set') return;
   throw new ApiError(
     'source_secret_required',
-    state === 'unset' ? PASSWORD_MISSING : PASSWORD_UNREADABLE,
+    state === 'unset' ? SOURCE_PASSWORD_MISSING_MESSAGE : SOURCE_PASSWORD_UNREADABLE_MESSAGE,
   );
 };
 
