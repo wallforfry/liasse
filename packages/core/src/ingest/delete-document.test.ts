@@ -293,9 +293,9 @@ describe('deleteDocument and the delete_file job', () => {
       { bytes, filename: 'again.pdf', source: 'api' },
     );
     await written.opened;
-    const ingestion = await fileLockHolder(harness.database.db, bytes);
     const removal = deleteFile(id);
     try {
+      const ingestion = await fileLockHolder(harness.database.db, bytes);
       await waitUntil(() => holdsBack(harness.database.db, ingestion));
     } finally {
       proceed.open();

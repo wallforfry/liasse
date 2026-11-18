@@ -82,9 +82,9 @@ describe('a deletion racing the ingestion of the same bytes', () => {
     const id = await failedDocument(bytes);
     const ingestion = await heldIngestion(bytes, 'watch');
 
-    const holder = await fileLockHolder(harness.database.db, bytes);
     const deletion = deleteDocument(harness.deps, id);
     try {
+      const holder = await fileLockHolder(harness.database.db, bytes);
       await waitUntil(() => holdsBack(harness.database.db, holder));
     } finally {
       ingestion.release();
