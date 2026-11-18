@@ -1,10 +1,11 @@
-import { type ChildProcess, spawn } from 'node:child_process';
+import { type ChildProcess, type ChildProcessByStdio, spawn } from 'node:child_process';
 import { once } from 'node:events';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { createServer as createHttpServer, type ServerResponse } from 'node:http';
 import { connect, createServer } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import type { Readable } from 'node:stream';
 import { fileURLToPath } from 'node:url';
 import { documents, jobs } from '@liasse/core/db';
 import {
@@ -26,9 +27,13 @@ import { describe, expect, it } from 'vitest';
 import { eq } from 'drizzle-orm';
 import { z } from 'zod';
 import { startModelStub } from './model-stub.test-helper.ts';
+import {
+  PROCESS_TEST_LIMIT_MS,
+  PROCESS_WAIT_LIMIT_MS,
+  untilWritten,
+} from './process-waits.test-helper.ts';
 import { LETTER } from './synthetic-documents.fixture.ts';
 
-const STEP_TIMEOUT_MS = 15_000;
 const LISTENING = 'Liasse is listening on ';
 
 const freePort = async (): Promise<number> => {
@@ -53,17 +58,15 @@ const codeOf = (error: unknown): unknown =>
  * calls `setTypeOfService` on it, which throws EINVAL from a socket callback, out of
  * reach of the request, as an uncaught exception.
  */
-const refusesConnections = async (port: number): Promise<boolean> => {
+const refusesConnections = async (port: number, signal: AbortSignal): Promise<boolean> => {
   const socket = connect(port, '127.0.0.1');
   try {
-    await once(socket, 'connect', { signal: AbortSignal.timeout(STEP_TIMEOUT_MS) });
+    await once(socket, 'connect', { signal });
     return false;
   } catch (error) {
     if (codeOf(error) === 'ECONNREFUSED') return true;
     // Queued as the listener closed: the next probe is refused.
     if (codeOf(error) === 'ECONNRESET') return false;
-    // A probe that hangs is abandoned; the next one tries again.
-    if (codeOf(error) === 'ABORT_ERR') return false;
     throw error;
   } finally {
     socket.destroy();
@@ -91,7 +94,7 @@ interface RunningServer {
 }
 
 interface Launched {
-  readonly child: ChildProcess;
+  readonly child: ChildProcessByStdio<null, Readable, Readable>;
   readonly stdout: () => string;
   readonly stderr: () => string;
 }
@@ -123,6 +126,7 @@ const launch = (
 };
 
 const withServer = async (
+  signal: AbortSignal,
   env: Readonly<Record<string, string>>,
   use: (server: RunningServer) => Promise<void>,
   settings: SettingsOverrides = {},
@@ -150,10 +154,13 @@ const withServer = async (
     PORT: String(port),
   });
   try {
-    await waitUntil(() => {
-      if (hasExited(child)) throw new Error(`the server exited before listening: ${stderr()}`);
-      return stderr().includes(`${LISTENING}http://127.0.0.1:${String(port)}\n`);
-    });
+    await untilWritten(
+      child,
+      child.stderr,
+      stderr,
+      `${LISTENING}http://127.0.0.1:${String(port)}\n`,
+      signal,
+    );
     const url = `http://127.0.0.1:${String(port)}`;
     const token = await createApiKeyOverHttp({
       baseUrl: url,
@@ -173,14 +180,14 @@ const withServer = async (
             ...Object.fromEntries(new Headers(init.headers)),
             Authorization: `Bearer ${token}`,
           },
-          signal: AbortSignal.timeout(STEP_TIMEOUT_MS),
+          signal,
         }),
       database,
       stdout,
       stderr,
       terminate: async () => {
         // `close` comes after the output streams have ended, so both are complete.
-        const closed = once(child, 'close', { signal: AbortSignal.timeout(STEP_TIMEOUT_MS) });
+        const closed = once(child, 'close', { signal });
         child.kill('SIGTERM');
         const [code] = z.tuple([z.number().nullable(), z.unknown()]).parse(await closed);
         return code;
@@ -235,35 +242,37 @@ const startHoldingS3 = async () => {
 describe('server process', () => {
   it(
     'serves /health and a first PDF, exits with code 0 on SIGTERM, and writes nothing on stdout',
-    async () => {
-      await withServer({}, async ({ url, token, call, database, stdout, stderr, terminate }) => {
-        const health = await fetch(`${url}/health`, {
-          signal: AbortSignal.timeout(STEP_TIMEOUT_MS),
-        });
-        expect(health.status).toBe(200);
-        expect(await health.json()).toEqual({ status: 'ok' });
+    async ({ signal }) => {
+      await withServer(
+        signal,
+        {},
+        async ({ url, token, call, database, stdout, stderr, terminate }) => {
+          const health = await fetch(`${url}/health`, { signal });
+          expect(health.status).toBe(200);
+          expect(await health.json()).toEqual({ status: 'ok' });
 
-        const id = await upload(call, 'first document');
-        const stored = await call(`/documents/${id}/file`);
-        expect(Buffer.from(await stored.arrayBuffer())).toEqual(
-          Buffer.from(syntheticPdf('first document')),
-        );
-        expect(await database.db.select({ id: documents.id }).from(documents)).toEqual([{ id }]);
+          const id = await upload(call, 'first document');
+          const stored = await call(`/documents/${id}/file`);
+          expect(Buffer.from(await stored.arrayBuffer())).toEqual(
+            Buffer.from(syntheticPdf('first document')),
+          );
+          expect(await database.db.select({ id: documents.id }).from(documents)).toEqual([{ id }]);
 
-        expect(await terminate()).toBe(0);
-        // stdout belongs to MCP over stdio: the server itself never writes there.
-        expect(stdout()).toBe('');
-        expect(stderr()).toContain('"event":"request"');
-        expect(stderr()).not.toContain(token);
-        expect(stderr()).not.toContain(TEST_ACCOUNT.password);
-      });
+          expect(await terminate()).toBe(0);
+          // stdout belongs to MCP over stdio: the server itself never writes there.
+          expect(stdout()).toBe('');
+          expect(stderr()).toContain('"event":"request"');
+          expect(stderr()).not.toContain(token);
+          expect(stderr()).not.toContain(TEST_ACCOUNT.password);
+        },
+      );
     },
-    4 * STEP_TIMEOUT_MS,
+    PROCESS_TEST_LIMIT_MS,
   );
 
   it(
     'takes an uploaded document to indexed through the pipeline it binds',
-    async () => {
+    async ({ signal }) => {
       const models = await startModelStub(TEST_EMBEDDING_DIM);
       const settings = {
         llm: { base_url: models.url },
@@ -271,6 +280,7 @@ describe('server process', () => {
       } as const;
       try {
         await withServer(
+          signal,
           { EMBEDDING_DIM: String(TEST_EMBEDDING_DIM) },
           async ({ call, database, terminate }) => {
             const form = new FormData();
@@ -287,7 +297,7 @@ describe('server process', () => {
                   .from(documents)
                   .where(eq(documents.id, id))
               )[0]?.status;
-            await waitUntil(async () => (await statusOf()) === 'indexed');
+            await waitUntil(async () => (await statusOf()) === 'indexed', PROCESS_WAIT_LIMIT_MS);
             const paths = models.requests.map(({ path }) => path);
             expect(paths).toContain('/v1/chat/completions');
             expect(paths).toContain('/v1/embeddings');
@@ -299,14 +309,15 @@ describe('server process', () => {
         await models.close();
       }
     },
-    4 * STEP_TIMEOUT_MS,
+    PROCESS_TEST_LIMIT_MS,
   );
 
   it(
     'warns on stderr when a cloud model provider is configured',
-    async () => {
+    async ({ signal }) => {
       const apiKey = 'synthetic-llm-key-7c1e';
       await withServer(
+        signal,
         {},
         async (server) => {
           expect(await server.terminate()).toBe(0);
@@ -321,12 +332,12 @@ describe('server process', () => {
         { llm: { provider: 'anthropic', api_key: apiKey } },
       );
     },
-    4 * STEP_TIMEOUT_MS,
+    PROCESS_TEST_LIMIT_MS,
   );
 
   it(
     'lets a job in flight finish before it exits',
-    async () => {
+    async ({ signal }) => {
       const s3 = await startHoldingS3();
       const env = {
         STORAGE_DRIVER: 's3',
@@ -336,49 +347,51 @@ describe('server process', () => {
         S3_SECRET_ACCESS_KEY: 'synthetic-secret-key',
       };
       try {
-        await withServer(env, async ({ child, port, call, database, stdout, terminate }) => {
-          const id = await upload(call, 'deleted during shutdown');
-          expect((await call(`/documents/${id}`, { method: 'DELETE' })).status).toBe(204);
-          await waitUntil(() => s3.holding() === 1);
+        await withServer(
+          signal,
+          env,
+          async ({ child, port, call, database, stdout, terminate }) => {
+            const id = await upload(call, 'deleted during shutdown');
+            expect((await call(`/documents/${id}`, { method: 'DELETE' })).status).toBe(204);
+            await waitUntil(() => s3.holding() === 1, PROCESS_WAIT_LIMIT_MS);
 
-          const exit = terminate();
-          // The listener is closed first: once it refuses connections the shutdown has
-          // reached the workers, and the process must still be there for its job.
-          await waitUntil(() => refusesConnections(port));
-          expect(hasExited(child)).toBe(false);
-          const running = await database.db.select({ status: jobs.status }).from(jobs);
-          expect(running.map((job) => job.status)).toContain('running');
+            const exit = terminate();
+            // The listener is closed first: once it refuses connections the shutdown has
+            // reached the workers, and the process must still be there for its job.
+            await waitUntil(() => refusesConnections(port, signal), PROCESS_WAIT_LIMIT_MS);
+            expect(hasExited(child)).toBe(false);
+            const running = await database.db.select({ status: jobs.status }).from(jobs);
+            expect(running.map((job) => job.status)).toContain('running');
 
-          s3.release();
-          expect(await exit).toBe(0);
-          expect(stdout()).toBe('');
-          const settled = await database.db
-            .select({ kind: jobs.kind, status: jobs.status })
-            .from(jobs);
-          expect(settled).toContainEqual({ kind: 'delete_file', status: 'succeeded' });
-          const [tombstone] = await database.db
-            .select({ fileDeletedAt: documents.fileDeletedAt })
-            .from(documents);
-          expect(tombstone?.fileDeletedAt).toBeInstanceOf(Date);
-        });
+            s3.release();
+            expect(await exit).toBe(0);
+            expect(stdout()).toBe('');
+            const settled = await database.db
+              .select({ kind: jobs.kind, status: jobs.status })
+              .from(jobs);
+            expect(settled).toContainEqual({ kind: 'delete_file', status: 'succeeded' });
+            const [tombstone] = await database.db
+              .select({ fileDeletedAt: documents.fileDeletedAt })
+              .from(documents);
+            expect(tombstone?.fileDeletedAt).toBeInstanceOf(Date);
+          },
+        );
       } finally {
         await s3.close();
       }
     },
-    4 * STEP_TIMEOUT_MS,
+    PROCESS_TEST_LIMIT_MS,
   );
 
   it(
     'exits with code 1 and one sentence when it cannot start, without a secret in it',
-    async () => {
+    async ({ signal }) => {
       const password = 'synthetic-db-password-41c9';
       const { child, stdout, stderr } = launch({
         DATABASE_URL: `postgres://liasse:${password}@127.0.0.1:1/liasse`,
         PORT: String(await freePort()),
       });
-      const closed: readonly unknown[] = await once(child, 'close', {
-        signal: AbortSignal.timeout(STEP_TIMEOUT_MS),
-      });
+      const closed: readonly unknown[] = await once(child, 'close', { signal });
       expect(closed[0]).toBe(1);
       expect(stderr()).toMatch(
         /Liasse could not start: migrating the database failed \([A-Za-z]+ ECONNREFUSED\)\.\n$/,
@@ -387,21 +400,19 @@ describe('server process', () => {
       expect(stderr()).not.toContain('    at ');
       expect(stdout()).toBe('');
     },
-    4 * STEP_TIMEOUT_MS,
+    PROCESS_TEST_LIMIT_MS,
   );
 
   it(
     'refuses to start while a variable moved to the settings is set, and names it',
-    async () => {
+    async ({ signal }) => {
       const apiKey = 'synthetic-llm-key-90ab';
       const { child, stdout, stderr } = launch({
         PORT: String(await freePort()),
         TEXT_MODEL: 'text-model',
         LLM_API_KEY: apiKey,
       });
-      const closed: readonly unknown[] = await once(child, 'close', {
-        signal: AbortSignal.timeout(STEP_TIMEOUT_MS),
-      });
+      const closed: readonly unknown[] = await once(child, 'close', { signal });
       expect(closed[0]).toBe(1);
       const moved =
         'no longer read from the environment: the settings are stored in the database and ' +
@@ -412,18 +423,18 @@ describe('server process', () => {
       expect(stderr()).not.toContain(apiKey);
       expect(stdout()).toBe('');
     },
-    4 * STEP_TIMEOUT_MS,
+    PROCESS_TEST_LIMIT_MS,
   );
 
   it(
     'refuses to start on a Node whose undici can end the process',
-    async () => {
+    async ({ signal }) => {
       const { child, stdout, stderr } = launch({ PORT: String(await freePort()) }, [
         `--import=${fileURLToPath(new URL('./affected-undici.test-helper.ts', import.meta.url))}`,
       ]);
-      const closed: readonly unknown[] = await once(child, 'close', {
-        signal: AbortSignal.timeout(STEP_TIMEOUT_MS),
-      }).finally(() => child.kill());
+      const closed: readonly unknown[] = await once(child, 'close', { signal }).finally(() =>
+        child.kill(),
+      );
       expect(closed[0]).toBe(1);
       expect(stderr()).toBe(
         'Liasse does not run on Node 24.18.0: its undici 7.28.0 can end the process on a reset ' +
@@ -432,6 +443,6 @@ describe('server process', () => {
       );
       expect(stdout()).toBe('');
     },
-    4 * STEP_TIMEOUT_MS,
+    PROCESS_TEST_LIMIT_MS,
   );
 });
