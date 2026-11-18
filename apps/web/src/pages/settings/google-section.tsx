@@ -6,14 +6,11 @@ import { fieldSetter, type SectionProps } from './settings-form.ts';
 import { issueAt } from './settings-validation.ts';
 
 interface GoogleSectionProps extends SectionProps<'google'> {
-  /**
-   * The origin the browser reaches Liasse at: the server answers the callback outside `/ui`,
-   * on the origin of the web UI.
-   */
-  readonly origin: string;
+  /** `PUBLIC_URL`, which the server builds the redirect URI from, as this one is built. */
+  readonly publicUrl: string;
 }
 
-export const GoogleSection = ({ values, issues, onChange, origin }: GoogleSectionProps) => {
+export const GoogleSection = ({ values, issues, onChange, publicUrl }: GoogleSectionProps) => {
   const set = fieldSetter(values, onChange);
   return (
     <SettingsCard
@@ -23,7 +20,9 @@ export const GoogleSection = ({ values, issues, onChange, origin }: GoogleSectio
     >
       <p className="text-sm text-muted-foreground">
         Register{' '}
-        <code className="break-all font-mono text-foreground">{origin + GOOGLE_CALLBACK_PATH}</code>{' '}
+        <code className="break-all font-mono text-foreground">
+          {new URL(GOOGLE_CALLBACK_PATH, publicUrl).toString()}
+        </code>{' '}
         as an authorized redirect URI of a Web application client, and move the app to In
         production: in Testing, Google ends the authorization of a source after 7 days.
       </p>

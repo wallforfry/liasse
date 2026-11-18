@@ -1,3 +1,4 @@
+import { publicUrl } from '../../lib/public-url.ts';
 import type { SettingsDraft } from '@liasse/contract';
 import type { SettingsState } from '@liasse/sdk';
 import { useMutation, useQuery } from '@tanstack/react-query';
@@ -124,7 +125,7 @@ const SettingsForm = ({ state, onReload }: SettingsFormProps) => {
         values={values.google}
         issues={issues}
         onChange={section('google')}
-        origin={window.location.origin}
+        publicUrl={publicUrl()}
       />
       <p role="status" className="text-sm text-destructive">
         {issues.size === 0 ? null : 'Some settings are not valid: see the marked fields.'}

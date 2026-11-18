@@ -4,6 +4,13 @@
 /** The `<meta property>` the server writes the CSP nonce of a page into, in its `nonce`. */
 export const CSP_NONCE_META_PROPERTY = 'csp-nonce';
 
+/**
+ * The `<meta property>` the server writes `PUBLIC_URL` into, in its `content`: the address
+ * Google sends the browser back to is built from it, which a page reached at another
+ * address cannot read from its own location.
+ */
+export const PUBLIC_URL_META_PROPERTY = 'public-url';
+
 /** Where the auth server (better-auth) answers: sign-in, sessions, API keys, OAuth. */
 export const AUTH_BASE_PATH = '/api/auth';
 

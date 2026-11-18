@@ -183,7 +183,7 @@ export const createApp = ({
     }),
   );
   app.route('/', authRoutes(auth, requestTimeout(requestTimeoutMs), resolveClientAddress));
-  app.route(UI_ROOT, webRoutes(assets));
+  app.route(UI_ROOT, webRoutes(assets, publicUrl));
   app.get('/', (context) => context.redirect(`${UI_ROOT}/`, 302));
   // `ingest` carries a file: an MCP call gets the deadline of an upload.
   app.route(

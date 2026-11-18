@@ -1,5 +1,5 @@
 import { randomBytes } from 'node:crypto';
-import { CSP_NONCE_META_PROPERTY } from '@liasse/contract';
+import { CSP_NONCE_META_PROPERTY, PUBLIC_URL_META_PROPERTY } from '@liasse/contract';
 import { Hono } from 'hono';
 import type { AppEnv } from '../env.ts';
 import { failure, respondWith } from '../errors.ts';
@@ -28,8 +28,22 @@ export const uiContentSecurityPolicy = (nonce: string): string =>
 
 const IMMUTABLE = 'public, max-age=31536000, immutable';
 
-const withNonce = (index: string, nonce: string): string =>
-  index.replace('<head>', `<head><meta property="${CSP_NONCE_META_PROPERTY}" nonce="${nonce}" />`);
+const ATTRIBUTE_ESCAPES: Readonly<Record<string, string>> = {
+  '&': '&amp;',
+  '"': '&quot;',
+  '<': '&lt;',
+  '>': '&gt;',
+};
+
+const attribute = (value: string): string =>
+  value.replace(/[&"<>]/g, (character) => ATTRIBUTE_ESCAPES[character] ?? character);
+
+const withMeta = (index: string, nonce: string, publicUrl: string): string =>
+  index.replace(
+    '<head>',
+    `<head><meta property="${CSP_NONCE_META_PROPERTY}" nonce="${nonce}" />` +
+      `<meta property="${PUBLIC_URL_META_PROPERTY}" content="${attribute(publicUrl)}" />`,
+  );
 
 const MISSING_ASSET = failure('not_found', 'No such file.');
 
@@ -37,7 +51,7 @@ const MISSING_ASSET = failure('not_found', 'No such file.');
  * The built single-page application under `/ui`: its files as they are, and `index.html`
  * for any other path, which the router of the application reads.
  */
-export const webRoutes = (assets: WebAssets): Hono<AppEnv> =>
+export const webRoutes = (assets: WebAssets, publicUrl: string): Hono<AppEnv> =>
   new Hono<AppEnv>().get('/*', (context) => {
     const path = context.req.path.slice(UI_ROOT.length).replace(/^\/+/, '');
     const file = assets.files.get(path);
@@ -50,7 +64,7 @@ export const webRoutes = (assets: WebAssets): Hono<AppEnv> =>
     // A missing script or stylesheet answered with the page would run as neither.
     if (/\.[a-z0-9]+$/i.test(path)) return respondWith(context, MISSING_ASSET);
     const nonce = randomBytes(16).toString('base64');
-    return context.html(withNonce(assets.index, nonce), 200, {
+    return context.html(withMeta(assets.index, nonce, publicUrl), 200, {
       'Cache-Control': 'no-cache',
       'Content-Security-Policy': uiContentSecurityPolicy(nonce),
     });

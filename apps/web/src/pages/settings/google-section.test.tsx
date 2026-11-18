@@ -27,6 +27,22 @@ describe('the Google section of the settings', () => {
     ).toBeInTheDocument();
   });
 
+  it('builds the redirect URI from the PUBLIC_URL the server wrote, not the page address', async () => {
+    const meta = document.createElement('meta');
+    meta.setAttribute('property', 'public-url');
+    meta.setAttribute('content', 'https://liasse.example.test');
+    document.head.append(meta);
+    try {
+      renderApp('/account/settings', fakeServer(settingsServer()).fetch);
+      const google = within(await region('Google'));
+      expect(
+        google.getByText('https://liasse.example.test/sources/google/callback'),
+      ).toBeInTheDocument();
+    } finally {
+      meta.remove();
+    }
+  });
+
   it('shows the stored client, its secret never', async () => {
     renderApp('/account/settings', fakeServer(settingsServer({ state: withGoogle })).fetch);
 
