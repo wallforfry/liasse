@@ -82,6 +82,7 @@ import {
   type UploadResult,
   uploadResultSchema,
 } from '@liasse/contract';
+import { SOURCE_CHECK_TIMEOUT_MS } from '@liasse/contract/domain';
 import { z } from 'zod';
 import { type DownloadedFile, downloadedFile, type UploadInput, uploadForm } from './files.ts';
 import { type ClientOptions, createSend, parseJson, type QueryParams } from './transport.ts';
@@ -203,6 +204,9 @@ export interface LiasseClient {
 
 const documentPath = (id: string): string => `/documents/${encodeURIComponent(id)}`;
 const sourcePath = (id: string): string => `/sources/${encodeURIComponent(id)}`;
+// The server answers a check that ran out of time with what stopped it: the client waits for
+// that answer, then for reading the source and sending it.
+const SOURCE_CHECK_DEADLINE_MS = SOURCE_CHECK_TIMEOUT_MS + 15_000;
 
 export const createLiasseClient = (options: ClientOptions): LiasseClient => {
   const send = createSend(options);
@@ -284,7 +288,14 @@ export const createLiasseClient = (options: ClientOptions): LiasseClient => {
       await send({ method: 'DELETE', path: sourcePath(id) });
     },
     checkSource: async (id) =>
-      parseJson(sourceCheckSchema, await send({ method: 'POST', path: `${sourcePath(id)}/check` })),
+      parseJson(
+        sourceCheckSchema,
+        await send({
+          method: 'POST',
+          path: `${sourcePath(id)}/check`,
+          minimumTimeoutMs: SOURCE_CHECK_DEADLINE_MS,
+        }),
+      ),
     runSource: async (id) =>
       parseJson(
         sourceRunRequestSchema,

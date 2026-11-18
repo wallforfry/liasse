@@ -59,6 +59,7 @@ describe('the IMAP connector', () => {
   });
 
   afterEach(async () => {
+    vi.restoreAllMocks();
     await mailbox.dispose();
   });
 
@@ -243,6 +244,28 @@ describe('the IMAP connector', () => {
     const connecting = imapConnector.connect(mailbox.config, mailbox.password, controller.signal);
     controller.abort(new Error('Stopping'));
     await expect(connecting).rejects.toThrow('Stopping');
+  });
+
+  it('closes the connection when its signal aborts during the LOGOUT', async () => {
+    // A server that never answers LOGOUT: the command ends only when the connection closes.
+    vi.spyOn(ImapFlow.prototype, 'logout').mockImplementation(function (this: ImapFlow) {
+      return new Promise((_resolve, reject) => {
+        this.once('close', () => {
+          reject(new Error('Closed'));
+        });
+      });
+    });
+    const close = vi.spyOn(ImapFlow.prototype, 'close');
+    const controller = new AbortController();
+    const session = await imapConnector.connect(
+      mailbox.config,
+      mailbox.password,
+      controller.signal,
+    );
+    const closing = session.close();
+    controller.abort(new Error('Stopping'));
+    expect(close).toHaveBeenCalled();
+    await expect(closing).rejects.toThrow('Closed');
   });
 
   it('refuses a wrong or a missing password as a credential error', async () => {

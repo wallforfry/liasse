@@ -9,7 +9,7 @@ import type { Issues } from '../settings/settings-validation.ts';
 import { sourceIssuesOf } from './source-errors.ts';
 import { SOURCES_QUERY_KEY } from './sources-query.ts';
 
-/** What the form sends: a new source, or every field of a saved one. */
+/** What the form sends: a new source, or the fields it changed of a saved one. */
 export type SourceSave =
   | { readonly action: 'create'; readonly source: SourceCreate }
   | { readonly action: 'update'; readonly id: string; readonly patch: SourcePatch };

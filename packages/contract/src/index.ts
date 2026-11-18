@@ -258,6 +258,8 @@ export {
   type SourceCreate,
   type SourceCreateInput,
   sourceCreateSchema,
+  SOURCE_PASSWORD_MISSING_MESSAGE,
+  SOURCE_PASSWORD_UNREADABLE_MESSAGE,
   type SourceError,
   sourceErrorSchema,
   type SourceList,

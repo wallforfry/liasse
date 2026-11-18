@@ -60,9 +60,13 @@ export const imapConnector: SourceConnector<ImapSourceConfig> = {
     }
     return {
       changes: (cursor) => imapChanges(client, config, parseImapCursor(cursor)),
+      // The signal still bounds the LOGOUT: a server slow to answer it is closed on abort.
       close: async () => {
-        signal.removeEventListener('abort', abort);
-        await client.logout();
+        try {
+          await client.logout();
+        } finally {
+          signal.removeEventListener('abort', abort);
+        }
       },
     };
   },

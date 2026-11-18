@@ -1,12 +1,15 @@
-import type {
-  SecretUpdate,
-  Source,
-  SourceCheck,
-  SourceCreate,
-  SourceList,
-  SourcePatch,
-  SourceRunRequest,
+import {
+  type SecretUpdate,
+  type Source,
+  type SourceCheck,
+  type SourceCreate,
+  type SourceList,
+  type SourcePatch,
+  type SourceRunRequest,
+  SOURCE_PASSWORD_MISSING_MESSAGE,
+  SOURCE_PASSWORD_UNREADABLE_MESSAGE,
 } from '@liasse/contract';
+import { SOURCE_CHECK_TIMEOUT_MS } from '@liasse/contract/domain';
 import { eq } from 'drizzle-orm';
 import type { Database } from '../db/client.ts';
 import { ingestionSources } from '../db/schema/sources.ts';
@@ -50,10 +53,40 @@ const KEEP: SecretUpdate = { action: 'keep' };
 const secretUpdateOf = (input: SourceCreate | SourcePatch): SecretUpdate =>
   input.kind === 'imap' ? input.secret : KEEP;
 
-// A check connects to a remote server: bounded apart from the deadline of the request.
-const CHECK_TIMEOUT_MS = 60_000;
-
 const sourceNotFound = (): ApiError => new ApiError('source_not_found', 'No source has this id.');
+
+type SecretState = Source['secret'];
+
+const secretStateAfter = (
+  secrets: SecretBox,
+  id: string,
+  sealed: string | null,
+  update: SecretUpdate,
+): SecretState => {
+  switch (update.action) {
+    case 'replace':
+      return 'set';
+    case 'clear':
+      return 'unset';
+    case 'keep':
+      return openSourceSecret(secrets, id, sealed).state;
+  }
+};
+
+// An enabled mailbox runs at once with what was saved: without a password that opens, the
+// run would only meet refused credentials. A Drive source is saved before its consent at
+// Google, and runs once that gives it an authorization.
+const requireUsableSecret = (
+  input: SourceCreate | SourcePatch,
+  enabled: boolean,
+  state: SecretState,
+): void => {
+  if (input.kind !== 'imap' || !enabled || state === 'set') return;
+  throw new ApiError(
+    'source_secret_required',
+    state === 'unset' ? SOURCE_PASSWORD_MISSING_MESSAGE : SOURCE_PASSWORD_UNREADABLE_MESSAGE,
+  );
+};
 
 export const listSources = async ({ db, secrets }: SourcesContext): Promise<SourceList> => ({
   sources: (await readSources(db)).map((source) => sourceViewOf(secrets, source)),
@@ -65,13 +98,15 @@ export const getSource = async ({ db, secrets }: SourcesContext, id: string): Pr
   return sourceViewOf(secrets, source);
 };
 
-/** Creates a source; an enabled one with credentials runs at once. */
+/** Creates a source; an enabled one runs at once once it has credentials. */
 export const createSource = async (
   context: SourcesContext,
   input: SourceCreate,
 ): Promise<Source> => {
   const id = newId(ID_PREFIXES.ingestionSource);
-  const secret = updateSourceSecret(context.secrets, id, null, secretUpdateOf(input));
+  const update = secretUpdateOf(input);
+  requireUsableSecret(input, input.enabled, secretStateAfter(context.secrets, id, null, update));
+  const secret = updateSourceSecret(context.secrets, id, null, update);
   await context.db.transaction(async (tx) => {
     await tx.insert(ingestionSources).values({
       id,
@@ -139,6 +174,11 @@ export const updateSource = async (
       );
     }
     const enabled = patch.enabled ?? stored.enabled;
+    requireUsableSecret(
+      patch,
+      enabled,
+      secretStateAfter(context.secrets, id, stored.secret, update),
+    );
     const secret = updateSourceSecret(context.secrets, id, stored.secret, update);
     await tx
       .update(ingestionSources)
@@ -190,7 +230,7 @@ export const deleteSource = async (
 export const checkSource = async (context: SourcesContext, id: string): Promise<SourceCheck> => {
   const source = await readSource(context.db, id);
   if (source === undefined) throw sourceNotFound();
-  return checkStoredSource(context, source, AbortSignal.timeout(CHECK_TIMEOUT_MS));
+  return checkStoredSource(context, source, AbortSignal.timeout(SOURCE_CHECK_TIMEOUT_MS));
 };
 
 /** Queues a run due at once, unless one is. */
