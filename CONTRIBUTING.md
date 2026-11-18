@@ -16,7 +16,7 @@ git commit -s -m "feat: add something"
 
 This adds a `Signed-off-by: Your Name <you@example.com>` trailer certifying that you wrote the change or have the right to submit it under the project's license (AGPL-3.0).
 
-Commit messages follow [Conventional Commits](https://www.conventionalcommits.org/); CI checks both the format and the sign-off. The sign-off must carry the email of the commit author. To check a branch before pushing:
+Commit messages follow [Conventional Commits](https://www.conventionalcommits.org/); CI checks both the format and the sign-off, except on the dependency updates Dependabot opens. The sign-off must carry the email of the commit author. To check a branch before pushing:
 
 ```sh
 scripts/check-dco.sh main
@@ -25,7 +25,7 @@ pnpm exec commitlint --from main
 
 ## Development
 
-You need Node 22.12 or later on the 22 line, 24.22.3 or later on the 24 line, or 26.5.1 or later (earlier Node 24, 25 and 26 releases bundle an undici that can end the process on a reset connection, nodejs/undici#5547, and the server refuses to start on them), pnpm, Docker and poppler (`poppler-utils` on Debian and Ubuntu, `poppler` with Homebrew), whose `pdfinfo` and `pdftoppm` measure and render scanned PDFs. CI runs the Node of `volta.node` in `package.json`, which [Volta](https://volta.sh) selects on its own in this repository; the Docker image runs the latest release of the same major line.
+You need Node 22.12 or later on the 22 line, 24.22.3 or later on the 24 line, or 26.5.1 or later (earlier Node 24, 25 and 26 releases bundle an undici that can end the process on a reset connection, nodejs/undici#5547, and the server refuses to start on them), pnpm, Docker and poppler (`poppler-utils` on Debian and Ubuntu, `poppler` with Homebrew), whose `pdfinfo` and `pdftoppm` measure and render scanned PDFs. CI runs the Node of `volta.node` in `package.json`, which [Volta](https://volta.sh) selects on its own in this repository; the Docker image runs the same release (`ARG NODE_VERSION` of the `Dockerfile`, which a test holds equal to it). Dependabot updates neither: bump both together.
 
 ```sh
 pnpm install

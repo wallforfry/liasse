@@ -40,6 +40,14 @@ describe('the Node range', () => {
     expect(serverSide.filter((manifest) => manifest.engines.node !== engines.node)).toEqual([]);
   });
 
+  it('runs the Docker image on the Node release CI tests', async () => {
+    const { volta } = z
+      .object({ volta: z.object({ node: z.string() }) })
+      .parse(JSON.parse(await readFile(new URL('package.json', root), 'utf8')));
+    const dockerfile = await readFile(new URL('Dockerfile', root), 'utf8');
+    expect(/^ARG NODE_VERSION=(\S+)$/mu.exec(dockerfile)?.[1]).toBe(volta.node);
+  });
+
   it('is the client floor in every client package', async () => {
     const clients = (await workspaceManifests()).filter((manifest) =>
       CLIENT_PACKAGES.includes(manifest.name),
