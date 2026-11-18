@@ -108,6 +108,9 @@ export const followServerChange = (
 
 export const PASSWORD_AGAIN_MESSAGE =
   'The stored password was given for the former server: enter it again.';
+export const PASSWORD_UNREADABLE_MESSAGE =
+  'The stored password no longer opens under the current AUTH_SECRET: enter it again.';
+export const PASSWORD_REQUIRED_MESSAGE = 'A mailbox is read with its password: enter it.';
 
 // Blank lines between mailboxes are layout; a name keeps its inner spaces.
 const mailboxesOf = (lines: string): readonly string[] =>
@@ -152,9 +155,34 @@ const validation = <Draft>(result: z.ZodSafeParseResult<Draft>): FormValidation<
         ),
       };
 
-/** The form read by the schema the server creates a source with. */
+// Problems of the password the schema cannot see: they need what is stored, or what the
+// first run would meet.
+const withPasswordIssue = <Draft>(
+  result: FormValidation<Draft>,
+  message: string | undefined,
+): FormValidation<Draft> => {
+  if (message === undefined) return result;
+  const issues = result.valid ? NO_ISSUES : result.issues;
+  return {
+    valid: false,
+    issues: issuesFrom([
+      { path: 'secret', message },
+      ...[...issues].map(([path, issue]) => ({ path, message: issue })),
+    ]),
+  };
+};
+
+/**
+ * The form read by the schema the server creates a source with. A new source without a
+ * password would only be refused by its first run: the form asks for it.
+ */
 export const validateCreate = (values: ImapSourceValues): FormValidation<SourceCreate> =>
-  validation(sourceCreateSchema.safeParse({ ...draftOf(values), hint: optionalText(values.hint) }));
+  withPasswordIssue(
+    validation(
+      sourceCreateSchema.safeParse({ ...draftOf(values), hint: optionalText(values.hint) }),
+    ),
+    values.password.update.action === 'replace' ? undefined : PASSWORD_REQUIRED_MESSAGE,
+  );
 
 // An emptied hint is removed; an empty one that was never stored is left out.
 const hintPatch = (hint: string, source: Source): string | null | undefined =>
@@ -162,7 +190,8 @@ const hintPatch = (hint: string, source: Source): string | null | undefined =>
 
 /**
  * The form read by the schema the server saves `source` with: every field is sent. A stored
- * password kept for another server is refused here as the server would.
+ * password kept for another server is refused here as the server would, and one that no
+ * longer opens, which the next run would only meet as refused credentials.
  */
 export const validatePatch = (
   values: ImapSourceValues,
@@ -171,15 +200,13 @@ export const validatePatch = (
   const result = validation(
     sourcePatchSchema.safeParse({ ...draftOf(values), hint: hintPatch(values.hint, source) }),
   );
-  const keptElsewhere =
-    needsPasswordAgain(values, source) && values.password.update.action === 'keep';
-  if (!keptElsewhere) return result;
-  const issues = result.valid ? NO_ISSUES : result.issues;
-  return {
-    valid: false,
-    issues: issuesFrom([
-      { path: 'secret', message: PASSWORD_AGAIN_MESSAGE },
-      ...[...issues].map(([path, message]) => ({ path, message })),
-    ]),
-  };
+  const kept = values.password.update.action === 'keep';
+  const message = !kept
+    ? undefined
+    : source.secret === 'unreadable'
+      ? PASSWORD_UNREADABLE_MESSAGE
+      : needsPasswordAgain(values, source)
+        ? PASSWORD_AGAIN_MESSAGE
+        : undefined;
+  return withPasswordIssue(result, message);
 };

@@ -140,6 +140,43 @@ describe('the form of a source', () => {
     expect(server.getByText(/app password/u)).toHaveTextContent('a label is a folder');
   });
 
+  it('asks for the password of a new source before creating it', async () => {
+    const server = fakeServer(sourcesServer());
+    renderApp('/sources/new', server.fetch);
+    const user = userEvent.setup();
+
+    await screen.findByRole('heading', { name: 'New source' });
+    await type(user, 'Name', 'Synthetic bills');
+    await type(user, 'Host', 'imap.example.test');
+    await type(user, 'User name', 'owner@example.test');
+    await type(user, 'Start date', '2026-01-01');
+    await user.click(
+      screen.getByRole('button', { name: 'Cancel the change of the mailbox password' }),
+    );
+    await save(user);
+
+    expect(
+      await screen.findByText('A mailbox is read with its password: enter it.'),
+    ).toBeInTheDocument();
+    expect(server.requests.some(isCreate)).toBe(false);
+  });
+
+  it('refuses to keep a stored password that no longer opens', async () => {
+    const server = fakeServer(sourcesServer({ sources: [{ ...SOURCE, secret: 'unreadable' }] }));
+    renderApp(`/sources/${SOURCE.id}/edit`, server.fetch);
+    const user = userEvent.setup();
+
+    await screen.findByDisplayValue('imap.example.test');
+    await save(user);
+
+    expect(
+      await screen.findByText(
+        'The stored password no longer opens under the current AUTH_SECRET: enter it again.',
+      ),
+    ).toBeInTheDocument();
+    expect(server.requests.some(isPatch)).toBe(false);
+  });
+
   it('edits a source, its password kept when untouched', async () => {
     const server = fakeServer(sourcesServer());
     renderApp(`/sources/${SOURCE.id}/edit`, server.fetch);
