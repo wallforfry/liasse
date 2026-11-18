@@ -15,6 +15,8 @@ The compose file reads `.env` next to it, written from [`.env.example`](../.env.
 
 The compose file sets `DATABASE_URL`, `HOST`, `PORT`, `STORAGE_PATH` and `EMBEDDING_CACHE_DIR` itself, over the values of `.env`, which suit a server run from source. Files and the local embedding model live in the `liasse-data` volume, the database in `postgres-data`: back up both.
 
+Postgres runs under an init (`init: true`), so the postmaster is not PID 1. Keep it on a Postgres container of your own: a postmaster that is PID 1 adopts an orphaned health check, such as a `pg_isready` killed at its timeout under load, takes its exit code for a crashed backend, ends every session and runs crash recovery.
+
 ## Settings
 
 The models, their keys, the embedder, the pipeline and Hindsight are settings stored in the database, in one row of the `settings` table; their keys are encrypted there with a key derived from `AUTH_SECRET`. A server without settings serves the web UI and the auth server, answers `503 not_configured` on the routes of the API, and runs no worker and no watched folder. A save applies at once, without a restart: jobs in progress finish with the models they started with.

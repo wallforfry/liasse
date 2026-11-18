@@ -6,6 +6,8 @@
 services:
   postgres:
     image: pgvector/pgvector:pg16
+    # The postmaster must not be PID 1: see the `postgres` service of docker-compose.yml.
+    init: true
     environment:
       POSTGRES_USER: liasse
       POSTGRES_PASSWORD: ${SERVICE_PASSWORD_64_POSTGRES}
