@@ -1,5 +1,10 @@
 import { eq } from 'drizzle-orm';
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import {
+  SOURCE_PASSWORD_MISSING_MESSAGE,
+  SOURCE_PASSWORD_UNREADABLE_MESSAGE,
+} from '@liasse/contract';
+import { SOURCE_CHECK_TIMEOUT_MS } from '@liasse/contract/domain';
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { jobs } from '../db/schema/jobs.ts';
 import { documentOrigins, ingestionSources } from '../db/schema/sources.ts';
 import { documents } from '../db/schema/documents.ts';
@@ -26,15 +31,20 @@ import {
   updateSource,
 } from './sources.ts';
 
-const codeOf = async (promise: Promise<unknown>): Promise<string | undefined> => {
+const refusalOf = async (
+  promise: Promise<unknown>,
+): Promise<{ readonly code: string; readonly message: string } | undefined> => {
   try {
     await promise;
     return undefined;
   } catch (error) {
-    if (error instanceof ApiError) return error.code;
+    if (error instanceof ApiError) return { code: error.code, message: error.message };
     throw error;
   }
 };
+
+const codeOf = async (promise: Promise<unknown>): Promise<string | undefined> =>
+  (await refusalOf(promise))?.code;
 
 describe('the source use cases', () => {
   let database: TestDatabase;
@@ -50,6 +60,10 @@ describe('the source use cases', () => {
   beforeEach(async () => {
     await database.db.delete(jobs);
     await database.db.delete(ingestionSources);
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
   });
 
   const context = () => sourcesContext(database.db);
@@ -141,6 +155,49 @@ describe('the source use cases', () => {
     ).toEqual(port);
   });
 
+  it('refuses an enabled source without a password that opens', async () => {
+    const keep = { action: 'keep' } as const;
+    const create = (enabled: boolean) =>
+      createSource(context(), {
+        kind: 'imap',
+        name: 'No password',
+        enabled,
+        poll_interval_minutes: 5,
+        private: false,
+        config: SYNTHETIC_IMAP_CONFIG,
+        secret: keep,
+      });
+    const missing = { code: 'source_secret_required', message: SOURCE_PASSWORD_MISSING_MESSAGE };
+    expect(await refusalOf(create(true))).toEqual(missing);
+    const disabled = await create(false);
+    expect(disabled).toMatchObject({ enabled: false, secret: 'unset' });
+    expect(
+      await refusalOf(
+        updateSource(context(), disabled.id, { kind: 'imap', enabled: true, secret: keep }),
+      ),
+    ).toEqual(missing);
+
+    const id = await addSource(database.db);
+    expect(
+      await refusalOf(updateSource(context(), id, { kind: 'imap', secret: { action: 'clear' } })),
+    ).toEqual(missing);
+    const [other] = await database.db
+      .select({ secret: ingestionSources.secret })
+      .from(ingestionSources)
+      .where(eq(ingestionSources.id, await addSource(database.db, { enabled: false })));
+    await database.db
+      .update(ingestionSources)
+      .set({ secret: other?.secret })
+      .where(eq(ingestionSources.id, id));
+    expect(
+      await refusalOf(updateSource(context(), id, { kind: 'imap', name: 'Renamed', secret: keep })),
+    ).toEqual({ code: 'source_secret_required', message: SOURCE_PASSWORD_UNREADABLE_MESSAGE });
+    expect(
+      await updateSource(context(), id, { kind: 'imap', enabled: false, secret: keep }),
+    ).toMatchObject({ enabled: false, secret: 'unreadable' });
+    expect(await queuedPolls(database.db)).toEqual([]);
+  });
+
   it('keeps, changes and removes the hint and the private flag of a source', async () => {
     const id = await addSource(database.db, { hint: 'Bank statements', private: true });
     expect(await getSource(context(), id)).toMatchObject({
@@ -212,10 +269,12 @@ describe('the source use cases', () => {
         config: mailbox.config,
         password: mailbox.password,
       });
+      const timeout = vi.spyOn(AbortSignal, 'timeout');
       expect(await checkSource(context(), id)).toEqual({
         ok: true,
         items: [{ name: 'checked.eml' }],
       });
+      expect(timeout).toHaveBeenCalledWith(SOURCE_CHECK_TIMEOUT_MS);
       expect((await getSource(context(), id)).last_run).toBeNull();
       const [row] = await database.db.select().from(ingestionSources);
       expect(row?.cursor).toBeNull();

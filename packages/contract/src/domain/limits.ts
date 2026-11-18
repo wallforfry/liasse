@@ -211,4 +211,7 @@ export const MAX_SOURCE_POLL_MINUTES = 24 * 60;
 export const MAX_SOURCE_NAME_LENGTH = 100;
 export const MAX_SOURCE_SKIPPED_ITEMS = 20;
 export const SOURCE_CHECK_SAMPLE = 5;
+// A check connects to a remote server: the server bounds it apart from the deadline of the
+// request, and answers a check that ran out of time itself, so a client waits longer.
+export const SOURCE_CHECK_TIMEOUT_MS = 60_000;
 export const MAX_IMAP_MAILBOXES = 20;

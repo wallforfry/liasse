@@ -6,12 +6,15 @@ import {
   type SourceCreateInput,
   type SourcePatch,
   sourcePatchSchema,
+  SOURCE_PASSWORD_MISSING_MESSAGE,
+  SOURCE_PASSWORD_UNREADABLE_MESSAGE,
 } from '@liasse/contract';
 import { DEFAULT_SOURCE_POLL_MINUTES, type ImapSecurity } from '@liasse/contract/domain';
 import type { z } from 'zod';
 import type { SecretValue } from '../../components/secret-field.tsx';
 import { number, numberText, optionalText, text } from '../settings/settings-form.ts';
 import { type Issues, issuesFrom, NO_ISSUES } from '../settings/settings-validation.ts';
+import { changesOf } from './source-changes.ts';
 
 /** The form of an IMAP source, every input as typed: numbers stay text until the schema reads them. */
 export interface ImapSourceValues {
@@ -111,8 +114,6 @@ export const followServerChange = (
 
 export const PASSWORD_AGAIN_MESSAGE =
   'The stored password was given for the former server: enter it again.';
-export const PASSWORD_UNREADABLE_MESSAGE =
-  'The stored password no longer opens under the current AUTH_SECRET: enter it again.';
 export const PASSWORD_REQUIRED_MESSAGE = 'A mailbox is read with its password: enter it.';
 
 // Blank lines between mailboxes are layout; a name keeps its inner spaces.
@@ -187,29 +188,36 @@ export const validateCreate = (values: ImapSourceValues): FormValidation<SourceC
     values.password.update.action === 'replace' ? undefined : PASSWORD_REQUIRED_MESSAGE,
   );
 
-// An emptied hint is removed; an empty one that was never stored is left out.
-const hintPatch = (hint: string, source: Source): string | null | undefined =>
-  optionalText(hint) ?? (source.hint === null ? undefined : null);
+// What the server refuses of the password a save leaves, checked here first: the server would
+// answer `source_secret_required`.
+const passwordIssueOf = (values: ImapSourceValues, source: ImapSource): string | undefined => {
+  const { action } = values.password.update;
+  if (action === 'replace') return undefined;
+  if (action === 'keep' && needsPasswordAgain(values, source)) return PASSWORD_AGAIN_MESSAGE;
+  if (!values.enabled) return undefined;
+  if (action === 'keep' && source.secret === 'unreadable')
+    return SOURCE_PASSWORD_UNREADABLE_MESSAGE;
+  return action === 'clear' || source.secret === 'unset'
+    ? SOURCE_PASSWORD_MISSING_MESSAGE
+    : undefined;
+};
 
 /**
- * The form read by the schema the server saves `source` with: every field is sent. A stored
- * password kept for another server is refused here as the server would, and one that no
- * longer opens, which the next run would only meet as refused credentials.
+ * The form read by the schema the server saves `source` with, as the fields it changes: see
+ * `changesOf`. An enabled source is refused a password it could not run with, as the server
+ * would refuse it: one kept for another server, one that no longer opens, or none.
  */
 export const validatePatch = (
   values: ImapSourceValues,
   source: ImapSource,
 ): FormValidation<SourcePatch> => {
   const result = validation(
-    sourcePatchSchema.safeParse({ ...draftOf(values), hint: hintPatch(values.hint, source) }),
+    sourcePatchSchema.safeParse({ ...draftOf(values), hint: optionalText(values.hint) ?? null }),
   );
-  const kept = values.password.update.action === 'keep';
-  const message = !kept
-    ? undefined
-    : source.secret === 'unreadable'
-      ? PASSWORD_UNREADABLE_MESSAGE
-      : needsPasswordAgain(values, source)
-        ? PASSWORD_AGAIN_MESSAGE
-        : undefined;
-  return withPasswordIssue(result, message);
+  // The draft of this form is always a mailbox; the schema output is the union of the kinds.
+  const changes: FormValidation<SourcePatch> =
+    result.valid && result.draft.kind === 'imap'
+      ? { valid: true, draft: changesOf(result.draft, source) }
+      : result;
+  return withPasswordIssue(changes, passwordIssueOf(values, source));
 };
