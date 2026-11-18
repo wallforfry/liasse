@@ -12,7 +12,7 @@ import {
 import type { ChangeTransaction } from './change-store.ts';
 import { ChangeRefusedError, orRefuse } from './refusal.ts';
 import { moveDocuments } from './document-moves.ts';
-import { rewriteRejectedTypes } from './type-references.ts';
+import { lockReferencingDocuments, rewriteRejectedTypes } from './type-references.ts';
 import type {
   MergePayload,
   PromoteFieldPayload,
@@ -43,12 +43,14 @@ const renamesOf = (pairs: readonly (readonly [string, string | null])[]) =>
 /**
  * Moves the documents of the source to the target, with their values renamed by the
  * mapping, then merges the source into the target: its slug and aliases become aliases
- * of the target, and a document that rejected the source rejects the target. Answers with the number of re-extractions queued.
+ * of the target, and a document that rejected the source rejects the target. Answers
+ * with the number of re-extractions queued.
  */
 export const applyMerge = (tx: ChangeTransaction, payload: MergePayload): Promise<number> =>
   withRegistryLock(tx, async (locked) => {
     const source = await liveType(locked, payload.source_id);
     const target = await liveType(locked, payload.target_id);
+    await lockReferencingDocuments(locked, source.id);
     const queued = await moveDocuments(locked, {
       fromTypeId: source.id,
       toTypeId: target.id,

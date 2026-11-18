@@ -123,6 +123,41 @@ describe('the lock order of a merge', () => {
     expect(merged).toMatchObject({ ok: true });
   });
 
+  // A type merge rewrites the documents of the source and those that rejected it: with
+  // the first id rejecting the source and the second of the source, a merge that took the
+  // two sets one after the other would hold the second row and wait for the first.
+  it('takes the rows of the documents of a merged type in id order, rejecters included', async () => {
+    const source = await seedType(database.db, { slug: 'lock_order_source_bill' });
+    const target = await seedType(database.db, { slug: 'lock_order_target_bill' });
+    const other = await seedType(database.db, { slug: 'lock_order_other_bill' });
+    const first = newId(ID_PREFIXES.document);
+    const second = newId(ID_PREFIXES.document);
+    await insertSyntheticDocument(database.db, {
+      id: first,
+      status: 'indexed',
+      typeId: other.id,
+      rejectedTypeIds: [source.id],
+    });
+    await insertSyntheticDocument(database.db, {
+      id: second,
+      status: 'indexed',
+      typeId: source.id,
+    });
+    const change = await seedChange(database.db, 'merge', {
+      source_id: source.id,
+      target_id: target.id,
+      field_mapping: {},
+      confidence: 0.95,
+    });
+    const merged = await raceWith([first, second], () =>
+      decideChange(database.db, change, 'apply', null),
+    );
+    expect(merged).toMatchObject({
+      outcome: 'decided',
+      decided: { change: { status: 'applied' } },
+    });
+  });
+
   // A type change takes every document of the type in id order (`moveDocuments`). The
   // second row is held while the merge, then the change, queue up; once it is released,
   // a merge that rewrote in scan order would hold the second row and wait for the first,

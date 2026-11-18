@@ -26,6 +26,7 @@ import {
   type PipelineHarness,
   scriptedModel,
 } from './harness.test-helper.ts';
+import { PipelineConflictError } from './errors.ts';
 import { reextractDocumentJob, type ReclassifyPayload } from './jobs.ts';
 import { reextractDocument } from './process-document.ts';
 import { reclassifyDocument } from './reclassify-document.ts';
@@ -72,10 +73,12 @@ describe('reclassifying a document', () => {
     water: await seedType('water_bill', { volume: { type: 'number' } }),
   });
 
+  // A typed document rejects its type, as the request of a reclassification leaves it.
   const settled = async (typeId: string | null, overrides = {}): Promise<string> => {
     const { id } = await insertSyntheticDocument(harness.db, {
       status: 'indexed',
       typeId,
+      rejectedTypeIds: typeId === null ? [] : [typeId],
       schemaVersion: 1,
       confidence: 0.9,
       core: { reference: 'SYN-2026-001' },
@@ -458,6 +461,28 @@ describe('reclassifying a document', () => {
       await reclassifyDocument(harness.deps({ textModel }), payloadOf(id, energy.id), live());
       expect(textModel.calls).toEqual([]);
       expect(await harness.document(id)).toMatchObject({ typeId: water.id, confidence: 0.9 });
+      expect(await queued()).toEqual([]);
+      expect(await eventsOf(id)).toEqual([]);
+    });
+
+    // A merge of a rejected type into the type the model decides rewrites the list, as
+    // `rewriteRejectedTypes` does, while the model answers.
+    it('writes nothing, and runs again, when the decided type becomes a rejected one', async () => {
+      const { energy, water } = await seedTypes();
+      const id = await settled(energy.id);
+      const textModel = scriptedModel({
+        classify: async () => {
+          await harness.db
+            .update(documents)
+            .set({ rejectedTypeIds: [energy.id, water.id] })
+            .where(eq(documents.id, id));
+          return { decision: 'existing', slug: 'water_bill', confidence: 0.9 };
+        },
+      });
+      await expect(
+        reclassifyDocument(harness.deps({ textModel }), payloadOf(id, energy.id), live()),
+      ).rejects.toBeInstanceOf(PipelineConflictError);
+      expect(await harness.document(id)).toMatchObject({ typeId: energy.id, confidence: 0.9 });
       expect(await queued()).toEqual([]);
       expect(await eventsOf(id)).toEqual([]);
     });

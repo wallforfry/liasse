@@ -43,7 +43,7 @@ export const moveDocuments = async (
     .from(documents)
     .where(and(eq(documents.typeId, fromTypeId), isLiveDocument))
     .orderBy(asc(documents.id))
-    .for('update');
+    .for('no key update');
   const retyped = fromTypeId !== toTypeId;
   for (const row of rows) {
     const rehomed = rehomeValues(row, rehoming);
