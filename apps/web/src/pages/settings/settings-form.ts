@@ -13,13 +13,8 @@ import type {
   SchemaLanguage,
   SecretState,
 } from '@liasse/contract/domain';
+import type { SecretValue } from '../../components/secret-field.tsx';
 import type { Issues } from './settings-validation.ts';
-
-/** The key of a section as edited: what the save does with the stored one. */
-export interface KeyField {
-  readonly state: SecretState;
-  readonly update: SecretUpdate;
-}
 
 /** The form, every input as typed: numbers stay text until the schema reads them. */
 export interface SettingsValues {
@@ -29,7 +24,7 @@ export interface SettingsValues {
     readonly text_model: string;
     readonly vision_model: string;
     readonly timeout_ms: string;
-    readonly api_key: KeyField;
+    readonly api_key: SecretValue;
   };
   readonly embedding: {
     readonly provider: EmbeddingProvider;
@@ -37,7 +32,7 @@ export interface SettingsValues {
     readonly base_url: string;
     readonly timeout_ms: string;
     readonly max_input_tokens: string;
-    readonly api_key: KeyField;
+    readonly api_key: SecretValue;
   };
   readonly pipeline: {
     readonly max_file_size: string;
@@ -52,7 +47,7 @@ export interface SettingsValues {
   readonly hindsight: {
     readonly url: string;
     readonly bank: string;
-    readonly api_key: KeyField;
+    readonly api_key: SecretValue;
   };
 }
 
@@ -60,7 +55,7 @@ export type SettingsSection = keyof SettingsValues;
 
 const KEEP: SecretUpdate = { action: 'keep' };
 
-const keyField = (state: SecretState): KeyField => ({ state, update: KEEP });
+const keyField = (state: SecretState): SecretValue => ({ state, update: KEEP });
 
 const text = (value: string | undefined): string => value ?? '';
 const numberText = (value: number | undefined): string =>
@@ -131,7 +126,7 @@ const optionalNumber = (value: string): number | undefined =>
 /** Whether the embedder runs in the process, with no endpoint, key or window of its own. */
 export const isLocalEmbedder = (provider: EmbeddingProvider): boolean => provider === 'local';
 
-const localEmbedderKey = ({ state }: KeyField): SecretUpdate =>
+const localEmbedderKey = ({ state }: SecretValue): SecretUpdate =>
   state === 'unreadable' ? { action: 'clear' } : KEEP;
 
 /** The endpoint of the language models as the form holds it, for the list of models. */
