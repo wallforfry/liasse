@@ -7,13 +7,13 @@ interface Sent {
   readonly init: RequestInit | undefined;
 }
 
-// A server that answers each request by its URL, and remembers what it got.
-const answering = (respond: (url: string) => Response) => {
+// A server that answers each request by its URL and method, and remembers what it got.
+const answering = (respond: (url: string, method: string) => Response) => {
   const sent: Sent[] = [];
   const fetch: typeof globalThis.fetch = async (input, init) => {
     const url = input instanceof Request ? input.url : String(input);
     sent.push({ url, init });
-    return Promise.resolve(respond(url));
+    return Promise.resolve(respond(url, init?.method ?? 'GET'));
   };
   return { fetch, sent };
 };
@@ -115,6 +115,84 @@ describe('createLiasseClient', () => {
       version: 0,
       settings: draft,
     });
+  });
+
+  it('lists, creates, reads, saves, checks, runs and deletes sources on their routes', async () => {
+    const source = {
+      id: 'src_01',
+      kind: 'imap',
+      name: 'Bills',
+      enabled: true,
+      poll_interval_minutes: 5,
+      config: {
+        host: 'imap.example.com',
+        port: 993,
+        security: 'tls',
+        username: 'someone@example.com',
+        mailboxes: ['INBOX'],
+        start_date: '2026-01-01',
+        include_messages_without_attachments: false,
+      },
+      secret: 'set',
+      needs_attention: false,
+      last_run: null,
+      created_at: '2026-11-18T08:00:00.000Z',
+      updated_at: '2026-11-18T08:00:00.000Z',
+    };
+    const check = { ok: true, items: [{ name: 'invoice.pdf' }] };
+    const server = answering((url, method) => {
+      if (url.endsWith('/check')) return json(check);
+      if (url.endsWith('/run')) return json({ queued: true }, 202);
+      if (method === 'DELETE') return new Response(null, { status: 204 });
+      if (method === 'GET' && url.endsWith('/sources')) return json({ sources: [source] });
+      return json(source);
+    });
+    const client = createLiasseClient({
+      baseUrl: 'https://liasse.example.com',
+      session: true,
+      fetch: server.fetch,
+    });
+    const created = {
+      kind: 'imap',
+      name: 'Bills',
+      config: {
+        host: 'imap.example.com',
+        username: 'someone@example.com',
+        start_date: '2026-01-01',
+      },
+      secret: { action: 'replace', value: 'synthetic-password' },
+    } as const;
+    expect(await client.listSources()).toEqual({ sources: [source] });
+    expect(await client.createSource(created)).toEqual(source);
+    expect(await client.getSource('src_01')).toEqual(source);
+    expect(await client.updateSource('src_01', { kind: 'imap', enabled: false })).toEqual(source);
+    expect(await client.checkSource('src_01')).toEqual(check);
+    expect(await client.runSource('src_01')).toEqual({ queued: true });
+    await client.deleteSource('src_01');
+    expect(server.sent.map(({ url, init }) => `${init?.method ?? 'GET'} ${url}`)).toEqual([
+      'GET https://liasse.example.com/sources',
+      'POST https://liasse.example.com/sources',
+      'GET https://liasse.example.com/sources/src_01',
+      'PATCH https://liasse.example.com/sources/src_01',
+      'POST https://liasse.example.com/sources/src_01/check',
+      'POST https://liasse.example.com/sources/src_01/run',
+      'DELETE https://liasse.example.com/sources/src_01',
+    ]);
+    const bodies = server.sent.map(({ init }): unknown =>
+      typeof init?.body === 'string' ? JSON.parse(init.body) : init?.body,
+    );
+    expect(bodies[1]).toEqual(created);
+    expect(bodies[3]).toEqual({ kind: 'imap', enabled: false });
+  });
+
+  it('rejects a source answer outside the contract', async () => {
+    const server = answering(() => json({ sources: [{ id: 'src_01', kind: 'pop3' }] }));
+    const client = createLiasseClient({
+      baseUrl: 'https://liasse.example.com',
+      session: true,
+      fetch: server.fetch,
+    });
+    await expect(client.listSources()).rejects.toBeInstanceOf(LiasseResponseError);
   });
 
   it('calls the onboarding under the path of the auth server, with the setup token', async () => {

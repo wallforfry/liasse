@@ -60,6 +60,16 @@ import {
   type SettingsState,
   settingsStateSchema,
   type SettingsUpdateInput,
+  type Source,
+  type SourceCheck,
+  sourceCheckSchema,
+  type SourceCreateInput,
+  type SourceList,
+  sourceListSchema,
+  type SourcePatchInput,
+  type SourceRunRequest,
+  sourceRunRequestSchema,
+  sourceSchema,
   type SubjectList,
   type TypeList,
   typeListSchema,
@@ -162,6 +172,22 @@ export interface LiasseClient {
   readonly checkSettings: (request: SettingsCheckRequestInput) => Promise<SettingsCheck>;
   /** The models the provider of one section lists, or why it listed none. */
   readonly listSettingsModels: (request: SettingsModelsRequestInput) => Promise<SettingsModels>;
+  /**
+   * The ingestion sources, oldest first, secrets replaced by whether each is set. These seven
+   * take the session of the web UI (`session: true`) and refuse an API key.
+   */
+  readonly listSources: () => Promise<SourceList>;
+  /** Creates a source; an enabled one runs at once. */
+  readonly createSource: (source: SourceCreateInput) => Promise<Source>;
+  readonly getSource: (id: string) => Promise<Source>;
+  /** Saves the fields given, the others kept; an enabled source runs at once. */
+  readonly updateSource: (id: string, patch: SourcePatchInput) => Promise<Source>;
+  /** Deletes a source; the documents it brought stay. */
+  readonly deleteSource: (id: string) => Promise<void>;
+  /** Connects with the stored credentials and lists the first items the next run would take. */
+  readonly checkSource: (id: string) => Promise<SourceCheck>;
+  /** Runs a source now; refused (409) while it is disabled or needs attention. */
+  readonly runSource: (id: string) => Promise<SourceRunRequest>;
   /** The latest consolidation runs, the one due last first, the next nightly one left out. */
   readonly listConsolidationRuns: () => Promise<ConsolidationRunList>;
   /**
@@ -176,6 +202,7 @@ export interface LiasseClient {
 }
 
 const documentPath = (id: string): string => `/documents/${encodeURIComponent(id)}`;
+const sourcePath = (id: string): string => `/sources/${encodeURIComponent(id)}`;
 
 export const createLiasseClient = (options: ClientOptions): LiasseClient => {
   const send = createSend(options);
@@ -248,6 +275,21 @@ export const createLiasseClient = (options: ClientOptions): LiasseClient => {
       ),
     checkSettings: async (request) => post(settingsCheckSchema, '/settings/check', request),
     listSettingsModels: async (request) => post(settingsModelsSchema, '/settings/models', request),
+    listSources: async () => get(sourceListSchema, '/sources'),
+    createSource: async (source) => post(sourceSchema, '/sources', source),
+    getSource: async (id) => get(sourceSchema, sourcePath(id)),
+    updateSource: async (id, patch) =>
+      parseJson(sourceSchema, await send({ method: 'PATCH', path: sourcePath(id), json: patch })),
+    deleteSource: async (id) => {
+      await send({ method: 'DELETE', path: sourcePath(id) });
+    },
+    checkSource: async (id) =>
+      parseJson(sourceCheckSchema, await send({ method: 'POST', path: `${sourcePath(id)}/check` })),
+    runSource: async (id) =>
+      parseJson(
+        sourceRunRequestSchema,
+        await send({ method: 'POST', path: `${sourcePath(id)}/run` }),
+      ),
     listConsolidationRuns: async () => get(consolidationRunListSchema, '/consolidation/runs'),
     getSetupStatus: async () => get(setupStatusSchema, SETUP_BASE_PATH),
     checkSetup: async (request) => post(settingsCheckSchema, `${SETUP_BASE_PATH}/check`, request),
