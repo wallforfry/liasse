@@ -114,7 +114,6 @@ describe('startModelProcess', () => {
     const stuck = model.embed(['hang']);
     const waiting = model.countTokens(['hang']);
     vi.advanceTimersByTime(2000);
-    vi.useRealTimers();
     await expect(stuck).rejects.toBeInstanceOf(LocalModelTimeoutError);
     await expect(stuck).rejects.toMatchObject({ retryable: true });
     await expect(stuck).rejects.toThrow('did not answer within 2000 ms and was ended');

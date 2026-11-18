@@ -1,4 +1,8 @@
 const POLL_INTERVAL_MS = 10;
+// Taken when this module loads, before a test fakes the clock: `waitUntil` keeps polling,
+// and its bound keeps running, while a test moves the time of the code it watches by hand.
+const { setTimeout: realSetTimeout } = globalThis;
+const realNow = Date.now.bind(Date);
 // Long on purpose: the wait ends as soon as the condition holds, so the bound only
 // decides how long a missing effect takes to fail, never whether a slow one passes. It
 // stays under the test timeout of the core project, so the failure names the wait.
@@ -14,13 +18,13 @@ export const waitUntil = async (
     signal,
   }: { readonly timeoutMs?: number; readonly signal?: AbortSignal } = {},
 ): Promise<void> => {
-  const deadline = Date.now() + timeoutMs;
+  const deadline = realNow() + timeoutMs;
   while (!(await condition())) {
     signal?.throwIfAborted();
-    if (Date.now() > deadline) {
+    if (realNow() > deadline) {
       throw new Error(`The condition did not hold within ${String(timeoutMs)} ms`);
     }
-    await new Promise((resolve) => setTimeout(resolve, POLL_INTERVAL_MS));
+    await new Promise((resolve) => realSetTimeout(resolve, POLL_INTERVAL_MS));
   }
 };
 
