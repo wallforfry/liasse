@@ -60,6 +60,11 @@ import {
   type SettingsState,
   settingsStateSchema,
   type SettingsUpdateInput,
+  type GoogleConsent,
+  type GoogleConsentAnswer,
+  type GoogleConsentResult,
+  googleConsentResultSchema,
+  googleConsentSchema,
   type Source,
   type SourceCheck,
   sourceCheckSchema,
@@ -174,7 +179,7 @@ export interface LiasseClient {
   /** The models the provider of one section lists, or why it listed none. */
   readonly listSettingsModels: (request: SettingsModelsRequestInput) => Promise<SettingsModels>;
   /**
-   * The ingestion sources, oldest first, secrets replaced by whether each is set. These seven
+   * The ingestion sources, oldest first, secrets replaced by whether each is set. These nine
    * take the session of the web UI (`session: true`) and refuse an API key.
    */
   readonly listSources: () => Promise<SourceList>;
@@ -189,6 +194,13 @@ export interface LiasseClient {
   readonly checkSource: (id: string) => Promise<SourceCheck>;
   /** Runs a source now; refused (409) while it is disabled or needs attention. */
   readonly runSource: (id: string) => Promise<SourceRunRequest>;
+  /**
+   * The consent page of Google for a Drive source, where to send the browser; refused (409
+   * `google_client_missing`) while the settings hold no Google client.
+   */
+  readonly startGoogleConsent: (id: string) => Promise<GoogleConsent>;
+  /** Hands Google's answer to the server, once: a code is single use. */
+  readonly completeGoogleConsent: (answer: GoogleConsentAnswer) => Promise<GoogleConsentResult>;
   /** The latest consolidation runs, the one due last first, the next nightly one left out. */
   readonly listConsolidationRuns: () => Promise<ConsolidationRunList>;
   /**
@@ -301,6 +313,13 @@ export const createLiasseClient = (options: ClientOptions): LiasseClient => {
         sourceRunRequestSchema,
         await send({ method: 'POST', path: `${sourcePath(id)}/run` }),
       ),
+    startGoogleConsent: async (id) =>
+      parseJson(
+        googleConsentSchema,
+        await send({ method: 'POST', path: `${sourcePath(id)}/google/authorize` }),
+      ),
+    completeGoogleConsent: async (answer) =>
+      post(googleConsentResultSchema, '/sources/google/complete', answer),
     listConsolidationRuns: async () => get(consolidationRunListSchema, '/consolidation/runs'),
     getSetupStatus: async () => get(setupStatusSchema, SETUP_BASE_PATH),
     checkSetup: async (request) => post(settingsCheckSchema, `${SETUP_BASE_PATH}/check`, request),
