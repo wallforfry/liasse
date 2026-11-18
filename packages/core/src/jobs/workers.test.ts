@@ -72,7 +72,7 @@ describe('workers: running, retrying and limiting jobs', () => {
     await waitUntil(async () => {
       const rows = await harness.database.db.select({ status: jobs.status }).from(jobs);
       return rows.every(({ status }) => status === 'succeeded');
-    }, 10_000);
+    });
     expect([...runs].sort()).toEqual([...labels].sort());
     const attempts = await harness.database.db.select({ attempts: jobs.attempts }).from(jobs);
     expect(attempts.every((row) => row.attempts === 1)).toBe(true);

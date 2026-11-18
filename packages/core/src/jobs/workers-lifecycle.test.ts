@@ -125,7 +125,9 @@ describe('workers: locks, wake-up and stop', () => {
     });
     for (const label of ['first', 'second', 'third', 'fourth', 'fifth']) {
       const id = await harness.queue(label);
-      await waitUntil(async () => (await harness.statusOf(id)) === 'succeeded', 60_000);
+      await waitUntil(async () => (await harness.statusOf(id)) === 'succeeded', {
+        timeoutMs: 60_000,
+      });
     }
   }, 360_000);
 

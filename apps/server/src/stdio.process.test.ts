@@ -249,7 +249,7 @@ describe('MCP over stdio', () => {
             );
             await waitUntil(
               async () => status.parse(await callTool('get_status', { id })).status === 'indexed',
-              PROCESS_WAIT_LIMIT_MS,
+              { timeoutMs: PROCESS_WAIT_LIMIT_MS, signal },
             );
             expect(models.requests.map(({ path }) => path)).toContain('/v1/chat/completions');
 

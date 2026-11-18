@@ -5,13 +5,18 @@ const POLL_INTERVAL_MS = 10;
 const DEFAULT_TIMEOUT_MS = 20_000;
 
 // For effects that land asynchronously (a job run by a worker, a file seen by a watcher).
-// It rejects when the condition never holds, so a missing effect fails the test.
+// It rejects when the condition never holds, so a missing effect fails the test, and stops
+// once `signal` aborts, such as the signal of a Vitest test that timed out.
 export const waitUntil = async (
   condition: () => boolean | Promise<boolean>,
-  timeoutMs: number = DEFAULT_TIMEOUT_MS,
+  {
+    timeoutMs = DEFAULT_TIMEOUT_MS,
+    signal,
+  }: { readonly timeoutMs?: number; readonly signal?: AbortSignal } = {},
 ): Promise<void> => {
   const deadline = Date.now() + timeoutMs;
   while (!(await condition())) {
+    signal?.throwIfAborted();
     if (Date.now() > deadline) {
       throw new Error(`The condition did not hold within ${String(timeoutMs)} ms`);
     }

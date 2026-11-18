@@ -57,6 +57,9 @@ const codeOf = (error: unknown): unknown =>
  * kernel, and on macOS the undici of Node 24 (before 7.30.2, nodejs/undici#5547) then
  * calls `setTypeOfService` on it, which throws EINVAL from a socket callback, out of
  * reach of the request, as an uncaught exception.
+ *
+ * No bound of its own: on loopback a connection is accepted, refused or reset at once. A
+ * dropped SYN would end in the kernel's ETIMEDOUT, which fails the test.
  */
 const refusesConnections = async (port: number, signal: AbortSignal): Promise<boolean> => {
   const socket = connect(port, '127.0.0.1');
@@ -297,7 +300,10 @@ describe('server process', () => {
                   .from(documents)
                   .where(eq(documents.id, id))
               )[0]?.status;
-            await waitUntil(async () => (await statusOf()) === 'indexed', PROCESS_WAIT_LIMIT_MS);
+            await waitUntil(async () => (await statusOf()) === 'indexed', {
+              timeoutMs: PROCESS_WAIT_LIMIT_MS,
+              signal,
+            });
             const paths = models.requests.map(({ path }) => path);
             expect(paths).toContain('/v1/chat/completions');
             expect(paths).toContain('/v1/embeddings');
@@ -353,12 +359,18 @@ describe('server process', () => {
           async ({ child, port, call, database, stdout, terminate }) => {
             const id = await upload(call, 'deleted during shutdown');
             expect((await call(`/documents/${id}`, { method: 'DELETE' })).status).toBe(204);
-            await waitUntil(() => s3.holding() === 1, PROCESS_WAIT_LIMIT_MS);
+            await waitUntil(() => s3.holding() === 1, {
+              timeoutMs: PROCESS_WAIT_LIMIT_MS,
+              signal,
+            });
 
             const exit = terminate();
             // The listener is closed first: once it refuses connections the shutdown has
             // reached the workers, and the process must still be there for its job.
-            await waitUntil(() => refusesConnections(port, signal), PROCESS_WAIT_LIMIT_MS);
+            await waitUntil(() => refusesConnections(port, signal), {
+              timeoutMs: PROCESS_WAIT_LIMIT_MS,
+              signal,
+            });
             expect(hasExited(child)).toBe(false);
             const running = await database.db.select({ status: jobs.status }).from(jobs);
             expect(running.map((job) => job.status)).toContain('running');
