@@ -9,7 +9,6 @@ export type {
   PrimitiveConflict,
   QuotaExceeded,
   RegistryError,
-  RegistryErrorCode,
 } from './errors.ts';
 export { addField, removeField, renameField, retypeField } from './field-operations.ts';
 export { type FieldPath, fieldPaths } from './field-paths.ts';

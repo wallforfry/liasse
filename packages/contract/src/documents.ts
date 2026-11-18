@@ -171,6 +171,20 @@ export const documentCorrectionSchema = z.strictObject({
 });
 export type DocumentCorrection = z.output<typeof documentCorrectionSchema>;
 
+// What `invalid_correction` lists in its `errors`, one entry per value refused.
+export const CORRECTION_ERROR_CODES = [
+  'invalid_input',
+  'document_not_found',
+  'type_not_found',
+  'no_type',
+  'unknown_field',
+  'unsupported_field',
+  'invalid_value',
+  'unresolved_entity',
+  'value_changed',
+] as const;
+export type CorrectionErrorCode = (typeof CORRECTION_ERROR_CODES)[number];
+
 // A request to decide the type of a settled document again, the type it has being wrong.
 export const documentReclassificationSchema = z.strictObject({
   hint: z

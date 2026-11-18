@@ -1,8 +1,8 @@
-import type { FieldDefinition } from '@liasse/contract/registry';
+import type { FieldDefinition, RegistryErrorCode } from '@liasse/contract/registry';
 import type { FieldIssue } from './fields.ts';
 import type { NamingViolation } from './naming.ts';
 
-interface Failure<Code extends string> {
+interface Failure<Code extends RegistryErrorCode> {
   readonly code: Code;
   // Complete on its own: it is shown as is to the model or the agent that made the request.
   readonly message: string;
@@ -38,7 +38,7 @@ export interface PrimitiveConflict extends Failure<'primitive_conflict'> {
   readonly proposed: FieldDefinition;
 }
 
-export interface FieldFailure<Code extends string> extends Failure<Code> {
+export interface FieldFailure<Code extends RegistryErrorCode> extends Failure<Code> {
   readonly field: string;
 }
 
@@ -59,8 +59,6 @@ export type RegistryError =
   | Failure<'type_merged'>
   | Failure<'invalid_status'>
   | Failure<'invalid_merge'>;
-
-export type RegistryErrorCode = RegistryError['code'];
 
 const joined = (items: readonly { readonly message: string }[]): string =>
   items.map(({ message }) => message).join(' ');
@@ -100,12 +98,15 @@ export const quotaExceeded = (limit: number, createdToday: number): QuotaExceede
   createdToday,
 });
 
-export const failure = <Code extends string>(code: Code, message: string): Failure<Code> => ({
+export const failure = <Code extends RegistryErrorCode>(
+  code: Code,
+  message: string,
+): Failure<Code> => ({
   code,
   message,
 });
 
-export const fieldFailure = <Code extends string>(
+export const fieldFailure = <Code extends RegistryErrorCode>(
   code: Code,
   field: string,
   message: string,

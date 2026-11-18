@@ -2,7 +2,13 @@ import { screen, waitFor, within } from '@testing-library/react';
 import { userEvent } from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { POLL_MILLISECONDS } from '../../lib/processing.ts';
-import { fakeServer, json, jsonBody, renderApp } from '../../test/render.test-helper.tsx';
+import {
+  errorBody,
+  fakeServer,
+  json,
+  jsonBody,
+  renderApp,
+} from '../../test/render.test-helper.tsx';
 
 const MARKUP = '<img src=x onerror="alert(1)"><b>bold</b>';
 
@@ -162,19 +168,9 @@ describe('the review panel', () => {
   it('lists what the server refused in the review', async () => {
     const server = fakeServer((request) => {
       if (request.method === 'PATCH') {
-        return json(
-          {
-            error: {
-              code: 'invalid_correction',
-              message: 'The correction was refused.',
-              request_id: 'req_synthetic',
-              errors: [
-                { code: 'unknown_field', message: 'There is no value "issuer" to confirm.' },
-              ],
-            },
-          },
-          400,
-        );
+        return errorBody(400, 'invalid_correction', 'The correction was refused.', {
+          errors: [{ code: 'unknown_field', message: 'There is no value "issuer" to confirm.' }],
+        });
       }
       return request.path.startsWith('/documents/doc_01FLAGGED')
         ? json(FLAGGED_DOCUMENT)
@@ -196,22 +192,14 @@ describe('the review panel', () => {
     const reads = { count: 0 };
     const server = fakeServer((request) => {
       if (request.method === 'PATCH') {
-        return json(
-          {
-            error: {
-              code: 'invalid_correction',
-              message: 'The correction was refused.',
-              request_id: 'req_synthetic',
-              errors: [
-                {
-                  code: 'value_changed',
-                  message: 'The value of "issuer" is no longer the one confirmed.',
-                },
-              ],
+        return errorBody(400, 'invalid_correction', 'The correction was refused.', {
+          errors: [
+            {
+              code: 'value_changed',
+              message: 'The value of "issuer" is no longer the one confirmed.',
             },
-          },
-          422,
-        );
+          ],
+        });
       }
       if (!request.path.startsWith('/documents/doc_01FLAGGED')) return undefined;
       reads.count += 1;

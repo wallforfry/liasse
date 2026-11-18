@@ -1,12 +1,12 @@
-import type { ErrorBody } from '@liasse/contract';
+import type { ApiErrorCode, ErrorBody } from '@liasse/contract';
 import type { z } from 'zod';
 
 /** The server refused the request, with one of the stable codes of the API. */
 export class LiasseApiError extends Error {
   override readonly name = 'LiasseApiError';
   readonly status: number;
-  /** Stable, for programs: `document_not_found`, `invalid_request`, `file_too_large`... */
-  readonly code: string;
+  /** Stable, for programs: one of `API_ERROR_CODES`, such as `document_not_found`. */
+  readonly code: ApiErrorCode;
   /** Quote it when reporting a failure: the server logs under the same id. */
   readonly requestId: string;
   /** What the code carries besides its message, such as the `issues` of `invalid_request`. */

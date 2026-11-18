@@ -49,10 +49,10 @@ const optionsProblem = (error: z.ZodError, otherwise: string): string =>
 const NO_BODY: AsyncIterable<Uint8Array> = Readable.from([]);
 
 const invalid = (message: string): HttpFailure =>
-  new HttpFailure(failure(400, 'invalid_request', message));
+  new HttpFailure(failure('invalid_request', message));
 
 const tooLarge = (maxFileSize: number): ApiError =>
-  new ApiError('too_large', 'file_too_large', 'The file is larger than the limit.', {
+  new ApiError('file_too_large', 'The file is larger than the limit.', {
     max_file_size: maxFileSize,
   });
 

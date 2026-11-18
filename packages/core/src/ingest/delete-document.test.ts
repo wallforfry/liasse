@@ -9,10 +9,11 @@ import { startWorkers } from '../jobs/workers.ts';
 import { storageKeyOf } from '../storage/key.ts';
 import type { Storage } from '../storage/port.ts';
 import { createGate, waitUntil } from '../testing/async.ts';
-import { sessionsWaitingForALock } from '../testing/lock-waits.ts';
+import { holdsBack } from '../testing/lock-waits.ts';
 import { syntheticPdf } from '../testing/synthetic-files.ts';
 import { deleteDocument, DOCUMENT_REFERENCES } from './delete-document.ts';
 import { createDeleteFileHandler } from './delete-file-job.ts';
+import { fileLockHolder } from './file-lock.test-helper.ts';
 import { createIngestHarness, type IngestHarness } from './harness.test-helper.ts';
 import { ingestFile } from './ingest-file.ts';
 
@@ -293,8 +294,13 @@ describe('deleteDocument and the delete_file job', () => {
     );
     await written.opened;
     const removal = deleteFile(id);
-    await waitUntil(async () => (await sessionsWaitingForALock(harness.database.db)) === 1);
-    proceed.open();
+    try {
+      const ingestion = await fileLockHolder(harness.database.db, bytes);
+      await waitUntil(() => holdsBack(harness.database.db, ingestion));
+    } finally {
+      proceed.open();
+      await Promise.allSettled([revival, removal]);
+    }
     await Promise.all([revival, removal]);
     expect(await documentRow(id)).toMatchObject({ status: 'received' });
     expect(await harness.storage.exists(keyOf(bytes))).toBe(true);

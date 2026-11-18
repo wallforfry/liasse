@@ -102,17 +102,9 @@ describe('the checks of the onboarding', () => {
 
   it('marks in place a field the check refused', async () => {
     const refused = () =>
-      json(
-        {
-          error: {
-            code: 'invalid_request',
-            message: 'The request is not valid.',
-            request_id: 'req_synthetic',
-            issues: [{ path: 'settings.llm.text_model', message: 'This model is refused.' }],
-          },
-        },
-        400,
-      );
+      errorBody(400, 'invalid_request', 'The request is not valid.', {
+        issues: [{ path: 'settings.llm.text_model', message: 'This model is refused.' }],
+      });
     renderApp('/', fakeServer(onboardingServer({ check: refused })).fetch);
     const user = userEvent.setup();
     await passToken(user);
@@ -219,17 +211,9 @@ describe('the end of the onboarding', () => {
       fakeServer(
         onboardingServer({
           setup: () =>
-            json(
-              {
-                error: {
-                  code: 'invalid_request',
-                  message: 'The request is not valid.',
-                  request_id: 'req_synthetic',
-                  issues: [{ path: 'account.email', message: 'This address is refused.' }],
-                },
-              },
-              400,
-            ),
+            errorBody(400, 'invalid_request', 'The request is not valid.', {
+              issues: [{ path: 'account.email', message: 'This address is refused.' }],
+            }),
         }),
       ).fetch,
     );

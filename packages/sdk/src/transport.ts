@@ -1,5 +1,5 @@
 import { errorBodySchema } from '@liasse/contract';
-import type { z } from 'zod';
+import { z } from 'zod';
 import { LiasseApiError, LiasseResponseError } from './errors.ts';
 
 export const DEFAULT_TIMEOUT_MS = 60_000;
@@ -76,14 +76,33 @@ const jsonOf = async (response: Response): Promise<unknown> => {
   }
 };
 
+// The error body of the API with any code: a server of another version may answer one
+// this SDK does not list.
+const anyCodeBodySchema = z.object({
+  error: errorBodySchema.shape.error.extend({ code: z.string() }),
+});
+
+const unknownBodyOf = (status: number, body: unknown, cause: z.ZodError): Error => {
+  const known = anyCodeBodySchema.safeParse(body);
+  const message = known.success
+    ? `HTTP ${String(status)} with the code "${known.data.error.code}" (request ` +
+      `${known.data.error.request_id}), which this SDK does not know.`
+    : `HTTP ${String(status)} without the error body of the API.`;
+  return new LiasseResponseError(status, message, cause);
+};
+
 const failureOf = async (response: Response): Promise<Error> => {
-  const parsed = errorBodySchema.safeParse(await jsonOf(response));
+  const body = await jsonOf(response);
+  if (body === NOT_JSON) {
+    return new LiasseResponseError(
+      response.status,
+      `HTTP ${String(response.status)} without the error body of the API.`,
+    );
+  }
+  const parsed = errorBodySchema.safeParse(body);
   return parsed.success
     ? new LiasseApiError(response.status, parsed.data)
-    : new LiasseResponseError(
-        response.status,
-        `HTTP ${String(response.status)} without the error body of the API.`,
-      );
+    : unknownBodyOf(response.status, body, parsed.error);
 };
 
 /** Parses a JSON answer with the schema of its route. */

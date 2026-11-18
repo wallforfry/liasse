@@ -7,10 +7,11 @@ import { jobs } from '../db/schema/jobs.ts';
 import { storageKeyOf } from '../storage/key.ts';
 import type { Storage } from '../storage/port.ts';
 import { createGate, waitUntil } from '../testing/async.ts';
-import { sessionsWaitingForALock } from '../testing/lock-waits.ts';
+import { holdsBack } from '../testing/lock-waits.ts';
 import { syntheticPdf } from '../testing/synthetic-files.ts';
 import { deleteDocument } from './delete-document.ts';
 import { createDeleteFileHandler } from './delete-file-job.ts';
+import { fileLockHolder } from './file-lock.test-helper.ts';
 import { createIngestHarness, type IngestHarness } from './harness.test-helper.ts';
 import { ingestFile } from './ingest-file.ts';
 
@@ -82,8 +83,13 @@ describe('a deletion racing the ingestion of the same bytes', () => {
     const ingestion = await heldIngestion(bytes, 'watch');
 
     const deletion = deleteDocument(harness.deps, id);
-    await waitUntil(async () => (await sessionsWaitingForALock(harness.database.db)) === 1);
-    ingestion.release();
+    try {
+      const holder = await fileLockHolder(harness.database.db, bytes);
+      await waitUntil(() => holdsBack(harness.database.db, holder));
+    } finally {
+      ingestion.release();
+      await Promise.allSettled([ingestion.result, deletion]);
+    }
     await ingestion.result;
     expect(await deletion).toBe(true);
     await createDeleteFileHandler({ db: harness.database.db, storage: harness.storage }).run(

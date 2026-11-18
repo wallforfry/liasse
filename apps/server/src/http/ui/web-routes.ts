@@ -31,7 +31,7 @@ const IMMUTABLE = 'public, max-age=31536000, immutable';
 const withNonce = (index: string, nonce: string): string =>
   index.replace('<head>', `<head><meta property="${CSP_NONCE_META_PROPERTY}" nonce="${nonce}" />`);
 
-const MISSING_ASSET = failure(404, 'not_found', 'No such file.');
+const MISSING_ASSET = failure('not_found', 'No such file.');
 
 /**
  * The built single-page application under `/ui`: its files as they are, and `index.html`

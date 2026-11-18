@@ -1,7 +1,6 @@
 export { documentConfidence, settledStatus } from './confidence.ts';
 export { correctDocument } from './correct-document.ts';
 export {
-  CORRECTION_ERROR_CODES,
   type CorrectionError,
   type CorrectionInput,
   correctionInputSchema,

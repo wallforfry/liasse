@@ -119,7 +119,7 @@ describe('hardening', () => {
         features: {
           listSubjects: () =>
             Promise.reject(
-              new ApiError('invalid', 'synthetic_refusal', 'Refused.', {
+              new ApiError('invalid_request', 'Refused.', {
                 code: 'forged',
                 request_id: 'forged',
                 hint: 'kept',
@@ -131,7 +131,7 @@ describe('hardening', () => {
       expect(response.status).toBe(400);
       expect(await response.json()).toEqual({
         error: {
-          code: 'synthetic_refusal',
+          code: 'invalid_request',
           message: 'Refused.',
           request_id: response.headers.get('X-Request-Id'),
           hint: 'kept',

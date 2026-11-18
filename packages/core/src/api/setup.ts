@@ -36,7 +36,6 @@ export interface SetupContext {
 
 const setupDone = (): ApiError =>
   new ApiError(
-    'conflict',
     'setup_done',
     'An account exists already: sign in, and change the settings from the web UI.',
   );
@@ -45,7 +44,6 @@ const setupDone = (): ApiError =>
 const checkToken = (token: SetupToken | undefined, candidate: string): void => {
   if (token?.matches(candidate) !== true) {
     throw new ApiError(
-      'forbidden',
       'invalid_setup_token',
       'The setup token is not the one this server printed at startup.',
     );
@@ -89,7 +87,6 @@ const refuseEmbedderChange = async (
 
 const settingsMoved = (): ApiError =>
   new ApiError(
-    'conflict',
     'settings_conflict',
     'The settings were saved by another process meanwhile. Try again.',
   );
