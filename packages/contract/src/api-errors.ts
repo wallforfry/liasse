@@ -29,7 +29,6 @@ const KIND_OF_CODE = {
   invalid_body: 'invalid',
   invalid_query: 'invalid',
   invalid_correction: 'invalid',
-  invalid_file: 'invalid',
   empty_file: 'invalid',
   document_not_settled: 'invalid',
   document_not_failed: 'invalid',

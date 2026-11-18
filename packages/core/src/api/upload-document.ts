@@ -1,11 +1,6 @@
 import { type UploadResult, uploadResultSchema } from '@liasse/contract';
 import type { DocumentSource } from '@liasse/contract/domain';
-import {
-  EmptyFileError,
-  FileTooLargeError,
-  IngestError,
-  UnsupportedFormatError,
-} from '../ingest/errors.ts';
+import { EmptyFileError, FileTooLargeError, UnsupportedFormatError } from '../ingest/errors.ts';
 import { ingestFile } from '../ingest/ingest-file.ts';
 import type { FileContent } from '../ingest/read-content.ts';
 import type { ApiContext } from './context.ts';
@@ -19,7 +14,8 @@ export type UploadInput = FileContent & {
   readonly private?: boolean | undefined;
 };
 
-const toApiError = (error: IngestError): ApiError => {
+// Every refusal of ingestion is one of these: another one stays an unexpected failure.
+const apiErrorOf = (error: unknown): unknown => {
   if (error instanceof FileTooLargeError) {
     return new ApiError('file_too_large', error.message, {
       max_file_size: error.maxFileSize,
@@ -28,10 +24,8 @@ const toApiError = (error: IngestError): ApiError => {
   if (error instanceof UnsupportedFormatError) {
     return new ApiError('unsupported_format', error.message);
   }
-  return new ApiError(
-    error instanceof EmptyFileError ? 'empty_file' : 'invalid_file',
-    error.message,
-  );
+  if (error instanceof EmptyFileError) return new ApiError('empty_file', error.message);
+  return error;
 };
 
 /**
@@ -46,6 +40,6 @@ export const uploadDocument = async (
     const { id, status, duplicate } = await ingestFile({ db, storage, maxFileSize }, input);
     return uploadResultSchema.parse({ id, status, duplicate });
   } catch (error) {
-    throw error instanceof IngestError ? toApiError(error) : error;
+    throw apiErrorOf(error);
   }
 };
