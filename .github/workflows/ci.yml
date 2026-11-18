@@ -30,9 +30,13 @@ jobs:
           node-version-file: package.json
           cache: pnpm
       - run: pnpm install --frozen-lockfile
+      # Dependabot writes release notes longer than the body lines commitlint allows, and cannot
+      # sign off. Its pull requests are recognised by their author, which a commit cannot forge.
       - name: Conventional Commits
+        if: github.event.pull_request.user.login != 'dependabot[bot]'
         run: pnpm exec commitlint --from "$BASE_SHA" --to "$HEAD_SHA" --verbose
       - name: Developer Certificate of Origin
+        if: github.event.pull_request.user.login != 'dependabot[bot]'
         run: |
           scripts/check-dco.test.sh
           scripts/check-dco.sh "$BASE_SHA" "$HEAD_SHA"
