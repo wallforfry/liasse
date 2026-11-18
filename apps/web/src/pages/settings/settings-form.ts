@@ -57,8 +57,8 @@ const KEEP: SecretUpdate = { action: 'keep' };
 
 const keyField = (state: SecretState): SecretValue => ({ state, update: KEEP });
 
-const text = (value: string | undefined): string => value ?? '';
-const numberText = (value: number | undefined): string =>
+export const text = (value: string | undefined): string => value ?? '';
+export const numberText = (value: number | undefined): string =>
   value === undefined ? '' : String(value);
 
 const draftShape = settingsDraftSchema.shape;
@@ -116,10 +116,10 @@ export const valuesOf = (saved: SettingsView | null): SettingsValues => {
   };
 };
 
-const optionalText = (value: string): string | undefined =>
+export const optionalText = (value: string): string | undefined =>
   value.trim() === '' ? undefined : value;
 // An empty input is not a number: the schema refuses it rather than reading 0.
-const number = (value: string): number => (value.trim() === '' ? Number.NaN : Number(value));
+export const number = (value: string): number => (value.trim() === '' ? Number.NaN : Number(value));
 const optionalNumber = (value: string): number | undefined =>
   value.trim() === '' ? undefined : Number(value);
 
