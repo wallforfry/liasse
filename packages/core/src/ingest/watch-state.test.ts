@@ -9,6 +9,13 @@ describe('decide', () => {
     });
   });
 
+  it('waits the whole stability delay again for a settling file that changed', () => {
+    const settling = { phase: 'settling', fingerprint: '1:1', since: 1000 } as const;
+    const restarted = { phase: 'settling', fingerprint: '2:2', since: 1040 } as const;
+    expect(decide(settling, '2:2', 1040, 50)).toEqual({ ingest: false, state: restarted });
+    expect(decide(restarted, '2:2', 1050, 50)).toEqual({ ingest: false, state: restarted });
+  });
+
   it('ingests a file that held still for the stability delay, not sooner', () => {
     const settling = { phase: 'settling', fingerprint: '1:1', since: 1000 } as const;
     expect(decide(settling, '1:1', 1049, 50)).toEqual({ ingest: false, state: settling });
