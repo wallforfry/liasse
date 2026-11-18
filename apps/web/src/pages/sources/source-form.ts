@@ -11,7 +11,7 @@ import { DEFAULT_SOURCE_POLL_MINUTES, type ImapSecurity } from '@liasse/contract
 import type { z } from 'zod';
 import type { SecretValue } from '../../components/secret-field.tsx';
 import { number, numberText, optionalText, text } from '../settings/settings-form.ts';
-import { type Issues, issuesFrom } from '../settings/settings-validation.ts';
+import { type Issues, issuesFrom, NO_ISSUES } from '../settings/settings-validation.ts';
 
 /** The form of an IMAP source, every input as typed: numbers stay text until the schema reads them. */
 export interface ImapSourceValues {
@@ -29,6 +29,9 @@ export interface ImapSourceValues {
   readonly from: string;
   readonly subject: string;
   readonly include_messages_without_attachments: boolean;
+  /** Given with every document of the source. */
+  readonly hint: string;
+  readonly private: boolean;
 }
 
 const configShape = imapSourceConfigSchema.shape;
@@ -49,6 +52,8 @@ export const newImapValues = (): ImapSourceValues => ({
   subject: '',
   include_messages_without_attachments:
     configShape.include_messages_without_attachments.parse(undefined),
+  hint: '',
+  private: false,
 });
 
 /** The form showing a saved source, its password kept. */
@@ -66,7 +71,43 @@ export const imapValuesOf = (source: Source): ImapSourceValues => ({
   from: text(source.config.from),
   subject: text(source.config.subject),
   include_messages_without_attachments: source.config.include_messages_without_attachments,
+  hint: text(source.hint ?? undefined),
+  private: source.private,
 });
+
+/**
+ * Whether the form points a stored password at another server than the one it was given
+ * for: the server refuses to keep it then (`source_secret_required`).
+ */
+export const needsPasswordAgain = (values: ImapSourceValues, source: Source): boolean =>
+  source.secret !== 'unset' &&
+  (values.host.trim() !== source.config.host || values.security !== source.config.security);
+
+const PASSWORD_TO_TYPE = { action: 'replace', value: '' } as const;
+
+/**
+ * `next` with its password opened for typing when this change points it at another server,
+ * and kept again when the change brings it back before anything was typed.
+ */
+export const followServerChange = (
+  previous: ImapSourceValues,
+  next: ImapSourceValues,
+  source: Source,
+): ImapSourceValues => {
+  const before = needsPasswordAgain(previous, source);
+  const after = needsPasswordAgain(next, source);
+  const { update } = next.password;
+  if (!before && after && update.action === 'keep') {
+    return { ...next, password: { ...next.password, update: PASSWORD_TO_TYPE } };
+  }
+  if (before && !after && update.action === 'replace' && update.value === '') {
+    return { ...next, password: { ...next.password, update: { action: 'keep' } } };
+  }
+  return next;
+};
+
+export const PASSWORD_AGAIN_MESSAGE =
+  'The stored password was given for the former server: enter it again.';
 
 // Blank lines between mailboxes are layout; a name keeps its inner spaces.
 const mailboxesOf = (lines: string): readonly string[] =>
@@ -91,6 +132,7 @@ const draftOf = (values: ImapSourceValues) =>
       include_messages_without_attachments: values.include_messages_without_attachments,
     },
     secret: values.password.update,
+    private: values.private,
   }) satisfies SourceCreateInput;
 
 export type FormValidation<Draft> =
@@ -112,8 +154,32 @@ const validation = <Draft>(result: z.ZodSafeParseResult<Draft>): FormValidation<
 
 /** The form read by the schema the server creates a source with. */
 export const validateCreate = (values: ImapSourceValues): FormValidation<SourceCreate> =>
-  validation(sourceCreateSchema.safeParse(draftOf(values)));
+  validation(sourceCreateSchema.safeParse({ ...draftOf(values), hint: optionalText(values.hint) }));
 
-/** The form read by the schema the server saves a source with: every field is sent. */
-export const validatePatch = (values: ImapSourceValues): FormValidation<SourcePatch> =>
-  validation(sourcePatchSchema.safeParse(draftOf(values)));
+// An emptied hint is removed; an empty one that was never stored is left out.
+const hintPatch = (hint: string, source: Source): string | null | undefined =>
+  optionalText(hint) ?? (source.hint === null ? undefined : null);
+
+/**
+ * The form read by the schema the server saves `source` with: every field is sent. A stored
+ * password kept for another server is refused here as the server would.
+ */
+export const validatePatch = (
+  values: ImapSourceValues,
+  source: Source,
+): FormValidation<SourcePatch> => {
+  const result = validation(
+    sourcePatchSchema.safeParse({ ...draftOf(values), hint: hintPatch(values.hint, source) }),
+  );
+  const keptElsewhere =
+    needsPasswordAgain(values, source) && values.password.update.action === 'keep';
+  if (!keptElsewhere) return result;
+  const issues = result.valid ? NO_ISSUES : result.issues;
+  return {
+    valid: false,
+    issues: issuesFrom([
+      { path: 'secret', message: PASSWORD_AGAIN_MESSAGE },
+      ...[...issues].map(([path, message]) => ({ path, message })),
+    ]),
+  };
+};

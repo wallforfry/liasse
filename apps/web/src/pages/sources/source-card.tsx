@@ -69,6 +69,11 @@ export const SourceCard = ({ source }: { readonly source: Source }) => {
           <Badge variant="outline" className="mr-2">
             {KIND_LABELS[source.kind]}
           </Badge>
+          {source.private ? (
+            <Badge variant="secondary" className="mr-2">
+              Private
+            </Badge>
+          ) : null}
           {username} on {host}, reading {mailboxes.join(', ')}, every{' '}
           {plural(source.poll_interval_minutes, 'minute')}.
         </CardDescription>
@@ -85,6 +90,11 @@ export const SourceCard = ({ source }: { readonly source: Source }) => {
         </CardAction>
       </CardHeader>
       <CardContent className="flex flex-col gap-4">
+        {source.hint === null ? null : (
+          <p className="text-sm break-words">
+            <span className="font-medium">Hint:</span> {source.hint}
+          </p>
+        )}
         <PasswordState source={source} />
         <SourceLastRun run={source.last_run} />
         <SourceCheckResult data={check.data} error={check.error} />

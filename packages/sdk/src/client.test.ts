@@ -133,6 +133,8 @@ describe('createLiasseClient', () => {
         start_date: '2026-01-01',
         include_messages_without_attachments: false,
       },
+      hint: null,
+      private: false,
       secret: 'set',
       needs_attention: false,
       last_run: null,

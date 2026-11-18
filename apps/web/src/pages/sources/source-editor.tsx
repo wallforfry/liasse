@@ -1,4 +1,8 @@
-import { MAX_SOURCE_NAME_LENGTH, MAX_SOURCE_POLL_MINUTES } from '@liasse/contract/domain';
+import {
+  MAX_HINT_LENGTH,
+  MAX_SOURCE_NAME_LENGTH,
+  MAX_SOURCE_POLL_MINUTES,
+} from '@liasse/contract/domain';
 import type { Source } from '@liasse/sdk';
 import { type SubmitEvent, useState } from 'react';
 import { Link } from 'react-router';
@@ -14,7 +18,9 @@ import { type Issues, issueAt, NO_ISSUES } from '../settings/settings-validation
 import { type ImapFieldsProps, ImapSelectionFields, ImapServerFields } from './imap-fields.tsx';
 import {
   type ImapSourceValues,
+  followServerChange,
   imapValuesOf,
+  needsPasswordAgain,
   newImapValues,
   validateCreate,
   validatePatch,
@@ -52,6 +58,25 @@ const GeneralFields = ({ values, issues, onChange }: ImapFieldsProps) => {
         />
         <Label htmlFor="source-enabled">Enabled</Label>
       </div>
+      <TextField
+        id="source-hint"
+        label="Hint (optional)"
+        maxLength={MAX_HINT_LENGTH}
+        value={values.hint}
+        onChange={set('hint')}
+        hint="Given with every document of the source, as the hint of an upload."
+        error={issueAt(issues, 'hint')}
+      />
+      <div className="flex items-center gap-2">
+        <Checkbox
+          id="source-private"
+          checked={values.private}
+          onCheckedChange={(checked) => {
+            set('private')(checked === true);
+          }}
+        />
+        <Label htmlFor="source-private">Private: flag every document of the source private</Label>
+      </div>
     </SettingsCard>
   );
 };
@@ -67,7 +92,7 @@ const saveOf = (
       ? { save: { action: 'create', source: created.draft } }
       : { issues: created.issues };
   }
-  const patched = validatePatch(values);
+  const patched = validatePatch(values, source);
   return patched.valid
     ? { save: { action: 'update', id: source.id, patch: patched.draft } }
     : { issues: patched.issues };
@@ -80,7 +105,13 @@ export const SourceEditor = ({ source }: { readonly source?: Source }) => {
   );
   const [issues, setIssues] = useState<Issues>(NO_ISSUES);
   const save = useSaveSource(setIssues);
-  const fields = { values, issues, onChange: setValues };
+  const onChange = (next: ImapSourceValues): void => {
+    setValues((previous) =>
+      source === undefined ? next : followServerChange(previous, next, source),
+    );
+  };
+  const fields = { values, issues, onChange };
+  const passwordAgain = source !== undefined && needsPasswordAgain(values, source);
 
   const submit = (event: SubmitEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -96,7 +127,7 @@ export const SourceEditor = ({ source }: { readonly source?: Source }) => {
   return (
     <form className="flex max-w-2xl flex-col gap-6" onSubmit={submit} noValidate>
       <GeneralFields {...fields} />
-      <ImapServerFields {...fields} />
+      <ImapServerFields {...fields} passwordAgain={passwordAgain} />
       <ImapSelectionFields {...fields} />
       <p role="status" className="text-sm text-destructive">
         {issues.size === 0 ? null : 'Some fields are not valid: see the marked fields.'}

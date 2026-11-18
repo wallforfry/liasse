@@ -16,6 +16,8 @@ export const SOURCE = {
     from: 'billing@example.test',
     include_messages_without_attachments: false,
   },
+  hint: 'Bills of the flat',
+  private: false,
   secret: 'set',
   needs_attention: false,
   last_run: {

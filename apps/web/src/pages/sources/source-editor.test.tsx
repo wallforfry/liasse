@@ -38,6 +38,8 @@ describe('the form of a source', () => {
     await type(user, 'Start date', '2026-01-01');
     await type(user, 'Subject contains (optional)', 'Invoice');
     await user.click(screen.getByLabelText('Include messages without attachments'));
+    await type(user, 'Hint (optional)', 'Bills of the flat');
+    await user.click(screen.getByLabelText(/^Private/u));
     await save(user);
 
     expect(await screen.findByRole('heading', { name: 'Sources' })).toBeInTheDocument();
@@ -57,6 +59,8 @@ describe('the form of a source', () => {
         include_messages_without_attachments: true,
       },
       secret: { action: 'replace', value: 'synthetic-app-password' },
+      hint: 'Bills of the flat',
+      private: true,
     });
   });
 
@@ -146,7 +150,9 @@ describe('the form of a source', () => {
     expect(password.getByText('Set')).toBeInTheDocument();
     expect(password.queryByRole('textbox')).not.toBeInTheDocument();
     expect(screen.getByLabelText('Mailboxes')).toHaveValue('INBOX\nBills');
+    expect(screen.getByLabelText('Hint (optional)')).toHaveValue('Bills of the flat');
     await type(user, 'Minutes between runs', '30');
+    await user.clear(screen.getByLabelText('Hint (optional)'));
     await save(user);
 
     await waitFor(() => {
@@ -159,6 +165,92 @@ describe('the form of a source', () => {
       poll_interval_minutes: 30,
       config: { ...SOURCE.config },
       secret: { action: 'keep' },
+      hint: null,
+      private: false,
     });
+  });
+
+  it('asks for the password again when the host changes, and sends it', async () => {
+    const server = fakeServer(sourcesServer());
+    renderApp(`/sources/${SOURCE.id}/edit`, server.fetch);
+    const user = userEvent.setup();
+
+    await screen.findByDisplayValue('imap.example.test');
+    await type(user, 'Host', 'imap.other.example.test');
+    expect(screen.getByLabelText('mailbox password')).toHaveValue('');
+    expect(screen.getByText(/given for the former server/u)).toBeInTheDocument();
+    await save(user);
+    expect(screen.getByLabelText('mailbox password')).toHaveAttribute('aria-invalid', 'true');
+    expect(server.requests.some(isPatch)).toBe(false);
+
+    await type(user, 'mailbox password', 'synthetic-new-password');
+    await save(user);
+    await waitFor(() => {
+      expect(server.requests.some(isPatch)).toBe(true);
+    });
+    expect(jsonBody(server.requests.find(isPatch))).toMatchObject({
+      config: { host: 'imap.other.example.test' },
+      secret: { action: 'replace', value: 'synthetic-new-password' },
+    });
+  });
+
+  it('refuses to keep the stored password for another security', async () => {
+    const server = fakeServer(sourcesServer());
+    renderApp(`/sources/${SOURCE.id}/edit`, server.fetch);
+    const user = userEvent.setup();
+
+    const security = await screen.findByRole('combobox', { name: 'Security' });
+    security.focus();
+    await user.keyboard('{Enter}');
+    await user.click(await screen.findByRole('option', { name: 'starttls' }));
+    await user.click(
+      screen.getByRole('button', { name: 'Cancel the change of the mailbox password' }),
+    );
+    await save(user);
+
+    expect(
+      await screen.findByText(
+        'The stored password was given for the former server: enter it again.',
+      ),
+    ).toBeInTheDocument();
+    expect(server.requests.some(isPatch)).toBe(false);
+  });
+
+  it('keeps the password untouched when the host comes back before anything is typed', async () => {
+    renderApp(`/sources/${SOURCE.id}/edit`, fakeServer(sourcesServer()).fetch);
+    const user = userEvent.setup();
+
+    await screen.findByDisplayValue('imap.example.test');
+    await type(user, 'Host', 'imap.other.example.test');
+    await type(user, 'Host', 'imap.example.test');
+
+    expect(screen.queryByLabelText('mailbox password')).not.toBeInTheDocument();
+    expect(screen.queryByText(/given for the former server/u)).not.toBeInTheDocument();
+  });
+
+  it('marks the password when the server asks for it again', async () => {
+    const refusal = () =>
+      json(
+        {
+          error: {
+            code: 'source_secret_required',
+            message: 'A new host or connection security would receive the stored password.',
+            request_id: 'req_synthetic',
+          },
+        },
+        400,
+      );
+    renderApp(`/sources/${SOURCE.id}/edit`, fakeServer(sourcesServer({ saved: refusal })).fetch);
+    const user = userEvent.setup();
+
+    await screen.findByDisplayValue('imap.example.test');
+    await save(user);
+
+    const password = within(screen.getByRole('group', { name: 'Password' }));
+    expect(
+      await password.findByText(
+        'The stored password was given for the former server: enter it again.',
+      ),
+    ).toBeInTheDocument();
   });
 });

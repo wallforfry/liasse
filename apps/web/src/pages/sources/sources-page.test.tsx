@@ -37,6 +37,8 @@ describe('the sources page', () => {
         'Last run finished 2026-11-18 08:01 UTC: 3 ingested, 1 duplicate, 1 skipped.',
       ),
     ).toBeInTheDocument();
+    expect(source.getByText('Hint:').parentElement).toHaveTextContent('Hint: Bills of the flat');
+    expect(source.queryByText('Private')).not.toBeInTheDocument();
     const skipped = within(source.getByRole('list', { name: 'Skipped items' }));
     expect(skipped.getByRole('listitem')).toHaveTextContent(
       'Huge scan.eml: The file is over max_file_size.',
@@ -65,6 +67,15 @@ describe('the sources page', () => {
     expect(source.getByText('The run stopped: the password was refused')).toBeInTheDocument();
     expect(source.getByText('Authentication failed.')).toBeInTheDocument();
     expect(source.getByRole('button', { name: 'Run now' })).toBeDisabled();
+  });
+
+  it('marks a private source', async () => {
+    const hidden = { ...SOURCE, private: true, hint: null };
+    renderApp('/sources', fakeServer(sourcesServer({ sources: [hidden] })).fetch);
+
+    const source = await card();
+    expect(source.getByText('Private')).toBeInTheDocument();
+    expect(source.queryByText('Hint:')).not.toBeInTheDocument();
   });
 
   it('says when the stored password no longer opens', async () => {

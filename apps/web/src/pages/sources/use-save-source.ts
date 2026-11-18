@@ -5,8 +5,8 @@ import { useNavigate } from 'react-router';
 import { toast } from 'sonner';
 import { useClient } from '../../api/session.ts';
 import { SOURCES_PATH } from '../../layout/navigation.ts';
-import { serverIssuesOf } from '../settings/settings-errors.ts';
 import type { Issues } from '../settings/settings-validation.ts';
+import { sourceIssuesOf } from './source-errors.ts';
 import { SOURCES_QUERY_KEY } from './sources-query.ts';
 
 /** What the form sends: a new source, or every field of a saved one. */
@@ -32,7 +32,7 @@ export const useSaveSource = (onIssues: (issues: Issues) => void) => {
       await navigate(SOURCES_PATH);
     },
     onError: (error) => {
-      onIssues(serverIssuesOf(error));
+      onIssues(sourceIssuesOf(error));
     },
   });
 };

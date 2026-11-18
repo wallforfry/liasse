@@ -14,7 +14,7 @@ import { SettingsCard } from '../settings/settings-card.tsx';
 import { ChoiceField, Field, TextField } from '../settings/settings-fields.tsx';
 import { fieldSetter } from '../settings/settings-form.ts';
 import { type Issues, issueAt } from '../settings/settings-validation.ts';
-import type { ImapSourceValues } from './source-form.ts';
+import { type ImapSourceValues, PASSWORD_AGAIN_MESSAGE } from './source-form.ts';
 
 export interface ImapFieldsProps {
   readonly values: ImapSourceValues;
@@ -51,7 +51,17 @@ const ClearTextWarning = () => (
 );
 
 /** The server of the mailbox and how to sign in to it. */
-export const ImapServerFields = ({ values, issues, onChange }: ImapFieldsProps) => {
+interface ImapServerFieldsProps extends ImapFieldsProps {
+  /** The host or the security differs from those the stored password was given for. */
+  readonly passwordAgain: boolean;
+}
+
+export const ImapServerFields = ({
+  values,
+  issues,
+  onChange,
+  passwordAgain,
+}: ImapServerFieldsProps) => {
   const set = fieldSetter(values, onChange);
   return (
     <SettingsCard id="server" title="Server" description="Where the mailbox is and how to sign in.">
@@ -98,6 +108,9 @@ export const ImapServerFields = ({ values, issues, onChange }: ImapFieldsProps) 
         onChange={set('password')}
         error={issueAt(issues, 'secret')}
       />
+      {passwordAgain && issueAt(issues, 'secret') === undefined ? (
+        <p className="text-sm text-muted-foreground">{PASSWORD_AGAIN_MESSAGE}</p>
+      ) : null}
     </SettingsCard>
   );
 };
