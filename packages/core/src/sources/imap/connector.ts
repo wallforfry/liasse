@@ -33,10 +33,11 @@ export const imapConnector: SourceConnector<ImapSourceConfig> = {
     if (password === undefined) {
       throw new SourceCredentialsError('No password is stored for this mailbox.');
     }
-    signal.throwIfAborted();
     // Loaded with the first connection: imapflow and its dependencies weigh some 30 MB of
     // memory, which a server without an IMAP source would carry at idle.
     const { ImapFlow } = await import('imapflow');
+    // Checked once the import settled: the signal may have aborted while it loaded.
+    signal.throwIfAborted();
     const client = new ImapFlow(optionsOf(config, password));
     // A socket error is also emitted: without a listener, Node would end the process. The
     // command in progress rejects with it, which is where it is handled.
