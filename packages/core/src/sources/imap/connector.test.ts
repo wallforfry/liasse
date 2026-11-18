@@ -238,12 +238,11 @@ describe('the IMAP connector', () => {
     expect([...(flags ?? [])]).toEqual(['\\Recent']);
   });
 
-  it('does not connect once its signal aborted', async () => {
+  it('does not connect when its signal aborts while imapflow loads', async () => {
     const controller = new AbortController();
+    const connecting = imapConnector.connect(mailbox.config, mailbox.password, controller.signal);
     controller.abort(new Error('Stopping'));
-    await expect(
-      imapConnector.connect(mailbox.config, mailbox.password, controller.signal),
-    ).rejects.toThrow('Stopping');
+    await expect(connecting).rejects.toThrow('Stopping');
   });
 
   it('refuses a wrong or a missing password as a credential error', async () => {
