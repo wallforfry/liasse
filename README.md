@@ -36,7 +36,7 @@ You need Docker with Compose, and either an API key of a model provider (Anthrop
    docker compose up -d
    ```
 
-   The server applies its migrations at startup, and `docker compose ps` shows it healthy within a minute. Compose pulls the `latest` image; set `LIASSE_VERSION` in `.env` to pin a version (see [the image and its tags](docs/deployment.md#image)). While the repository is private, so is the image: run `docker login ghcr.io` with a token that can read it first.
+   The server applies its migrations at startup, and `docker compose ps` shows it healthy within a minute. Compose pulls the `latest` image; set `LIASSE_VERSION` in `.env` to pin a version (see [the image and its tags](docs/deployment.md#image)).
 
 4. Open <http://localhost:8080>: while no account exists, every page shows the onboarding. It asks for the setup token the server printed at startup, on the line that begins with `Notice: no account exists yet` (`docker compose logs liasse`; a restart prints a new one until an account exists), then for your account, the language models (provider, text and vision models, and the key or base URL, with a check that calls them), and the embedder (the local one by default, checked against `EMBEDDING_DIM`). Finishing creates the account, saves the settings in the database and signs you in. For Ollama on the same machine, its base URL is `http://host.docker.internal:11434` (inside the container, `127.0.0.1` is the container itself; on Linux, see [Ollama on the host](docs/deployment.md#ollama-on-the-host)). The settings page of the account menu changes them later.
 

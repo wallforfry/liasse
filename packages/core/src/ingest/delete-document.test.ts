@@ -8,7 +8,8 @@ import { docTypes } from '../db/schema/registry.ts';
 import { startWorkers } from '../jobs/workers.ts';
 import { storageKeyOf } from '../storage/key.ts';
 import type { Storage } from '../storage/port.ts';
-import { createGate, sleep, waitUntil } from '../testing/async.ts';
+import { createGate, waitUntil } from '../testing/async.ts';
+import { sessionsWaitingForALock } from '../testing/lock-waits.ts';
 import { syntheticPdf } from '../testing/synthetic-files.ts';
 import { deleteDocument, DOCUMENT_REFERENCES } from './delete-document.ts';
 import { createDeleteFileHandler } from './delete-file-job.ts';
@@ -292,7 +293,7 @@ describe('deleteDocument and the delete_file job', () => {
     );
     await written.opened;
     const removal = deleteFile(id);
-    await Promise.race([removal, sleep(300)]);
+    await waitUntil(async () => (await sessionsWaitingForALock(harness.database.db)) === 1);
     proceed.open();
     await Promise.all([revival, removal]);
     expect(await documentRow(id)).toMatchObject({ status: 'received' });

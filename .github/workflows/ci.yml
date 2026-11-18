@@ -227,3 +227,16 @@ jobs:
       # The server these tests start refuses to start without the web UI build.
       - run: pnpm --filter @liasse/web build
       - run: pnpm test:paradedb
+
+  # The one check the ruleset of `main` requires. A job skipped by its condition still reports
+  # under its unexpanded name (`Build, test (${{ matrix.shard }}/3)`), so the ruleset cannot
+  # require the jobs themselves.
+  checks:
+    name: Checks
+    needs: [commits, changes, format, lint, typecheck, test, bm25]
+    if: ${{ always() }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Every job passed or was skipped
+        if: ${{ contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled') }}
+        run: exit 1

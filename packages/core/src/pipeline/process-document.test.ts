@@ -5,7 +5,8 @@ import { documentDates, facts, subjects } from '../db/schema/knowledge.ts';
 import { docTypes, entities } from '../db/schema/registry.ts';
 import { PIPELINE_PROVENANCE_KEY } from '../domain/provenance.ts';
 import { deleteDocument } from '../ingest/delete-document.ts';
-import { createGate, sleep } from '../testing/async.ts';
+import { createGate, waitUntil } from '../testing/async.ts';
+import { sessionsWaitingForALock } from '../testing/lock-waits.ts';
 import { createFakeEmbedder } from '../testing/fake-embedder.ts';
 import {
   createPipelineHarness,
@@ -696,21 +697,16 @@ describe('processDocument', () => {
     // The deletion starts once the transaction has read the document and before it
     // writes anything: only the row lock taken first can hold it back.
     const deletions: Promise<boolean>[] = [];
-    const outcomes: boolean[] = [];
     const racing: typeof harness.entities = {
       ...harness.entities,
       missingIds: async (tx, ids) => {
-        const deletion = deleteDocument({ db: harness.db }, id);
-        deletions.push(deletion);
-        outcomes.push(
-          await Promise.race([deletion.then(() => true), sleep(300).then(() => false)]),
-        );
+        deletions.push(deleteDocument({ db: harness.db }, id));
+        await waitUntil(async () => (await sessionsWaitingForALock(harness.db)) === 1);
         return harness.entities.missingIds(tx, ids);
       },
     };
     await processDocument(depsFor(OUTPUT, { entities: racing }), id, live());
     expect(await Promise.all(deletions)).toEqual([true]);
-    expect(outcomes).toEqual([false]);
     expect(await harness.document(id)).toMatchObject({ status: 'deleted', core: {} });
     expect(await harness.db.select().from(facts)).toEqual([]);
   });

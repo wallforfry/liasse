@@ -13,6 +13,7 @@ import {
   type FakeTextScript,
 } from '../testing/fake-text-model.ts';
 import { insertSyntheticDocument, type NewDocumentRow } from '../testing/fixtures.ts';
+import { sessionsWaitingForALock } from '../testing/lock-waits.ts';
 import { createTestDatabase, type TestDatabase } from '../testing/test-database.ts';
 import { detectLinks } from './detect-links.ts';
 import { createKnowledgeHandlers, detectLinksJob } from './jobs.ts';
@@ -426,15 +427,8 @@ describe('link detection', () => {
       expect(await stateOf(older)).toBe('current');
     });
 
-    const waiting = async (sessions: number): Promise<boolean> => {
-      // A session waiting for a row waits for a transaction, which `pg_locks` ties to no
-      // database: the sessions are counted where their database is named.
-      const [row] = await database.db.execute<{ waiting: number }>(sql`
-        SELECT count(*)::int AS waiting FROM pg_stat_activity
-        WHERE wait_event_type = 'Lock' AND datname = current_database()
-      `);
-      return (row?.waiting ?? 0) >= sessions;
-    };
+    const waiting = async (sessions: number): Promise<boolean> =>
+      (await sessionsWaitingForALock(database.db)) >= sessions;
 
     it('gives a document its state back when what superseded or terminated it is deleted', async () => {
       const contract = await insert('Contract');

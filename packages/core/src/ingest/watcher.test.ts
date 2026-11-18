@@ -20,6 +20,7 @@ import { startWatcher, type Watcher, type WatcherOptions } from './watcher.ts';
 
 const STABILITY_MS = 60;
 const NEVER_MS = 600_000;
+const SENTINEL = 'sentinel.pdf';
 
 interface Seen {
   readonly filename: string;
@@ -49,7 +50,20 @@ describe('startWatcher', () => {
     return watcher;
   };
 
-  const names = (): readonly string[] => seen.map(({ filename }) => filename).sort();
+  const others = (): readonly Seen[] => seen.filter(({ filename }) => filename !== SENTINEL);
+  const names = (): readonly string[] =>
+    others()
+      .map(({ filename }) => filename)
+      .sort();
+  const sentinelSeen = (): boolean => seen.some(({ filename }) => filename === SENTINEL);
+
+  // A new file is read at the earliest by the second scan that lists it. Once the sentinel
+  // is read, a whole scan started after it was written has looked at every other file: what
+  // that scan did not do to them, the watcher would not do without a change.
+  const afterAWholeScan = async (): Promise<void> => {
+    await writeFile(join(dir, SENTINEL), 'sentinel');
+    await waitUntil(sentinelSeen);
+  };
 
   beforeEach(async () => {
     dir = await mkdtemp(join(tmpdir(), 'liasse-watch-'));
@@ -81,6 +95,8 @@ describe('startWatcher', () => {
     expect(errors).toEqual([]);
   });
 
+  // The watcher must be idle when the file is dropped, and nothing tells that it is: a
+  // sentinel read at start would leave it scanning on the late events of its creation.
   it('ingests a file dropped later, without waiting for a rescan', async () => {
     start();
     await sleep(3 * STABILITY_MS);
@@ -90,20 +106,24 @@ describe('startWatcher', () => {
     expect(seen).toEqual([{ filename: 'dropped.pdf', content: 'dropped' }]);
   });
 
+  // The sentinel, there from the start, is read once the scans of the start are over.
   it('finds new files by rescanning when the file system sends no events', async () => {
+    await writeFile(join(dir, SENTINEL), 'sentinel');
     start({ fsEvents: false, rescanIntervalMs: 50 });
-    await sleep(3 * STABILITY_MS);
+    await waitUntil(sentinelSeen);
     await writeFile(join(dir, 'polled.pdf'), 'polled');
-    await waitUntil(() => seen.length === 1);
+    await waitUntil(() => others().length === 1);
     expect(names()).toEqual(['polled.pdf']);
   });
 
+  // Nothing would ever happen, so no signal says the watcher looked: the wait stays.
   it('sees nothing new without events nor rescan', async () => {
+    await writeFile(join(dir, SENTINEL), 'sentinel');
     start({ fsEvents: false });
-    await sleep(3 * STABILITY_MS);
+    await waitUntil(sentinelSeen);
     await writeFile(join(dir, 'unseen.pdf'), 'unseen');
     await sleep(6 * STABILITY_MS);
-    expect(seen).toEqual([]);
+    expect(names()).toEqual([]);
   });
 
   it('waits for a file that is still being written', async () => {
@@ -117,8 +137,8 @@ describe('startWatcher', () => {
     }
     await waitUntil(() => seen.length === 1);
     expect(seen[0]?.content).toBe('part-0 part-1 part-2 part-3 part-4 part-5 part-6');
-    await sleep(700);
-    expect(seen).toHaveLength(1);
+    await afterAWholeScan();
+    expect(others()).toHaveLength(1);
   });
 
   it('ignores dotfiles, hidden directories and temporary files', async () => {
@@ -139,7 +159,7 @@ describe('startWatcher', () => {
     );
     start();
     await waitUntil(() => seen.length === 1);
-    await sleep(4 * STABILITY_MS);
+    await afterAWholeScan();
     expect(names()).toEqual(['kept.pdf']);
   });
 
@@ -153,7 +173,7 @@ describe('startWatcher', () => {
     try {
       start({ fsEvents: false, rescanIntervalMs: 20 });
       await waitUntil(() => seen.length === 2);
-      await sleep(15 * 20);
+      await afterAWholeScan();
       expect(names()).toEqual(['bill.pdf', 'scan.pdf']);
       expect(errors).toHaveLength(1);
       expect(errors[0]).toMatchObject({ path: locked, error: { code: 'EACCES' } });
@@ -189,8 +209,8 @@ describe('startWatcher', () => {
       },
     });
     await waitUntil(() => seen.length === 2);
-    await sleep(2 * STABILITY_MS);
-    expect((await readdir(dir)).sort()).toEqual(['kept.pdf', 'refused.txt']);
+    await afterAWholeScan();
+    expect((await readdir(dir)).sort()).toEqual(['kept.pdf', 'refused.txt', SENTINEL]);
     expect(await readFile(join(dir, 'kept.pdf'), 'utf8')).toBe('kept');
     expect(await readFile(join(dir, 'refused.txt'), 'utf8')).toBe('refused');
   });
@@ -200,11 +220,11 @@ describe('startWatcher', () => {
     await writeFile(path, 'first version');
     start({ fsEvents: false, rescanIntervalMs: 30 });
     await waitUntil(() => seen.length === 1);
-    await sleep(10 * 30);
-    expect(seen).toHaveLength(1);
+    await afterAWholeScan();
+    expect(others()).toHaveLength(1);
     await writeFile(path, 'second version, longer');
-    await waitUntil(() => seen.length === 2);
-    expect(seen[1]?.content).toBe('second version, longer');
+    await waitUntil(() => others().length === 2);
+    expect(others()[1]?.content).toBe('second version, longer');
   });
 
   it('does not read a refused file again, however many rescans follow', async () => {
@@ -218,11 +238,12 @@ describe('startWatcher', () => {
       },
     });
     await waitUntil(() => seen.length === 1);
-    await sleep(15 * 20);
-    expect(seen).toHaveLength(1);
-    expect(errors).toHaveLength(1);
-    expect(errors[0]).toMatchObject({ path: join(dir, 'notes.txt') });
-    expect(errors[0]?.error).toBeInstanceOf(UnsupportedFormatError);
+    await afterAWholeScan();
+    expect(others()).toHaveLength(1);
+    const refused = errors.filter(({ path }) => path !== join(dir, SENTINEL));
+    expect(refused).toHaveLength(1);
+    expect(refused[0]).toMatchObject({ path: join(dir, 'notes.txt') });
+    expect(refused[0]?.error).toBeInstanceOf(UnsupportedFormatError);
   });
 
   it('retries a failure unrelated to the file, one rescan interval later', async () => {
@@ -254,8 +275,8 @@ describe('startWatcher', () => {
       },
     });
     await waitUntil(() => seen.length === 1);
-    await sleep(3 * STABILITY_MS);
-    expect(seen).toEqual([{ filename: 'b-staying.pdf', content: 'staying' }]);
+    await afterAWholeScan();
+    expect(others()).toEqual([{ filename: 'b-staying.pdf', content: 'staying' }]);
     expect(errors).toEqual([]);
   });
 
