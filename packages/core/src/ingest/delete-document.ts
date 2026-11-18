@@ -124,7 +124,7 @@ export interface DeleteDocumentOptions {
   readonly when?: (tx: Transaction) => Promise<boolean>;
   /**
    * The source that keeps the file now holds another version of it: the tombstone records
-   * it, and the same source may bring the document back if the file returns to these bytes.
+   * it, and a source that keeps the file may bring the document back if it returns to these bytes.
    */
   readonly replacedBySource?: boolean;
 }

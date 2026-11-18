@@ -64,6 +64,23 @@ const sourceBytes = async (
   return bytes;
 };
 
+// Streamed as it arrives, so its hash is known only at the end: a file that changed after
+// the source compared its checksum ends the stream with an error, which a reader sees as a
+// download cut short, never as a complete file with other bytes.
+async function* hashChecked(
+  body: AsyncIterable<Uint8Array>,
+  sha256: string,
+): AsyncGenerator<Uint8Array> {
+  const hash = createHash('sha256');
+  for await (const chunk of body) {
+    hash.update(chunk);
+    yield chunk;
+  }
+  if (hash.digest('hex') !== sha256) {
+    throw new SourceFileChangedError('The source served other bytes than those indexed.');
+  }
+}
+
 export const getDocumentFile = async (
   { db, storage, sourceFiles }: DocumentFileDeps,
   id: string,
@@ -84,7 +101,9 @@ export const getDocumentFile = async (
       ...described,
       bytes: (signal) => sourceBytes(sourceFiles, id, described.sha256, signal),
       stream: async (signal) =>
-        Readable.from(await sourceFiles.open(id, signal), { objectMode: false }),
+        Readable.from(hashChecked(await sourceFiles.open(id, signal), described.sha256), {
+          objectMode: false,
+        }),
     };
   }
   const key = parseStorageKey(storageKey);

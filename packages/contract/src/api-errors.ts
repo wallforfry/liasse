@@ -37,7 +37,6 @@ const KIND_OF_CODE = {
   settings_not_applicable: 'invalid',
   source_secret_required: 'invalid',
   source_kind_mismatch: 'invalid',
-  google_consent_failed: 'invalid',
   unauthorized: 'unauthenticated',
   invalid_setup_token: 'forbidden',
   origin_refused: 'forbidden',

@@ -16,7 +16,6 @@ const STATUS_OF_CODE: Readonly<Record<ApiErrorCode, number>> = {
   settings_not_applicable: 400,
   source_secret_required: 400,
   source_kind_mismatch: 400,
-  google_consent_failed: 400,
   invalid_slug: 400,
   invalid_alias: 400,
   invalid_fields: 400,

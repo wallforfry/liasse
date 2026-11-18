@@ -106,5 +106,9 @@ describe('getDocumentFile', () => {
       id,
     );
     await expect(other?.bytes()).rejects.toBeInstanceOf(SourceFileChangedError);
+    const stream = await other?.stream();
+    await expect(stream === undefined ? undefined : buffer(stream)).rejects.toBeInstanceOf(
+      SourceFileChangedError,
+    );
   });
 });
