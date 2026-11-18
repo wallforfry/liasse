@@ -6,6 +6,11 @@ services:
   postgres:
     image: pgvector/pgvector:pg16
     restart: unless-stopped
+    # Without an init, the postmaster is PID 1 and adopts every orphaned `docker exec` process,
+    # such as a health check pg_isready whose shell was killed at the timeout under load. It
+    # takes the exit code 2 of that pg_isready ("no response") for a crashed backend, ends every
+    # session and runs crash recovery.
+    init: true
     environment:
       POSTGRES_USER: liasse
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
