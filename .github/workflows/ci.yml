@@ -99,9 +99,11 @@ jobs:
       - run: pnpm install --frozen-lockfile
       # Typed linting holds one TypeScript program per package. The default heap of the
       # runner is about 2 GB: main peaked near it, and the types of the MCP SDK passed it.
+      # A 4 GB heap then sat at the edge: on macOS, unbuilt, main peaked at 3.9 GB of resident
+      # memory, and the Drive source added 0.1 GB. The runner has 16 GB.
       - run: pnpm lint
         env:
-          NODE_OPTIONS: --max-old-space-size=4096
+          NODE_OPTIONS: --max-old-space-size=6144
 
   typecheck:
     name: Typecheck
