@@ -65,24 +65,37 @@ const toSpawnError = (error: Error, command: string): Error => {
 
 const ignore = (): void => undefined;
 
-// Runs one poppler command without a shell. What it writes on stdout is handed to
-// `onStdout` chunk by chunk and not kept. Node kills the child itself on a timeout
-// (`killed` is then true); a child killed from outside, by the memory limit of a
-// container for instance, is a failure that another attempt may not meet.
-export const runPoppler = (
+// `deadline` aborts once the command has run for `timeoutMs`, the duration the timeout
+// error names.
+export interface PopplerDeadlineOptions extends PopplerRunOptions {
+  readonly deadline: AbortSignal;
+}
+
+// Runs one poppler command without a shell, and kills it when `deadline` aborts. What it
+// writes on stdout is handed to `onStdout` chunk by chunk and not kept. A child killed
+// from outside, by the memory limit of a container for instance, is a failure that
+// another attempt may not meet; only one killed at the deadline is a timeout.
+export const runPopplerUntil = (
   command: string,
   args: readonly string[],
-  { timeoutMs, signal }: PopplerRunOptions,
+  { deadline, timeoutMs, signal }: PopplerDeadlineOptions,
   onStdout: (chunk: Uint8Array) => void = ignore,
 ): Promise<void> =>
   new Promise((resolve, reject) => {
     const child = spawn(command, [...args], {
       stdio: ['ignore', 'pipe', 'pipe'],
-      timeout: timeoutMs,
       killSignal: 'SIGKILL',
       ...(signal === undefined ? {} : { signal }),
     });
     const stderr = createOutputTail();
+    let expired = false;
+    const expire = (): void => {
+      expired = true;
+      child.kill('SIGKILL');
+    };
+    const disarm = (): void => {
+      deadline.removeEventListener('abort', expire);
+    };
     // A process the command started may outlive it and keep the pipes open: letting go of
     // them is what ends the wait on this side, and what stops that process at its next
     // write.
@@ -93,13 +106,15 @@ export const runPoppler = (
     child.stdout.on('data', onStdout);
     child.stderr.on('data', stderr.push);
     child.on('error', (error) => {
+      disarm();
       releasePipes();
       reject(toSpawnError(error, command));
     });
     // `close` waits for the pipes, which a surviving grandchild holds for as long as it
     // lives: a timeout is reported when the killed child exits, not then.
     child.on('exit', (code) => {
-      if (code !== null || !child.killed) return;
+      disarm();
+      if (code !== null || !expired) return;
       releasePipes();
       reject(
         new TextExtractionError(
@@ -112,4 +127,21 @@ export const runPoppler = (
       if (code === 0) resolve();
       else reject(failed(command, stderr.text()));
     });
+    if (deadline.aborted) expire();
+    else deadline.addEventListener('abort', expire, { once: true });
   });
+
+// The deadline is a signal rather than the `timeout` option of `spawn`, whose timer starts
+// at spawn time out of any caller's reach: a test fires it once the command is ready.
+export const runPoppler = (
+  command: string,
+  args: readonly string[],
+  options: PopplerRunOptions,
+  onStdout: (chunk: Uint8Array) => void = ignore,
+): Promise<void> =>
+  runPopplerUntil(
+    command,
+    args,
+    { ...options, deadline: AbortSignal.timeout(options.timeoutMs) },
+    onStdout,
+  );
