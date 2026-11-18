@@ -41,9 +41,10 @@ import { createSecretBox, type PipelineConfig, type ResolvedSettings } from '@li
 import {
   createSourceHandlers,
   SOURCE_CONCURRENCY,
-  SOURCE_CONNECTORS,
+  type SourceConnectors,
   seedSourcePolls,
 } from '@liasse/core/sources';
+import type { SourceFiles } from '@liasse/core/ingest';
 import type { Storage } from '@liasse/core/storage';
 import type { Logger } from '../log.ts';
 
@@ -56,6 +57,8 @@ export interface RuntimeParts {
   readonly embedder: Embedder;
   readonly textModel: TextModel;
   readonly visionModel: VisionModel;
+  readonly sourceConnectors: SourceConnectors;
+  readonly sourceFiles: SourceFiles;
   readonly logger: Logger;
 }
 
@@ -95,13 +98,14 @@ export const pipelineSettingsOf = ({
 });
 
 const pipelineDepsOf = (
-  { config, settings, db, storage, embedder, textModel, visionModel }: RuntimeParts,
+  { config, settings, db, storage, sourceFiles, embedder, textModel, visionModel }: RuntimeParts,
   hindsight: HindsightIntegration,
 ): PipelineDeps => {
   const identifierKey = deriveIdentifierKey(config.auth.fileUrlSecret);
   return {
     db,
     storage,
+    sourceFiles,
     embedder,
     textModel,
     visionModel,
@@ -152,6 +156,7 @@ export const bindFeatures: Bind = (parts) => {
   });
   const hindsightNotice = describeHindsight(settings);
   const pipeline = pipelineDepsOf(parts, hindsight);
+  const features = featuresOf(pipeline, hindsight);
   return {
     handlers: [
       createDeleteFileHandler({ db, storage }),
@@ -169,7 +174,10 @@ export const bindFeatures: Bind = (parts) => {
         storage,
         maxFileSize: settings.pipeline.maxFileSize,
         secrets: createSecretBox(parts.config.auth.secret),
-        connectors: SOURCE_CONNECTORS,
+        connectors: parts.sourceConnectors,
+        ...(features.onDocumentDeleted === undefined
+          ? {}
+          : { onDocumentDeleted: features.onDocumentDeleted }),
       }),
     ],
     perKindConcurrency: {
@@ -177,7 +185,7 @@ export const bindFeatures: Bind = (parts) => {
       ...CONSOLIDATION_CONCURRENCY,
       ...SOURCE_CONCURRENCY,
     },
-    features: featuresOf(pipeline, hindsight),
+    features,
     startupTasks: [
       { name: 'queueing the file removals still owed', run: () => requeueFileDeletions({ db }) },
       { name: 'failing the documents no job will process', run: () => failAbandonedDocuments(db) },

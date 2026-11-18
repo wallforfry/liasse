@@ -28,5 +28,6 @@ export const sessionCookie =
     ) {
       throw new HttpFailure(ORIGIN_REFUSED);
     }
+    context.set('sessionId', session.session.id);
     return true;
   };

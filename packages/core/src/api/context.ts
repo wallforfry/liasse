@@ -1,5 +1,6 @@
 import type { SchemaLanguage } from '@liasse/contract/domain';
 import type { Database } from '../db/client.ts';
+import type { SourceFiles } from '../ingest/document-file.ts';
 import type { Embedder } from '../models/ports.ts';
 import type { ChunkRanker } from '../search/rankers.ts';
 import type { Storage } from '../storage/port.ts';
@@ -10,6 +11,8 @@ import type { FileUrls } from './file-url.ts';
 export interface ApiContext {
   readonly db: Database;
   readonly storage: Storage;
+  /** The files that stay at the source that found them, such as those of a Drive. */
+  readonly sourceFiles: SourceFiles;
   readonly embedder: Embedder;
   /** The full-text side of hybrid search, chosen at startup by `prepareFullTextRanking`. */
   readonly fullText: ChunkRanker;

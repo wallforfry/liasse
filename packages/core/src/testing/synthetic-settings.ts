@@ -11,6 +11,7 @@ export interface SettingsOverrides {
   readonly embedding?: SettingsInput['embedding'];
   readonly pipeline?: SettingsInput['pipeline'];
   readonly hindsight?: SettingsInput['hindsight'];
+  readonly google?: SettingsInput['google'];
 }
 
 /** The synthetic settings with these sections changed, parsed by the schema of the contract. */

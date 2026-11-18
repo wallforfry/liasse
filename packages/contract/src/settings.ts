@@ -60,6 +60,15 @@ const hindsightFields = {
   bank: text.default(DEFAULT_HINDSIGHT_BANK),
 };
 
+// The OAuth client of the operator's own Google Cloud project, which the Drive sources sign
+// in with. Its secret is the key of the section.
+const googleFields = {
+  client_id: text
+    .max(MAX_API_KEY_LENGTH)
+    .optional()
+    .describe('The Drive sources cannot connect without it.'),
+};
+
 export const pipelineSettingsSchema = z.strictObject({
   max_file_size: z.int().min(1).max(MAX_FILE_SIZE_LIMIT).default(DEFAULT_MAX_FILE_SIZE),
   auto_apply: autoApplyModeSchema.default('safe'),
@@ -160,6 +169,11 @@ const missingKey = (
     ? [{ path: [section, 'api_key'], message: `required when provider is ${provider}` }]
     : [];
 
+const googleIssues = (clientId: string | undefined, secret: string | undefined) =>
+  clientId !== undefined && secret === undefined
+    ? [{ path: ['google', 'client_secret'], message: 'required with client_id' }]
+    : [];
+
 const report = (ctx: z.RefinementCtx, issues: readonly Issue[]): void => {
   issues.forEach(({ path, message }) => {
     ctx.addIssue({ code: 'custom', path: [...path], message });
@@ -176,12 +190,14 @@ export const settingsSchema = z
     embedding: z.strictObject({ ...embeddingFields, api_key: apiKey.optional() }).prefault({}),
     pipeline: pipelineSettingsSchema.prefault({}),
     hindsight: z.strictObject({ ...hindsightFields, api_key: apiKey.optional() }).prefault({}),
+    google: z.strictObject({ ...googleFields, client_secret: apiKey.optional() }).prefault({}),
   })
   .superRefine((settings, ctx) => {
     report(ctx, [
       ...shapeIssues(settings),
       ...missingKey('llm', settings.llm.provider, settings.llm.api_key),
       ...missingKey('embedding', settings.embedding.provider, settings.embedding.api_key),
+      ...googleIssues(settings.google.client_id, settings.google.client_secret),
     ]);
   });
 export type Settings = z.output<typeof settingsSchema>;
@@ -209,6 +225,7 @@ export const settingsDraftSchema = z
     embedding: z.strictObject({ ...embeddingFields, api_key: keyUpdateSchema }).prefault({}),
     pipeline: pipelineSettingsSchema.prefault({}),
     hindsight: z.strictObject({ ...hindsightFields, api_key: keyUpdateSchema }).prefault({}),
+    google: z.strictObject({ ...googleFields, client_secret: keyUpdateSchema }).prefault({}),
   })
   .superRefine((settings, ctx) => {
     report(ctx, shapeIssues(settings));
@@ -227,5 +244,6 @@ export const settingsViewSchema = z.object({
   embedding: z.object({ ...embeddingFields, api_key_state: keyState }),
   pipeline: pipelineSettingsSchema,
   hindsight: z.object({ ...hindsightFields, api_key_state: keyState }),
+  google: z.object({ ...googleFields, client_secret_state: keyState }),
 });
 export type SettingsView = z.output<typeof settingsViewSchema>;

@@ -11,7 +11,6 @@ import { buildSyntheticEmail } from '../testing/synthetic-email.ts';
 import { syntheticPdf } from '../testing/synthetic-files.ts';
 import { createTestMailbox, type TestMailbox } from '../testing/test-mailbox.ts';
 import { type SourceConnectors, SourceCredentialsError } from './connector.ts';
-import { SOURCE_CONNECTORS } from './connectors.ts';
 import { pollSource, type SourcePollDeps } from './poll.ts';
 import {
   addSource,
@@ -20,6 +19,7 @@ import {
   setCursor,
   storedSource,
   TEST_SECRETS,
+  testConnectors,
 } from './sources.test-helper.ts';
 
 const withPdf = (label: string, bytes: Uint8Array = syntheticPdf(label)) =>
@@ -52,7 +52,9 @@ describe('a run of a source', () => {
     await mailbox.dispose();
   });
 
-  const depsWith = (connectors: SourceConnectors = SOURCE_CONNECTORS): SourcePollDeps => ({
+  const depsWith = (
+    connectors: SourceConnectors = testConnectors(harness.database.db).connectors,
+  ): SourcePollDeps => ({
     ...harness.deps,
     secrets: TEST_SECRETS,
     connectors,

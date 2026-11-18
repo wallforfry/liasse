@@ -34,7 +34,7 @@ const servedType = (mime: string): string =>
 
 /** The original file of a document, served as data. The web UI serves it the same way. */
 export const documentFileResponse = async (
-  api: Pick<ApiContext, 'db' | 'storage'>,
+  api: Pick<ApiContext, 'db' | 'storage' | 'sourceFiles'>,
   id: string,
 ): Promise<Response> => {
   const { mime, filename, stream } = await openDocumentFile(api, id);
@@ -57,7 +57,7 @@ const grantQuery = z.strictObject({
 
 export interface FileRouteDeps {
   /** Files are served whether or not the settings are saved. */
-  readonly files: Pick<ApiContext, 'db' | 'storage'>;
+  readonly files: Pick<ApiContext, 'db' | 'storage' | 'sourceFiles'>;
   /** A Bearer token, or the grant of a signed URL. No request deadline: a file may be long. */
   readonly fileAccess: MiddlewareHandler<AppEnv>;
 }
@@ -71,10 +71,12 @@ export const fileRoutes = ({ files, fileAccess }: FileRouteDeps): Hono<AppEnv> =
       credentials: [BEARER_SCHEME, SIGNED_URL_SCHEME],
       responses: {
         200: {
-          description: 'The file, as it was uploaded.',
+          description:
+            'The file, as it was uploaded, or as the source that keeps it, such as a Drive, ' +
+            'holds it.',
           content: { '*/*': { schema: { type: 'string', format: 'binary' } } },
         },
-        ...failures(400, 404),
+        ...failures(400, 404, 409, 410),
       },
     }),
     fileAccess,

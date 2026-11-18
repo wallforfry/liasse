@@ -1,6 +1,10 @@
 import type { Readable } from 'node:stream';
 import { deleteDocument } from '../ingest/delete-document.ts';
-import { getDocumentFile } from '../ingest/document-file.ts';
+import {
+  getDocumentFile,
+  SourceFileChangedError,
+  SourceFileUnavailableError,
+} from '../ingest/document-file.ts';
 import { StorageObjectNotFoundError } from '../storage/errors.ts';
 import type { ApiContext } from './context.ts';
 import { ApiError, documentNotFound } from './errors.ts';
@@ -11,25 +15,47 @@ export interface OpenedFile {
   readonly stream: Readable;
 }
 
+const fileError = (error: unknown): ApiError | undefined => {
+  if (error instanceof StorageObjectNotFoundError) {
+    return new ApiError(
+      'file_missing',
+      'The file of this document is missing from the storage. Upload it again to restore it.',
+    );
+  }
+  if (error instanceof SourceFileChangedError) {
+    return new ApiError(
+      'file_changed',
+      'The file changed at its source since it was read: the next run of the source ' +
+        'reads the new version.',
+    );
+  }
+  if (error instanceof SourceFileUnavailableError) {
+    return new ApiError(
+      'file_unavailable',
+      'The file of this document is no longer at its source: it was trashed, deleted or ' +
+        'moved out of the folder read. Its text and knowledge stay.',
+    );
+  }
+  return undefined;
+};
+
 /**
- * Opens the original file of a document. Rejects with `document_not_found` for an
- * unknown or deleted document, and with `file_missing` when the storage lost the file:
- * uploading the same bytes again restores it.
+ * Opens the original file of a document, from the storage or through the source that
+ * keeps it. Rejects with `document_not_found` for an unknown or deleted document, with
+ * `file_missing` when the storage lost the file (uploading the same bytes again restores
+ * it), with `file_changed` when the source holds other bytes than those indexed, and
+ * with `file_unavailable` when no source holds the file any more.
  */
 export const openDocumentFile = async (
-  { db, storage }: Pick<ApiContext, 'db' | 'storage'>,
+  { db, storage, sourceFiles }: Pick<ApiContext, 'db' | 'storage' | 'sourceFiles'>,
   id: string,
 ): Promise<OpenedFile> => {
-  const file = await getDocumentFile({ db, storage }, id);
+  const file = await getDocumentFile({ db, storage, sourceFiles }, id);
   if (file === undefined) throw documentNotFound();
   try {
     return { mime: file.mime, filename: file.filename, stream: await file.stream() };
   } catch (error) {
-    if (!(error instanceof StorageObjectNotFoundError)) throw error;
-    throw new ApiError(
-      'file_missing',
-      'The file of this document is missing from the storage. Upload it again to restore it.',
-    );
+    throw fileError(error) ?? error;
   }
 };
 

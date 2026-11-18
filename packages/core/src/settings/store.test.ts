@@ -15,11 +15,13 @@ import {
 const LLM_KEY = 'synthetic-llm-key-41f0';
 const EMBEDDING_KEY = 'synthetic-embedding-key-41f0';
 const HINDSIGHT_KEY = 'synthetic-hindsight-key-41f0';
+const GOOGLE_SECRET = 'synthetic-google-client-secret-41f0';
 
 const WITH_KEYS = syntheticSettings({
   llm: { provider: 'anthropic', api_key: LLM_KEY },
   embedding: { provider: 'openai', model: 'embedding-model', api_key: EMBEDDING_KEY },
   hindsight: { url: 'http://127.0.0.1:8888', api_key: HINDSIGHT_KEY },
+  google: { client_id: 'client.synthetic', client_secret: GOOGLE_SECRET },
 });
 
 describe('the settings store', () => {
@@ -57,7 +59,7 @@ describe('the settings store', () => {
     const rows = await database.db.$client`SELECT row_to_json(settings)::text AS row FROM settings`;
     const stored = rows.map(({ row }) => String(row)).join('\n');
     expect(stored).toContain('anthropic');
-    [LLM_KEY, EMBEDDING_KEY, HINDSIGHT_KEY].forEach((key) => {
+    [LLM_KEY, EMBEDDING_KEY, HINDSIGHT_KEY, GOOGLE_SECRET].forEach((key) => {
       expect(stored).not.toContain(key);
     });
   });
@@ -102,6 +104,7 @@ describe('the settings store', () => {
       llm: { state: 'unreadable' },
       embedding: { state: 'set', value: EMBEDDING_KEY },
       hindsight: { state: 'unset' },
+      google: { state: 'unset' },
     });
     expect(read === undefined ? 'none' : settingsOf(read)).toBeUndefined();
   });

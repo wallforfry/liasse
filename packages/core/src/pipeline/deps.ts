@@ -7,6 +7,7 @@ import type { Transaction } from '../ingest/existing-document.ts';
 import type { KnowledgeDocument, KnowledgeInput } from '../knowledge/input.ts';
 import type { PersistedKnowledge } from '../knowledge/persist-knowledge.ts';
 import type { Embedder, TextModel, VisionModel } from '../models/ports.ts';
+import type { SourceFiles } from '../ingest/document-file.ts';
 import type { Storage } from '../storage/port.ts';
 import type { ExtractedText, ExtractTextDeps, ExtractTextInput } from '../text/types.ts';
 import type { TextProcessLimits } from './text-process/limits.ts';
@@ -90,6 +91,8 @@ export interface PipelineSettings {
 export interface PipelineDeps {
   readonly db: Database;
   readonly storage: Storage;
+  /** Where the text stage reads a file that stayed at its source. */
+  readonly sourceFiles: SourceFiles;
   readonly textModel: TextModel;
   readonly visionModel: VisionModel;
   readonly embedder: Embedder;

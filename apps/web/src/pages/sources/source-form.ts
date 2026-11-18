@@ -57,7 +57,10 @@ export const newImapValues = (): ImapSourceValues => ({
 });
 
 /** The form showing a saved source, its password kept. */
-export const imapValuesOf = (source: Source): ImapSourceValues => ({
+/** A source of the one kind this form edits. */
+export type ImapSource = Extract<Source, { readonly kind: 'imap' }>;
+
+export const imapValuesOf = (source: ImapSource): ImapSourceValues => ({
   name: source.name,
   enabled: source.enabled,
   poll_interval_minutes: numberText(source.poll_interval_minutes),
@@ -79,7 +82,7 @@ export const imapValuesOf = (source: Source): ImapSourceValues => ({
  * Whether the form points a stored password at another server than the one it was given
  * for: the server refuses to keep it then (`source_secret_required`).
  */
-export const needsPasswordAgain = (values: ImapSourceValues, source: Source): boolean =>
+export const needsPasswordAgain = (values: ImapSourceValues, source: ImapSource): boolean =>
   source.secret !== 'unset' &&
   (values.host.trim() !== source.config.host || values.security !== source.config.security);
 
@@ -92,7 +95,7 @@ const PASSWORD_TO_TYPE = { action: 'replace', value: '' } as const;
 export const followServerChange = (
   previous: ImapSourceValues,
   next: ImapSourceValues,
-  source: Source,
+  source: ImapSource,
 ): ImapSourceValues => {
   const before = needsPasswordAgain(previous, source);
   const after = needsPasswordAgain(next, source);
@@ -195,7 +198,7 @@ const hintPatch = (hint: string, source: Source): string | null | undefined =>
  */
 export const validatePatch = (
   values: ImapSourceValues,
-  source: Source,
+  source: ImapSource,
 ): FormValidation<SourcePatch> => {
   const result = validation(
     sourcePatchSchema.safeParse({ ...draftOf(values), hint: hintPatch(values.hint, source) }),

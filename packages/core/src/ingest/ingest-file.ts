@@ -47,6 +47,12 @@ export type IngestInput = FileContent & {
    */
   readonly revivesDeleted?: boolean;
   /**
+   * True when the source keeps the file: the bytes are read for their hash, type and text,
+   * never written to the storage, and the document serves its file from the source. Bytes
+   * that already have a stored file keep it, and bytes stored later replace the reference.
+   */
+  readonly byReference?: boolean;
+  /**
    * Runs in the transaction of the ingestion, under the lock of the hash, once the
    * document is known: what it writes commits with the document, and a deletion of the
    * same bytes waits for it.
@@ -79,6 +85,7 @@ export const ingestFile = async (
     bytes,
     sha256,
     storageKey: storageKeyOf(sha256),
+    byReference: input.byReference ?? false,
     mime,
     filename: cleanFilename(input.filename),
     source: input.source,
@@ -93,7 +100,7 @@ export const ingestFile = async (
     // changes it waits for this transaction, or this one for that save.
     await holdEmbedderShared(tx);
     const [existing] = await tx
-      .select({ id: documents.id, status: documents.status })
+      .select({ id: documents.id, status: documents.status, fileAtSource: documents.fileAtSource })
       .from(documents)
       .where(eq(documents.sha256, sha256));
     const result =
