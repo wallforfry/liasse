@@ -132,14 +132,17 @@ describe('the IMAP connector', () => {
     const withoutUidNext = vi
       .spyOn(ImapFlow.prototype, 'mailboxOpen')
       .mockImplementation(async function (this: ImapFlow, ...args) {
+        // The object imapflow keeps updating, as a server that sends no UIDNEXT leaves it.
         const mailboxObject = await open.apply(this, args);
-        return { ...mailboxObject, uidNext: Number.NaN };
+        Reflect.deleteProperty(mailboxObject, 'uidNext');
+        return mailboxObject;
       });
     try {
+      await mailbox.append(withPdf('old'), { date: BEFORE_START });
       await mailbox.append(withPdf('since-start'), { date: READ_SINCE });
       const first = await changesOf(mailbox.config, mailbox.password);
       expect(namesOf(first)).toEqual(['since-start.eml']);
-      await mailbox.append(withPdf('old'), { date: BEFORE_START });
+      await mailbox.append(withPdf('old-labelled'), { date: BEFORE_START });
       const next = await changesOf(mailbox.config, mailbox.password, lastCursor(first));
       expect(namesOf(next)).toEqual([]);
     } finally {

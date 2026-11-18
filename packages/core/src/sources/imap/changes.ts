@@ -93,6 +93,8 @@ export async function* imapChanges(
   for (const path of config.mailboxes) {
     const mailbox = await client.mailboxOpen(path, { readOnly: true });
     const uidValidity = mailbox.uidValidity.toString();
+    // Read before any fetch: imapflow fills a missing `uidNext` from the UIDs it fetches.
+    const uidNext = Number.isSafeInteger(mailbox.uidNext) ? mailbox.uidNext : undefined;
     const known = cursor.mailboxes[path];
     const resumed = known?.uid_validity === uidValidity ? known : undefined;
     const lastUid = resumed?.last_uid;
@@ -109,8 +111,8 @@ export async function* imapChanges(
     // Every UID below `uidNext` existed when the search ran: those it left out (older than
     // the start date, or not matching the filters) are never wanted. A server that omits it
     // leaves them unknown: the first pass is not over, and the start date stays.
-    const toldUidNext = Number.isSafeInteger(mailbox.uidNext);
-    const below = toldUidNext ? mailbox.uidNext - 1 : 0;
+    const toldUidNext = uidNext !== undefined;
+    const below = uidNext === undefined ? 0 : uidNext - 1;
     const handled = Math.max(lastUid ?? 0, uids.at(-1) ?? 0, below);
     cursor = advanceMailbox(cursor, path, {
       uidValidity,
