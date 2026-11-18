@@ -19,7 +19,7 @@ import { detectLinks } from './detect-links.ts';
 import { createKnowledgeHandlers, detectLinksJob } from './jobs.ts';
 import { findLinkCandidates, readLinkSource } from './link-candidates.ts';
 import type { ProposedLink } from './link-prompt.ts';
-import { replaceLinksBetween } from './link-store.ts';
+import { LINK_LOCK, replaceLinksBetween } from './link-store.ts';
 import { documentRow, linkBetween, linksOf } from './support.test-helper.ts';
 
 const ISSUER = newId(ID_PREFIXES.entity);
@@ -412,9 +412,7 @@ describe('link detection', () => {
         await database.db.transaction(async (holder) => {
           // The writer takes both rows, then waits here for the lock of the links; the
           // deletion waits for the writer.
-          await holder.execute(
-            sql`SELECT pg_advisory_xact_lock(hashtext('liasse.document_links'))`,
-          );
+          await holder.execute(LINK_LOCK);
           const linksLock = await backendPid(holder);
           write = replaceLinksBetween(database.db, [newer, older], [supersedes(newer, older)], 'm');
           await waitUntil(() => holdsBack(database.db, linksLock));

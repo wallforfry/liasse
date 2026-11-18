@@ -32,8 +32,8 @@ export interface Gate<T = void> {
   readonly open: (value: T) => void;
 }
 
-// Holds a concurrent step at a chosen point, so a test decides the interleaving. The
-// step that opens it can hand a value over, such as the server process of its session.
+// Holds a concurrent step at a chosen point, so a test decides the interleaving.
+// The step that opens it can hand a value over, such as the server process of its session.
 export const createGate = <T = void>(): Gate<T> => {
   let open: (value: T) => void = () => undefined;
   const opened = new Promise<T>((resolve) => {
