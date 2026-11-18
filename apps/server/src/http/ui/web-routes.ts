@@ -28,21 +28,13 @@ export const uiContentSecurityPolicy = (nonce: string): string =>
 
 const IMMUTABLE = 'public, max-age=31536000, immutable';
 
-const ATTRIBUTE_ESCAPES: Readonly<Record<string, string>> = {
-  '&': '&amp;',
-  '"': '&quot;',
-  '<': '&lt;',
-  '>': '&gt;',
-};
-
-const attribute = (value: string): string =>
-  value.replace(/[&"<>]/g, (character) => ATTRIBUTE_ESCAPES[character] ?? character);
-
+// `PUBLIC_URL` is parsed down to an origin by the configuration, which holds no character
+// an attribute would need escaped.
 const withMeta = (index: string, nonce: string, publicUrl: string): string =>
   index.replace(
     '<head>',
     `<head><meta property="${CSP_NONCE_META_PROPERTY}" nonce="${nonce}" />` +
-      `<meta property="${PUBLIC_URL_META_PROPERTY}" content="${attribute(publicUrl)}" />`,
+      `<meta property="${PUBLIC_URL_META_PROPERTY}" content="${publicUrl}" />`,
   );
 
 const MISSING_ASSET = failure('not_found', 'No such file.');

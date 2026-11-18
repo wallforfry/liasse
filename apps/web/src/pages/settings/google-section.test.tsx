@@ -1,3 +1,4 @@
+import { PUBLIC_URL_META_PROPERTY } from '@liasse/contract';
 import { screen, waitFor, within } from '@testing-library/react';
 import { userEvent } from '@testing-library/user-event';
 import { describe, expect, it } from 'vitest';
@@ -17,9 +18,8 @@ describe('the Google section of the settings', () => {
     renderApp('/account/settings', fakeServer(settingsServer()).fetch);
 
     const google = within(await region('Google'));
-    expect(
-      google.getByText(`${window.location.origin}/sources/google/callback`),
-    ).toBeInTheDocument();
+    // No server wrote this page: it names the setting rather than guess its value.
+    expect(google.getByText('PUBLIC_URL/sources/google/callback')).toBeInTheDocument();
     expect(google.getByText(/move the app to In production/u)).toBeInTheDocument();
     expect(google.getByLabelText('Client id')).toHaveValue('');
     expect(
@@ -29,7 +29,7 @@ describe('the Google section of the settings', () => {
 
   it('builds the redirect URI from the PUBLIC_URL the server wrote, not the page address', async () => {
     const meta = document.createElement('meta');
-    meta.setAttribute('property', 'public-url');
+    meta.setAttribute('property', PUBLIC_URL_META_PROPERTY);
     meta.setAttribute('content', 'https://liasse.example.test');
     document.head.append(meta);
     try {

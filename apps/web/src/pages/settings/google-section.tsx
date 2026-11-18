@@ -6,8 +6,11 @@ import { fieldSetter, type SectionProps } from './settings-form.ts';
 import { issueAt } from './settings-validation.ts';
 
 interface GoogleSectionProps extends SectionProps<'google'> {
-  /** `PUBLIC_URL`, which the server builds the redirect URI from, as this one is built. */
-  readonly publicUrl: string;
+  /**
+   * `PUBLIC_URL`, which the server builds the redirect URI from, as this one is built;
+   * undefined when the page does not know it, which then names it.
+   */
+  readonly publicUrl: string | undefined;
 }
 
 export const GoogleSection = ({ values, issues, onChange, publicUrl }: GoogleSectionProps) => {
@@ -21,7 +24,9 @@ export const GoogleSection = ({ values, issues, onChange, publicUrl }: GoogleSec
       <p className="text-sm text-muted-foreground">
         Register{' '}
         <code className="break-all font-mono text-foreground">
-          {new URL(GOOGLE_CALLBACK_PATH, publicUrl).toString()}
+          {publicUrl === undefined
+            ? `PUBLIC_URL${GOOGLE_CALLBACK_PATH}`
+            : new URL(GOOGLE_CALLBACK_PATH, publicUrl).toString()}
         </code>{' '}
         as an authorized redirect URI of a Web application client, and move the app to In
         production: in Testing, Google ends the authorization of a source after 7 days.
