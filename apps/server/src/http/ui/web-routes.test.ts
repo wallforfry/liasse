@@ -1,6 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { createHttpHarness, type HttpHarness } from '../harness.test-helper.ts';
-import { TEST_SCRIPT } from './ui.test-helper.ts';
+import { createHttpHarness, type HttpHarness, TEST_PUBLIC_URL } from '../harness.test-helper.ts';
+import { TEST_SCRIPT, testAssets } from './ui.test-helper.ts';
+import { webRoutes } from './web-routes.ts';
 
 const NONCE_META = /<meta property="csp-nonce" nonce="([A-Za-z0-9+/=]+)" \/>/;
 
@@ -26,6 +27,17 @@ describe('the built web UI under /ui', () => {
       expect(response.headers.get('Cache-Control')).toBe('no-cache');
       expect(await response.text()).toContain(`src="/ui/${TEST_SCRIPT}"`);
     }
+  });
+
+  it('writes PUBLIC_URL into the page, for the address Google sends the browser back to', async () => {
+    const page = await (await harness.app.request('/ui/account/settings')).text();
+    expect(page).toContain(`<meta property="public-url" content="${TEST_PUBLIC_URL}" />`);
+  });
+
+  it('escapes PUBLIC_URL in its attribute, a quote of its host included', async () => {
+    const routes = webRoutes(testAssets(), 'https://a"onx=y.example');
+    const page = await (await routes.request('/ui/account/settings')).text();
+    expect(page).toContain('<meta property="public-url" content="https://a&quot;onx=y.example" />');
   });
 
   it('writes a fresh nonce into the page and its policy, with no inline script allowed', async () => {

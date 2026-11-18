@@ -1,3 +1,4 @@
+import { publicUrl } from '../../lib/public-url.ts';
 import type { SettingsDraft } from '@liasse/contract';
 import type { SettingsState } from '@liasse/sdk';
 import { useMutation, useQuery } from '@tanstack/react-query';
@@ -11,6 +12,7 @@ import { Button } from '../../components/ui/button.tsx';
 import { Skeleton } from '../../components/ui/skeleton.tsx';
 import { formatTime } from '../../lib/format.ts';
 import { EmbedderSection } from './embedder-section.tsx';
+import { GoogleSection } from './google-section.tsx';
 import { HindsightSection } from './hindsight-section.tsx';
 import { LanguageModelsSection } from './language-models-section.tsx';
 import { PipelineSection } from './pipeline-section.tsx';
@@ -119,6 +121,12 @@ const SettingsForm = ({ state, onReload }: SettingsFormProps) => {
         check={checks.hindsight}
         onCheck={checkOf('hindsight')}
       />
+      <GoogleSection
+        values={values.google}
+        issues={issues}
+        onChange={section('google')}
+        publicUrl={publicUrl()}
+      />
       <p role="status" className="text-sm text-destructive">
         {issues.size === 0 ? null : 'Some settings are not valid: see the marked fields.'}
       </p>
@@ -138,7 +146,7 @@ const savedAt = (state: SettingsState | undefined): string | undefined => {
   return state.updated_at === null ? 'Never saved.' : `Saved ${formatTime(state.updated_at)}.`;
 };
 
-/** The settings of the server: models, embedder, pipeline and Hindsight, saved as one. */
+/** The settings of the server: models, embedder, pipeline, Hindsight and Google, saved as one. */
 export const SettingsPage = () => {
   const client = useClient();
   const settings = useQuery({

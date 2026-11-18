@@ -15,7 +15,7 @@ const SCRIPT_SCHEMES: ReadonlySet<string> = new Set(['javascript:', 'data:', 'vb
 export const checkedRedirect = (url: string): string => {
   const resolved = URL.parse(url, window.location.href);
   if (resolved === null || SCRIPT_SCHEMES.has(resolved.protocol)) {
-    throw new LiasseResponseError(200, 'The auth server sent a redirection this page refuses.');
+    throw new LiasseResponseError(200, 'The server sent a redirection this page refuses.');
   }
   return resolved.href;
 };

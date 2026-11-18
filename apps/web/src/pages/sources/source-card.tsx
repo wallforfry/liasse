@@ -1,9 +1,8 @@
 import type { Source } from '@liasse/sdk';
 import type { SourceKind } from '@liasse/contract/domain';
-import { CircleAlertIcon, PencilIcon, PlayIcon, PlugZapIcon } from 'lucide-react';
+import { PencilIcon, PlayIcon, PlugZapIcon } from 'lucide-react';
 import { Link } from 'react-router';
 import { editSourcePath } from '../../layout/navigation.ts';
-import { Alert, AlertDescription, AlertTitle } from '../../components/ui/alert.tsx';
 import { Badge } from '../../components/ui/badge.tsx';
 import { Button } from '../../components/ui/button.tsx';
 import {
@@ -20,6 +19,8 @@ import { Switch } from '../../components/ui/switch.tsx';
 import { plural } from '../../lib/format.ts';
 import { DeleteSource } from './delete-source.tsx';
 import { SourceCheckResult } from './source-check-result.tsx';
+import { needsGoogleConsent } from './google-consent.ts';
+import { SourceCredentials } from './source-credentials.tsx';
 import { SourceLastRun } from './source-last-run.tsx';
 import { useCheckSource, useRunSource, useToggleSource } from './use-source-actions.ts';
 
@@ -29,32 +30,6 @@ const readsWhat = (source: Source): string =>
   source.kind === 'imap'
     ? `${source.config.username} on ${source.config.host}, reading ${source.config.mailboxes.join(', ')}`
     : `Drive folder ${source.config.folder_id}`;
-
-const PasswordState = ({ source }: { readonly source: Source }) => {
-  if (source.needs_attention) {
-    return (
-      <Alert variant="destructive">
-        <CircleAlertIcon />
-        <AlertTitle>Needs attention: the password was refused</AlertTitle>
-        <AlertDescription>
-          Polling stopped. Edit the source and save it with a working password to resume.
-        </AlertDescription>
-      </Alert>
-    );
-  }
-  if (source.secret === 'unreadable') {
-    return (
-      <Alert variant="destructive">
-        <CircleAlertIcon />
-        <AlertTitle>The password is unreadable</AlertTitle>
-        <AlertDescription>
-          It was sealed under another AUTH_SECRET. Edit the source and give the password again.
-        </AlertDescription>
-      </Alert>
-    );
-  }
-  return null;
-};
 
 /** One source: what it reads, how its last run went, and what can be done with it. */
 export const SourceCard = ({ source }: { readonly source: Source }) => {
@@ -98,14 +73,16 @@ export const SourceCard = ({ source }: { readonly source: Source }) => {
             <span className="font-medium">Hint:</span> {source.hint}
           </p>
         )}
-        <PasswordState source={source} />
-        <SourceLastRun run={source.last_run} />
+        <SourceCredentials source={source} />
+        <SourceLastRun run={source.last_run} kind={source.kind} />
         <SourceCheckResult data={check.data} error={check.error} />
       </CardContent>
       <CardFooter className="flex flex-wrap gap-2">
         <Button
           size="sm"
-          disabled={!source.enabled || source.needs_attention || run.isPending}
+          disabled={
+            !source.enabled || source.needs_attention || needsGoogleConsent(source) || run.isPending
+          }
           onClick={() => {
             run.mutate();
           }}
@@ -130,7 +107,7 @@ export const SourceCard = ({ source }: { readonly source: Source }) => {
             Edit
           </Link>
         </Button>
-        <DeleteSource id={source.id} name={source.name} />
+        <DeleteSource source={source} />
       </CardFooter>
     </Card>
   );

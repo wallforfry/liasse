@@ -241,7 +241,13 @@ export {
   HEALTH_STATUSES,
   healthSchema,
 } from './system.ts';
-export { AUTH_BASE_PATH, CSP_NONCE_META_PROPERTY } from './web-ui.ts';
+export {
+  AUTH_BASE_PATH,
+  CSP_NONCE_META_PROPERTY,
+  GOOGLE_CALLBACK_PATH,
+  GOOGLE_CONSENT_UI_PATH,
+  PUBLIC_URL_META_PROPERTY,
+} from './web-ui.ts';
 export { type QueryDsl, queryDslSchema } from './query/dsl.ts';
 export {
   type GdriveSourceConfig,

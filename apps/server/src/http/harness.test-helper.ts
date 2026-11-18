@@ -1,6 +1,7 @@
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { GOOGLE_CALLBACK_PATH } from '@liasse/contract';
 import {
   type ApiContext,
   type ApiFeatures,
@@ -33,7 +34,6 @@ import type { Hono } from 'hono';
 import { createLogger } from '../log.ts';
 import { type AppDependencies, createApp } from './app.ts';
 import type { AppEnv } from './env.ts';
-import { GOOGLE_CALLBACK_PATH } from './routes/google-consent.ts';
 import { testAssets } from './ui/ui.test-helper.ts';
 
 export const TEST_PUBLIC_URL = 'https://liasse.example.com';

@@ -198,6 +198,38 @@ describe('createLiasseClient', () => {
     await expect(client.listSources()).rejects.toBeInstanceOf(LiasseResponseError);
   });
 
+  it('starts and completes the consent of Google on their routes', async () => {
+    const consent = { url: 'https://accounts.google.example.test/o/oauth2/v2/auth?state=s' };
+    const result = { outcome: 'connected', source_id: 'src_01' };
+    const server = answering((url) => json(url.endsWith('/authorize') ? consent : result));
+    const client = createLiasseClient({
+      baseUrl: 'https://liasse.example.com',
+      session: true,
+      fetch: server.fetch,
+    });
+    const answer = { code: 'synthetic-code', state: 'synthetic-state' };
+    expect(await client.startGoogleConsent('src_01')).toEqual(consent);
+    expect(await client.completeGoogleConsent(answer)).toEqual(result);
+    expect(server.sent.map(({ url, init }) => `${init?.method ?? 'GET'} ${url}`)).toEqual([
+      'POST https://liasse.example.com/sources/src_01/google/authorize',
+      'POST https://liasse.example.com/sources/google/complete',
+    ]);
+    const body = server.sent[1]?.init?.body;
+    expect(typeof body === 'string' ? JSON.parse(body) : body).toEqual(answer);
+  });
+
+  it('rejects a consent outcome outside the contract', async () => {
+    const server = answering(() => json({ outcome: 'maybe' }));
+    const client = createLiasseClient({
+      baseUrl: 'https://liasse.example.com',
+      session: true,
+      fetch: server.fetch,
+    });
+    await expect(client.completeGoogleConsent({ error: 'access_denied' })).rejects.toBeInstanceOf(
+      LiasseResponseError,
+    );
+  });
+
   it('calls the onboarding under the path of the auth server, with the setup token', async () => {
     const check = {
       text_model: { status: 'ok' },

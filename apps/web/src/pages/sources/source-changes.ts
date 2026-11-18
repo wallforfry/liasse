@@ -1,8 +1,5 @@
 import type { Source, SourcePatch } from '@liasse/contract';
 
-type ImapPatch = Extract<SourcePatch, { readonly kind: 'imap' }>;
-type ImapSource = Extract<Source, { readonly kind: 'imap' }>;
-
 const isRecord = (value: unknown): value is Readonly<Record<string, unknown>> =>
   typeof value === 'object' && value !== null && !Array.isArray(value);
 
@@ -17,14 +14,9 @@ const canonical = (value: unknown): string | undefined =>
 const differs = (value: unknown, stored: unknown): boolean =>
   canonical(value) !== canonical(stored);
 
-/**
- * The fields of `patch` that differ from `source` as the form read it, with the kind and the
- * password, which a patch always names. A field the form left as it was is not sent, so what
- * another tab saved to it in the meantime stays; the configuration is one field.
- */
-export const changesOf = (patch: ImapPatch, source: ImapSource): ImapPatch => ({
-  kind: patch.kind,
-  secret: patch.secret,
+type SharedField = 'name' | 'enabled' | 'poll_interval_minutes' | 'hint' | 'private';
+
+const sharedChanges = (patch: SourcePatch, source: Source): Pick<SourcePatch, SharedField> => ({
   ...(patch.name !== undefined && differs(patch.name, source.name) ? { name: patch.name } : {}),
   ...(patch.enabled !== undefined && differs(patch.enabled, source.enabled)
     ? { enabled: patch.enabled }
@@ -37,7 +29,27 @@ export const changesOf = (patch: ImapPatch, source: ImapSource): ImapPatch => ({
   ...(patch.private !== undefined && differs(patch.private, source.private)
     ? { private: patch.private }
     : {}),
-  ...(patch.config !== undefined && differs(patch.config, source.config)
-    ? { config: patch.config }
-    : {}),
 });
+
+const configChange = <Config>(config: Config | undefined, stored: unknown) =>
+  config !== undefined && differs(config, stored) ? { config } : {};
+
+/**
+ * The fields of `patch` that differ from `source` as the form read it, with the kind, and
+ * the password of a mailbox, which a patch always names. A field the form left as it was is
+ * not sent, so what another tab saved to it in the meantime stays; the configuration is one
+ * field. `patch` is of the kind of `source`.
+ */
+export const changesOf = (patch: SourcePatch, source: Source): SourcePatch =>
+  patch.kind === 'imap'
+    ? {
+        kind: patch.kind,
+        secret: patch.secret,
+        ...sharedChanges(patch, source),
+        ...configChange(patch.config, source.config),
+      }
+    : {
+        kind: patch.kind,
+        ...sharedChanges(patch, source),
+        ...configChange(patch.config, source.config),
+      };

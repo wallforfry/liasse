@@ -20,7 +20,10 @@ export interface SessionState {
    */
   readonly logIn: (email: string, password: string) => Promise<void>;
   readonly logOut: () => Promise<void>;
-  /** Leaves the application for a redirection of the auth server; rejects a script URL. */
+  /**
+   * Leaves the application for a redirection of the auth server or for the consent page of
+   * Google; rejects a script URL.
+   */
   readonly followRedirect: (url: string) => void;
 }
 

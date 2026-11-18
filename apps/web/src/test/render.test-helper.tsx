@@ -1,5 +1,6 @@
 import { type ApiErrorCode, AUTH_BASE_PATH, SETUP_BASE_PATH } from '@liasse/contract';
 import { render, type RenderResult } from '@testing-library/react';
+import { StrictMode } from 'react';
 import { createMemoryRouter } from 'react-router';
 import { RouterProvider } from 'react-router/dom';
 import { type Mock, vi } from 'vitest';
@@ -68,22 +69,27 @@ export const fakeServer = (...answers: readonly Answer[]) => {
   return { fetch, requests };
 };
 
-/** The application at `path` under `/ui`, over the given `fetch`. */
+/**
+ * The application at `path` under `/ui`, over the given `fetch`; under StrictMode with
+ * `strict`, as `main.tsx` renders it, which runs every effect twice.
+ */
 export const renderApp = (
   path: string,
   fetch: typeof globalThis.fetch,
+  { strict = false }: { readonly strict?: boolean } = {},
 ): RenderResult & {
   readonly navigateAway: Mock<NavigateAway>;
   readonly router: ReturnType<typeof createMemoryRouter>;
 } => {
   const router = createMemoryRouter(ROUTES, { initialEntries: [path] });
   const navigateAway = vi.fn<NavigateAway>();
+  const app = (
+    <AppProviders baseUrl={TEST_ORIGIN} fetch={fetch} navigateAway={navigateAway}>
+      <RouterProvider router={router} />
+    </AppProviders>
+  );
   return {
-    ...render(
-      <AppProviders baseUrl={TEST_ORIGIN} fetch={fetch} navigateAway={navigateAway}>
-        <RouterProvider router={router} />
-      </AppProviders>,
-    ),
+    ...render(strict ? <StrictMode>{app}</StrictMode> : app),
     navigateAway,
     router,
   };

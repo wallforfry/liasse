@@ -23,6 +23,7 @@ export interface NavigationItem {
 export const SOURCES_PATH = '/sources';
 export const NEW_SOURCE_PATH = '/sources/new';
 export const editSourcePath = (id: string): string => `/sources/${encodeURIComponent(id)}/edit`;
+export const SETTINGS_PATH = '/account/settings';
 
 export const NAVIGATION: readonly NavigationItem[] = [
   { label: 'Documents', path: '/documents', icon: FileTextIcon },
@@ -38,7 +39,7 @@ export const ACCOUNT_NAVIGATION: readonly NavigationItem[] = [
   { label: 'API keys', path: '/account/api-keys', icon: KeyRoundIcon },
   { label: 'MCP connections', path: '/account/mcp-connections', icon: PlugIcon },
   { label: 'Change password', path: '/account/password', icon: LockKeyholeIcon },
-  { label: 'Settings', path: '/account/settings', icon: SettingsIcon },
+  { label: 'Settings', path: SETTINGS_PATH, icon: SettingsIcon },
 ];
 
 export const documentPath = (id: string): string => `/documents/${encodeURIComponent(id)}`;

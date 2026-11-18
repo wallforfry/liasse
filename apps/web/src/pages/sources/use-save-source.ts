@@ -14,6 +14,14 @@ export type SourceSave =
   | { readonly action: 'create'; readonly source: SourceCreate }
   | { readonly action: 'update'; readonly id: string; readonly patch: SourcePatch };
 
+const savedMessage = (saved: Source): string => {
+  if (!saved.enabled) return 'The source is saved, disabled.';
+  if (saved.kind === 'gdrive' && saved.secret !== 'set') {
+    return 'The source is saved: connect it with Google to run it.';
+  }
+  return 'The source is saved and runs now.';
+};
+
 /** Saves the form, then returns to the list; a refusal marks the fields it names. */
 export const useSaveSource = (onIssues: (issues: Issues) => void) => {
   const client = useClient();
@@ -25,9 +33,7 @@ export const useSaveSource = (onIssues: (issues: Issues) => void) => {
         ? client.createSource(save.source)
         : client.updateSource(save.id, save.patch),
     onSuccess: async (saved) => {
-      toast.success(
-        saved.enabled ? 'The source is saved and runs now.' : 'The source is saved, disabled.',
-      );
+      toast.success(savedMessage(saved));
       await queryClient.invalidateQueries({ queryKey: SOURCES_QUERY_KEY });
       await navigate(SOURCES_PATH);
     },
