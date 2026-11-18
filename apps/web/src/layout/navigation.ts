@@ -23,7 +23,6 @@ export interface NavigationItem {
 export const SOURCES_PATH = '/sources';
 export const NEW_SOURCE_PATH = '/sources/new';
 export const editSourcePath = (id: string): string => `/sources/${encodeURIComponent(id)}/edit`;
-export { GOOGLE_CONSENT_UI_PATH as GOOGLE_CONSENT_PATH } from '@liasse/contract';
 export const SETTINGS_PATH = '/account/settings';
 
 export const NAVIGATION: readonly NavigationItem[] = [

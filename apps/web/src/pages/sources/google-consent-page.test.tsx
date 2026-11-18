@@ -1,8 +1,15 @@
 import { GOOGLE_CONSENT_OUTCOMES, type GoogleConsentOutcome } from '@liasse/contract/domain';
-import { screen, waitFor } from '@testing-library/react';
+import { onlineManager } from '@tanstack/react-query';
+import { act, screen, waitFor } from '@testing-library/react';
 import { userEvent } from '@testing-library/user-event';
 import { describe, expect, it } from 'vitest';
-import { fakeServer, json, jsonBody, renderApp } from '../../test/render.test-helper.tsx';
+import {
+  errorBody,
+  fakeServer,
+  json,
+  jsonBody,
+  renderApp,
+} from '../../test/render.test-helper.tsx';
 import { DRIVE_SOURCE, isComplete, isRead, sourcesServer } from './sources.test-helper.ts';
 
 const RETURN = '/sources/google?code=synthetic-code&state=synthetic-state&scope=drive';
@@ -52,6 +59,39 @@ describe('the return from the consent of Google', () => {
       error: 'access_denied',
       state: 'synthetic-state',
     });
+  });
+
+  it('never posts a code again once a post failed, a reconnection included', async () => {
+    const server = fakeServer(
+      sourcesServer({
+        sources: [DRIVE_SOURCE],
+        complete: () => errorBody(500, 'internal_error', 'The exchange failed.'),
+      }),
+    );
+    renderApp(RETURN, server.fetch);
+    expect(await screen.findByText('Consent not completed')).toBeInTheDocument();
+
+    // The refetch a reconnection starts is sent within the work `act` flushes.
+    await act(async () => {
+      onlineManager.setOnline(false);
+      onlineManager.setOnline(true);
+      await Promise.resolve();
+    });
+    expect(server.requests.filter(isComplete)).toHaveLength(1);
+  });
+
+  it('says an answer it cannot read is unusable, and takes it out of the address', async () => {
+    const server = answering('connected');
+    const { router } = renderApp(
+      `/sources/google?code=${'c'.repeat(5000)}&state=synthetic-state`,
+      server.fetch,
+    );
+
+    expect(await screen.findByText('The answer of Google cannot be read')).toBeInTheDocument();
+    await waitFor(() => {
+      expect(router.state.location.search).toBe('');
+    });
+    expect(server.requests.filter(isComplete)).toHaveLength(0);
   });
 
   it('takes the answer out of the address without a history entry', async () => {

@@ -46,8 +46,11 @@ const OUTCOMES: Readonly<Record<GoogleConsentOutcome, OutcomeText>> = {
 
 const ANSWER_PARAMETERS = ['code', 'state', 'error'] as const;
 
-/** What Google answered, as the server put it in the address; undefined when nothing is there. */
-const answerOf = (search: string): GoogleConsentAnswer | undefined => {
+/**
+ * What Google answered, as the server put it in the address: undefined when nothing is
+ * there, `unreadable` when the contract refuses it.
+ */
+const answerOf = (search: string): GoogleConsentAnswer | 'unreadable' | undefined => {
   const query = new URLSearchParams(search);
   const given = ANSWER_PARAMETERS.flatMap((name) => {
     const value = query.get(name);
@@ -55,11 +58,13 @@ const answerOf = (search: string): GoogleConsentAnswer | undefined => {
   });
   if (given.length === 0) return undefined;
   const parsed = googleConsentAnswerSchema.safeParse(Object.fromEntries(given));
-  return parsed.success ? parsed.data : undefined;
+  return parsed.success ? parsed.data : 'unreadable';
 };
 
-// A code is single use: one query per answer, never refetched, and no retry that could send
-// it twice. React runs the effects of StrictMode twice, and the cache answers the second.
+// A code is single use: one query per answer, and nothing that could send it twice. React
+// runs the effects of StrictMode twice, and the cache answers the second. A query without
+// data counts as stale whatever its `staleTime`: after a failed post, a reconnection or a
+// new mount would post the code again, unless both refetches are off.
 const useCompleteConsent = (answer: GoogleConsentAnswer) => {
   const client = useClient();
   const queryClient = useQueryClient();
@@ -73,17 +78,23 @@ const useCompleteConsent = (answer: GoogleConsentAnswer) => {
     staleTime: Number.POSITIVE_INFINITY,
     gcTime: Number.POSITIVE_INFINITY,
     retry: false,
+    refetchOnMount: false,
+    refetchOnReconnect: false,
+    refetchOnWindowFocus: false,
   });
+};
+
+// Once the answer is read, it leaves the address and the history.
+const useClearedAddress = (read: boolean): void => {
+  const navigate = useNavigate();
+  useEffect(() => {
+    if (read) void navigate({ search: '' }, { replace: true });
+  }, [read, navigate]);
 };
 
 const ConsentOutcome = ({ answer }: { readonly answer: GoogleConsentAnswer }) => {
   const completion = useCompleteConsent(answer);
-  const navigate = useNavigate();
-  const settled = !completion.isPending;
-  // Once the server has read the answer, it leaves the address and the history.
-  useEffect(() => {
-    if (settled) void navigate({ search: '' }, { replace: true });
-  }, [settled, navigate]);
+  useClearedAddress(!completion.isPending);
 
   if (completion.isPending) {
     return <p className="text-sm text-muted-foreground">Completing the consent...</p>;
@@ -113,6 +124,23 @@ const NoConsent = () => (
   </Alert>
 );
 
+const UnreadableConsent = () => {
+  useClearedAddress(true);
+  return (
+    <Alert variant="destructive">
+      <CircleAlertIcon />
+      <AlertTitle>The answer of Google cannot be read</AlertTitle>
+      <AlertDescription>Connect the source again from the Sources page.</AlertDescription>
+    </Alert>
+  );
+};
+
+const Consent = ({ answer }: { readonly answer: ReturnType<typeof answerOf> }) => {
+  if (answer === undefined) return <NoConsent />;
+  if (answer === 'unreadable') return <UnreadableConsent />;
+  return <ConsentOutcome answer={answer} />;
+};
+
 /** Where the server sends the browser back from Google: completes the consent once. */
 export const GoogleConsentPage = () => {
   const { search } = useLocation();
@@ -122,7 +150,7 @@ export const GoogleConsentPage = () => {
     <>
       <PageHeader title="Google Drive" description="The end of a connection to Google." />
       <div className="flex max-w-2xl flex-col gap-4" role="status">
-        {answer === undefined ? <NoConsent /> : <ConsentOutcome answer={answer} />}
+        <Consent answer={answer} />
       </div>
       <Button variant="outline" className="mt-4 self-start" asChild>
         <Link to={SOURCES_PATH}>Back to the sources</Link>
