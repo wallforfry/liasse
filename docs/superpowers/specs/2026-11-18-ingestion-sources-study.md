@@ -190,15 +190,17 @@ Each step is one pull request or a few, and each leaves the product working.
 
 ## 7. Decisions needed
 
-| #   | Decision                                | Proposal                                                                                                      |
-| --- | --------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
-| 1   | Gmail through IMAP or the Gmail API     | **Decided:** IMAP first, Gmail API later if more useful                                                       |
-| 1b  | Sync state                              | **Decided:** a cursor per source, no item history                                                             |
-| 2   | Whole message or attachments only       | **Decided:** whole `.eml`, only messages with an attachment; an option includes the others                    |
-| 3   | Drive scope                             | **Decided:** `drive.readonly`, client "In production" unverified                                              |
-| 4   | Native Google files                     | **Decided:** excluded at first; later exported to PDF and stored                                              |
-| 5   | Reference mode                          | **Decided:** Drive by reference (file id), no copy                                                            |
-| 6   | Drift in reference mode                 | **Decided:** a changed checksum is a new document, the old one is deleted; downloads check the checksum first |
-| 7   | File removed upstream in reference mode | **Decided:** document and knowledge stay, file marked unavailable (410)                                       |
-| 8   | Spec amendments                         | **Decided:** recorded in the decision table of the spec with this study                                       |
-| 9   | MCP access to sources                   | None at first (credentials stay behind the session cookie)                                                    |
+| #   | Decision                                | Proposal                                                                                                                       |
+| --- | --------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| 1   | Gmail through IMAP or the Gmail API     | **Decided:** IMAP first, Gmail API later if more useful                                                                        |
+| 1b  | Sync state                              | **Decided:** a cursor per source, no item history                                                                              |
+| 2   | Whole message or attachments only       | **Decided:** whole `.eml`, only messages with an attachment; an option includes the others                                     |
+| 3   | Drive scope                             | **Decided:** `drive.readonly`, client "In production" unverified                                                               |
+| 4   | Native Google files                     | **Decided:** excluded at first; later exported to PDF and stored                                                               |
+| 5   | Reference mode                          | **Decided:** Drive by reference (file id), no copy                                                                             |
+| 6   | Drift in reference mode                 | **Decided:** a changed checksum is a new document, the old one is deleted; downloads check the checksum first                  |
+| 7   | File removed upstream in reference mode | **Decided:** document and knowledge stay, file marked unavailable (410)                                                        |
+| 8   | Spec amendments                         | **Decided:** recorded in the decision table of the spec with this study                                                        |
+| 9   | MCP access to sources                   | None at first (credentials stay behind the session cookie)                                                                     |
+| 10  | Listing of the items a source took      | **Decided:** none (`GET /sources/:id/items` is dropped): a cursor only (1b); the last run names its skipped items              |
+| 11  | Filters of section 2.6                  | **Decided:** `hint` and `private` per source with the first brick; extension or MIME filters with the file kinds (Drive, SFTP) |
