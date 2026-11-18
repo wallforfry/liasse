@@ -28,13 +28,23 @@ export const uiContentSecurityPolicy = (nonce: string): string =>
 
 const IMMUTABLE = 'public, max-age=31536000, immutable';
 
-// `PUBLIC_URL` is parsed down to an origin by the configuration, which holds no character
-// an attribute would need escaped.
+// The origin of a URL keeps a `"` of its host, which the configuration accepts: written
+// raw, it would end the attribute.
+const ATTRIBUTE_ESCAPES: Readonly<Record<string, string>> = {
+  '&': '&amp;',
+  '"': '&quot;',
+  '<': '&lt;',
+  '>': '&gt;',
+};
+
+const attribute = (value: string): string =>
+  value.replace(/[&"<>]/g, (character) => ATTRIBUTE_ESCAPES[character] ?? character);
+
 const withMeta = (index: string, nonce: string, publicUrl: string): string =>
   index.replace(
     '<head>',
     `<head><meta property="${CSP_NONCE_META_PROPERTY}" nonce="${nonce}" />` +
-      `<meta property="${PUBLIC_URL_META_PROPERTY}" content="${publicUrl}" />`,
+      `<meta property="${PUBLIC_URL_META_PROPERTY}" content="${attribute(publicUrl)}" />`,
   );
 
 const MISSING_ASSET = failure('not_found', 'No such file.');
