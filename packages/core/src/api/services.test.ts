@@ -3,6 +3,8 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { ZodError } from 'zod';
 import { createDb } from '../db/client.ts';
 import { documents } from '../db/schema/documents.ts';
+import { ID_PREFIXES, newId } from '../domain/ids.ts';
+import { mergeEntities } from '../entities/merge.ts';
 import { seedEntity, SYNTHETIC_IBAN } from '../entities/support.test-helper.ts';
 import { deleteFileJob } from '../ingest/delete-file-job.ts';
 import { enqueue } from '../jobs/enqueue.ts';
@@ -20,7 +22,7 @@ import {
   upcoming,
 } from './features.ts';
 import { type ApiHarness, createApiHarness } from './harness.test-helper.ts';
-import { listEntities } from './list-entities.ts';
+import { getEntity, listEntities } from './list-entities.ts';
 import { executionFailure, queryDocuments } from './query-documents.ts';
 import { searchDocuments } from './search-documents.ts';
 import { insertSyntheticDocument } from '../testing/fixtures.ts';
@@ -252,6 +254,52 @@ describe('use cases of the API', () => {
           ),
         );
       }
+    });
+  });
+
+  describe('getEntity', () => {
+    const ENTITY_NOT_FOUND = { kind: 'not_found', code: 'entity_not_found' };
+
+    it('answers the entity under the names of the list, counting private documents on request', async () => {
+      const { db } = harness.database;
+      const id = await seedEntity(db, {
+        name: 'Atelier Quartz',
+        identifiers: [{ type: 'iban', value: SYNTHETIC_IBAN }],
+      });
+      const naming = { issuer: { entity_id: id, match: 'name', confidence: 0.99 } };
+      const added = await insertSyntheticDocument(db, {
+        status: 'indexed',
+        provenance: naming,
+        private: true,
+      });
+      try {
+        const entity = await getEntity(harness.context, id);
+        const listed = await listEntities(harness.context, { query: 'quartz' });
+        expect(entity).toEqual(listed.entities.find((candidate) => candidate.id === id));
+        expect(entity).toMatchObject({ id, canonical_name: 'Atelier Quartz', document_count: 0 });
+        expect(JSON.stringify(entity)).not.toContain(SYNTHETIC_IBAN);
+        expect(await getEntity(harness.context, id, { include_private: true })).toMatchObject({
+          document_count: 1,
+        });
+      } finally {
+        // The counts of `readStats` below are those of the corpus alone.
+        await db.delete(documents).where(inArray(documents.id, [added.id]));
+      }
+    });
+
+    it('answers entity_not_found for the source of a merge, and for an unknown id', async () => {
+      const { db } = harness.database;
+      const sourceId = await seedEntity(db, { name: 'Atelier Onyx' });
+      const targetId = await seedEntity(db, { name: 'Onyx Atelier' });
+      expect((await mergeEntities({ db }, { sourceId, targetId })).ok).toBe(true);
+      expect(await failureOf(getEntity(harness.context, sourceId))).toMatchObject(ENTITY_NOT_FOUND);
+      expect(await getEntity(harness.context, targetId)).toMatchObject({ id: targetId });
+      expect(await failureOf(getEntity(harness.context, newId(ID_PREFIXES.entity)))).toMatchObject(
+        ENTITY_NOT_FOUND,
+      );
+      expect(await failureOf(getEntity(harness.context, 'not-an-id'))).toMatchObject(
+        ENTITY_NOT_FOUND,
+      );
     });
   });
 

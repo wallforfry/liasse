@@ -163,6 +163,30 @@ describe('search, query, registry and metrics routes', () => {
       expect((await harness.call('/entities?limit=100000')).status).toBe(400);
       expect((await harness.call('/entities?include_private=true')).status).toBe(200);
     });
+
+    it('reads an entity by its id, and answers 404 for an id no entity has', async () => {
+      const [row] = await harness.database.db
+        .insert(entities)
+        .values({ kind: 'person', canonicalName: 'Synthetic Beryl' })
+        .returning({ id: entities.id });
+      const id = row?.id ?? '';
+      const response = await harness.call(`/entities/${id}?include_private=true`);
+      expect(response.status).toBe(200);
+      expect(await response.json()).toEqual({
+        id,
+        kind: 'person',
+        canonical_name: 'Synthetic Beryl',
+        aliases: [],
+        identifiers: [],
+        document_count: 0,
+      });
+      const missing = await harness.call('/entities/ent_01JC0000000000000000000000');
+      expect(missing.status).toBe(404);
+      expect(await codeOf(missing)).toBe('entity_not_found');
+      expect((await harness.call(`/entities/${id}?include_private=1`)).status).toBe(400);
+      expect((await harness.call(`/entities/${id}?kind=org`)).status).toBe(400);
+      expect((await harness.call('/entities/not-an-id')).status).toBe(400);
+    });
   });
 
   describe('POST /types', () => {

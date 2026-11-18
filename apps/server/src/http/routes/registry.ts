@@ -8,6 +8,8 @@ import {
   createTypeRequestSchema,
   describeTypesOptionsSchema,
   entityListSchema,
+  entityViewSchema,
+  getEntityRequestSchema,
   graphRequestSchema,
   graphSchema,
   listChangesOptionsSchema,
@@ -24,6 +26,7 @@ import {
   applyChange,
   createType,
   describeTypes,
+  getEntity,
   listChanges,
   listConsolidationRuns,
   listEntities,
@@ -60,6 +63,10 @@ const entitiesQuery = z
     include_private: flagParam.optional(),
   })
   .pipe(listEntitiesRequestSchema);
+
+const entityQuery = z
+  .strictObject({ include_private: flagParam.optional() })
+  .pipe(getEntityRequestSchema);
 
 const subjectsQuery = z.strictObject({ query: text, kind: text }).pipe(listSubjectsOptionsSchema);
 
@@ -141,6 +148,25 @@ export const registryRoutes = ({ authenticated }: RouteDeps): Hono<AppEnv> =>
       valid('query', entitiesQuery),
       async (context) =>
         context.json(await listEntities(context.var.api, context.req.valid('query'))),
+    )
+    .get(
+      '/entities/:id',
+      operation({
+        summary: 'Read an entity; a merge deletes its source, which then answers 404',
+        tag: 'Registry',
+        responses: { 200: jsonResponse('The entity.', entityViewSchema), ...failures(400, 404) },
+      }),
+      authenticated,
+      valid('param', idParam),
+      valid('query', entityQuery),
+      async (context) =>
+        context.json(
+          await getEntity(
+            context.var.api,
+            context.req.valid('param').id,
+            context.req.valid('query'),
+          ),
+        ),
     )
     .get(
       '/subjects',
