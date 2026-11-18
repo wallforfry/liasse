@@ -26,7 +26,7 @@ const notAllowed = (context: AppContext): Response => {
   context.header('Allow', 'POST');
   return respondWith(
     context,
-    failure(405, 'method_not_allowed', 'This server takes MCP messages by POST only.'),
+    failure('method_not_allowed', 'This server takes MCP messages by POST only.'),
   );
 };
 
@@ -63,7 +63,7 @@ export const mcpRoutes = ({ authenticated, report }: McpRouteDeps): Hono<AppEnv>
       jsonDepth,
       async (context) => {
         const body: unknown = await context.req.json().catch(() => {
-          throw new HttpFailure(failure(400, 'invalid_body', 'The request body is not JSON.'));
+          throw new HttpFailure(failure('invalid_body', 'The request body is not JSON.'));
         });
         return handleMcpRequest({ api: () => context.var.api, report }, context.req.raw, body);
       },

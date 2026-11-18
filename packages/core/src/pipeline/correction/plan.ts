@@ -1,3 +1,4 @@
+import type { CorrectionErrorCode } from '@liasse/contract';
 import {
   CORE_FIELD_NAMES,
   CORE_FIELDS,
@@ -26,20 +27,8 @@ export const correctionInputSchema = z.strictObject({
 export type CorrectionInput = z.input<typeof correctionInputSchema>;
 export type CorrectionRequest = Readonly<z.output<typeof correctionInputSchema>>;
 
-export const CORRECTION_ERROR_CODES = [
-  'invalid_input',
-  'document_not_found',
-  'type_not_found',
-  'no_type',
-  'unknown_field',
-  'unsupported_field',
-  'invalid_value',
-  'unresolved_entity',
-  'value_changed',
-] as const;
-
 export interface CorrectionError {
-  readonly code: (typeof CORRECTION_ERROR_CODES)[number];
+  readonly code: CorrectionErrorCode;
   /** Complete on its own: it is shown as is to the agent that made the request. */
   readonly message: string;
   readonly field?: string;

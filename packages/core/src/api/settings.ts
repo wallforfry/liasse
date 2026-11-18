@@ -65,14 +65,12 @@ export const readSettingsState = async (context: SettingsContext): Promise<Setti
 
 const staleVersion = (): ApiError =>
   new ApiError(
-    'conflict',
     'settings_conflict',
     'The settings changed since they were read. Read them again, then save.',
   );
 
 export const embedderLocked = (): ApiError =>
   new ApiError(
-    'conflict',
     'embedder_locked',
     'The embedder cannot change once a document exists: the stored vectors are its own.',
   );
@@ -99,7 +97,7 @@ export const prepareSettings = async (
     // Written for the operator, and holding no value of the settings: the embedder refuses
     // a local model of another dimension that way.
     if (error instanceof StartupError) {
-      throw new ApiError('invalid', 'settings_not_applicable', error.message);
+      throw new ApiError('settings_not_applicable', error.message);
     }
     throw error;
   }

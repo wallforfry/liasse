@@ -105,7 +105,7 @@ describe('the document page', () => {
     const server = fakeServer(
       (request) =>
         request.path.startsWith('/types')
-          ? errorBody(503, 'unavailable', 'The registry cannot be read.')
+          ? errorBody(503, 'not_configured', 'The registry cannot be read.')
           : undefined,
       answerDocument,
     );
@@ -210,7 +210,7 @@ describe('the document page', () => {
     const server = fakeServer(
       (request) =>
         request.path === '/documents/doc_01HOSTILE/events'
-          ? errorBody(503, 'unavailable', 'The log cannot be read.')
+          ? errorBody(503, 'not_configured', 'The log cannot be read.')
           : undefined,
       answerDocument,
     );

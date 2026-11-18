@@ -27,7 +27,6 @@ export const openDocumentFile = async (
   } catch (error) {
     if (!(error instanceof StorageObjectNotFoundError)) throw error;
     throw new ApiError(
-      'not_found',
       'file_missing',
       'The file of this document is missing from the storage. Upload it again to restore it.',
     );

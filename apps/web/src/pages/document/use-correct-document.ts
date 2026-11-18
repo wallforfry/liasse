@@ -1,33 +1,28 @@
+import { CORRECTION_ERROR_CODES } from '@liasse/contract';
 import { type DocumentCorrection, LiasseApiError } from '@liasse/sdk';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { toast } from 'sonner';
+import { z } from 'zod';
 import { errorMessage } from '../../api/errors.ts';
 import { useClient } from '../../api/session.ts';
 
-interface RefusedValue {
-  readonly code: string | undefined;
-  readonly message: string;
-}
+// `invalid_correction` lists what the registry refused, one entry per value. A code this
+// build does not know still shows its message.
+const refusedValueSchema = z.object({
+  code: z.enum(CORRECTION_ERROR_CODES).optional().catch(undefined),
+  message: z.string(),
+});
+type RefusedValue = z.output<typeof refusedValueSchema>;
 
-// `invalid_correction` lists what the registry refused, one entry per value.
 const refusedValues = (error: unknown): readonly RefusedValue[] => {
   if (!(error instanceof LiasseApiError)) return [];
   const { errors } = error.details;
   if (!Array.isArray(errors)) return [];
-  return errors.flatMap((item: unknown) =>
-    typeof item === 'object' &&
-    item !== null &&
-    'message' in item &&
-    typeof item.message === 'string'
-      ? [
-          {
-            code: 'code' in item && typeof item.code === 'string' ? item.code : undefined,
-            message: item.message,
-          },
-        ]
-      : [],
-  );
+  return errors.flatMap((item: unknown) => {
+    const parsed = refusedValueSchema.safeParse(item);
+    return parsed.success ? [parsed.data] : [];
+  });
 };
 
 /**
