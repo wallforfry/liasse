@@ -1,5 +1,6 @@
 import { useSearchParams } from 'react-router';
 import { PageHeader } from '../../components/page-header.tsx';
+import { Skeleton } from '../../components/ui/skeleton.tsx';
 import { DocumentFilters } from './document-filters.tsx';
 import { DocumentListResults } from './document-list-results.tsx';
 import { DocumentSearchBox } from './document-search-box.tsx';
@@ -12,7 +13,7 @@ import {
   withOffset,
 } from './list-params.ts';
 import { MissingEntityNotice } from './missing-entity-notice.tsx';
-import { useMissingEntity } from './use-missing-entity.ts';
+import { useEntityCheck } from './use-entity-check.ts';
 
 export interface DocumentListPageProps {
   readonly title: string;
@@ -25,7 +26,7 @@ export const DocumentListPage = ({ title, description, status }: DocumentListPag
   const [params, setParams] = useSearchParams();
   const read = readFilters(params);
   const filters = status === undefined ? read : { ...read, status };
-  const missingEntity = useMissingEntity(filters.entity);
+  const entityCheck = useEntityCheck(filters.entity);
 
   return (
     <>
@@ -48,9 +49,11 @@ export const DocumentListPage = ({ title, description, status }: DocumentListPag
           setParams(withEntity(params, entity));
         }}
       />
-      {missingEntity !== undefined ? (
+      {entityCheck === 'checking' ? (
+        <Skeleton className="h-64 w-full" />
+      ) : entityCheck === 'missing' && filters.entity !== undefined ? (
         <MissingEntityNotice
-          entity={missingEntity}
+          entity={filters.entity}
           onClear={() => {
             setParams(withEntity(params, undefined));
           }}

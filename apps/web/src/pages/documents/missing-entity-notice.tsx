@@ -11,11 +11,12 @@ export interface MissingEntityNoticeProps {
 export const MissingEntityNotice = ({ entity, onClear }: MissingEntityNoticeProps) => (
   <Alert>
     <InfoIcon />
-    <AlertTitle>This entity no longer exists</AlertTitle>
+    <AlertTitle>Unknown entity</AlertTitle>
     <AlertDescription>
       <p>
-        {entity.name} was merged into another entity, which now holds its documents, or it was
-        removed. Pick the entity again to see its documents.
+        No entity has the id this address gives for {entity.name}. It may have been merged into
+        another entity, which now holds its documents, or the address may name an entity that never
+        existed. Pick the entity again to see its documents.
       </p>
       <Button type="button" variant="outline" size="sm" onClick={onClear}>
         Clear the entity filter
