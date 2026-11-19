@@ -1,5 +1,5 @@
-import type { TypeReviewReason } from '@liasse/contract/domain';
-import { and, asc, count, eq, not, type SQL, sql } from 'drizzle-orm';
+import { TYPE_REFUSALS, type TypeReviewReason } from '@liasse/contract/domain';
+import { and, asc, count, eq, inArray, not, type SQL, sql } from 'drizzle-orm';
 import type { Database } from '../db/client.ts';
 import { documents } from '../db/schema/documents.ts';
 import { documentEvents } from '../db/schema/document-events.ts';
@@ -29,16 +29,19 @@ const flaggedFor = (reason: TypeReviewReason): SQL | undefined =>
 
 const pendingWrite = sql`exists (select 1 from ${jobs} where ${pendingWriteOf(documents.id)})`;
 
-// A reclassification refused, or failed for good, changes nothing and logs a failed
-// `classification` event, the last of the document: asking again would pay the model for
-// the same refusal, and keep the oldest documents ahead of those never tried.
-const refusedBefore = sql`(
-  select ${documentEvents.outcome} from ${documentEvents}
+// A reclassification the registry or the privacy rule refused changes nothing and logs a
+// failed `classification` event with that refusal, the last of the document: asking
+// again would pay the model for the same refusal, and keep the oldest documents ahead of
+// those never tried. An attempt that failed for another cause, such as a provider outage,
+// may succeed the next time.
+const refusedBefore = sql`coalesce((
+  select ${documentEvents.outcome} = 'failed' and ${inArray(documentEvents.errorCode, TYPE_REFUSALS)}
+  from ${documentEvents}
   where ${documentEvents.documentId} = ${documents.id}
     and ${documentEvents.stage} = 'classification'
   order by ${documentEvents.occurredAt} desc, ${documentEvents.id} desc
   limit 1
-) is not distinct from 'failed'`;
+), false)`;
 
 const countWhere = async (db: Database, condition: SQL | undefined): Promise<number> => {
   const [row] = await db.select({ total: count() }).from(documents).where(condition);
@@ -57,7 +60,8 @@ export const stillFlaggedFor =
  * document and with the refusals of a single request. A document whose type or values a
  * job is about to rewrite is skipped, and so is one that no longer has the reason once
  * locked: a person corrected it, or a job settled it, after the list was read. One whose
- * last reclassification was refused is left out and counted apart. An error part way
+ * last reclassification was refused is left out and counted apart. The counts are read
+ * apart from the requests, so a job that ends meanwhile can make them overlap by a few. An error part way
  * rejects the request; the documents queued before it stay queued, and are skipped by
  * the next request.
  */

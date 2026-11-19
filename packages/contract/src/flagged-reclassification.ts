@@ -29,14 +29,16 @@ export const flaggedReclassificationResultSchema = z.strictObject({
     .min(0)
     .describe(
       'Documents with the reason that were left alone: a job that rewrites their type or ' +
-        'values was already queued or running, or they changed while the request ran.',
+        'values was already queued or running, or they changed while the request ran. ' +
+        'Approximate while jobs end during the request.',
     ),
   refused: z
     .int()
     .min(0)
     .describe(
       'Documents with the reason left out because their last reclassification was refused ' +
-        'or failed for good: asking again would repeat it. Reclassify them one at a time.',
+        '(a type refusal such as `private_document`): asking again would repeat it. ' +
+        'Reclassify them one at a time.',
     ),
   remaining: z
     .int()

@@ -124,24 +124,26 @@ describe('reclassifyFlaggedDocuments', () => {
     ).rejects.toThrow();
   });
 
+  // One transaction per event: the events of a transaction share their time.
+  const logClassification = async (
+    id: string,
+    outcome: 'succeeded' | 'failed',
+    errorCode?: string,
+  ): Promise<void> => {
+    await database.db.transaction(async (tx) => {
+      await recordDocumentEvent(tx, id, {
+        stage: 'classification',
+        outcome,
+        status: 'needs_review',
+        ...(errorCode === undefined ? {} : { errorCode, retryable: false }),
+      });
+    });
+  };
+
   it('leaves out a document whose last reclassification was refused, and reaches a newer one', async () => {
     const refusedBefore = await insert('untyped');
-    await database.db.transaction(async (tx) => {
-      await recordDocumentEvent(tx, refusedBefore, {
-        stage: 'classification',
-        outcome: 'succeeded',
-        status: 'classified',
-      });
-    });
-    await database.db.transaction(async (tx) => {
-      await recordDocumentEvent(tx, refusedBefore, {
-        stage: 'classification',
-        outcome: 'failed',
-        status: 'needs_review',
-        errorCode: 'private_document',
-        retryable: false,
-      });
-    });
+    await logClassification(refusedBefore, 'succeeded');
+    await logClassification(refusedBefore, 'failed', 'private_document');
     const never = await insert('untyped');
 
     expect(
@@ -150,6 +152,21 @@ describe('reclassifyFlaggedDocuments', () => {
     expect(await queuedDocuments()).toEqual([
       { documentId: never, rejectedTypeId: null, newType: false },
     ]);
+  });
+
+  it('asks again for a refusal followed by a success, and for a failure that is no refusal', async () => {
+    const refusedThenClassified = await insert('untyped');
+    await logClassification(refusedThenClassified, 'failed', 'invalid_proposal');
+    await logClassification(refusedThenClassified, 'succeeded');
+    const outage = await insert('untyped');
+    await logClassification(outage, 'failed', 'model_provider_failed');
+
+    expect(await reclassifyFlaggedDocuments(database, { reason: 'type_untyped' })).toEqual({
+      queued: 2,
+      skipped: 0,
+      refused: 0,
+      remaining: 0,
+    });
   });
 
   it('rejects the closest type a fallback document was given', async () => {

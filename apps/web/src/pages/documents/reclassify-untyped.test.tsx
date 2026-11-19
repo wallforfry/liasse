@@ -35,8 +35,8 @@ describe('the reclassification of the untyped documents of the review queue', ()
     expect(
       await screen.findByText(
         '3 untyped documents queued to be analysed again. ' +
-          '1 document skipped: already queued or being processed. ' +
-          '1 document left out: their last analysis was refused, open them one by one. ' +
+          '1 document skipped: already queued, being processed or changed meanwhile. ' +
+          '1 document left out: a new type was refused for them, open them one by one. ' +
           '2 documents left: ask again.',
       ),
     ).toBeInTheDocument();

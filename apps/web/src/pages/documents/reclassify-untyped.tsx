@@ -30,11 +30,13 @@ const outcomeMessage = ({
       : `${plural(queued, 'untyped document')} queued to be analysed again.`,
     ...(skipped === 0
       ? []
-      : [`${plural(skipped, 'document')} skipped: already queued or being processed.`]),
+      : [
+          `${plural(skipped, 'document')} skipped: already queued, being processed or changed meanwhile.`,
+        ]),
     ...(refused === 0
       ? []
       : [
-          `${plural(refused, 'document')} left out: their last analysis was refused, open them one by one.`,
+          `${plural(refused, 'document')} left out: a new type was refused for them, open them one by one.`,
         ]),
     ...(remaining === 0 ? [] : [`${plural(remaining, 'document')} left: ask again.`]),
   ].join(' ');
