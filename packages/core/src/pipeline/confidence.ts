@@ -1,4 +1,10 @@
-import type { ClassificationOutcome, DocumentStatus, ReviewReason } from '@liasse/contract/domain';
+import {
+  type ClassificationOutcome,
+  type DocumentStatus,
+  type ReviewReason,
+  TYPE_REVIEW_REASONS,
+  type TypeReviewReason,
+} from '@liasse/contract/domain';
 import type { TypeProvenance } from '../domain/provenance.ts';
 
 // A type a person chose is certain; a document that reached extraction without any
@@ -29,18 +35,22 @@ export const documentConfidence = (
 };
 
 /** The reasons of `REVIEW_REASONS` that come from the confidence and the type. */
-export type SettlementReason = Extract<
-  ReviewReason,
-  'low_confidence' | 'type_pending_extraction' | 'type_fallback' | 'type_untyped'
->;
+export type SettlementReason =
+  Extract<ReviewReason, 'low_confidence' | 'type_pending_extraction'> | TypeReviewReason;
 
-const TYPE_OUTCOME_REASONS: Readonly<Partial<Record<ClassificationOutcome, SettlementReason>>> = {
-  fallback: 'type_fallback',
-  untyped: 'type_untyped',
+/** The outcome of a classification by the model that each type reason stands for. */
+export const TYPE_REASON_OUTCOMES: Readonly<Record<TypeReviewReason, ClassificationOutcome>> = {
+  type_fallback: 'fallback',
+  type_untyped: 'untyped',
 };
 
+const TYPE_OUTCOME_REASONS: Readonly<Partial<Record<ClassificationOutcome, TypeReviewReason>>> =
+  Object.fromEntries(
+    TYPE_REVIEW_REASONS.map((reason) => [TYPE_REASON_OUTCOMES[reason], reason] as const),
+  );
+
 /** The reason the type alone flags a document: it got the closest type, or none. */
-export const typeReason = (type: TypeProvenance | undefined): SettlementReason | undefined =>
+export const typeReason = (type: TypeProvenance | undefined): TypeReviewReason | undefined =>
   type === undefined || 'manual' in type ? undefined : TYPE_OUTCOME_REASONS[type.outcome];
 
 /**

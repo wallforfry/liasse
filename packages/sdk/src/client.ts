@@ -16,6 +16,9 @@ import {
   type DocumentList,
   type DocumentEventList,
   type DocumentReclassification,
+  type FlaggedReclassification,
+  type FlaggedReclassificationResult,
+  flaggedReclassificationResultSchema,
   documentEventListSchema,
   documentListSchema,
   documentSchema,
@@ -138,6 +141,13 @@ export interface LiasseClient {
     input?: DocumentReclassification,
   ) => Promise<DocumentView>;
   /**
+   * Queues the type of the documents flagged for review with a type reason to be decided
+   * again, at most `limit`; those with a job pending are skipped and counted.
+   */
+  readonly reclassifyFlaggedDocuments: (
+    input: FlaggedReclassification,
+  ) => Promise<FlaggedReclassificationResult>;
+  /**
    * Queues the values of an indexed or flagged document to be extracted again, for the type
    * it has; refused while it is processed. Values corrected by hand are kept.
    */
@@ -256,6 +266,8 @@ export const createLiasseClient = (options: ClientOptions): LiasseClient => {
       parseJson(documentSchema, await send({ method: 'POST', path: `${documentPath(id)}/retry` })),
     reclassifyDocument: async (id, input = {}) =>
       post(documentSchema, `${documentPath(id)}/reclassify`, input),
+    reclassifyFlaggedDocuments: async (input) =>
+      post(flaggedReclassificationResultSchema, '/documents/reclassify', input),
     reextractDocument: async (id) =>
       parseJson(
         documentSchema,

@@ -32,6 +32,7 @@ export { listDocuments } from './list-documents.ts';
 export { getEntity, listEntities } from './list-entities.ts';
 export { queryDocuments } from './query-documents.ts';
 export { reclassifyDocument } from './reclassify-document.ts';
+export { reclassifyFlaggedDocuments } from './reclassify-flagged-documents.ts';
 export { reextractDocument } from './reextract-document.ts';
 export { searchDocuments } from './search-documents.ts';
 export {

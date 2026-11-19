@@ -5,6 +5,8 @@ import {
   documentReclassificationSchema,
   documentSchema,
   documentStatusSchema,
+  flaggedReclassificationResultSchema,
+  flaggedReclassificationSchema,
   getDocumentOptionsSchema,
   listDocumentsOptionsSchema,
 } from '@liasse/contract';
@@ -16,6 +18,7 @@ import {
   listDocumentEvents,
   listDocuments,
   reclassifyDocument,
+  reclassifyFlaggedDocuments,
   reextractDocument,
   removeDocument,
   retryDocument,
@@ -179,6 +182,28 @@ export const documentRoutes = ({ authenticated }: RouteDeps): Hono<AppEnv> =>
         await reclassifyDocument(context.var.api, id, context.req.valid('json'));
         return context.json(await getDocument(context.var.api, id), 202);
       },
+    )
+    .post(
+      '/documents/reclassify',
+      operation({
+        summary: 'Decide again the type of the documents flagged for review with a type reason',
+        tag: TAG,
+        responses: {
+          202: jsonResponse(
+            'What was queued, skipped and left.',
+            flaggedReclassificationResultSchema,
+          ),
+          ...failures(400, 413, 415),
+        },
+      }),
+      authenticated,
+      jsonBody,
+      valid('json', flaggedReclassificationSchema),
+      async (context) =>
+        context.json(
+          await reclassifyFlaggedDocuments(context.var.api, context.req.valid('json')),
+          202,
+        ),
     )
     .post(
       '/documents/:id/reextract',

@@ -13,6 +13,7 @@ import {
   withOffset,
 } from './list-params.ts';
 import { MissingEntityNotice } from './missing-entity-notice.tsx';
+import { ReclassifyUntyped } from './reclassify-untyped.tsx';
 import { useEntityCheck } from './use-entity-check.ts';
 
 export interface DocumentListPageProps {
@@ -30,7 +31,11 @@ export const DocumentListPage = ({ title, description, status }: DocumentListPag
 
   return (
     <>
-      <PageHeader title={title} description={description} />
+      <PageHeader
+        title={title}
+        description={description}
+        actions={status === 'needs_review' ? <ReclassifyUntyped /> : undefined}
+      />
       {/* A new address, such as a search from the command palette, starts the box again. */}
       <DocumentSearchBox
         key={filters.query ?? ''}

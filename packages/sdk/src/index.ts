@@ -21,6 +21,8 @@ export type {
   DocumentView,
   EntityListView,
   EntityView,
+  FlaggedReclassification,
+  FlaggedReclassificationResult,
   GetDocumentOptions,
   GetEntityRequest,
   GoogleConsent,

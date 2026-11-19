@@ -29,6 +29,7 @@ const TOOLS = [
   'query',
   'recall',
   'reclassify_document',
+  'reclassify_flagged_documents',
   'reextract_document',
   'request_consolidation_run',
   'retry_document',
@@ -51,6 +52,7 @@ const UNTRUSTED_TOOLS = TOOLS.filter(
       'list_consolidation_runs',
       'list_document_events',
       'reclassify_document',
+      'reclassify_flagged_documents',
       'reextract_document',
       'request_consolidation_run',
       'retry_document',
@@ -135,7 +137,13 @@ describe('the tools', () => {
     const descriptionOf = (name: string) =>
       tools.find((tool) => tool.name === name)?.description ?? '';
     const naming = (tool: string) =>
-      ['list_pending_changes', 'apply_change', 'update_document', 'reclassify_document']
+      [
+        'list_pending_changes',
+        'apply_change',
+        'update_document',
+        'reclassify_document',
+        'reclassify_flagged_documents',
+      ]
         .filter((name) => !descriptionOf(name).includes(tool))
         .toSorted();
     expect(naming('`list_documents` with `status: needs_review`')).toEqual([]);
@@ -173,6 +181,7 @@ describe('the tools', () => {
             'delete_document',
             'ingest',
             'reclassify_document',
+            'reclassify_flagged_documents',
             'reextract_document',
             'request_consolidation_run',
             'retry_document',
@@ -387,6 +396,25 @@ describe('the tools', () => {
       expect(isError).toBe(false);
       expect(body).toEqual({ id, status: 'needs_review', state: 'current', error: null });
       expect((await failureOf('reclassify_document', { id })).code).toBe('document_not_settled');
+    });
+
+    it('queues the documents flagged untyped in one call, then skips them', async () => {
+      const id = await harness.addDocument([], {
+        status: 'needs_review',
+        provenance: { '@pipeline': { type: { model: 'm', confidence: 0, outcome: 'untyped' } } },
+      });
+      const first = await callTool(client, 'reclassify_flagged_documents', {
+        reason: 'type_untyped',
+      });
+      expect(first.isError).toBe(false);
+      expect(first.body).toMatchObject({ queued: 1, remaining: 0 });
+      expect((await callTool(client, 'get_status', { id })).body).toMatchObject({
+        job: { kind: 'reclassify_document', state: 'queued' },
+      });
+      const second = await callTool(client, 'reclassify_flagged_documents', {
+        reason: 'type_untyped',
+      });
+      expect(second.body).toMatchObject({ queued: 0, remaining: 0 });
     });
 
     it('queues the values of a settled document again and answers its status', async () => {
