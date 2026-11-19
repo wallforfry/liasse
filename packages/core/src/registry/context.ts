@@ -14,8 +14,6 @@ export interface RegistryWriteContext {
 
 export interface RegistryContext extends RegistryReadContext {
   readonly embedder: Embedder;
-  // `max_new_types_per_day` of the settings.
-  readonly maxNewTypesPerDay: number;
   // `schema_language` of the settings: the language slugs are generated in.
   readonly schemaLanguage: SchemaLanguage;
   readonly now?: () => Date;

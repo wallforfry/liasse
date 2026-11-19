@@ -79,7 +79,7 @@ describe('loadConfig', () => {
           'database and changed with PUT /settings. Unset it.',
       ),
     );
-    expect(REMOVED_ENV_KEYS).toHaveLength(23);
+    expect(REMOVED_ENV_KEYS).toHaveLength(22);
     expect(REMOVED_ENV_KEYS.filter((key) => CONFIG_ENV_KEYS.includes(key))).toEqual([]);
   });
 

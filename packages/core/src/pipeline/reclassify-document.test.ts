@@ -60,7 +60,6 @@ describe('reclassifying a document', () => {
       {
         db: harness.db,
         embedder: createFakeEmbedder(),
-        maxNewTypesPerDay: 100,
         schemaLanguage: 'en',
       },
     );
@@ -294,6 +293,44 @@ describe('reclassifying a document', () => {
       expect((await eventsOf(id))[0]).toMatchObject({ details: { classification: 'new' } });
     });
 
+    // Real use: a first import left most documents so, under a daily quota of new types
+    // that is now removed; their stored refusal still parses.
+    it('files a document the removed daily quota left untyped, under a new type', async () => {
+      await seedTypes();
+      const id = await settled(null, {
+        status: 'needs_review',
+        schemaVersion: null,
+        confidence: 0,
+        fields: {},
+        extra: { meter_id: 'PDL-1' },
+        provenance: {
+          reference: EXTRACTED,
+          [PIPELINE_PROVENANCE_KEY]: {
+            type: { model: 'm', confidence: 0, outcome: 'untyped', refusal: 'quota_exceeded' },
+          },
+        },
+        manualFields: [],
+      });
+      expect(await requestReclassification(harness.db, id, {})).toBe('queued');
+      const [job] = await queued();
+      expect(job).toEqual({ kind: 'reclassify_document', payload: payloadOf(id, null) });
+      await harness.db.update(jobs).set({ status: 'succeeded' });
+      const textModel = scriptedModel({
+        classify: () => ({ ...NEW_TYPE, new_type: { ...NEW_TYPE.new_type, slug: 'gas_bill' } }),
+      });
+      await reclassifyDocument(harness.deps({ textModel }), payloadOf(id, null), live());
+      const [created] = await harness.db
+        .select()
+        .from(docTypes)
+        .where(eq(docTypes.slug, 'gas_bill'));
+      const document = await harness.document(id);
+      expect(document).toMatchObject({ typeId: created?.id });
+      expect(document.provenance[PIPELINE_PROVENANCE_KEY]).toEqual({
+        type: { model: 'fake-text-model', confidence: 0.9, outcome: 'new' },
+      });
+      expect((await eventsOf(id))[0]).toMatchObject({ details: { classification: 'new' } });
+    });
+
     // The document as `settled` wrote it, and the one failed event that says why.
     const expectUnchanged = async (id: string, typeId: string, refusal: string) => {
       expect(await harness.document(id)).toMatchObject({
@@ -338,25 +375,6 @@ describe('reclassifying a document', () => {
       });
       await reclassifyDocument(deps, payloadOf(id, energy.id), live());
       await expectUnchanged(id, energy.id, 'private_document');
-    });
-
-    // Real use: a receipt that only a new type fits, asked with `new_type`, was filed under
-    // the closest other type once the quota was reached, and its re-extraction dropped
-    // values that were right.
-    it('assigns no other existing type when a new type is required and the quota is reached', async () => {
-      const { energy } = await seedTypes();
-      const id = await settled(energy.id);
-      const deps = harness.deps({
-        textModel: scriptedModel({
-          classify: () => ({ ...NEW_TYPE, new_type: { ...NEW_TYPE.new_type, slug: 'gas_bill' } }),
-        }),
-      });
-      await reclassifyDocument(
-        { ...deps, settings: { ...deps.settings, maxNewTypesPerDay: 2 } },
-        payloadOf(id, energy.id, { newType: true }),
-        live(),
-      );
-      await expectUnchanged(id, energy.id, 'quota_exceeded');
     });
 
     it('takes no existing type that a new slug names when a new type is required', async () => {

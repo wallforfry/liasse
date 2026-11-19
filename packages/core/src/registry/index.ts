@@ -7,7 +7,6 @@ export type {
   InvalidSlug,
   NameTaken,
   PrimitiveConflict,
-  QuotaExceeded,
   RegistryError,
 } from './errors.ts';
 export { addField, removeField, renameField, retypeField } from './field-operations.ts';

@@ -132,12 +132,4 @@ describe('createType', () => {
     const refusal = await refusalOf(createType(context, { slug: 'tax_notice', description: ' ' }));
     expect(refusal.code).toBe('invalid_description');
   });
-
-  it('is not bounded by the daily quota of the pipeline', async () => {
-    const slugs = ['rent_receipt', 'pay_slip', 'tax_return', 'bank_statement', 'insurance_policy'];
-    const created = await Promise.all(
-      slugs.map(async (slug) => createType(context, { slug, description: `A ${slug}` })),
-    );
-    expect(created).toHaveLength(slugs.length);
-  });
 });

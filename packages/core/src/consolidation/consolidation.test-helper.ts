@@ -25,7 +25,7 @@ export const seedType = async (
 ): Promise<RegisteredType> => {
   const created = await createType(
     { slug, description, fields },
-    { db, embedder: createFakeEmbedder(), maxNewTypesPerDay: 1000, schemaLanguage: 'en' },
+    { db, embedder: createFakeEmbedder(), schemaLanguage: 'en' },
   );
   if (!created.ok) throw new Error(created.error.message);
   if (status === undefined) return created.value;

@@ -59,7 +59,6 @@ describe('the plan of the common filtered query', () => {
     const context = {
       db,
       embedder: createFakeEmbedder(),
-      maxNewTypesPerDay: 10,
       schemaLanguage: 'en',
     } as const;
     const create = async (slug: string) => {

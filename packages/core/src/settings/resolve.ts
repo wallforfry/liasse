@@ -38,7 +38,6 @@ export interface PipelineConfig {
   readonly maxFileSize: number;
   readonly autoApply: AutoApplyMode;
   readonly confidenceThreshold: number;
-  readonly maxNewTypesPerDay: number;
   readonly schemaLanguage: SchemaLanguage;
   readonly maxVisionPages: number;
   readonly entitySimilarity: { readonly attach: number; readonly arbitrate: number };
@@ -105,7 +104,6 @@ export const resolveSettings = (
       maxFileSize: pipeline.max_file_size,
       autoApply: pipeline.auto_apply,
       confidenceThreshold: pipeline.confidence_threshold,
-      maxNewTypesPerDay: pipeline.max_new_types_per_day,
       schemaLanguage: pipeline.schema_language,
       maxVisionPages: pipeline.max_vision_pages,
       entitySimilarity: Object.freeze({

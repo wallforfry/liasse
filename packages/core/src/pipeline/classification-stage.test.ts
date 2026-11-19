@@ -53,7 +53,6 @@ describe('the classification stage', () => {
   const registryContext = () => ({
     db: harness.db,
     embedder: createFakeEmbedder(),
-    maxNewTypesPerDay: 100,
     schemaLanguage: 'en' as const,
   });
 
@@ -212,6 +211,14 @@ describe('the classification stage', () => {
       type: { outcome: 'untyped', confidence: 0, refusal: 'invalid_proposal' },
     });
     expect(await harness.db.select().from(docTypes)).toHaveLength(3);
+    const events = await harness.db
+      .select()
+      .from(documentEvents)
+      .where(eq(documentEvents.documentId, id));
+    expect(events.find(({ stage }) => stage === 'classification')?.details).toEqual({
+      classification: 'untyped',
+      type_refusal: 'invalid_proposal',
+    });
   });
 
   // Verdict P6: what a model writes in a new type reaches `describe_types` and every later
@@ -279,26 +286,29 @@ describe('the classification stage', () => {
     expect(type).toMatchObject({ type: { outcome: 'untyped', refusal: 'private_document' } });
   });
 
-  it('assigns no type at once, without a second call, when the daily quota is reached', async () => {
+  // Real use: a first import on an empty registry created five types, then left every
+  // other document untyped, in review, while a daily quota of new types was in force.
+  it('creates the new type the model proposes, however many were created today', async () => {
     await seedTypes();
-    const id = await harness.ingest('over quota');
-    const deps = harness.deps();
-    const { document, type, prompts } = await classify(id, () => proposal('tax_notice'), {
-      settings: { ...deps.settings, maxNewTypesPerDay: 3, confidenceThreshold: 0 },
-      ...text('Contract by which a landlord rents a home to a tenant'),
-    });
+    const created = await Promise.all(
+      ['receipt', 'contract', 'warranty', 'certificate', 'statement'].map((slug) =>
+        createType({ slug, description: `A synthetic ${slug}`, fields: {} }, registryContext()),
+      ),
+    );
+    expect(created.every(({ ok }) => ok)).toBe(true);
+    const id = await harness.ingest('ninth type of the day');
+    const { document, type, prompts } = await classify(
+      id,
+      () => proposal('tax_notice'),
+      text('Notice of the income tax a household owes for the year'),
+    );
     expect(prompts).toHaveLength(1);
-    // Flagged for review whatever the threshold, never filed under the closest candidate.
-    expect(document).toMatchObject({ typeId: null, status: 'needs_review' });
-    expect(type).toMatchObject({ type: { outcome: 'untyped', refusal: 'quota_exceeded' } });
-    const events = await harness.db
+    const [taxNotice] = await harness.db
       .select()
-      .from(documentEvents)
-      .where(eq(documentEvents.documentId, id));
-    expect(events.find(({ stage }) => stage === 'classification')?.details).toEqual({
-      classification: 'untyped',
-      type_refusal: 'quota_exceeded',
-    });
+      .from(docTypes)
+      .where(eq(docTypes.slug, 'tax_notice'));
+    expect(document.typeId).toBe(taxNotice?.id);
+    expect(type).toMatchObject({ type: { outcome: 'new' } });
   });
 
   // Real use: social and tax compliance certificates were filed under a rental insurance
@@ -330,17 +340,13 @@ describe('the classification stage', () => {
       expect(type).toMatchObject({ type: { outcome: 'new' } });
     });
 
-    it('is never filed under the unrelated candidate when the new type is over quota', async () => {
+    it('is never filed under the unrelated candidate when the new type is refused', async () => {
       const rental = await seedRental();
-      const id = await harness.ingest('social certificate over quota');
-      const deps = harness.deps();
-      const { document, type } = await classify(id, () => social, {
-        settings: { ...deps.settings, maxNewTypesPerDay: 1 },
-        ...text(SOCIAL),
-      });
+      const id = await harness.ingest('social certificate refused');
+      const { document, type } = await classify(id, () => proposal('edf_2026'), text(SOCIAL));
       expect(document.typeId).not.toBe(rental);
       expect(document).toMatchObject({ typeId: null, status: 'needs_review' });
-      expect(type).toMatchObject({ type: { outcome: 'untyped', refusal: 'quota_exceeded' } });
+      expect(type).toMatchObject({ type: { outcome: 'untyped', refusal: 'invalid_proposal' } });
     });
   });
 
@@ -348,7 +354,7 @@ describe('the classification stage', () => {
     const id = await harness.ingest('untyped');
     const deps = harness.deps();
     const model = scriptedModel({
-      classify: () => proposal('tax_notice'),
+      classify: () => proposal('edf_2026'),
       extract: () => ({
         core: {
           reference: { value: 'SYN-2026-001', page: 1, quote: 'SYN-2026-001', confidence: 1 },
@@ -358,11 +364,7 @@ describe('the classification stage', () => {
         },
       }),
     });
-    await processDocument(
-      { ...deps, textModel: model, settings: { ...deps.settings, maxNewTypesPerDay: 0 } },
-      id,
-      live(),
-    );
+    await processDocument({ ...deps, textModel: model }, id, live());
     const document = await harness.document(id);
     expect(document).toMatchObject({
       typeId: null,

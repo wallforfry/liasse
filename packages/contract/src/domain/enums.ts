@@ -41,9 +41,11 @@ export const DOCUMENT_JOB_FAILURE_CODES = {
 export const CLASSIFICATION_OUTCOMES = ['existing', 'new', 'fallback', 'untyped'] as const;
 export type ClassificationOutcome = (typeof CLASSIFICATION_OUTCOMES)[number];
 
-// Why the new type the model proposed was not created: the daily quota is reached; the
-// document is private and the embedder outside the installation; the registry refused
-// the proposal twice (naming, fields, hierarchy); or it named the type a person rejected.
+// Why the new type the model proposed was not created: the document is private and the
+// embedder outside the installation; the registry refused the proposal twice (naming,
+// fields, hierarchy); or it named the type a person rejected. `quota_exceeded`, the daily
+// quota of new types that was removed, is no longer assigned; documents classified
+// before keep it.
 export const TYPE_REFUSALS = [
   'quota_exceeded',
   'private_document',

@@ -78,8 +78,7 @@ export const CreateType = ({ roots }: { readonly roots: readonly TypeView[] }) =
           <DialogTitle>Create a type</DialogTitle>
           <DialogDescription>
             Generic to specific, in snake_case: energy_bill, never edf_october. The type starts
-            provisional, like one the pipeline creates, and counts towards the daily quota of new
-            types the pipeline may create.
+            provisional, like one the pipeline creates.
           </DialogDescription>
         </DialogHeader>
         <Tabs

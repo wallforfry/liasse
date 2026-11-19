@@ -99,7 +99,6 @@ describe('extraction of synthetic certificates', () => {
       {
         db: harness.db,
         embedder: createFakeEmbedder(),
-        maxNewTypesPerDay: 100,
         schemaLanguage: 'en',
       },
     );

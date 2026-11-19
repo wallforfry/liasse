@@ -32,15 +32,6 @@ export const PipelineSection = ({ values, issues, onChange }: SectionProps<'pipe
         onChange={set('confidence_threshold')}
         error={error('confidence_threshold')}
       />
-      <TextField
-        id="pipeline-max-new-types"
-        label="New types per day"
-        kind="number"
-        hint="Beyond, a document no type fits stays without one and waits for review."
-        value={values.max_new_types_per_day}
-        onChange={set('max_new_types_per_day')}
-        error={error('max_new_types_per_day')}
-      />
       <ChoiceField
         id="pipeline-schema-language"
         label="Schema language"

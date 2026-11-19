@@ -169,6 +169,13 @@
       "when": 1795023965587,
       "tag": "0023_drive_by_reference",
       "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1795096962840,
+      "tag": "0024_drop_type_quota_setting",
+      "breakpoints": true
     }
   ]
 }

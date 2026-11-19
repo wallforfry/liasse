@@ -70,7 +70,7 @@ export const confidenceLabel = (confidence: number | null): string =>
 const untypedBecause = (refusal: DocumentReview['type']['refusal']): string => {
   switch (refusal) {
     case 'quota_exceeded':
-      return ': the daily quota of new types is reached, create the type by hand';
+      return ': the daily quota of new types, since removed, was reached, reclassify it';
     case 'private_document':
       return ': a new type for a private document needs a local embedder';
     case 'invalid_proposal':

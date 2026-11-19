@@ -187,7 +187,7 @@ describe('what reaches the statement', () => {
       const { db } = database;
       const created = await createType(
         { slug: 'memo', description: 'A synthetic memo', fields: NOTE_FIELDS },
-        { db, embedder: createFakeEmbedder(), maxNewTypesPerDay: 10, schemaLanguage: 'en' },
+        { db, embedder: createFakeEmbedder(), schemaLanguage: 'en' },
       );
       if (!created.ok) throw new Error(created.error.message);
       await db.insert(entities).values({ kind: 'org', canonicalName: 'Synthetic Owner' });

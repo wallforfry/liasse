@@ -23,8 +23,6 @@ export const DEFAULT_MAX_FILE_SIZE = 50 * MEBIBYTE;
 // An ingested file is hashed and sniffed in memory, and a Node Buffer stops at 2 GiB.
 export const MAX_FILE_SIZE_LIMIT = 2048 * MEBIBYTE - 1;
 
-export const DEFAULT_MAX_NEW_TYPES_PER_DAY = 5;
-export const MAX_NEW_TYPES_PER_DAY_LIMIT = 1000;
 export const DEFAULT_CONFIDENCE_THRESHOLD = 0.7;
 
 // Upper bounds of one model call or one embedding request, their retries included.

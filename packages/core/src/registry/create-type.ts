@@ -1,16 +1,8 @@
 import { MAX_TYPE_DESCRIPTION_LENGTH, type SchemaLanguage } from '@liasse/contract/domain';
 import { err, ok, type Result } from '@liasse/contract/registry';
-import { and, count, gte, lt } from 'drizzle-orm';
 import { docTypes, entities } from '../db/schema/registry.ts';
 import type { RegistryContext } from './context.ts';
-import {
-  failure,
-  invalidFields,
-  invalidSlug,
-  nameTaken,
-  quotaExceeded,
-  type RegistryError,
-} from './errors.ts';
+import { failure, invalidFields, invalidSlug, nameTaken, type RegistryError } from './errors.ts';
 import { checkTypeFields, type TypeFields } from './fields.ts';
 import { type SlugContext, slugViolations } from './naming.ts';
 import {
@@ -99,62 +91,38 @@ const resolveParent = async (
       );
 };
 
-const DAY_IN_MILLISECONDS = 86_400_000;
-
-const startOfUtcDay = (instant: Date): Date =>
-  new Date(Date.UTC(instant.getUTCFullYear(), instant.getUTCMonth(), instant.getUTCDate()));
-
-// The day is closed at both ends: a row dated after it, by a clock step or another host,
-// belongs to its own day and takes nothing from this one.
-const typesCreatedOnUtcDayOf = async (reader: RegistryReader, instant: Date): Promise<number> => {
-  const start = startOfUtcDay(instant);
-  const [row] = await reader
-    .select({ total: count() })
-    .from(docTypes)
-    .where(
-      and(
-        gte(docTypes.createdAt, start),
-        lt(docTypes.createdAt, new Date(start.getTime() + DAY_IN_MILLISECONDS)),
-      ),
-    );
-  return row?.total ?? 0;
-};
-
 // Answers with the slug of the parent as the registry knows it.
 const checkCreatable = async (
   reader: RegistryReader,
   draft: TypeDraft,
-  instant: Date,
-  limit: number,
 ): Promise<Result<string | null, RegistryError>> => {
   const holder = await findNameHolder(reader, draft.slug);
   if (holder !== undefined) return err(nameTaken(draft.slug, holder));
-  const parent = await resolveParent(reader, draft.parentSlug);
-  if (!parent.ok) return parent;
-  const createdToday = await typesCreatedOnUtcDayOf(reader, instant);
-  return createdToday >= limit ? err(quotaExceeded(limit, createdToday)) : parent;
+  return resolveParent(reader, draft.parentSlug);
 };
 
 export const createType = async (
   input: CreateTypeInput,
-  { db, embedder, maxNewTypesPerDay, schemaLanguage, now = () => new Date() }: RegistryContext,
+  { db, embedder, schemaLanguage, now = () => new Date() }: RegistryContext,
 ): Promise<Result<RegisteredType, RegistryError>> => {
   const draft = await checkDraft(input, db, schemaLanguage);
   if (!draft.ok) return draft;
   // The embedder may be a remote call: it runs outside the lock, and only for a request
   // that would pass at this point. The same checks run again under the lock.
-  const early = await checkCreatable(db, draft.value, now(), maxNewTypesPerDay);
+  const early = await checkCreatable(db, draft.value);
   if (!early.ok) return early;
   const [embedding] = await embedder.embed([draft.value.description], 'passage');
   if (embedding === undefined) throw new Error('The embedder returned no embedding');
   return withRegistryLock(db, async (tx) => {
-    // Read under the lock, after the embedder: the type is counted on the day it is
-    // written, and that day is the one whose quota was just checked.
-    const createdAt = now();
-    const parentSlug = await checkCreatable(tx, draft.value, createdAt, maxNewTypesPerDay);
+    const parentSlug = await checkCreatable(tx, draft.value);
     if (!parentSlug.ok) return parentSlug;
     return ok(
-      await insertType(tx, { ...draft.value, parentSlug: parentSlug.value, embedding, createdAt }),
+      await insertType(tx, {
+        ...draft.value,
+        parentSlug: parentSlug.value,
+        embedding,
+        createdAt: now(),
+      }),
     );
   });
 };

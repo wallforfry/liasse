@@ -42,7 +42,6 @@ describe('createType', () => {
   const context = (overrides: Partial<RegistryContext> = {}): RegistryContext => ({
     db: database.db,
     embedder: createFakeEmbedder(),
-    maxNewTypesPerDay: 1000,
     schemaLanguage: 'en',
     now: () => new Date('2026-01-15T10:00:00.000Z'),
     ...overrides,
@@ -248,39 +247,16 @@ describe('createType', () => {
     });
   });
 
-  describe('daily quota', () => {
-    it('refuses the type that exceeds the quota of the current UTC day', async () => {
-      const at = (time: string) => ({
-        maxNewTypesPerDay: 2,
-        now: () => new Date(`2030-03-10T${time}Z`),
-      });
-      expect((await createType(draft('quota_first'), context(at('00:00:00.000')))).ok).toBe(true);
-      expect((await createType(draft('quota_second'), context(at('12:00:00.000')))).ok).toBe(true);
-      expect(await errorOf(draft('quota_third'), at('06:00:00.000'))).toEqual({
-        code: 'quota_exceeded',
-        message: 'The daily quota of new types is reached: 2 created today, 2 allowed.',
-        limit: 2,
-        createdToday: 2,
-      });
-      expect(await database.db.$count(docTypes, eq(docTypes.slug, 'quota_third'))).toBe(0);
-    });
-
-    it('opens a new quota at midnight UTC', async () => {
-      const quota = { maxNewTypesPerDay: 1 };
-      const lateEvening = () => new Date('2031-05-20T23:59:59.999Z');
-      const midnight = () => new Date('2031-05-21T00:00:00.000Z');
-      expect(
-        (await createType(draft('before_midnight'), context({ ...quota, now: lateEvening }))).ok,
-      ).toBe(true);
-      expect(await errorOf(draft('same_day'), { ...quota, now: lateEvening })).toMatchObject({
-        code: 'quota_exceeded',
-      });
-      expect(
-        (await createType(draft('after_midnight'), context({ ...quota, now: midnight }))).ok,
-      ).toBe(true);
-      expect(await errorOf(draft('next_day_full'), { ...quota, now: midnight })).toMatchObject({
-        code: 'quota_exceeded',
-      });
+  describe('on one day', () => {
+    // An import on an empty registry creates a type for each kind of document it meets.
+    it('creates every type asked for, with no daily bound', async () => {
+      const sameDay = { now: () => new Date('2030-03-10T09:00:00.000Z') };
+      const results = await Promise.all(
+        Array.from({ length: 12 }, (_, index) =>
+          createType(draft(`bootstrap_${'abcdefghijkl'.charAt(index)}`), context(sameDay)),
+        ),
+      );
+      expect(results.filter(({ ok }) => ok)).toHaveLength(12);
     });
 
     it('stamps the type when it is written, after a slow embedder', async () => {
@@ -293,86 +269,21 @@ describe('createType', () => {
           return fake.embed(texts, kind);
         },
       };
-      const quota = { maxNewTypesPerDay: 1, now: () => clock, embedder: slow };
-      expect((await createType(draft('slow_embedder'), context(quota))).ok).toBe(true);
+      expect(
+        (await createType(draft('slow_embedder'), context({ now: () => clock, embedder: slow })))
+          .ok,
+      ).toBe(true);
       const [row] = await database.db
         .select({ createdAt: docTypes.createdAt })
         .from(docTypes)
         .where(eq(docTypes.slug, 'slow_embedder'));
       expect(row?.createdAt).toEqual(new Date('2040-06-02T00:00:01.000Z'));
-      clock = new Date('2040-06-01T12:00:00.000Z');
-      const sameClock = { maxNewTypesPerDay: 1, now: () => clock };
-      expect((await createType(draft('previous_day'), context(sameClock))).ok).toBe(true);
-      expect(
-        await errorOf(draft('next_day_taken'), {
-          ...sameClock,
-          now: () => new Date('2040-06-02T08:00:00.000Z'),
-        }),
-      ).toMatchObject({ code: 'quota_exceeded', createdToday: 1 });
-    });
-
-    it('refuses a type whose day filled up while the embedder was running', async () => {
-      let clock = new Date('2041-06-01T23:59:59.900Z');
-      const fake = createFakeEmbedder();
-      const slow: Embedder = {
-        ...fake,
-        embed: async (texts, kind) => {
-          clock = new Date('2041-06-02T00:00:01.000Z');
-          await createType(
-            draft('other_process'),
-            context({ maxNewTypesPerDay: 1, now: () => clock }),
-          );
-          return fake.embed(texts, kind);
-        },
-      };
-      const quota = { maxNewTypesPerDay: 1, now: () => clock, embedder: slow };
-      expect(await errorOf(draft('late_arrival'), quota)).toMatchObject({
-        code: 'quota_exceeded',
-        createdToday: 1,
-      });
-    });
-
-    it('does not count a type dated after the current UTC day', async () => {
-      const day = (date: string) => ({ maxNewTypesPerDay: 1, now: () => new Date(date) });
-      expect(
-        (await createType(draft('dated_later'), context(day('2042-03-06T00:00:00.000Z')))).ok,
-      ).toBe(true);
-      expect(
-        (await createType(draft('dated_today'), context(day('2042-03-05T23:59:59.999Z')))).ok,
-      ).toBe(true);
-      expect(
-        await errorOf(draft('dated_today_again'), day('2042-03-05T00:00:00.000Z')),
-      ).toMatchObject({
-        code: 'quota_exceeded',
-        createdToday: 1,
-      });
-    });
-
-    it('creates nothing when the quota is zero', async () => {
-      const quota = { maxNewTypesPerDay: 0, now: () => new Date('2032-01-01T08:00:00.000Z') };
-      expect(await errorOf(draft('never_created'), quota)).toMatchObject({
-        code: 'quota_exceeded',
-        createdToday: 0,
-      });
-    });
-
-    it('never lets concurrent creations share the last slot', async () => {
-      const quota = { maxNewTypesPerDay: 3, now: () => new Date('2033-07-04T09:00:00.000Z') };
-      const results = await Promise.all(
-        Array.from({ length: 10 }, (_, index) =>
-          createType(draft(`concurrent_${'abcdefghij'.charAt(index)}`), context(quota)),
-        ),
-      );
-      expect(results.filter(({ ok }) => ok)).toHaveLength(3);
-      expect(results.flatMap((result) => (result.ok ? [] : [result.error.code]))).toEqual(
-        Array.from({ length: 7 }, () => 'quota_exceeded'),
-      );
     });
 
     it('does not call the embedder for a creation that is refused', async () => {
       const embedder = countingEmbedder();
-      const quota = { maxNewTypesPerDay: 0, now: () => new Date('2034-01-01T08:00:00.000Z') };
-      await createType(draft('refused_by_quota'), context({ ...quota, embedder }));
+      await createType(draft('already_there'), context());
+      await createType(draft('already_there'), context({ embedder }));
       await createType(draft('Refused By Naming'), context({ embedder }));
       expect(embedder.calls()).toBe(0);
     });

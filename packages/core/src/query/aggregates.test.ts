@@ -99,7 +99,7 @@ describe('aggregates', () => {
     const { db } = database;
     const created = await createType(
       { slug: 'invoice', description: 'A synthetic invoice', fields: INVOICE_FIELDS },
-      { db, embedder: createFakeEmbedder(), maxNewTypesPerDay: 10, schemaLanguage: 'en' },
+      { db, embedder: createFakeEmbedder(), schemaLanguage: 'en' },
     );
     if (!created.ok) throw new Error(created.error.message);
     const [first, second] = await db

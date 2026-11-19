@@ -20,7 +20,6 @@ const STATUS_OF_CODE: Readonly<Record<ApiErrorCode, number>> = {
   invalid_alias: 400,
   invalid_fields: 400,
   name_taken: 400,
-  quota_exceeded: 400,
   primitive_conflict: 400,
   field_exists: 400,
   field_not_found: 400,
