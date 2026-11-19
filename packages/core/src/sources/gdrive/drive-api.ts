@@ -45,7 +45,10 @@ export interface DriveApi {
     signal: AbortSignal,
   ) => Promise<DrivePage<DriveFile>>;
   readonly changes: (pageToken: string, signal: AbortSignal) => Promise<ChangesPage>;
-  /** The bytes of a binary file; undefined when Drive knows none of this id. */
+  /**
+   * The bytes of a binary file; undefined when Drive knows none of this id. Rejects with
+   * `DriveFileRefusedError` when Drive refuses to serve this file in particular.
+   */
   readonly download: (
     id: string,
     signal?: AbortSignal,
@@ -55,4 +58,9 @@ export interface DriveApi {
 /** Drive refused the access token: the authorization was revoked. */
 export class DriveUnauthorizedError extends Error {
   override readonly name = 'DriveUnauthorizedError';
+}
+
+/** Drive refuses the bytes of this one file, and would refuse them again. */
+export class DriveFileRefusedError extends Error {
+  override readonly name = 'DriveFileRefusedError';
 }

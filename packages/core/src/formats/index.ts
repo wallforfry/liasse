@@ -1,4 +1,5 @@
 export { DOCX_MAIN_DOCUMENT, isDocx } from './docx.ts';
+export { type DeclaredFile, mayBeSupported } from './declared.ts';
 export { checkEmail, type EmailCheck } from './email.ts';
 export { isHeic } from './heic.ts';
 export { isJpeg, isPdf, isPng } from './signatures.ts';

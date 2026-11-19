@@ -11,6 +11,16 @@ interface StoredFile {
   readonly trashed: boolean;
   readonly bytes?: Uint8Array;
   readonly target?: string;
+  /** What a request of the file answers instead of its bytes or its metadata. */
+  readonly refusal?: DriveRefusal;
+}
+
+/** A refusal, as Drive answers one: a status and the reason of its body. */
+export interface DriveRefusal {
+  readonly status: number;
+  readonly reason: string;
+  /** The request refused: the download of the bytes (the default), or the metadata. */
+  readonly of?: 'download' | 'metadata';
 }
 
 /** The files of a Drive as the fake serves them, and a change log of every edit. */
@@ -18,11 +28,17 @@ export interface FakeDriveState {
   /** The id of the top of My Drive, which `root` stands for. */
   readonly rootId: string;
   readonly folder: (name: string, parent?: string) => string;
-  readonly file: (name: string, parent: string, bytes: Uint8Array) => string;
+  /** A binary file, listed as `application/pdf` unless another type is given. */
+  readonly file: (name: string, parent: string, bytes: Uint8Array, mimeType?: string) => string;
   /** A Google Doc: a type of Google's own, without bytes. */
   readonly googleDoc: (name: string, parent: string) => string;
   readonly shortcut: (name: string, parent: string, target: string) => string;
   readonly update: (id: string, bytes: Uint8Array) => void;
+  /**
+   * Every later download of the file answers this refusal, or every later read of its
+   * metadata with `of: 'metadata'`; listings of its folder never do.
+   */
+  readonly refuse: (id: string, refusal: DriveRefusal) => void;
   readonly trash: (id: string) => void;
   readonly restore: (id: string) => void;
   readonly move: (id: string, parent: string) => void;
@@ -81,11 +97,17 @@ export const createFakeDriveState = (): FakeDriveState => {
   return {
     rootId,
     folder: (name, parent = rootId) => add(name, FOLDER, parent),
-    file: (name, parent, bytes) => add(name, 'application/pdf', parent, { bytes }),
+    file: (name, parent, bytes, mimeType = 'application/pdf') =>
+      add(name, mimeType, parent, { bytes }),
     googleDoc: (name, parent) => add(name, 'application/vnd.google-apps.document', parent),
     shortcut: (name, parent, target) => add(name, SHORTCUT, parent, { target }),
     update: (id, bytes) => {
       edit(id, { bytes });
+    },
+    refuse: (id, refusal) => {
+      const file = files.get(id);
+      if (file === undefined) throw new Error(`The fake Drive has no file ${id}`);
+      files.set(id, { ...file, refusal });
     },
     trash: (id) => {
       edit(id, { trashed: true });
