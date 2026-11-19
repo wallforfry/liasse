@@ -34,7 +34,10 @@ export interface FakeDriveState {
   readonly googleDoc: (name: string, parent: string) => string;
   readonly shortcut: (name: string, parent: string, target: string) => string;
   readonly update: (id: string, bytes: Uint8Array) => void;
-  /** Every later request of the file answers this refusal; listings of its folder do not. */
+  /**
+   * Every later download of the file answers this refusal, or every later read of its
+   * metadata with `of: 'metadata'`; listings of its folder never do.
+   */
   readonly refuse: (id: string, refusal: DriveRefusal) => void;
   readonly trash: (id: string) => void;
   readonly restore: (id: string) => void;
