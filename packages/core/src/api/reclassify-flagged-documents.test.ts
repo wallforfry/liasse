@@ -1,11 +1,18 @@
 import type { ClassificationOutcome, DocumentStatus } from '@liasse/contract/domain';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { eq } from 'drizzle-orm';
+import { documents } from '../db/schema/documents.ts';
 import { jobs } from '../db/schema/jobs.ts';
 import { MANUAL_PROVENANCE, PIPELINE_PROVENANCE_KEY } from '../domain/provenance.ts';
 import { enqueue } from '../jobs/enqueue.ts';
+import { loadDocument } from '../pipeline/document.ts';
 import { reclassifyDocumentJob } from '../pipeline/jobs.ts';
+import { stillFlaggedFor } from '../pipeline/reclassify-flagged.ts';
 import { requestReclassification } from '../pipeline/request-reclassification.ts';
+import { recordDocumentEvent } from '../processing-log/record.ts';
+import { createType } from '../registry/create-type.ts';
 import { insertSyntheticDocument } from '../testing/fixtures.ts';
+import { createFakeEmbedder } from '../testing/fake-embedder.ts';
 import { createTestDatabase, type TestDatabase } from '../testing/test-database.ts';
 import { reclassifyFlaggedDocuments } from './reclassify-flagged-documents.ts';
 
@@ -58,6 +65,7 @@ describe('reclassifyFlaggedDocuments', () => {
     expect(await reclassifyFlaggedDocuments(database, { reason: 'type_untyped' })).toEqual({
       queued: 2,
       skipped: 0,
+      refused: 0,
       remaining: 0,
     });
     expect(await queuedDocuments()).toEqual(
@@ -78,11 +86,13 @@ describe('reclassifyFlaggedDocuments', () => {
     expect(await reclassifyFlaggedDocuments(database, { reason: 'type_untyped' })).toEqual({
       queued: 1,
       skipped: 1,
+      refused: 0,
       remaining: 0,
     });
     expect(await reclassifyFlaggedDocuments(database, { reason: 'type_untyped' })).toEqual({
       queued: 0,
       skipped: 2,
+      refused: 0,
       remaining: 0,
     });
     expect(await queuedDocuments()).toHaveLength(2);
@@ -94,13 +104,13 @@ describe('reclassifyFlaggedDocuments', () => {
 
     expect(
       await reclassifyFlaggedDocuments(database, { reason: 'type_fallback', limit: 2 }),
-    ).toEqual({ queued: 2, skipped: 0, remaining: 1 });
+    ).toEqual({ queued: 2, skipped: 0, refused: 0, remaining: 1 });
     expect(await queuedDocuments()).toEqual(
       [first, second].map((documentId) => ({ documentId, rejectedTypeId: null, newType: false })),
     );
     expect(
       await reclassifyFlaggedDocuments(database, { reason: 'type_fallback', limit: 2 }),
-    ).toEqual({ queued: 1, skipped: 2, remaining: 0 });
+    ).toEqual({ queued: 1, skipped: 2, refused: 0, remaining: 0 });
     expect(await queuedDocuments()).toContainEqual({
       documentId: third,
       rejectedTypeId: null,
@@ -114,11 +124,74 @@ describe('reclassifyFlaggedDocuments', () => {
     ).rejects.toThrow();
   });
 
+  it('leaves out a document whose last reclassification was refused, and reaches a newer one', async () => {
+    const refusedBefore = await insert('untyped');
+    await database.db.transaction(async (tx) => {
+      await recordDocumentEvent(tx, refusedBefore, {
+        stage: 'classification',
+        outcome: 'succeeded',
+        status: 'classified',
+      });
+    });
+    await database.db.transaction(async (tx) => {
+      await recordDocumentEvent(tx, refusedBefore, {
+        stage: 'classification',
+        outcome: 'failed',
+        status: 'needs_review',
+        errorCode: 'private_document',
+        retryable: false,
+      });
+    });
+    const never = await insert('untyped');
+
+    expect(
+      await reclassifyFlaggedDocuments(database, { reason: 'type_untyped', limit: 1 }),
+    ).toEqual({ queued: 1, skipped: 0, refused: 1, remaining: 0 });
+    expect(await queuedDocuments()).toEqual([
+      { documentId: never, rejectedTypeId: null, newType: false },
+    ]);
+  });
+
+  it('rejects the closest type a fallback document was given', async () => {
+    const created = await createType(
+      { slug: 'water_bill', description: 'Synthetic water bill', fields: {} },
+      { db: database.db, embedder: createFakeEmbedder(), schemaLanguage: 'en' },
+    );
+    if (!created.ok) throw new Error(created.error.message);
+    const { id } = await insertSyntheticDocument(database.db, {
+      status: 'needs_review',
+      typeId: created.value.id,
+      provenance: classifiedAs('fallback'),
+    });
+
+    await reclassifyFlaggedDocuments(database, { reason: 'type_fallback' });
+    expect(await queuedDocuments()).toEqual([
+      { documentId: id, rejectedTypeId: created.value.id, newType: false },
+    ]);
+    const [document] = await database.db.select().from(documents).where(eq(documents.id, id));
+    expect(document?.rejectedTypeIds).toEqual([created.value.id]);
+  });
+
   it('leaves alone a document that no longer has the reason once its row is locked', async () => {
     const id = await insert('untyped');
     expect(await requestReclassification(database.db, id, { onlyIf: () => false })).toBe(
       'not_settled',
     );
     expect(await queuedDocuments()).toEqual([]);
+  });
+
+  it('tells a document still flagged with the reason from one corrected or settled since', async () => {
+    const flagged = await loadDocument(database.db, await insert('untyped'));
+    if (flagged === undefined) throw new Error('The document was not inserted');
+    const stillUntyped = stillFlaggedFor('type_untyped');
+    expect(stillUntyped(flagged)).toBe(true);
+    expect(stillFlaggedFor('type_fallback')(flagged)).toBe(false);
+    expect(stillUntyped({ ...flagged, status: 'indexed' })).toBe(false);
+    expect(
+      stillUntyped({
+        ...flagged,
+        provenance: { [PIPELINE_PROVENANCE_KEY]: { type: MANUAL_PROVENANCE } },
+      }),
+    ).toBe(false);
   });
 });

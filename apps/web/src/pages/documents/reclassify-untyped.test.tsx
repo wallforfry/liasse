@@ -29,12 +29,14 @@ const reclassify = async () => {
 
 describe('the reclassification of the untyped documents of the review queue', () => {
   it('asks for the untyped documents once confirmed, and says what was queued', async () => {
-    const server = serve(json({ queued: 3, skipped: 1, remaining: 2 }, 202));
+    const server = serve(json({ queued: 3, skipped: 1, refused: 1, remaining: 2 }, 202));
     renderApp('/review', server.fetch);
     await reclassify();
     expect(
       await screen.findByText(
-        '3 untyped documents queued to be analysed again. 1 document already being processed. ' +
+        '3 untyped documents queued to be analysed again. ' +
+          '1 document skipped: already queued or being processed. ' +
+          '1 document left out: their last analysis was refused, open them one by one. ' +
           '2 documents left: ask again.',
       ),
     ).toBeInTheDocument();

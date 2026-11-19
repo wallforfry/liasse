@@ -18,12 +18,24 @@ import {
 import { Button } from '../../components/ui/button.tsx';
 import { plural } from '../../lib/format.ts';
 
-const outcomeMessage = ({ queued, skipped, remaining }: FlaggedReclassificationResult): string =>
+const outcomeMessage = ({
+  queued,
+  skipped,
+  refused,
+  remaining,
+}: FlaggedReclassificationResult): string =>
   [
     queued === 0
       ? 'No untyped document was queued.'
       : `${plural(queued, 'untyped document')} queued to be analysed again.`,
-    ...(skipped === 0 ? [] : [`${plural(skipped, 'document')} already being processed.`]),
+    ...(skipped === 0
+      ? []
+      : [`${plural(skipped, 'document')} skipped: already queued or being processed.`]),
+    ...(refused === 0
+      ? []
+      : [
+          `${plural(refused, 'document')} left out: their last analysis was refused, open them one by one.`,
+        ]),
     ...(remaining === 0 ? [] : [`${plural(remaining, 'document')} left: ask again.`]),
   ].join(' ');
 

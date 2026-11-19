@@ -483,7 +483,7 @@ describe('document routes', () => {
       const response = await reclassifyFlagged({ reason: 'type_fallback' });
       expect(response.status).toBe(202);
       // Other tests of this file flag documents too: only this one is known to be queued.
-      expect(await response.json()).toMatchObject({ skipped: 0, remaining: 0 });
+      expect(await response.json()).toMatchObject({ skipped: 0, refused: 0, remaining: 0 });
       const queued = await harness.database.db
         .select({ payload: jobs.payload })
         .from(jobs)

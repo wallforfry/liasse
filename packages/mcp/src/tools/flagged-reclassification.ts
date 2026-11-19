@@ -10,8 +10,11 @@ const RECLASSIFY_FLAGGED_DESCRIPTION =
   '`type_fallback` for those given the closest type. Each is queued as ' +
   '`reclassify_document` would queue it, oldest first, at most `limit`, private ones ' +
   'included. A document with a processing, re-extraction or reclassification pending is ' +
-  'skipped, not refused. Returns the counts `queued`, `skipped` and `remaining` (left ' +
-  'beyond `limit`: call again). `list_documents` with `status: needs_review` lists the ' +
+  'skipped, not refused; one whose last reclassification was refused is left out ' +
+  '(`refused`): use `reclassify_document` for it. With `type_fallback` the closest type ' +
+  'is rejected for each. Returns the counts `queued`, `skipped`, `refused` and ' +
+  '`remaining` (left beyond `limit`: call again). `list_documents` with ' +
+  '`status: needs_review` lists the ' +
   'documents flagged for review.';
 
 export const registerFlaggedReclassificationTool = (
