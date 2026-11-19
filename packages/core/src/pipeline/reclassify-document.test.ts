@@ -9,6 +9,7 @@ import {
   MANUAL_PROVENANCE,
   MANUAL_TYPE_FIELD,
   PIPELINE_PROVENANCE_KEY,
+  readPipelineProvenance,
 } from '../domain/provenance.ts';
 import { deleteDocument } from '../ingest/delete-document.ts';
 import { enqueue } from '../jobs/enqueue.ts';
@@ -310,6 +311,9 @@ describe('reclassifying a document', () => {
           },
         },
         manualFields: [],
+      });
+      expect(readPipelineProvenance((await harness.document(id)).provenance).type).toMatchObject({
+        refusal: 'quota_exceeded',
       });
       expect(await requestReclassification(harness.db, id, {})).toBe('queued');
       const [job] = await queued();

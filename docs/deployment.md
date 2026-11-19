@@ -80,6 +80,8 @@ docker compose up -d
 
 The server applies pending migrations at startup, in one transaction: a migration that fails leaves the database as it was, and the server refuses to start with the reason in its log (`docker compose logs liasse`). Pin `LIASSE_VERSION` to a version to upgrade only when you choose to, and read the notes of the [releases](https://github.com/wallforfry/liasse/releases) in between first.
 
+Stop every process of the older version before the new one starts, MCP over stdio included. An older process that saves the settings after the migrations of a newer one writes them in its own shape: since migration `0024`, a saved `pipeline.max_new_types_per_day` makes every newer process refuse the stored settings until they are saved again without it.
+
 On shutdown the server lets running jobs finish for 30 seconds, so the compose file gives the container 40 seconds before Docker kills it; with `docker run`, pass `--stop-timeout 40`.
 
 ## Reverse proxy and TLS
