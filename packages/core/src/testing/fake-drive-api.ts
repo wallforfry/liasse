@@ -61,6 +61,13 @@ export const driveReply = (drive: FakeDriveState, url: URL): DriveReply => {
   const file = drive.get(decodeURIComponent(path.replace(/^files\//, '')));
   if (file === undefined) return { status: 404, body: { error: { code: 404 } } };
   if (url.searchParams.get('alt') === 'media') {
+    if (file.refusal !== undefined) {
+      const { status, reason } = file.refusal;
+      return {
+        status,
+        body: { error: { code: status, message: 'Synthetic refusal.', errors: [{ reason }] } },
+      };
+    }
     return { status: 200, bytes: file.bytes ?? new Uint8Array() };
   }
   return { status: 200, body: fileResource(file) };

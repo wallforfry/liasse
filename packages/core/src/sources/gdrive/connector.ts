@@ -5,7 +5,7 @@ import type { GoogleClientReader } from '../google/client.ts';
 import { type GoogleClient, GoogleAuthorizationError, type GoogleOAuth } from '../google/oauth.ts';
 import { driveChanges } from './changes.ts';
 import { parseDriveCursor } from './cursor.ts';
-import { type DriveApi, DriveUnauthorizedError } from './drive-api.ts';
+import { type DriveApi, DriveFileRefusedError, DriveUnauthorizedError } from './drive-api.ts';
 import { createDriveApi } from './drive-client.ts';
 import { FOLDER_TYPE } from './items.ts';
 
@@ -91,7 +91,12 @@ export const createDriveConnector = (
       if (checksum !== null && file.md5Checksum !== checksum) {
         throw new SourceFileChangedError('Drive holds another version of this file.');
       }
-      const body = await api.download(externalId, signal);
+      const body = await api.download(externalId, signal).catch((error: unknown) => {
+        if (error instanceof DriveFileRefusedError) {
+          throw new SourceFileUnavailableError(error.message, { cause: error });
+        }
+        throw error;
+      });
       if (body === undefined)
         throw new SourceFileUnavailableError('Drive no longer holds this file.');
       return body;

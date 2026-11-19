@@ -1,11 +1,7 @@
 import { Readable } from 'node:stream';
 import { z } from 'zod';
-import {
-  type DriveApi,
-  driveChangeSchema,
-  driveFileSchema,
-  DriveUnauthorizedError,
-} from './drive-api.ts';
+import { type DriveApi, driveChangeSchema, driveFileSchema } from './drive-api.ts';
+import { refusalOf, refusalReasons } from './drive-refusal.ts';
 
 const REQUEST_TIMEOUT_MS = 30_000;
 const PAGE_SIZE = '100';
@@ -36,6 +32,7 @@ export const createDriveApi = (base: string, accessToken: AccessToken): DriveApi
     path: string,
     query: Readonly<Record<string, string>>,
     signal: AbortSignal | undefined,
+    perFile = false,
   ): Promise<Response | undefined> => {
     const url = new URL(`${base}/${path}`);
     url.search = new URLSearchParams(query).toString();
@@ -45,12 +42,12 @@ export const createDriveApi = (base: string, accessToken: AccessToken): DriveApi
       ...(signal === undefined ? {} : { signal }),
     });
     if (response.ok) return response;
-    await response.body?.cancel();
-    if (response.status === 404) return undefined;
-    if (response.status === 401) {
-      throw new DriveUnauthorizedError('Drive refused the authorization of the source.');
+    if (response.status === 404) {
+      await response.body?.cancel();
+      return undefined;
     }
-    throw new Error(`Drive answered ${String(response.status)} to ${path.split('/')[0] ?? ''}.`);
+    const reasons = await refusalReasons(response);
+    throw refusalOf(response.status, path.split('/')[0] ?? '', reasons, perFile);
   };
   const json = async <Output>(
     schema: z.ZodType<Output>,
@@ -129,6 +126,7 @@ export const createDriveApi = (base: string, accessToken: AccessToken): DriveApi
         `files/${encodeURIComponent(id)}`,
         { alt: 'media', supportsAllDrives: 'true' },
         signal,
+        true,
       );
       if (response === undefined) return undefined;
       return response.body === null ? Readable.from([]) : Readable.fromWeb(response.body);

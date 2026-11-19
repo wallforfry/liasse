@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { deleteDocument } from '../../ingest/delete-document.ts';
+import { SourceFileUnavailableError } from '../../ingest/document-file.ts';
 import { ingestFile } from '../../ingest/ingest-file.ts';
 import { syntheticPdf } from '../../testing/synthetic-files.ts';
 import { openSourceSecret } from '../secret.ts';
@@ -95,6 +96,86 @@ describe('a Drive source', () => {
     await harness.poll(source);
 
     expect(await names()).toEqual(['target.pdf']);
+  });
+
+  it('never downloads nor reports a file that no supported format matches', async () => {
+    const { drive } = harness.google;
+    const folder = drive.folder('Mixed');
+    drive.file('kept.pdf', folder, syntheticPdf('kept'));
+    drive.file('scan.PDF', folder, syntheticPdf('scan'), 'application/octet-stream');
+    const leftOut = [
+      drive.file('film.torrent', folder, syntheticPdf('torrent'), 'application/x-bittorrent'),
+      drive.file('clip.MOV', folder, syntheticPdf('clip'), 'video/quicktime'),
+      drive.file('README', folder, syntheticPdf('readme'), 'application/octet-stream'),
+    ];
+    const source = await harness.addDriveSource(folder);
+
+    await harness.poll(source);
+
+    expect(await names()).toEqual(['kept.pdf', 'scan.PDF']);
+    expect(await harness.lastRun(source)).toMatchObject({
+      ingested: 2,
+      skipped: 0,
+      skipped_items: [],
+      error: null,
+    });
+    const downloads = harness.google.driveRequests().filter((call) => call.includes('alt=media'));
+    expect(downloads).toHaveLength(2);
+    expect(downloads.filter((call) => leftOut.some((id) => call.includes(id)))).toEqual([]);
+  });
+
+  it.each(['cannotDownloadAbusiveFile', 'cannotDownloadFile', 'insufficientFilePermissions'])(
+    'skips a file Drive refuses with 403 %s, and reads the others',
+    async (reason) => {
+      const { drive } = harness.google;
+      const folder = drive.folder('Refused');
+      const refused = drive.file('refused.pdf', folder, syntheticPdf('refused'));
+      drive.refuseDownload(refused, { status: 403, reason });
+      drive.file('after.pdf', folder, syntheticPdf('after'));
+      const source = await harness.addDriveSource(folder);
+
+      await harness.poll(source);
+
+      expect(await names()).toEqual(['after.pdf']);
+      const run = await harness.lastRun(source);
+      expect(run).toMatchObject({ ingested: 1, skipped: 1, error: null });
+      expect(run.skipped_items).toMatchObject([{ external_id: refused, name: 'refused.pdf' }]);
+      expect(run.skipped_items[0]?.reason).toContain(reason);
+    },
+  );
+
+  it.each([
+    { status: 403, reason: 'userRateLimitExceeded' },
+    { status: 403, reason: 'rateLimitExceeded' },
+    { status: 429, reason: 'rateLimitExceeded' },
+  ])('ends the run on a rate limit ($status $reason), for the retries', async (refusal) => {
+    const { drive } = harness.google;
+    const folder = drive.folder('Limited');
+    const limited = drive.file('limited.pdf', folder, syntheticPdf('limited'));
+    drive.refuseDownload(limited, refusal);
+    const source = await harness.addDriveSource(folder);
+
+    await expect(harness.poll(source)).rejects.toThrow(/rate of requests/);
+
+    expect(await names()).toEqual([]);
+    const run = await harness.lastRun(source);
+    expect(run).toMatchObject({ skipped: 0, error: { kind: 'transient' } });
+    expect(run.error?.message).toContain(refusal.reason);
+  });
+
+  it('answers a stored file Drive now refuses to serve as unavailable', async () => {
+    const { drive } = harness.google;
+    const folder = drive.folder('Flagged later');
+    const file = drive.file('flagged.pdf', folder, syntheticPdf('flagged'));
+    const source = await harness.addDriveSource(folder);
+    await harness.poll(source);
+    const [document] = await harness.liveDocuments();
+    if (document === undefined) throw new Error('The file was not ingested');
+    drive.refuseDownload(file, { status: 403, reason: 'cannotDownloadAbusiveFile' });
+
+    await expect(harness.sourceFiles().open(document.id)).rejects.toBeInstanceOf(
+      SourceFileUnavailableError,
+    );
   });
 
   it('marks a trashed file removed, keeps its document, and clears the mark on a restore', async () => {
