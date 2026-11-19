@@ -56,6 +56,8 @@ describe('the API keys page', () => {
       '2026-11-14 08:30 UTC',
       'Delete',
     ]);
+    expect(within(row).getByText('lia_ab...')).toHaveClass('font-mono');
+    expect(screen.getByRole('columnheader', { name: 'Starts with' })).toHaveClass('font-mono');
   });
 
   it('creates a key and shows it once', async () => {
