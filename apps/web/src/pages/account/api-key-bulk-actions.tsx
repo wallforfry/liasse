@@ -23,6 +23,7 @@ export const ApiKeyBulkActions = ({ rows, clear }: BulkActionsProps<ApiKey>) => 
       noun="API key"
       done="deleted"
       confirmation={{
+        destructive: true,
         title: `Delete ${plural(rows.length, 'API key')}?`,
         description:
           'The programs that use these keys can no longer call Liasse. This cannot be undone.',

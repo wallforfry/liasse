@@ -5,9 +5,15 @@ import { AuthApiError } from './auth-result.ts';
 export const isUnauthorized = (error: unknown): boolean =>
   (error instanceof LiasseApiError || error instanceof AuthApiError) && error.status === 401;
 
+/** A refusal of the UI itself, before any request: its message is written for the person. */
+export class UiRefusal extends Error {
+  override readonly name = 'UiRefusal';
+}
+
 /** What to tell the person: the message the server wrote, or what went wrong on the way. */
 export const errorMessage = (error: unknown): string => {
   if (error instanceof LiasseApiError || error instanceof AuthApiError) return error.message;
+  if (error instanceof UiRefusal) return error.message;
   if (error instanceof LiasseResponseError) {
     return `The server answered in an unexpected way (HTTP ${String(error.status)}).`;
   }

@@ -66,7 +66,7 @@ describe('the bulk actions of the document list', () => {
 
     const bar = screen.getByRole('toolbar', { name: 'Actions on the selected rows' });
     expect(within(bar).getByText('1 row selected')).toBeInTheDocument();
-    expect(within(bar).getByRole('button', { name: 'Retry failed (0)' })).toBeDisabled();
+    expect(within(bar).queryByRole('button', { name: /Retry failed/ })).toBeNull();
     await user.click(within(bar).getByRole('button', { name: 'Clear selection' }));
     expect(screen.queryByRole('toolbar')).toBeNull();
     expect(screen.getByRole('checkbox', { name: 'Select Indexed bill' })).not.toBeChecked();

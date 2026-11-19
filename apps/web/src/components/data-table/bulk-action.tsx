@@ -30,7 +30,11 @@ export interface BulkActionProps<TData> {
   /** What the action did to a row: `deleted`. */
   readonly done: string;
   /** Asks before running, with these words; a destructive action always has them. */
-  readonly confirmation?: { readonly title: string; readonly description: string };
+  readonly confirmation?: {
+    readonly title: string;
+    readonly description: string;
+    readonly destructive?: boolean;
+  };
 }
 
 const report = (outcome: BulkOutcome, noun: string, done: string) => {
@@ -90,7 +94,7 @@ export const BulkAction = <TData,>({
         <AlertDialogFooter>
           <AlertDialogCancel>Cancel</AlertDialogCancel>
           <AlertDialogAction
-            variant="destructive"
+            variant={confirmation.destructive === true ? 'destructive' : 'default'}
             onClick={() => {
               bulk.mutate();
             }}

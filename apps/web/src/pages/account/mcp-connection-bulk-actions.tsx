@@ -23,6 +23,7 @@ export const McpConnectionBulkActions = ({ rows, clear }: BulkActionsProps<McpCo
       noun="MCP connection"
       done="revoked"
       confirmation={{
+        destructive: true,
         title: `Revoke ${plural(rows.length, 'MCP connection')}?`,
         description:
           'These clients can no longer call Liasse: their tokens stop working now. Each can connect again only through a new authorization, which you would have to accept.',
