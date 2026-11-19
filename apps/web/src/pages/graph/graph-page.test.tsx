@@ -369,7 +369,7 @@ describe('the graph page', () => {
     expect(typeLabel()?.getAttribute('font-size')).toBe('11');
   });
 
-  it('keeps the view the user chose while a search matches the same nodes', async () => {
+  it('keeps the view the user chose while a search matches the same nodes, not other ones', async () => {
     withReducedMotion();
     renderApp('/graph', fakeServer(graphAnswer).fetch);
     await nodeButton('type energy_contract');
@@ -380,8 +380,14 @@ describe('the graph page', () => {
     const chosen = contentTransform();
 
     await userEvent.type(search, ' ');
-
     expect(contentTransform()).toBe(chosen);
+
+    // As many matches, other nodes, with no empty search between: the view fits them.
+    fireEvent.change(search, { target: { value: 'energy' } });
+    await screen.findByRole('button', { name: 'type energy_contract' });
+    await waitFor(() => {
+      expect(contentTransform()).not.toBe(chosen);
+    });
   });
 
   it('draws only the nodes a search matches and their neighbors, case and accents aside', async () => {
