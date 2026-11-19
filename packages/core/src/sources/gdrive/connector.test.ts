@@ -124,44 +124,70 @@ describe('a Drive source', () => {
     expect(downloads.filter((call) => leftOut.some((id) => call.includes(id)))).toEqual([]);
   });
 
-  it.each(['cannotDownloadAbusiveFile', 'cannotDownloadFile', 'insufficientFilePermissions'])(
-    'skips a file Drive refuses with 403 %s, and reads the others',
-    async (reason) => {
-      const { drive } = harness.google;
-      const folder = drive.folder('Refused');
-      const refused = drive.file('refused.pdf', folder, syntheticPdf('refused'));
-      drive.refuseDownload(refused, { status: 403, reason });
-      drive.file('after.pdf', folder, syntheticPdf('after'));
-      const source = await harness.addDriveSource(folder);
+  it.each([
+    'cannotDownloadAbusiveFile',
+    'cannotDownloadFile',
+    'insufficientFilePermissions',
+    'appNotAuthorizedToFile',
+  ])('skips a file Drive refuses with 403 %s, and reads the others', async (reason) => {
+    const { drive } = harness.google;
+    const folder = drive.folder('Refused');
+    const refused = drive.file('refused.pdf', folder, syntheticPdf('refused'));
+    drive.refuse(refused, { status: 403, reason });
+    drive.file('after.pdf', folder, syntheticPdf('after'));
+    const source = await harness.addDriveSource(folder);
 
-      await harness.poll(source);
+    await harness.poll(source);
 
-      expect(await names()).toEqual(['after.pdf']);
-      const run = await harness.lastRun(source);
-      expect(run).toMatchObject({ ingested: 1, skipped: 1, error: null });
-      expect(run.skipped_items).toMatchObject([{ external_id: refused, name: 'refused.pdf' }]);
-      expect(run.skipped_items[0]?.reason).toContain(reason);
-    },
-  );
+    expect(await names()).toEqual(['after.pdf']);
+    const run = await harness.lastRun(source);
+    expect(run).toMatchObject({ ingested: 1, skipped: 1, error: null });
+    expect(run.skipped_items).toMatchObject([{ external_id: refused, name: 'refused.pdf' }]);
+    expect(run.skipped_items[0]?.reason).toContain(reason);
+  });
 
   it.each([
     { status: 403, reason: 'userRateLimitExceeded' },
     { status: 403, reason: 'rateLimitExceeded' },
+    { status: 403, reason: 'downloadQuotaExceeded' },
     { status: 429, reason: 'rateLimitExceeded' },
-  ])('ends the run on a rate limit ($status $reason), for the retries', async (refusal) => {
+    { status: 429, reason: 'anythingElse' },
+  ])('ends the run on a limit ($status $reason), for the retries', async (refusal) => {
     const { drive } = harness.google;
     const folder = drive.folder('Limited');
     const limited = drive.file('limited.pdf', folder, syntheticPdf('limited'));
-    drive.refuseDownload(limited, refusal);
+    drive.refuse(limited, refusal);
     const source = await harness.addDriveSource(folder);
 
-    await expect(harness.poll(source)).rejects.toThrow(/rate of requests/);
+    await expect(harness.poll(source)).rejects.toThrow(/a later attempt resumes/);
 
     expect(await names()).toEqual([]);
     const run = await harness.lastRun(source);
     expect(run).toMatchObject({ skipped: 0, error: { kind: 'transient' } });
     expect(run.error?.message).toContain(refusal.reason);
   });
+
+  it.each([
+    { status: 500, reason: 'cannotDownloadFile', of: 'download' },
+    { status: 403, reason: 'insufficientFilePermissions', of: 'metadata' },
+  ] as const)(
+    'ends the run when $status $reason refuses the $of, never skipping the file',
+    async (refusal) => {
+      const { drive } = harness.google;
+      const folder = drive.folder('Not a file refusal');
+      const file = drive.file('held.pdf', folder, syntheticPdf('held'));
+      // The metadata a run reads is that of its folder; a download is that of the file.
+      drive.refuse(refusal.of === 'metadata' ? folder : file, refusal);
+      const source = await harness.addDriveSource(folder);
+
+      await expect(harness.poll(source)).rejects.toThrow(
+        `Drive answered ${String(refusal.status)} to files (${refusal.reason}).`,
+      );
+
+      const run = await harness.lastRun(source);
+      expect(run).toMatchObject({ skipped: 0, skipped_items: [], error: { kind: 'transient' } });
+    },
+  );
 
   it('answers a stored file Drive now refuses to serve as unavailable', async () => {
     const { drive } = harness.google;
@@ -171,7 +197,7 @@ describe('a Drive source', () => {
     await harness.poll(source);
     const [document] = await harness.liveDocuments();
     if (document === undefined) throw new Error('The file was not ingested');
-    drive.refuseDownload(file, { status: 403, reason: 'cannotDownloadAbusiveFile' });
+    drive.refuse(file, { status: 403, reason: 'cannotDownloadAbusiveFile' });
 
     await expect(harness.sourceFiles().open(document.id)).rejects.toBeInstanceOf(
       SourceFileUnavailableError,

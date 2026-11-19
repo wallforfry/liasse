@@ -32,7 +32,7 @@ export const createDriveApi = (base: string, accessToken: AccessToken): DriveApi
     path: string,
     query: Readonly<Record<string, string>>,
     signal: AbortSignal | undefined,
-    perFile = false,
+    { perFile }: { readonly perFile: boolean } = { perFile: false },
   ): Promise<Response | undefined> => {
     const url = new URL(`${base}/${path}`);
     url.search = new URLSearchParams(query).toString();
@@ -47,7 +47,7 @@ export const createDriveApi = (base: string, accessToken: AccessToken): DriveApi
       return undefined;
     }
     const reasons = await refusalReasons(response);
-    throw refusalOf(response.status, path.split('/')[0] ?? '', reasons, perFile);
+    throw refusalOf({ status: response.status, call: path.split('/')[0] ?? '', reasons, perFile });
   };
   const json = async <Output>(
     schema: z.ZodType<Output>,
@@ -126,7 +126,7 @@ export const createDriveApi = (base: string, accessToken: AccessToken): DriveApi
         `files/${encodeURIComponent(id)}`,
         { alt: 'media', supportsAllDrives: 'true' },
         signal,
-        true,
+        { perFile: true },
       );
       if (response === undefined) return undefined;
       return response.body === null ? Readable.from([]) : Readable.fromWeb(response.body);

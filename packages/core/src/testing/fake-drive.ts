@@ -11,14 +11,16 @@ interface StoredFile {
   readonly trashed: boolean;
   readonly bytes?: Uint8Array;
   readonly target?: string;
-  /** What a download of the file answers instead of its bytes. */
+  /** What a request of the file answers instead of its bytes or its metadata. */
   readonly refusal?: DriveRefusal;
 }
 
-/** A refusal of a download, as Drive answers one: a status and the reason of its body. */
+/** A refusal, as Drive answers one: a status and the reason of its body. */
 export interface DriveRefusal {
   readonly status: number;
   readonly reason: string;
+  /** The request refused: the download of the bytes (the default), or the metadata. */
+  readonly of?: 'download' | 'metadata';
 }
 
 /** The files of a Drive as the fake serves them, and a change log of every edit. */
@@ -32,8 +34,8 @@ export interface FakeDriveState {
   readonly googleDoc: (name: string, parent: string) => string;
   readonly shortcut: (name: string, parent: string, target: string) => string;
   readonly update: (id: string, bytes: Uint8Array) => void;
-  /** Every later download of the file answers this refusal; its listing is unchanged. */
-  readonly refuseDownload: (id: string, refusal: DriveRefusal) => void;
+  /** Every later request of the file answers this refusal; listings of its folder do not. */
+  readonly refuse: (id: string, refusal: DriveRefusal) => void;
   readonly trash: (id: string) => void;
   readonly restore: (id: string) => void;
   readonly move: (id: string, parent: string) => void;
@@ -99,7 +101,7 @@ export const createFakeDriveState = (): FakeDriveState => {
     update: (id, bytes) => {
       edit(id, { bytes });
     },
-    refuseDownload: (id, refusal) => {
+    refuse: (id, refusal) => {
       const file = files.get(id);
       if (file === undefined) throw new Error(`The fake Drive has no file ${id}`);
       files.set(id, { ...file, refusal });

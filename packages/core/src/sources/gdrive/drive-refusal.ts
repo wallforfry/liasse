@@ -8,10 +8,14 @@ const errorBodySchema = z.object({
 // A reason is a camel-case code; anything else is not repeated in a message.
 const REASON = /^[A-Za-z]{1,64}$/;
 
-// Drive answers a rate limit with 429 or with 403 and one of these reasons.
-const RATE_LIMIT_REASONS: ReadonlySet<string> = new Set([
+// Limits that lift on their own: the run ends without moving its cursor, and a retry of the
+// queue resumes. Drive answers a rate limit with 429 or with 403 and one of the first two
+// reasons. `downloadQuotaExceeded` limits the downloads of one file for up to a day: the
+// source waits for it rather than skipping, for good, a file it could read later.
+const LIMIT_REASONS: ReadonlySet<string> = new Set([
   'userRateLimitExceeded',
   'rateLimitExceeded',
+  'downloadQuotaExceeded',
 ]);
 
 // The 403 reasons that concern the one file downloaded, never the account: the next
@@ -25,17 +29,35 @@ const FILE_REFUSALS: ReadonlyMap<string, string> = new Map([
 ]);
 
 const ERROR_BODY_TIMEOUT_MS = 5_000;
+// Drive's error bodies are a few hundred bytes; what is past this is not read.
+const ERROR_BODY_MAX_BYTES = 64 * 1024;
+
+// Passes the first `max` bytes, then ends the stream, which cancels the rest of the body.
+const firstBytes = (max: number): TransformStream<Uint8Array, Uint8Array> => {
+  let left = max;
+  return new TransformStream({
+    transform: (chunk, controller) => {
+      controller.enqueue(chunk.subarray(0, left));
+      left -= Math.min(left, chunk.byteLength);
+      if (left === 0) controller.terminate();
+    },
+  });
+};
 
 /**
- * The reasons of a refused request. A body that is not Drive's JSON, or does not come in
- * time, gives none: the request is then refused for its status alone.
+ * The reasons of a refused request. A body that is not Drive's JSON, is larger than an
+ * error body, or does not come within `timeoutMs`, gives none: the request is then refused
+ * for its status alone.
  */
-export const refusalReasons = async (response: Response): Promise<readonly string[]> => {
+export const refusalReasons = async (
+  response: Response,
+  timeoutMs = ERROR_BODY_TIMEOUT_MS,
+): Promise<readonly string[]> => {
   if (response.body === null) return [];
   try {
     const text = await new Response(
-      response.body.pipeThrough(new TransformStream<Uint8Array, Uint8Array>(), {
-        signal: AbortSignal.timeout(ERROR_BODY_TIMEOUT_MS),
+      response.body.pipeThrough(firstBytes(ERROR_BODY_MAX_BYTES), {
+        signal: AbortSignal.timeout(timeoutMs),
       }),
     ).text();
     const body = errorBodySchema.safeParse(JSON.parse(text));
@@ -45,23 +67,24 @@ export const refusalReasons = async (response: Response): Promise<readonly strin
   }
 };
 
-/**
- * The error of a request Drive refused with `status`, other than 404. Only a download
- * (`perFile`) is refused for one file: the same reasons on a listing concern the source.
- */
-export const refusalOf = (
-  status: number,
-  call: string,
-  reasons: readonly string[],
-  perFile: boolean,
-): Error => {
+export interface RefusedRequest {
+  readonly status: number;
+  /** The resource called, as named in a message: `files`, `changes`. */
+  readonly call: string;
+  readonly reasons: readonly string[];
+  /** The request reads the bytes of one file: only then is a refusal about that file. */
+  readonly perFile: boolean;
+}
+
+/** The error of a request Drive refused, with any status but 404. */
+export const refusalOf = ({ status, call, reasons, perFile }: RefusedRequest): Error => {
   if (status === 401) {
     return new DriveUnauthorizedError('Drive refused the authorization of the source.');
   }
   const named = reasons.filter((reason) => REASON.test(reason));
   const told = named.length === 0 ? '' : ` (${named.join(', ')})`;
-  if (status === 429 || named.some((reason) => RATE_LIMIT_REASONS.has(reason))) {
-    return new Error(`Drive limits the rate of requests${told}: a later attempt resumes.`);
+  if (status === 429 || named.some((reason) => LIMIT_REASONS.has(reason))) {
+    return new Error(`Drive limits requests or downloads for now${told}: a later attempt resumes.`);
   }
   const fileRefusal = [...FILE_REFUSALS].find(([reason]) => named.includes(reason));
   if (perFile && status === 403 && fileRefusal !== undefined) {
