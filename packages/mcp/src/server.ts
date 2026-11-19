@@ -3,6 +3,7 @@ import packageJson from '../package.json' with { type: 'json' };
 import type { McpDeps } from './deps.ts';
 import { registerResources } from './resources.ts';
 import { registerDocumentTools } from './tools/documents.ts';
+import { registerFlaggedReclassificationTool } from './tools/flagged-reclassification.ts';
 import { registerKnowledgeTools } from './tools/knowledge.ts';
 import { registerRegistryTools } from './tools/registry.ts';
 import { registerSearchTools } from './tools/search.ts';
@@ -30,6 +31,7 @@ export const createMcpServer = (deps: McpDeps): McpServer => {
   });
   registerSearchTools(server, deps);
   registerDocumentTools(server, deps);
+  registerFlaggedReclassificationTool(server, deps);
   registerRegistryTools(server, deps);
   registerKnowledgeTools(server, deps);
   registerResources(server, deps);

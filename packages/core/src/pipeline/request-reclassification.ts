@@ -5,13 +5,18 @@ import { documents } from '../db/schema/documents.ts';
 import { writeIfLive } from '../ingest/live-write.ts';
 import { cleanHint } from '../ingest/untrusted-text.ts';
 import { enqueue } from '../jobs/enqueue.ts';
-import { loadDocument } from './document.ts';
+import { loadDocument, type PipelineDocument } from './document.ts';
 import { reclassifyDocumentJob } from './jobs.ts';
 import { hasPendingWrite } from './pending-write.ts';
 
 export interface ReclassificationRequest {
   readonly hint?: string | undefined;
   readonly newType?: boolean | undefined;
+  /**
+   * What the document must still be, read under its row lock, for a request that chose it
+   * from a list read before; a document that no longer is counts as not settled.
+   */
+  readonly onlyIf?: (document: PipelineDocument) => boolean;
 }
 
 export type ReclassificationOutcome = 'queued' | 'not_settled' | 'not_found';
@@ -31,7 +36,7 @@ const withRejected = (rejected: readonly string[], typeId: string | null): reado
 export const requestReclassification = async (
   db: Database,
   documentId: string,
-  { hint, newType }: ReclassificationRequest,
+  { hint, newType, onlyIf = () => true }: ReclassificationRequest,
 ): Promise<ReclassificationOutcome> => {
   const outcome = await writeIfLive(
     db,
@@ -39,7 +44,11 @@ export const requestReclassification = async (
     async (tx): Promise<ReclassificationOutcome> => {
       const document = await loadDocument(tx, documentId);
       if (document === undefined) return 'not_found';
-      if (!SETTLED_STATUSES.includes(document.status) || (await hasPendingWrite(tx, documentId))) {
+      if (
+        !SETTLED_STATUSES.includes(document.status) ||
+        !onlyIf(document) ||
+        (await hasPendingWrite(tx, documentId))
+      ) {
         return 'not_settled';
       }
       await tx

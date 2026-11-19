@@ -31,6 +31,10 @@ export { createPipelineHandlers } from './handlers.ts';
 export { reclassifyDocumentJob, reextractDocumentJob, reindexDocumentJob } from './jobs.ts';
 export { processDocument, reextractDocument, reindexDocument } from './process-document.ts';
 export { reclassifyDocument } from './reclassify-document.ts';
+export {
+  type FlaggedReclassificationCounts,
+  requestFlaggedReclassifications,
+} from './reclassify-flagged.ts';
 export { suggestType, type SuggestTypeDeps } from './suggest-type.ts';
 export {
   type ReclassificationOutcome,

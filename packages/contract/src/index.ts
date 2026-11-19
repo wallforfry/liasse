@@ -71,6 +71,14 @@ export {
   uploadResultSchema,
 } from './documents.ts';
 export {
+  DEFAULT_FLAGGED_RECLASSIFICATION_LIMIT,
+  type FlaggedReclassification,
+  type FlaggedReclassificationResult,
+  flaggedReclassificationResultSchema,
+  flaggedReclassificationSchema,
+  MAX_FLAGGED_RECLASSIFICATION_LIMIT,
+} from './flagged-reclassification.ts';
+export {
   CHANGE_DECISIONS,
   MAX_CHANGE_NOTE_LENGTH,
   type ChangeDecision,

@@ -1,4 +1,4 @@
-import { and, inArray } from 'drizzle-orm';
+import { inArray, type SQL, type SQLWrapper, sql } from 'drizzle-orm';
 import type { Database } from '../db/client.ts';
 import { jobs, unfinishedJobOfDocument } from '../db/schema/jobs.ts';
 import type { Transaction } from '../ingest/existing-document.ts';
@@ -10,6 +10,10 @@ const WRITING_KINDS = [processDocumentJob, reextractDocumentJob, reclassifyDocum
   ({ name }) => name,
 );
 
+/** The condition on `jobs` of a job that writes the type or the fields of the document. */
+export const pendingWriteOf = (documentId: SQLWrapper | string): SQL =>
+  sql`${inArray(jobs.kind, WRITING_KINDS)} and ${unfinishedJobOfDocument(documentId)}`;
+
 /** Whether a job that writes the type or the fields of the document is queued or running. */
 export const hasPendingWrite = async (
   db: Database | Transaction,
@@ -18,7 +22,7 @@ export const hasPendingWrite = async (
   const [pending] = await db
     .select({ id: jobs.id })
     .from(jobs)
-    .where(and(inArray(jobs.kind, WRITING_KINDS), unfinishedJobOfDocument(documentId)))
+    .where(pendingWriteOf(documentId))
     .limit(1);
   return pending !== undefined;
 };
