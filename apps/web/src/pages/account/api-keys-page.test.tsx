@@ -48,6 +48,7 @@ describe('the API keys page', () => {
         .getAllByRole('cell')
         .map((cell) => cell.textContent),
     ).toEqual([
+      '',
       'Synthetic agent',
       'lia_ab...',
       '2026-11-01 10:00 UTC',
@@ -55,6 +56,8 @@ describe('the API keys page', () => {
       '2026-11-14 08:30 UTC',
       'Delete',
     ]);
+    expect(within(row).getByText('lia_ab...')).toHaveClass('font-mono');
+    expect(screen.getByRole('columnheader', { name: 'Starts with' })).toHaveClass('font-mono');
   });
 
   it('creates a key and shows it once', async () => {
@@ -101,5 +104,33 @@ describe('the API keys page', () => {
     const deletion = server.requests.find(({ path }) => path === authPath('/api-key/delete'));
     expect(deletion?.method).toBe('POST');
     expect(jsonBody(deletion)).toEqual({ keyId: 'key_synthetic' });
+  });
+
+  it('deletes the selected keys at once after the confirmation', async () => {
+    const second = { ...API_KEY, id: 'key_second', name: 'Second agent' };
+    const server = fakeServer((request) =>
+      request.path.startsWith(authPath('/api-key/list'))
+        ? json({ apiKeys: [API_KEY, second], total: 2 })
+        : apiKeys(request),
+    );
+    renderApp('/account/api-keys', server.fetch);
+    const user = userEvent.setup();
+    await user.click(await screen.findByRole('checkbox', { name: 'Select all rows' }));
+    await user.click(screen.getByRole('button', { name: 'Delete (2)' }));
+    const dialog = await screen.findByRole('alertdialog');
+    expect(within(dialog).getByText('Delete 2 API keys?')).toBeInTheDocument();
+    await user.click(within(dialog).getByRole('button', { name: 'Delete' }));
+
+    expect(await screen.findByText('2 API keys deleted.')).toBeInTheDocument();
+    const deletions = server.requests
+      .filter(({ path }) => path === authPath('/api-key/delete'))
+      .map(jsonBody);
+    expect(deletions).toEqual(
+      expect.arrayContaining([{ keyId: 'key_synthetic' }, { keyId: 'key_second' }]),
+    );
+    expect(deletions).toHaveLength(2);
+    await waitFor(() => {
+      expect(listings(server.requests)).toBe(2);
+    });
   });
 });

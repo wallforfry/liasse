@@ -2,18 +2,13 @@ import { useQuery } from '@tanstack/react-query';
 import { unwrap } from '../../api/auth-result.ts';
 import { type ApiKey, apiKeyListSchema } from '../../api/auth-schemas.ts';
 import { useAuth } from '../../api/session.ts';
+import { DataTable } from '../../components/data-table/data-table.tsx';
+import { dataTableColumns } from '../../components/data-table/data-table-columns.ts';
 import { ErrorAlert } from '../../components/error-alert.tsx';
 import { PageHeader } from '../../components/page-header.tsx';
 import { Skeleton } from '../../components/ui/skeleton.tsx';
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '../../components/ui/table.tsx';
 import { formatTime } from '../../lib/format.ts';
+import { ApiKeyBulkActions } from './api-key-bulk-actions.tsx';
 import { API_KEYS_QUERY_KEY } from './api-keys-query.ts';
 import { CreateApiKey } from './create-api-key.tsx';
 import { DeleteApiKey } from './delete-api-key.tsx';
@@ -21,23 +16,44 @@ import { DeleteApiKey } from './delete-api-key.tsx';
 const shownTime = (date: Date | null): string =>
   date === null ? 'Never' : formatTime(date.toISOString());
 
-const ApiKeyRow = ({ apiKey }: { readonly apiKey: ApiKey }) => {
-  const name = apiKey.name ?? 'Unnamed key';
-  return (
-    <TableRow>
-      <TableCell className="font-medium">{name}</TableCell>
-      <TableCell className="font-mono text-xs">
-        {apiKey.start === null ? null : `${apiKey.start}...`}
-      </TableCell>
-      <TableCell>{shownTime(apiKey.createdAt)}</TableCell>
-      <TableCell>{shownTime(apiKey.expiresAt)}</TableCell>
-      <TableCell>{shownTime(apiKey.lastRequest)}</TableCell>
-      <TableCell className="text-right">
-        <DeleteApiKey id={apiKey.id} name={name} />
-      </TableCell>
-    </TableRow>
-  );
-};
+const apiKeyName = (apiKey: ApiKey): string => apiKey.name ?? 'Unnamed key';
+
+const column = dataTableColumns<ApiKey>();
+
+const columns = column.columns([
+  column.display({
+    id: 'name',
+    header: 'Name',
+    meta: { className: 'font-medium' },
+    cell: ({ row }) => apiKeyName(row.original),
+  }),
+  column.accessor('start', {
+    header: 'Starts with',
+    meta: { className: 'font-mono text-xs' },
+    cell: ({ getValue }) => {
+      const start = getValue();
+      return start === null ? null : `${start}...`;
+    },
+  }),
+  column.accessor('createdAt', {
+    header: 'Created',
+    cell: ({ getValue }) => shownTime(getValue()),
+  }),
+  column.accessor('expiresAt', {
+    header: 'Expires',
+    cell: ({ getValue }) => shownTime(getValue()),
+  }),
+  column.accessor('lastRequest', {
+    header: 'Last used',
+    cell: ({ getValue }) => shownTime(getValue()),
+  }),
+  column.display({
+    id: 'actions',
+    header: () => <span className="sr-only">Actions</span>,
+    meta: { className: 'text-right' },
+    cell: ({ row }) => <DeleteApiKey id={row.original.id} name={apiKeyName(row.original)} />,
+  }),
+]);
 
 /** The API keys of the account: what the SDK and other programs authenticate with. */
 export const ApiKeysPage = () => {
@@ -54,25 +70,13 @@ export const ApiKeysPage = () => {
       return <p className="text-sm text-muted-foreground">No API key yet.</p>;
     }
     return (
-      <Table>
-        <TableHeader>
-          <TableRow>
-            <TableHead>Name</TableHead>
-            <TableHead>Starts with</TableHead>
-            <TableHead>Created</TableHead>
-            <TableHead>Expires</TableHead>
-            <TableHead>Last used</TableHead>
-            <TableHead>
-              <span className="sr-only">Actions</span>
-            </TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {keys.data.map((apiKey) => (
-            <ApiKeyRow key={apiKey.id} apiKey={apiKey} />
-          ))}
-        </TableBody>
-      </Table>
+      <DataTable
+        columns={columns}
+        data={keys.data}
+        getRowId={({ id }) => id}
+        rowLabel={apiKeyName}
+        bulkActions={ApiKeyBulkActions}
+      />
     );
   })();
 

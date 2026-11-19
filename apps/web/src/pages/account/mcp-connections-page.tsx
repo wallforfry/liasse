@@ -1,50 +1,69 @@
 import type { McpConnection } from '@liasse/contract';
 import { useQuery } from '@tanstack/react-query';
 import { useAuth } from '../../api/session.ts';
+import { DataTable } from '../../components/data-table/data-table.tsx';
+import { dataTableColumns } from '../../components/data-table/data-table-columns.ts';
 import { ErrorAlert } from '../../components/error-alert.tsx';
 import { PageHeader } from '../../components/page-header.tsx';
 import { Skeleton } from '../../components/ui/skeleton.tsx';
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '../../components/ui/table.tsx';
 import { formatTime } from '../../lib/format.ts';
+import { McpConnectionBulkActions } from './mcp-connection-bulk-actions.tsx';
 import { listMcpConnections, MCP_CONNECTIONS_QUERY_KEY } from './mcp-connections-api.ts';
 import { RevokeMcpConnection } from './revoke-mcp-connection.tsx';
 
-const ConnectionRow = ({ connection }: { readonly connection: McpConnection }) => {
-  const name = connection.name ?? connection.client_id;
-  return (
-    <TableRow>
-      <TableCell className="font-medium">{name}</TableCell>
-      <TableCell className="max-w-64 font-mono text-xs break-all whitespace-normal">
-        {connection.client_id}
-      </TableCell>
-      <TableCell className="max-w-64 text-xs break-all whitespace-normal">
-        {connection.redirect_uris.join(', ')}
-      </TableCell>
-      <TableCell className="text-xs">
-        {connection.granted_scopes.length === 0 ? 'None' : connection.granted_scopes.join(' ')}
-      </TableCell>
-      <TableCell>{connection.active_tokens}</TableCell>
-      <TableCell>
-        {connection.created_at === null ? 'Unknown' : formatTime(connection.created_at)}
-      </TableCell>
-      <TableCell>
-        {connection.last_token_issued_at === null
-          ? 'Never'
-          : formatTime(connection.last_token_issued_at)}
-      </TableCell>
-      <TableCell className="text-right">
-        <RevokeMcpConnection id={connection.id} name={name} />
-      </TableCell>
-    </TableRow>
-  );
-};
+const connectionName = (connection: McpConnection): string =>
+  connection.name ?? connection.client_id;
+
+const column = dataTableColumns<McpConnection>();
+
+const columns = column.columns([
+  column.display({
+    id: 'name',
+    header: 'Name',
+    meta: { className: 'font-medium' },
+    cell: ({ row }) => connectionName(row.original),
+  }),
+  column.accessor('client_id', {
+    header: 'Client id',
+    meta: { className: 'max-w-64 font-mono text-xs break-all whitespace-normal' },
+  }),
+  column.accessor('redirect_uris', {
+    header: 'Redirect URIs',
+    meta: { className: 'max-w-64 text-xs break-all whitespace-normal' },
+    cell: ({ getValue }) => getValue().join(', '),
+  }),
+  column.accessor('granted_scopes', {
+    header: 'Scopes',
+    meta: { className: 'text-xs' },
+    cell: ({ getValue }) => {
+      const scopes = getValue();
+      return scopes.length === 0 ? 'None' : scopes.join(' ');
+    },
+  }),
+  column.accessor('active_tokens', { header: 'Active tokens' }),
+  column.accessor('created_at', {
+    header: 'Connected',
+    cell: ({ getValue }) => {
+      const created = getValue();
+      return created === null ? 'Unknown' : formatTime(created);
+    },
+  }),
+  column.accessor('last_token_issued_at', {
+    header: 'Last token',
+    cell: ({ getValue }) => {
+      const issued = getValue();
+      return issued === null ? 'Never' : formatTime(issued);
+    },
+  }),
+  column.display({
+    id: 'actions',
+    header: () => <span className="sr-only">Actions</span>,
+    meta: { className: 'text-right' },
+    cell: ({ row }) => (
+      <RevokeMcpConnection id={row.original.id} name={connectionName(row.original)} />
+    ),
+  }),
+]);
 
 /** The MCP clients connected to the account through OAuth, each with what it was granted. */
 export const McpConnectionsPage = () => {
@@ -63,27 +82,13 @@ export const McpConnectionsPage = () => {
       return <p className="text-sm text-muted-foreground">No MCP client is connected.</p>;
     }
     return (
-      <Table>
-        <TableHeader>
-          <TableRow>
-            <TableHead>Name</TableHead>
-            <TableHead>Client id</TableHead>
-            <TableHead>Redirect URIs</TableHead>
-            <TableHead>Scopes</TableHead>
-            <TableHead>Active tokens</TableHead>
-            <TableHead>Connected</TableHead>
-            <TableHead>Last token</TableHead>
-            <TableHead>
-              <span className="sr-only">Actions</span>
-            </TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {connections.data.map((connection) => (
-            <ConnectionRow key={connection.id} connection={connection} />
-          ))}
-        </TableBody>
-      </Table>
+      <DataTable
+        columns={columns}
+        data={connections.data}
+        getRowId={({ id }) => id}
+        rowLabel={connectionName}
+        bulkActions={McpConnectionBulkActions}
+      />
     );
   })();
 

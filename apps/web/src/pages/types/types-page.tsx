@@ -1,26 +1,18 @@
 import type { TypeView } from '@liasse/sdk';
-import { createColumnHelper, tableFeatures, useTable } from '@tanstack/react-table';
 import { useState } from 'react';
 import { Link } from 'react-router';
+import { DataTable } from '../../components/data-table/data-table.tsx';
+import { dataTableColumns } from '../../components/data-table/data-table-columns.ts';
 import { ErrorAlert } from '../../components/error-alert.tsx';
 import { PageHeader } from '../../components/page-header.tsx';
 import { Checkbox } from '../../components/ui/checkbox.tsx';
 import { Label } from '../../components/ui/label.tsx';
 import { Skeleton } from '../../components/ui/skeleton.tsx';
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '../../components/ui/table.tsx';
 import { CreateType } from './create-type.tsx';
 import { TypeStatusBadge } from './type-status-badge.tsx';
 import { typePath, useTypes } from './types-query.ts';
 
-const features = tableFeatures({});
-const column = createColumnHelper<typeof features, TypeView>();
+const column = dataTableColumns<TypeView>();
 
 // Descriptions of types the pipeline created were written by the model after reading a
 // document: they are rendered as text only.
@@ -38,6 +30,7 @@ const columns = column.columns([
   }),
   column.accessor('description', {
     header: 'Description',
+    meta: { className: 'whitespace-normal' },
     cell: ({ getValue }) => <span className="text-muted-foreground">{getValue()}</span>,
   }),
   column.accessor('status', {
@@ -50,38 +43,6 @@ const columns = column.columns([
   }),
   column.accessor('document_count', { header: 'Documents' }),
 ]);
-
-const TypeTable = ({ types }: { readonly types: readonly TypeView[] }) => {
-  const table = useTable({ features, columns, data: types });
-  return (
-    <div className="rounded-md border">
-      <Table>
-        <TableHeader>
-          {table.getHeaderGroups().map((group) => (
-            <TableRow key={group.id}>
-              {group.headers.map((header) => (
-                <TableHead key={header.id}>
-                  {header.isPlaceholder ? null : <table.FlexRender header={header} />}
-                </TableHead>
-              ))}
-            </TableRow>
-          ))}
-        </TableHeader>
-        <TableBody>
-          {table.getRowModel().rows.map((row) => (
-            <TableRow key={row.id}>
-              {row.getAllCells().map((cell) => (
-                <TableCell key={cell.id} className="whitespace-normal">
-                  <table.FlexRender cell={cell} />
-                </TableCell>
-              ))}
-            </TableRow>
-          ))}
-        </TableBody>
-      </Table>
-    </div>
-  );
-};
 
 export const TypesPage = () => {
   const [includePrivate, setIncludePrivate] = useState(false);
@@ -112,7 +73,7 @@ export const TypesPage = () => {
           No type yet: the first documents will create them.
         </p>
       ) : (
-        <TypeTable types={types.data.types} />
+        <DataTable columns={columns} data={types.data.types} getRowId={({ slug }) => slug} />
       )}
     </>
   );
