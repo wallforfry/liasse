@@ -6,18 +6,19 @@ import { isDocumentLink } from './graph-model.ts';
 import { GraphNodeMark } from './graph-node.tsx';
 import { type Body, boundsOf, placeOf, type Spring } from './graph-simulation.ts';
 import type { LiveGraph } from './use-graph-simulation.ts';
+import { useLabelLayout } from './use-label-layout.ts';
 import { useNodeDrag } from './use-node-drag.ts';
 import { transformOf, usePanZoom } from './use-pan-zoom.ts';
 
 export interface GraphCanvasProps {
   readonly live: LiveGraph;
   readonly selectedId: string | undefined;
+  /** The nodes a search matched, labelled before the others; none without a search. */
+  readonly matchedIds: ReadonlySet<string> | undefined;
   readonly onSelect: (id: string | undefined) => void;
 }
 
 const BUTTON_ZOOM = 1.4;
-// From this zoom on, documents show their labels too.
-const DOCUMENT_LABEL_SCALE = 2;
 
 const springKey = ({ edge }: Spring): string => `${edge.source} ${edge.target} ${edge.kind}`;
 
@@ -39,7 +40,7 @@ const placeLine = (element: SVGLineElement, { source, target }: Spring): void =>
   element.setAttribute('y2', String(target.y ?? 0));
 };
 
-export const GraphCanvas = ({ live, selectedId, onSelect }: GraphCanvasProps) => {
+export const GraphCanvas = ({ live, selectedId, matchedIds, onSelect }: GraphCanvasProps) => {
   const svgRef = useRef<SVGSVGElement>(null);
   const { viewport, handlers, panned, toContent, zoomBy, fit } = usePanZoom(svgRef);
   const [hoveredId, setHoveredId] = useState<string | undefined>(undefined);
@@ -50,6 +51,11 @@ export const GraphCanvas = ({ live, selectedId, onSelect }: GraphCanvasProps) =>
     () => neighborhoodOf(live.springs, hoveredId ?? selectedId),
     [live.springs, hoveredId, selectedId],
   );
+  const labelOf = useLabelLayout(svgRef, live, {
+    scale: viewport.scale,
+    forced: neighborhood,
+    preferred: matchedIds,
+  });
   const { bounds } = live;
   const center = { x: bounds.x + bounds.width / 2, y: bounds.y + bounds.height / 2 };
 
@@ -116,11 +122,7 @@ export const GraphCanvas = ({ live, selectedId, onSelect }: GraphCanvasProps) =>
               }}
               selected={body.node.id === selectedId}
               dimmed={!inFocus(body.node.id)}
-              labelled={
-                body.node.kind !== 'document' ||
-                neighborhood?.has(body.node.id) === true ||
-                viewport.scale >= DOCUMENT_LABEL_SCALE
-              }
+              registerLabel={labelOf(body)}
               onHover={setHoveredId}
               onSelect={onSelect}
               pointer={pointerOf(body)}

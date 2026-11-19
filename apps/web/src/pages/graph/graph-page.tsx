@@ -4,10 +4,12 @@ import {
   type GraphNodeKind,
 } from '@liasse/contract/domain';
 import type { Graph, GraphNode } from '@liasse/sdk';
-import { useCallback, useMemo, useState } from 'react';
+import { SearchIcon } from 'lucide-react';
+import { useCallback, useDeferredValue, useMemo, useState } from 'react';
 import { ErrorAlert } from '../../components/error-alert.tsx';
 import { PageHeader } from '../../components/page-header.tsx';
 import { Checkbox } from '../../components/ui/checkbox.tsx';
+import { Input } from '../../components/ui/input.tsx';
 import { Label } from '../../components/ui/label.tsx';
 import {
   Select,
@@ -19,7 +21,14 @@ import {
 import { Skeleton } from '../../components/ui/skeleton.tsx';
 import { plural } from '../../lib/format.ts';
 import { GraphCanvas } from './graph-canvas.tsx';
-import { ALL_NODE_KINDS, neighborsOf, NODE_KIND_STYLES, visibleGraph } from './graph-model.ts';
+import {
+  ALL_NODE_KINDS,
+  matchingIds,
+  neighborsOf,
+  NODE_KIND_STYLES,
+  shownNodes,
+  visibleGraph,
+} from './graph-model.ts';
 import { useGraph } from './graph-query.ts';
 import { NodeDetails } from './node-details.tsx';
 import { useGraphSimulation } from './use-graph-simulation.ts';
@@ -62,17 +71,66 @@ const KindFilters = ({
   </fieldset>
 );
 
+const GraphSearch = ({
+  query,
+  matches,
+  onChange,
+}: {
+  readonly query: string;
+  readonly matches: number | undefined;
+  readonly onChange: (query: string) => void;
+}) => (
+  <div className="flex flex-wrap items-center gap-3">
+    <div className="relative w-full max-w-sm">
+      <SearchIcon
+        aria-hidden
+        className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground"
+      />
+      <Input
+        type="search"
+        aria-label="Search the nodes"
+        placeholder="Search the nodes"
+        className="pl-8"
+        value={query}
+        onChange={(event) => {
+          onChange(event.target.value);
+        }}
+      />
+    </div>
+    {matches === undefined ? null : (
+      <p role="status" className="text-sm text-muted-foreground">
+        {matches === 0
+          ? 'No node matches.'
+          : `${plural(matches, 'node')} ${matches === 1 ? 'matches' : 'match'}, shown with their neighbors.`}
+      </p>
+    )}
+  </div>
+);
+
 const GraphView = ({ graph }: { readonly graph: Graph }) => {
   const [kinds, setKinds] = useState<ReadonlySet<GraphNodeKind>>(ALL_NODE_KINDS);
+  const [query, setQuery] = useState('');
+  // Each change of the nodes shown warms the simulation up: typing does not wait on it.
+  const deferredQuery = useDeferredValue(query);
   const [selectedId, setSelectedId] = useState<string | undefined>(undefined);
-  const shownKind = useCallback((node: GraphNode) => kinds.has(node.kind), [kinds]);
-  const live = useGraphSimulation(graph, shownKind);
-  const visible = useMemo(() => visibleGraph(graph, kinds), [graph, kinds]);
+  const matched = useMemo(
+    () =>
+      matchingIds(
+        graph.nodes.filter(({ kind }) => kinds.has(kind)),
+        deferredQuery,
+      ),
+    [graph, deferredQuery, kinds],
+  );
+  const shownIds = useMemo(() => shownNodes(graph, kinds, matched), [graph, kinds, matched]);
+  const isShown = useCallback((node: GraphNode) => shownIds.has(node.id), [shownIds]);
+  const live = useGraphSimulation(graph, isShown);
+  const visible = useMemo(() => visibleGraph(graph, shownIds), [graph, shownIds]);
   const selected = visible.nodes.find(({ id }) => id === selectedId);
   const shown = graph.nodes.filter(({ kind }) => kind === 'document').length;
 
   return (
     <>
+      <GraphSearch query={query} matches={matched?.size} onChange={setQuery} />
       <KindFilters graph={graph} kinds={kinds} onChange={setKinds} />
       <p className="text-sm text-muted-foreground">
         {shown < graph.document_total
@@ -82,7 +140,12 @@ const GraphView = ({ graph }: { readonly graph: Graph }) => {
         is joined to.
       </p>
       <div className="grid gap-4 lg:grid-cols-[1fr_20rem]">
-        <GraphCanvas live={live} selectedId={selected?.id} onSelect={setSelectedId} />
+        <GraphCanvas
+          live={live}
+          selectedId={selected?.id}
+          matchedIds={matched}
+          onSelect={setSelectedId}
+        />
         {selected === undefined ? (
           <p className="rounded-md border border-dashed p-6 text-sm text-muted-foreground">
             Select a node of the graph.
