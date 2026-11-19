@@ -343,13 +343,45 @@ describe('the graph page', () => {
       return text;
     };
     expect(label().getAttribute('display')).toBe('inline');
-    const before = Number(label().getAttribute('font-size'));
+    // One pixel per unit of the view box: the size on screen is the size in the content.
+    expect(label().getAttribute('font-size')).toBe('11');
 
     await userEvent.click(screen.getByRole('button', { name: 'Zoom in' }));
 
     const scale = Number(/scale\((\S+)\)/.exec(contentTransform() ?? '')?.[1]);
     expect(scale).toBeGreaterThan(1);
-    expect(Number(label().getAttribute('font-size'))).toBeCloseTo(before / scale);
+    expect(Number(label().getAttribute('font-size'))).toBeCloseTo(11 / scale);
+  });
+
+  it('sizes the label of a node drawn again, at the same zoom', async () => {
+    withReducedMotion();
+    renderApp('/graph', fakeServer(graphAnswer).fetch);
+    await nodeButton('type energy_contract');
+    const typeLabel = () =>
+      [...document.querySelectorAll('svg text')].find(
+        (text) => text.textContent === 'energy_contract',
+      );
+
+    await userEvent.click(screen.getByLabelText('Types (1)'));
+    expect(typeLabel()).toBeUndefined();
+    await userEvent.click(screen.getByLabelText('Types (1)'));
+
+    expect(typeLabel()?.getAttribute('font-size')).toBe('11');
+  });
+
+  it('keeps the view the user chose while a search matches the same nodes', async () => {
+    withReducedMotion();
+    renderApp('/graph', fakeServer(graphAnswer).fetch);
+    await nodeButton('type energy_contract');
+    const search = screen.getByRole('searchbox', { name: 'Search the nodes' });
+    await userEvent.type(search, 'flat');
+    await screen.findByText('1 node matches, shown with their neighbors.');
+    await userEvent.click(screen.getByRole('button', { name: 'Zoom in' }));
+    const chosen = contentTransform();
+
+    await userEvent.type(search, ' ');
+
+    expect(contentTransform()).toBe(chosen);
   });
 
   it('draws only the nodes a search matches and their neighbors, case and accents aside', async () => {

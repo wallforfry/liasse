@@ -20,6 +20,14 @@ export interface GraphCanvasProps {
 
 const BUTTON_ZOOM = 1.4;
 
+const sameIds = (
+  a: ReadonlySet<string> | undefined,
+  b: ReadonlySet<string> | undefined,
+): boolean => {
+  if (a === undefined || b === undefined) return a === b;
+  return a.size === b.size && [...a].every((id) => b.has(id));
+};
+
 const springKey = ({ edge }: Spring): string => `${edge.source} ${edge.target} ${edge.kind}`;
 
 // The node in focus and its neighbors; everything else is dimmed while one is in focus.
@@ -57,10 +65,11 @@ export const GraphCanvas = ({ live, selectedId, matchedIds, onSelect }: GraphCan
     preferred: matchedIds,
   });
   const { bounds } = live;
-  // A new search, or its end, brings what it shows into view; the first paint keeps its view.
+  // Other matches, or the end of a search, bring what is shown into view; the first paint
+  // keeps its view, and a keystroke that matches the same nodes keeps the user's.
   const searched = useRef(matchedIds);
   useEffect(() => {
-    if (searched.current === matchedIds) return;
+    if (sameIds(searched.current, matchedIds)) return;
     searched.current = matchedIds;
     fit(bounds, boundsOf(live.bodies));
   }, [matchedIds, bounds, live.bodies, fit]);
