@@ -127,5 +127,8 @@ describe('the API keys page', () => {
       expect.arrayContaining([{ keyId: 'key_synthetic' }, { keyId: 'key_second' }]),
     );
     expect(deletions).toHaveLength(2);
+    await waitFor(() => {
+      expect(listings(server.requests)).toBe(2);
+    });
   });
 });

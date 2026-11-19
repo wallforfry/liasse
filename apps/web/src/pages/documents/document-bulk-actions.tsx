@@ -37,7 +37,7 @@ export const DocumentBulkActions = ({ rows, clear }: BulkActionsProps<DocumentSu
           confirmation={{
             title: `Accept ${plural(toReview.length, 'document')} as read?`,
             description:
-              'Each keeps its type, and every doubtful value is confirmed as it was read, without being looked at. A value that changed since is refused, and its document stays to review.',
+              'Each document is read again just before: it keeps its type, and every doubtful value is confirmed as it reads then, without being looked at.',
           }}
         />
       )}

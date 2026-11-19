@@ -1,5 +1,11 @@
-import { type Row, type RowData, useTable } from '@tanstack/react-table';
-import type { ComponentType } from 'react';
+import {
+  functionalUpdate,
+  type Row,
+  type RowData,
+  type RowSelectionState,
+  useTable,
+} from '@tanstack/react-table';
+import { type ComponentType, useState } from 'react';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../ui/table.tsx';
 import { BulkActionBar } from './bulk-action-bar.tsx';
 import {
@@ -15,6 +21,13 @@ export interface BulkActionsProps<TData> {
   /** Empties the selection, once an action is done with it. */
   readonly clear: () => void;
 }
+
+/** The selection, less the rows no longer shown: a row that comes back is not selected again. */
+const shownSelection = (
+  selection: RowSelectionState,
+  shownIds: ReadonlySet<string>,
+): RowSelectionState =>
+  Object.fromEntries(Object.entries(selection).filter(([id]) => shownIds.has(id)));
 
 export interface DataTableProps<TData extends RowData> {
   readonly columns: DataTableColumns<TData>;
@@ -39,14 +52,24 @@ export const DataTable = <TData extends RowData>({
   bulkActions: BulkActions,
 }: DataTableProps<TData>) => {
   const selectable = BulkActions !== undefined;
+  const [selection, setSelection] = useState<RowSelectionState>({});
+  const rowSelection = shownSelection(selection, new Set(data.map(getRowId)));
+  // Adjusted while rendering, as React advises for state derived from props, rather than
+  // reset on new data: the list is read again while documents are processed.
+  if (Object.keys(rowSelection).length !== Object.keys(selection).length) {
+    setSelection(rowSelection);
+  }
   const table = useTable({
     features: dataTableFeatures,
     columns: selectable ? [selectColumn(rowLabel), ...columns] : [...columns],
     data: [...data],
     getRowId: (row: TData) => getRowId(row),
     enableRowSelection: selectable,
+    state: { rowSelection },
+    onRowSelectionChange: (updater) => {
+      setSelection(functionalUpdate(updater, rowSelection));
+    },
   });
-  // The selection keeps the ids of rows that left the data; only rows still shown count.
   const selected = table
     .getSelectedRowModel()
     .rows.map((row: Row<DataTableFeatures, TData>) => row.original);

@@ -114,4 +114,27 @@ describe('the bulk actions of the document list', () => {
       expect(listings(server)).toBeGreaterThan(before);
     });
   });
+
+  it('forgets the selection of a page left, so its rows come back unselected', async () => {
+    const server = fakeServer((request) => {
+      if (request.path.startsWith('/types')) return json({ types: [] });
+      if (request.path.startsWith('/entities')) return json({ entities: [], total: 0 });
+      if (request.path.startsWith('/documents?')) {
+        return request.path.includes('offset=50')
+          ? json({ documents: [REFUSED], total: 51, has_more: false })
+          : json({ documents: [FAILED, INDEXED], total: 51, has_more: true });
+      }
+      return undefined;
+    });
+    renderApp('/documents', server.fetch);
+    const user = userEvent.setup();
+    await user.click(await screen.findByRole('checkbox', { name: 'Select Indexed bill' }));
+    await user.click(screen.getByRole('button', { name: 'Next' }));
+    expect(await screen.findByRole('checkbox', { name: 'Select Refused bill' })).not.toBeChecked();
+    expect(screen.queryByRole('toolbar')).toBeNull();
+
+    await user.click(screen.getByRole('button', { name: 'Previous' }));
+    expect(await screen.findByRole('checkbox', { name: 'Select Indexed bill' })).not.toBeChecked();
+    expect(screen.queryByRole('toolbar')).toBeNull();
+  });
 });

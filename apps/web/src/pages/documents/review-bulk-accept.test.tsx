@@ -46,18 +46,21 @@ const flagged = (id: string, title: string, analysisPending: boolean) => ({
 
 const READY = flagged('doc_synthetic_ready', 'Ready note', false);
 const PENDING = flagged('doc_synthetic_pending', 'Pending note', true);
+const SETTLED = { ...flagged('doc_synthetic_settled', 'Settled note', false), status: 'indexed' };
 const DOCUMENTS = [READY, PENDING];
 
-const queue = () =>
+const queue = (listed: readonly object[] = DOCUMENTS, current = DOCUMENTS) =>
   fakeServer((request) => {
     if (request.path.startsWith('/types')) return json({ types: [] });
     if (request.path.startsWith('/entities')) return json({ entities: [], total: 0 });
-    const document = DOCUMENTS.find(({ id }) => request.path.startsWith(`/documents/${id}`));
+    const document = [...current, SETTLED].find(({ id }) =>
+      request.path.startsWith(`/documents/${id}`),
+    );
     if (document !== undefined) {
       return json(request.method === 'PATCH' ? { ...document, status: 'indexed' } : document);
     }
     if (request.path.startsWith('/documents')) {
-      return json({ documents: DOCUMENTS, total: 2, has_more: false });
+      return json({ documents: listed, total: listed.length, has_more: false });
     }
     return undefined;
   });
@@ -85,5 +88,43 @@ describe('the bulk acceptance of the review queue', () => {
       type: 'note',
       confirm: { issuer: 'Synthetic issuer' },
     });
+  });
+
+  it('accepts only the documents of the selection that are to review', async () => {
+    const server = queue([READY, SETTLED]);
+    renderApp('/documents', server.fetch);
+    const user = userEvent.setup();
+    await user.click(await screen.findByRole('checkbox', { name: 'Select all rows' }));
+    await user.click(screen.getByRole('button', { name: 'Accept as read (1)' }));
+    await user.click(
+      within(await screen.findByRole('alertdialog')).getByRole('button', {
+        name: 'Accept as read',
+      }),
+    );
+
+    expect(await screen.findByText('1 document accepted.')).toBeInTheDocument();
+    expect(
+      server.requests.filter(({ method }) => method === 'PATCH').map(({ path }) => path),
+    ).toEqual([`/documents/${READY.id}`]);
+  });
+
+  it('refuses a document settled since the list was read, and sends it nothing', async () => {
+    const server = queue([READY], [{ ...READY, status: 'indexed' }]);
+    renderApp('/review', server.fetch);
+    const user = userEvent.setup();
+    await user.click(await screen.findByRole('checkbox', { name: 'Select Ready note' }));
+    await user.click(screen.getByRole('button', { name: 'Accept as read (1)' }));
+    await user.click(
+      within(await screen.findByRole('alertdialog')).getByRole('button', {
+        name: 'Accept as read',
+      }),
+    );
+
+    expect(
+      await screen.findByText(
+        '1 document could not be accepted: The document is no longer to review.',
+      ),
+    ).toBeInTheDocument();
+    expect(server.requests.some(({ method }) => method === 'PATCH')).toBe(false);
   });
 });
