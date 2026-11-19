@@ -178,7 +178,7 @@ describe('operators', () => {
         description: 'A synthetic type with every primitive',
         fields: SAMPLE_FIELDS,
       },
-      { db, embedder: createFakeEmbedder(), maxNewTypesPerDay: 10, schemaLanguage: 'en' },
+      { db, embedder: createFakeEmbedder(), schemaLanguage: 'en' },
     );
     if (!created.ok) throw new Error(created.error.message);
     const [northwind, contoso] = await db

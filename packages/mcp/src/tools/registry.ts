@@ -64,9 +64,8 @@ const CREATE_TYPE_DESCRIPTION =
   'Call `describe_types` first: an existing type or alias may already fit. Documents ' +
   'already filed keep their type: `reclassify_document` or `update_document` moves one. ' +
   'Use it too when classification could not create the type a document needs: the ' +
-  'refusal, such as `quota_exceeded`, is in `get_status` and the `review` of ' +
-  '`get_document`. The daily quota of new types bounds classification only and does not ' +
-  'refuse this call.';
+  'refusal, such as `invalid_proposal`, is in `get_status` and the `review` of ' +
+  '`get_document`.';
 
 const SUGGEST_TYPE_DESCRIPTION =
   'Drafts a document type with the text model from `request`, free text on the documents ' +

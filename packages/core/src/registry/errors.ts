@@ -27,11 +27,6 @@ export interface NameTaken extends Failure<'name_taken'> {
   readonly heldBy: string;
 }
 
-export interface QuotaExceeded extends Failure<'quota_exceeded'> {
-  readonly limit: number;
-  readonly createdToday: number;
-}
-
 export interface PrimitiveConflict extends Failure<'primitive_conflict'> {
   readonly field: string;
   readonly existing: FieldDefinition;
@@ -47,7 +42,6 @@ export type RegistryError =
   | InvalidAlias
   | InvalidFields
   | NameTaken
-  | QuotaExceeded
   | PrimitiveConflict
   | FieldFailure<'field_exists'>
   | FieldFailure<'field_not_found'>
@@ -89,13 +83,6 @@ export const nameTaken = (name: string, heldBy: string): NameTaken => ({
       : `"${name}" is already an alias of the type "${heldBy}".`,
   name,
   heldBy,
-});
-
-export const quotaExceeded = (limit: number, createdToday: number): QuotaExceeded => ({
-  code: 'quota_exceeded',
-  message: `The daily quota of new types is reached: ${String(createdToday)} created today, ${String(limit)} allowed.`,
-  limit,
-  createdToday,
 });
 
 export const failure = <Code extends RegistryErrorCode>(

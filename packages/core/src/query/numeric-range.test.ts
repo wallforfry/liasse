@@ -38,7 +38,7 @@ describe('numbers at and beyond the range of a double', () => {
         description: 'A synthetic measure',
         fields: { reading: { type: 'number' } },
       },
-      { db, embedder: createFakeEmbedder(), maxNewTypesPerDay: 10, schemaLanguage: 'en' },
+      { db, embedder: createFakeEmbedder(), schemaLanguage: 'en' },
     );
     if (!created.ok) throw new Error(created.error.message);
     // JSON cannot carry these through the driver as numbers of JavaScript: `1e400` is

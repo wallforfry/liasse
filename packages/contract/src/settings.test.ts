@@ -20,7 +20,6 @@ describe('the settings schema', () => {
         max_file_size: 52_428_800,
         auto_apply: 'safe',
         confidence_threshold: 0.7,
-        max_new_types_per_day: 5,
         schema_language: 'en',
         max_vision_pages: 100,
         entity_attach_similarity: 1,

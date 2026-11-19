@@ -49,7 +49,6 @@ describe('reading the registry', () => {
     context = {
       db: database.db,
       embedder: createFakeEmbedder(),
-      maxNewTypesPerDay: 1000,
       schemaLanguage: 'en',
     };
     for (const [slug, description] of Object.entries(DESCRIPTIONS)) {

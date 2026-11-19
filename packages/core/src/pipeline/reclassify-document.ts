@@ -108,9 +108,8 @@ const typesOf = async (
  * `reclassify_document`: the classification of a settled document again, without any
  * type a person rejected for it since its type was last set by hand, with what they
  * said. The request added the rejected type to `rejected_type_ids`. A new type that
- * cannot be created, past the quota or refused, leaves the document as it was, with a
- * failed `classification` event whose code says why: no other existing type is assigned
- * in its place.
+ * cannot be created leaves the document as it was, with a failed `classification` event
+ * whose code says why: no other existing type is assigned in its place.
  */
 export const reclassifyDocument = async (
   deps: PipelineDeps,

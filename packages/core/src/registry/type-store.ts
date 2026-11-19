@@ -59,7 +59,7 @@ const isTransaction = (executor: RegistryExecutor): executor is RegistryTransact
 
 const LOCK = sql`SELECT pg_advisory_xact_lock(hashtext('liasse.registry'))`;
 
-// Every registry write runs under this one lock. Quota, name uniqueness across slugs and
+// Every registry write runs under this one lock. Name uniqueness across slugs and
 // aliases, hierarchy depth and version bumps all read before they write, and no unique
 // index can express them; writes are rare enough that serializing them costs nothing.
 //

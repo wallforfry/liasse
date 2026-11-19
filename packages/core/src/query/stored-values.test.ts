@@ -50,7 +50,7 @@ describe('stored values of the wrong shape', () => {
     const { db } = database;
     const created = await createType(
       { slug: 'sample', description: 'A synthetic type', fields: FIELDS },
-      { db, embedder: createFakeEmbedder(), maxNewTypesPerDay: 10, schemaLanguage: 'en' },
+      { db, embedder: createFakeEmbedder(), schemaLanguage: 'en' },
     );
     if (!created.ok) throw new Error(created.error.message);
     const [entity] = await db

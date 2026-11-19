@@ -49,7 +49,6 @@ describe('correctDocument', () => {
       {
         db: harness.db,
         embedder: createFakeEmbedder(),
-        maxNewTypesPerDay: 100,
         schemaLanguage: 'en',
       },
     );

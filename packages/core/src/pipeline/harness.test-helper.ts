@@ -129,7 +129,6 @@ export const createPipelineHarness = async (): Promise<PipelineHarness> => {
     identifierKey: TEST_IDENTIFIER_KEY,
     settings: {
       confidenceThreshold: 0.7,
-      maxNewTypesPerDay: 5,
       schemaLanguage: 'en',
       maxFileSize: ingestHarness.deps.maxFileSize,
     },

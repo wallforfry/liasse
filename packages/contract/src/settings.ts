@@ -6,7 +6,6 @@ import {
   DEFAULT_HINDSIGHT_BANK,
   DEFAULT_LLM_TIMEOUT_MS,
   DEFAULT_MAX_FILE_SIZE,
-  DEFAULT_MAX_NEW_TYPES_PER_DAY,
   DEFAULT_MAX_VISION_PAGES,
   ENTITY_ARBITRATION_SIMILARITY,
   ENTITY_ATTACH_SIMILARITY,
@@ -14,7 +13,6 @@ import {
   MAX_EMBEDDING_INPUT_TOKENS,
   MAX_FILE_SIZE_LIMIT,
   MAX_MODEL_TIMEOUT_MS,
-  MAX_NEW_TYPES_PER_DAY_LIMIT,
   MAX_VISION_PAGES_LIMIT,
   MIN_EMBEDDING_INPUT_TOKENS,
 } from './domain/limits.ts';
@@ -73,11 +71,6 @@ export const pipelineSettingsSchema = z.strictObject({
   max_file_size: z.int().min(1).max(MAX_FILE_SIZE_LIMIT).default(DEFAULT_MAX_FILE_SIZE),
   auto_apply: autoApplyModeSchema.default('safe'),
   confidence_threshold: share.default(DEFAULT_CONFIDENCE_THRESHOLD),
-  max_new_types_per_day: z
-    .int()
-    .min(0)
-    .max(MAX_NEW_TYPES_PER_DAY_LIMIT)
-    .default(DEFAULT_MAX_NEW_TYPES_PER_DAY),
   schema_language: schemaLanguageSchema.default('en'),
   max_vision_pages: z.int().min(1).max(MAX_VISION_PAGES_LIMIT).default(DEFAULT_MAX_VISION_PAGES),
   entity_attach_similarity: share.default(ENTITY_ATTACH_SIMILARITY),

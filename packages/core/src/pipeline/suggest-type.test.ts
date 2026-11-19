@@ -29,7 +29,6 @@ describe('suggestType', () => {
       db: database.db,
       embedder,
       schemaLanguage: 'en' as const,
-      maxNewTypesPerDay: 10,
     };
     const created = [
       await createType({ slug: 'bill', description: 'A bill to pay', fields: {} }, context),

@@ -38,7 +38,6 @@ export interface SettingsValues {
     readonly max_file_size: string;
     readonly auto_apply: AutoApplyMode;
     readonly confidence_threshold: string;
-    readonly max_new_types_per_day: string;
     readonly schema_language: SchemaLanguage;
     readonly max_vision_pages: string;
     readonly entity_attach_similarity: string;
@@ -107,7 +106,6 @@ export const valuesOf = (saved: SettingsView | null): SettingsValues => {
       max_file_size: numberText(pipeline.max_file_size),
       auto_apply: pipeline.auto_apply,
       confidence_threshold: numberText(pipeline.confidence_threshold),
-      max_new_types_per_day: numberText(pipeline.max_new_types_per_day),
       schema_language: pipeline.schema_language,
       max_vision_pages: numberText(pipeline.max_vision_pages),
       entity_attach_similarity: numberText(pipeline.entity_attach_similarity),
@@ -183,7 +181,6 @@ export const draftOf = ({ llm, embedding, pipeline, hindsight, google }: Setting
       max_file_size: number(pipeline.max_file_size),
       auto_apply: pipeline.auto_apply,
       confidence_threshold: number(pipeline.confidence_threshold),
-      max_new_types_per_day: number(pipeline.max_new_types_per_day),
       schema_language: pipeline.schema_language,
       max_vision_pages: number(pipeline.max_vision_pages),
       entity_attach_similarity: number(pipeline.entity_attach_similarity),

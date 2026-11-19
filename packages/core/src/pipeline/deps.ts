@@ -69,9 +69,8 @@ export type ExtractDocumentText = (
 ) => Promise<ExtractedText>;
 
 export interface PipelineSettings {
-  /** `confidence_threshold`, `max_new_types_per_day`, `schema_language`, `max_file_size`. */
+  /** `confidence_threshold`, `schema_language`, `max_file_size`. */
   readonly confidenceThreshold: number;
-  readonly maxNewTypesPerDay: number;
   readonly schemaLanguage: SchemaLanguage;
   readonly maxFileSize: number;
   /** `max_vision_pages`. */

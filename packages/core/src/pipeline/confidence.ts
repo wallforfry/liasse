@@ -45,8 +45,8 @@ export const typeReason = (type: TypeProvenance | undefined): SettlementReason |
 
 /**
  * Spec: below the threshold a document is flagged for review, and so is one that got
- * the closest type, or none, because a new type was refused or over quota. A confidence
- * that is null is owed by the extraction of a type chosen by hand.
+ * the closest type, or none, because a new type was refused. A confidence that is null is
+ * owed by the extraction of a type chosen by hand.
  */
 export const settlementReasons = (
   confidence: number | null,

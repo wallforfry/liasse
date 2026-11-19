@@ -145,7 +145,7 @@ describe('the review of a document', () => {
   });
 
   it.each([
-    ['quota_exceeded', 'the daily quota of new types is reached, create the type by hand'],
+    ['quota_exceeded', 'the daily quota of new types, since removed, was reached, reclassify it'],
     ['private_document', 'a new type for a private document needs a local embedder'],
     ['invalid_proposal', 'the new type the model proposed was refused'],
   ] as const)('says why a document has no type: %s', (refusal, why) => {

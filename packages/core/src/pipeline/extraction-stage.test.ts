@@ -64,7 +64,6 @@ describe('extraction and re-extraction', () => {
   const registry = () => ({
     db: harness.db,
     embedder: createFakeEmbedder(),
-    maxNewTypesPerDay: 100,
     schemaLanguage: 'en' as const,
   });
 

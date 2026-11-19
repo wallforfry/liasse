@@ -60,7 +60,7 @@ describe('entity conditions', () => {
           parties: { type: 'list', items: { type: 'entity' } },
         },
       },
-      { db, embedder: createFakeEmbedder(), maxNewTypesPerDay: 10, schemaLanguage: 'en' },
+      { db, embedder: createFakeEmbedder(), schemaLanguage: 'en' },
     );
     if (!lease.ok) throw new Error(lease.error.message);
     // The stored name never equals a name of the entity: only the provenance links them.

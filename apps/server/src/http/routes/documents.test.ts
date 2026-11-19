@@ -1,4 +1,5 @@
 import { documents, jobs } from '@liasse/core/db';
+import { PIPELINE_PROVENANCE_KEY } from '@liasse/core/domain';
 import { recordDocumentEvent } from '@liasse/core/processing-log';
 import { syntheticEml, syntheticPdf } from '@liasse/core/testing';
 import { eq } from 'drizzle-orm';
@@ -423,6 +424,34 @@ describe('document routes', () => {
         .from(documents)
         .where(eq(documents.id, id));
       expect(document).toEqual({ hint: 'a payslip' });
+    });
+
+    it('queues a document the removed daily quota of new types left untyped', async () => {
+      const id = await harness.addDocument([], {
+        status: 'needs_review',
+        typeId: null,
+        provenance: {
+          [PIPELINE_PROVENANCE_KEY]: {
+            type: { model: 'm', confidence: 0, outcome: 'untyped', refusal: 'quota_exceeded' },
+          },
+        },
+      });
+      const read = await harness.call(`/documents/${id}?include=review`);
+      expect(await read.json()).toMatchObject({
+        review: { type: { outcome: 'untyped', refusal: 'quota_exceeded' } },
+      });
+      const response = await reclassify(id, {});
+      expect(response.status).toBe(202);
+      expect(await response.json()).toMatchObject({ id, status: 'needs_review' });
+      const queued = await harness.database.db
+        .select({ payload: jobs.payload })
+        .from(jobs)
+        .where(eq(jobs.kind, 'reclassify_document'));
+      expect(queued.map(({ payload }) => payload)).toContainEqual({
+        documentId: id,
+        rejectedTypeId: null,
+        newType: false,
+      });
     });
 
     it('refuses a document that is not settled, an unknown one, and other options', async () => {

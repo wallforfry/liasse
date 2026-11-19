@@ -60,6 +60,9 @@ interface Assigned {
   readonly outcome: 'existing' | 'new';
 }
 
+// `quota_exceeded` is only read back from documents classified before the quota was removed.
+type AssignedTypeRefusal = Exclude<TypeRefusal, 'quota_exceeded'>;
+
 interface Refusal {
   readonly code: RegistryError['code'] | 'rejected_type';
   readonly message: string;
@@ -123,7 +126,6 @@ const create = async (
     {
       db,
       embedder,
-      maxNewTypesPerDay: settings.maxNewTypesPerDay,
       schemaLanguage: settings.schemaLanguage,
       ...(now === undefined ? {} : { now }),
     },
@@ -178,7 +180,7 @@ const assignment = ({ type, outcome }: Assigned, { decision, model }: Answer): T
 // Spec: a new type that could not be created leaves the document without a type, for
 // review, with the reason. No existing type is assigned in its place: the model said none
 // of the candidates fits, and the closest one by embedding is a type the document is not.
-const untyped = (model: string, refusal: TypeRefusal): TypeDecision => ({
+const untyped = (model: string, refusal: AssignedTypeRefusal): TypeDecision => ({
   typeId: null,
   provenance: { model, confidence: 0, outcome: 'untyped', refusal },
   refusal,
@@ -196,16 +198,14 @@ export const classificationEvent = ({ provenance }: TypeDecision) =>
       }
     : {};
 
-const refusalOf = ({ code }: Refusal): TypeRefusal => {
-  if (code === 'quota_exceeded' || code === 'rejected_type') return code;
-  return 'invalid_proposal';
-};
+const refusalOf = ({ code }: Refusal): AssignedTypeRefusal =>
+  code === 'rejected_type' ? code : 'invalid_proposal';
 
 /**
  * One classification call, and a second one only when the registry refused the proposed
  * type for a reason the model can correct: the reason is given back to it once. A new
- * type that may not be created, over quota or still refused, leaves the document without
- * a type and says why.
+ * type that may not be created, or is still refused, leaves the document without a type
+ * and says why.
  */
 export const decideType = async (
   deps: PipelineDeps,
@@ -218,7 +218,6 @@ export const decideType = async (
   }
   const settled = await settle(deps, question, first.decision);
   if ('type' in settled) return assignment(settled, first);
-  if (settled.refused.code === 'quota_exceeded') return untyped(first.model, 'quota_exceeded');
   const second = await ask(deps, question, signal, {
     proposal: first.decision,
     reason: settled.refused.message,

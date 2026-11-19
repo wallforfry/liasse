@@ -5,7 +5,6 @@ export const REGISTRY_ERROR_CODES = [
   'invalid_alias',
   'invalid_fields',
   'name_taken',
-  'quota_exceeded',
   'primitive_conflict',
   'field_exists',
   'field_not_found',

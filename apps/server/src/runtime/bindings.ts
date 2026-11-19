@@ -83,14 +83,12 @@ export type Bind = (parts: RuntimeParts) => Bindings;
 
 export const pipelineSettingsOf = ({
   confidenceThreshold,
-  maxNewTypesPerDay,
   schemaLanguage,
   maxFileSize,
   maxVisionPages,
   entitySimilarity,
 }: PipelineConfig): PipelineSettings => ({
   confidenceThreshold,
-  maxNewTypesPerDay,
   schemaLanguage,
   maxFileSize,
   maxVisionPages,
