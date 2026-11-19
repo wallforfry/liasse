@@ -59,11 +59,15 @@ export type TypeRefusal = (typeof TYPE_REFUSALS)[number];
 // its last re-extraction never succeeded; or it was flagged at settlement by a rule or a
 // threshold that no longer flags it. `rejected_values` tells that the model returned
 // values that were dropped, which weighs on the confidence.
+// The reasons of the flag that come from how the type was decided: those a
+// reclassification can clear.
+export const TYPE_REVIEW_REASONS = ['type_fallback', 'type_untyped'] as const;
+export type TypeReviewReason = (typeof TYPE_REVIEW_REASONS)[number];
+
 export const REVIEW_REASONS = [
   'low_confidence',
   'type_pending_extraction',
-  'type_fallback',
-  'type_untyped',
+  ...TYPE_REVIEW_REASONS,
   'reextraction_failed',
   'flagged_at_settlement',
   'rejected_values',

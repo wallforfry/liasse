@@ -466,6 +466,43 @@ describe('document routes', () => {
     });
   });
 
+  describe('POST /documents/reclassify', () => {
+    const reclassifyFlagged = (body: unknown) =>
+      harness.call('/documents/reclassify', jsonRequest('POST', body));
+
+    it('queues the documents flagged with a type reason and answers 202 with the counts', async () => {
+      const id = await harness.addDocument([], {
+        status: 'needs_review',
+        typeId: null,
+        provenance: {
+          [PIPELINE_PROVENANCE_KEY]: {
+            type: { model: 'm', confidence: 0, outcome: 'fallback' },
+          },
+        },
+      });
+      const response = await reclassifyFlagged({ reason: 'type_fallback' });
+      expect(response.status).toBe(202);
+      // Other tests of this file flag documents too: only this one is known to be queued.
+      expect(await response.json()).toMatchObject({ skipped: 0, remaining: 0 });
+      const queued = await harness.database.db
+        .select({ payload: jobs.payload })
+        .from(jobs)
+        .where(eq(jobs.kind, 'reclassify_document'));
+      expect(queued.map(({ payload }) => payload)).toContainEqual({
+        documentId: id,
+        rejectedTypeId: null,
+        newType: false,
+      });
+    });
+
+    it('refuses a reason that is not a type reason, and a limit beyond the bound', async () => {
+      const lowConfidence = await reclassifyFlagged({ reason: 'low_confidence' });
+      expect(lowConfidence.status).toBe(400);
+      expect((await reclassifyFlagged({ reason: 'type_untyped', limit: 101 })).status).toBe(400);
+      expect((await reclassifyFlagged({})).status).toBe(400);
+    });
+  });
+
   describe('POST /documents/:id/reextract', () => {
     const reextract = (id: string) =>
       harness.call(`/documents/${id}/reextract`, { method: 'POST' });

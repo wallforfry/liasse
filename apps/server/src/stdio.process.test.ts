@@ -207,7 +207,7 @@ describe('MCP over stdio', () => {
         });
         expect(
           (await client.listTools(undefined, { signal, timeout: PROCESS_WAIT_LIMIT_MS })).tools,
-        ).toHaveLength(25);
+        ).toHaveLength(26);
         const idsOf = async (args: Readonly<Record<string, unknown>>) =>
           rows.parse(await callTool('query', args)).rows.map(({ id }) => id);
         expect(await idsOf({})).toEqual([publicId]);
