@@ -2,11 +2,7 @@ import type { PointerEvent } from 'react';
 import { cn } from '../../lib/utils.ts';
 import { NODE_KIND_STYLES } from './graph-model.ts';
 import { type Body, placeOf } from './graph-simulation.ts';
-
-const LABEL_LENGTH = 32;
-
-const shortened = (label: string): string =>
-  label.length > LABEL_LENGTH ? `${label.slice(0, LABEL_LENGTH - 1)}…` : label;
+import { shortened } from './label-layout.ts';
 
 export interface NodePointerHandlers {
   readonly onPointerDown: (event: PointerEvent<SVGGElement>) => void;
@@ -22,7 +18,8 @@ export interface GraphNodeMarkProps {
   readonly register: (element: SVGGElement | null) => void;
   readonly selected: boolean;
   readonly dimmed: boolean;
-  readonly labelled: boolean;
+  /** Takes the label, which the label layout sizes, places and shows. */
+  readonly registerLabel: (element: SVGTextElement | null) => void;
   readonly onHover: (id: string | undefined) => void;
   readonly onSelect: (id: string) => void;
   readonly pointer: NodePointerHandlers;
@@ -34,7 +31,7 @@ export const GraphNodeMark = ({
   register,
   selected,
   dimmed,
-  labelled,
+  registerLabel,
   onHover,
   onSelect,
   pointer,
@@ -73,15 +70,15 @@ export const GraphNodeMark = ({
         )}
         strokeWidth={selected ? 2.5 : 1}
       />
-      {labelled ? (
-        <text
-          y={radius + 11}
-          textAnchor="middle"
-          className="pointer-events-none fill-foreground text-[10px] select-none"
-        >
-          {shortened(node.label)}
-        </text>
-      ) : null}
+      <text
+        ref={registerLabel}
+        display="none"
+        dominantBaseline="hanging"
+        textAnchor="middle"
+        className="pointer-events-none fill-foreground select-none"
+      >
+        {shortened(node.label)}
+      </text>
     </g>
   );
 };

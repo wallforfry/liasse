@@ -1,6 +1,6 @@
 import { fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { userEvent } from '@testing-library/user-event';
-import { describe, expect, it, onTestFinished } from 'vitest';
+import { beforeEach, describe, expect, it, onTestFinished } from 'vitest';
 import { type Answer, fakeServer, json, renderApp } from '../../test/render.test-helper.tsx';
 import { withReducedMotion } from './graph.test-helper.ts';
 
@@ -54,7 +54,8 @@ const IDENTITY_MATRIX = {
   inverse: () => IDENTITY_MATRIX,
 };
 
-// jsdom has no `getScreenCTM`: the test gives the canvas a screen.
+// jsdom has no `getScreenCTM`: each test gives the canvas a screen, which the panning,
+// the dragging and the label layout read.
 const withScreen = (): void => {
   Object.defineProperty(SVGSVGElement.prototype, 'getScreenCTM', {
     configurable: true,
@@ -63,6 +64,56 @@ const withScreen = (): void => {
   onTestFinished(() => {
     Reflect.deleteProperty(SVGSVGElement.prototype, 'getScreenCTM');
   });
+};
+
+// A screen of `pixels` per unit of the view box.
+const withPixels = (pixels: number): void => {
+  const matrix = { ...IDENTITY_MATRIX, a: pixels, d: pixels, inverse: () => IDENTITY_MATRIX };
+  Object.defineProperty(SVGSVGElement.prototype, 'getScreenCTM', {
+    configurable: true,
+    value: () => matrix,
+  });
+};
+
+// The test setup's observer never reports; this one reports when the test says.
+const withResizes = (): (() => void) => {
+  const setupObserver = Object.getOwnPropertyDescriptor(window, 'ResizeObserver');
+  const callbacks = new Set<() => void>();
+  class ReportingResizeObserver {
+    readonly #callback: () => void;
+    constructor(callback: () => void) {
+      this.#callback = callback;
+    }
+    observe(): void {
+      callbacks.add(this.#callback);
+    }
+    unobserve(): void {
+      callbacks.delete(this.#callback);
+    }
+    disconnect(): void {
+      callbacks.delete(this.#callback);
+    }
+  }
+  Object.defineProperty(window, 'ResizeObserver', {
+    configurable: true,
+    value: ReportingResizeObserver,
+  });
+  onTestFinished(() => {
+    if (setupObserver !== undefined) Object.defineProperty(window, 'ResizeObserver', setupObserver);
+  });
+  return () => {
+    for (const callback of callbacks) callback();
+  };
+};
+
+const shownLabels = (): readonly (string | null)[] =>
+  [...document.querySelectorAll('svg text')]
+    .filter((text) => text.getAttribute('display') === 'inline')
+    .map((text) => text.textContent);
+
+const zoomOutFully = async (): Promise<void> => {
+  for (const _ of [1, 2, 3, 4, 5, 6, 7])
+    await userEvent.click(screen.getByRole('button', { name: 'Zoom out' }));
 };
 
 const placeOf = (name: string): string | null =>
@@ -85,6 +136,8 @@ const contentTransform = (): string | null =>
     ?.getAttribute('transform') ?? null;
 
 describe('the graph page', () => {
+  beforeEach(withScreen);
+
   it('draws every node, labels from documents as text', async () => {
     const server = fakeServer(graphAnswer);
     renderApp('/graph', server.fetch);
@@ -126,7 +179,6 @@ describe('the graph page', () => {
   });
 
   it('pans on a drag of the background without losing the selection, and zooms on the wheel', async () => {
-    withScreen();
     renderApp('/graph', fakeServer(graphAnswer).fetch);
     await userEvent.click(await nodeButton('type energy_contract'));
     const canvas = screen.getByRole('img', { name: /^Graph of/ });
@@ -180,7 +232,6 @@ describe('the graph page', () => {
 
   it('frees a node once its press ends however it ends, and never takes a secondary press', async () => {
     withReducedMotion();
-    withScreen();
     renderApp('/graph', fakeServer(graphAnswer).fetch);
     const name = 'document Synthetic power contract';
     const contract = await nodeButton(name);
@@ -214,7 +265,6 @@ describe('the graph page', () => {
   });
 
   it('pans only on a primary press of the background, and stops on a cancelled one', async () => {
-    withScreen();
     renderApp('/graph', fakeServer(graphAnswer).fetch);
     await nodeButton('type energy_contract');
     const canvas = screen.getByRole('img', { name: /^Graph of/ });
@@ -232,7 +282,6 @@ describe('the graph page', () => {
 
   it('fits the graph as it stands into the view', async () => {
     withReducedMotion();
-    withScreen();
     renderApp('/graph', fakeServer(graphAnswer).fetch);
     const contract = await nodeButton('document Synthetic power contract');
     pressAndMove(contract, { x: 5000, y: 5000 });
@@ -283,21 +332,167 @@ describe('the graph page', () => {
     expect(amendment).not.toHaveClass('opacity-20');
   });
 
-  it('labels documents once zoomed in', async () => {
+  it('keeps labels one size on screen as it zooms', async () => {
     renderApp('/graph', fakeServer(graphAnswer).fetch);
     await nodeButton('type energy_contract');
-    const labels = () => [...document.querySelectorAll('svg text')].map((text) => text.textContent);
-    expect(labels()).not.toContain('Synthetic power contract');
+    const label = () => {
+      const text = [...document.querySelectorAll('svg text')].find(
+        (each) => each.textContent === 'energy_contract',
+      );
+      if (text === undefined) throw new Error('Expected the label of the type');
+      return text;
+    };
+    expect(label().getAttribute('display')).toBe('inline');
+    // One pixel per unit of the view box: the size on screen is the size in the content.
+    expect(label().getAttribute('font-size')).toBe('11');
 
-    for (const _ of [1, 2, 3])
-      await userEvent.click(screen.getByRole('button', { name: 'Zoom in' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Zoom in' }));
 
-    expect(labels()).toContain('Synthetic power contract');
+    const scale = Number(/scale\((\S+)\)/.exec(contentTransform() ?? '')?.[1]);
+    expect(scale).toBeGreaterThan(1);
+    expect(Number(label().getAttribute('font-size'))).toBeCloseTo(11 / scale);
+  });
+
+  it('sizes the label of a node drawn again, at the same zoom', async () => {
+    withReducedMotion();
+    renderApp('/graph', fakeServer(graphAnswer).fetch);
+    await nodeButton('type energy_contract');
+    const typeLabel = () =>
+      [...document.querySelectorAll('svg text')].find(
+        (text) => text.textContent === 'energy_contract',
+      );
+
+    await userEvent.click(screen.getByLabelText('Types (1)'));
+    expect(typeLabel()).toBeUndefined();
+    await userEvent.click(screen.getByLabelText('Types (1)'));
+
+    expect(typeLabel()?.getAttribute('font-size')).toBe('11');
+  });
+
+  it('keeps the view the user chose while a search matches the same nodes, not other ones', async () => {
+    withReducedMotion();
+    renderApp('/graph', fakeServer(graphAnswer).fetch);
+    await nodeButton('type energy_contract');
+    const search = screen.getByRole('searchbox', { name: 'Search the nodes' });
+    await userEvent.type(search, 'flat');
+    await screen.findByText('1 node matches, shown with their neighbors.');
+    await userEvent.click(screen.getByRole('button', { name: 'Zoom in' }));
+    const chosen = contentTransform();
+
+    await userEvent.type(search, ' ');
+    expect(contentTransform()).toBe(chosen);
+
+    // As many matches, other nodes, with no empty search between: the view fits them.
+    fireEvent.change(search, { target: { value: 'energy' } });
+    await screen.findByRole('button', { name: 'type energy_contract' });
+    await waitFor(() => {
+      expect(contentTransform()).not.toBe(chosen);
+    });
+  });
+
+  it('draws only the nodes a search matches and their neighbors, case and accents aside', async () => {
+    withReducedMotion();
+    renderApp('/graph', fakeServer(graphAnswer).fetch);
+    await nodeButton('type energy_contract');
+    const firstView = contentTransform();
+    const search = screen.getByRole('searchbox', { name: 'Search the nodes' });
+    const nodes = () =>
+      screen
+        .getAllByRole('button', { name: /^(document|type|subject|entity) / })
+        .map((node) => node.getAttribute('aria-label'));
+
+    await userEvent.type(search, 'FLÂT');
+
+    expect(await screen.findByText('1 node matches, shown with their neighbors.')).toBeTruthy();
+    expect(nodes()).toEqual(['document Synthetic power contract', 'subject Synthetic flat']);
+    expect(document.querySelectorAll('svg line')).toHaveLength(1);
+    // The view fits what the search shows.
+    expect(contentTransform()).not.toBe(firstView);
+
+    await userEvent.clear(search);
+    await userEvent.type(search, 'nothing of the sort');
+    expect(await screen.findByText('No node matches.')).toBeTruthy();
+    expect(screen.queryAllByRole('button', { name: /^(document|type|subject|entity) / })).toEqual(
+      [],
+    );
+
+    await userEvent.clear(search);
+    await waitFor(() => {
+      expect(nodes()).toHaveLength(GRAPH.nodes.length);
+    });
+    expect(screen.getByRole('status').textContent).toBe('');
+  });
+
+  it('keeps a search within the kinds shown, for matches and neighbors alike', async () => {
+    withReducedMotion();
+    renderApp('/graph', fakeServer(graphAnswer).fetch);
+    await nodeButton('type energy_contract');
+    const search = screen.getByRole('searchbox', { name: 'Search the nodes' });
+    await userEvent.click(screen.getByLabelText('Entities (1)'));
+    await userEvent.click(screen.getByLabelText('Subjects (1)'));
+
+    await userEvent.type(search, 'flat');
+    expect(await screen.findByText('No node matches.')).toBeTruthy();
+
+    await userEvent.clear(search);
+    await userEvent.type(search, 'power contract');
+    expect(await screen.findByText('1 node matches, shown with their neighbors.')).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'entity Synthetic Power' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'subject Synthetic flat' })).toBeNull();
+    expect(screen.getByRole('button', { name: 'type energy_contract' })).toBeTruthy();
+  });
+
+  it('labels the node in focus and its neighbors whatever they cover', async () => {
+    withReducedMotion();
+    renderApp('/graph', fakeServer(graphAnswer).fetch);
+    const entity = await nodeButton('entity Synthetic Power');
+    await zoomOutFully();
+    expect(shownLabels()).not.toContain('Synthetic power contract');
+
+    fireEvent.pointerEnter(entity);
+
+    expect(shownLabels()).toEqual(
+      expect.arrayContaining(['Synthetic Power', 'Synthetic power contract']),
+    );
+  });
+
+  it('labels what a search matched before larger nodes', async () => {
+    withReducedMotion();
+    renderApp('/graph', fakeServer(graphAnswer).fetch);
+    await nodeButton('type energy_contract');
+    await zoomOutFully();
+    expect(shownLabels()).not.toContain('Synthetic power contract');
+
+    await userEvent.type(
+      screen.getByRole('searchbox', { name: 'Search the nodes' }),
+      'power contract',
+    );
+    await screen.findByText('1 node matches, shown with their neighbors.');
+    await zoomOutFully();
+
+    expect(shownLabels()).toContain('Synthetic power contract');
+  });
+
+  it('sizes the labels again when the canvas is resized', async () => {
+    const resize = withResizes();
+    renderApp('/graph', fakeServer(graphAnswer).fetch);
+    await nodeButton('type energy_contract');
+    const fontSize = () =>
+      Number(
+        [...document.querySelectorAll('svg text')]
+          .find((text) => text.textContent === 'energy_contract')
+          ?.getAttribute('font-size'),
+      );
+    const before = fontSize();
+
+    withPixels(2);
+    resize();
+
+    expect(fontSize()).toBeCloseTo(before / 2);
   });
 
   it('with reduced motion, stands still and moves only the node pulled', async () => {
     withReducedMotion();
-    withScreen();
     renderApp('/graph', fakeServer(graphAnswer).fetch);
     const contract = await nodeButton('document Synthetic power contract');
     const entity = placeOf('entity Synthetic Power');

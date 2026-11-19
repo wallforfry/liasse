@@ -23,12 +23,48 @@ const LINKS: ReadonlySet<string> = new Set(LINK_KINDS);
 /** A link the text model found between two documents, as opposed to a membership. */
 export const isDocumentLink = ({ kind }: GraphEdge): boolean => LINKS.has(kind);
 
-/** The nodes of the kinds shown, and the edges between two of them. */
-export const visibleGraph = (
+// Case and accents aside: `électricité` is found by `electricite`.
+const folded = (text: string): string =>
+  text
+    .normalize('NFD')
+    .replace(/\p{Diacritic}/gu, '')
+    .toLocaleLowerCase();
+
+/** The ids of the nodes whose label holds `query`; none for a blank query. */
+export const matchingIds = (
+  nodes: readonly GraphNode[],
+  query: string,
+): ReadonlySet<string> | undefined => {
+  const needle = folded(query.trim());
+  if (needle === '') return undefined;
+  return new Set(nodes.filter(({ label }) => folded(label).includes(needle)).map(({ id }) => id));
+};
+
+/**
+ * Which nodes are drawn: those of the kinds shown and, under a search, the nodes it
+ * matched among them with their neighbors, to show what a match is joined to.
+ */
+export const shownNodes = (
   graph: Graph,
   kinds: ReadonlySet<GraphNodeKind>,
+  matched: ReadonlySet<string> | undefined,
+): ReadonlySet<string> => {
+  const ofKind = new Set(graph.nodes.filter(({ kind }) => kinds.has(kind)).map(({ id }) => id));
+  if (matched === undefined) return ofKind;
+  const joined = graph.edges
+    .filter(({ source, target }) => ofKind.has(source) && ofKind.has(target))
+    .flatMap(({ source, target }) =>
+      matched.has(source) ? [target] : matched.has(target) ? [source] : [],
+    );
+  return new Set([...[...matched].filter((id) => ofKind.has(id)), ...joined]);
+};
+
+/** The nodes shown, and the edges between two of them. */
+export const visibleGraph = (
+  graph: Graph,
+  shown: ReadonlySet<string>,
 ): Pick<Graph, 'nodes' | 'edges'> => {
-  const nodes = graph.nodes.filter(({ kind }) => kinds.has(kind));
+  const nodes = graph.nodes.filter(({ id }) => shown.has(id));
   const ids = new Set(nodes.map(({ id }) => id));
   return {
     nodes,
