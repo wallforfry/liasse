@@ -1,8 +1,6 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Trash2Icon } from 'lucide-react';
 import { toast } from 'sonner';
-import { z } from 'zod';
-import { unwrap } from '../../api/auth-result.ts';
 import { errorMessage } from '../../api/errors.ts';
 import { useAuth } from '../../api/session.ts';
 import {
@@ -17,14 +15,13 @@ import {
   AlertDialogTrigger,
 } from '../../components/ui/alert-dialog.tsx';
 import { Button } from '../../components/ui/button.tsx';
-import { API_KEYS_QUERY_KEY } from './api-keys-query.ts';
+import { API_KEYS_QUERY_KEY, deleteApiKey } from './api-keys-query.ts';
 
 export const DeleteApiKey = ({ id, name }: { readonly id: string; readonly name: string }) => {
   const auth = useAuth();
   const queryClient = useQueryClient();
   const remove = useMutation({
-    mutationFn: async () =>
-      unwrap(z.object({ success: z.literal(true) }), await auth.apiKey.delete({ keyId: id })),
+    mutationFn: async () => deleteApiKey(auth, id),
     onSuccess: async () => {
       toast.success('The API key was deleted.');
       await queryClient.invalidateQueries({ queryKey: API_KEYS_QUERY_KEY });

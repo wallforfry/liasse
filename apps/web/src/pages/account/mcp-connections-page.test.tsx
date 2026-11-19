@@ -46,6 +46,7 @@ describe('the MCP connections page', () => {
         .getAllByRole('cell')
         .map((cell) => cell.textContent),
     ).toEqual([
+      '',
       'Synthetic MCP client',
       'https://client.example.net/oauth/metadata.json',
       'https://client.example.net/callback',
@@ -98,5 +99,27 @@ describe('the MCP connections page', () => {
     const revocation = server.requests.find(({ path }) => path === REVOKE);
     expect(revocation?.method).toBe('POST');
     expect(jsonBody(revocation)).toEqual({ id: 'ocl_synthetic' });
+  });
+
+  it('revokes the selected connections only, after the confirmation', async () => {
+    const other = { ...CONNECTION, id: 'ocl_other', name: 'Other MCP client' };
+    const server = fakeServer((request) =>
+      request.path === LIST ? json({ connections: [CONNECTION, other] }) : connections(request),
+    );
+    renderApp('/account/mcp-connections', server.fetch);
+    const user = userEvent.setup();
+    await user.click(await screen.findByRole('checkbox', { name: 'Select Other MCP client' }));
+    await user.click(screen.getByRole('button', { name: 'Revoke (1)' }));
+    await user.click(
+      within(await screen.findByRole('alertdialog')).getByRole('button', { name: 'Revoke' }),
+    );
+
+    expect(await screen.findByText('1 MCP connection revoked.')).toBeInTheDocument();
+    expect(server.requests.filter(({ path }) => path === REVOKE).map(jsonBody)).toEqual([
+      { id: 'ocl_other' },
+    ]);
+    await waitFor(() => {
+      expect(listings(server.requests)).toBe(2);
+    });
   });
 });
