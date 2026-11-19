@@ -1,5 +1,5 @@
 import type { Bounds } from './graph-simulation.ts';
-import { type PointerEvent, type RefObject, useEffect, useRef, useState } from 'react';
+import { type PointerEvent, type RefObject, useCallback, useEffect, useRef, useState } from 'react';
 
 export interface Viewport {
   readonly x: number;
@@ -67,6 +67,9 @@ export const usePanZoom = (svgRef: RefObject<SVGSVGElement | null>) => {
   const drag = useRef<{ readonly x: number; readonly y: number } | undefined>(undefined);
   // Whether the last press on the background moved the view: its click is no selection.
   const moved = useRef(false);
+  const fit = useCallback((viewBox: Bounds, content: Bounds) => {
+    setViewport(fittedTo(viewBox, content));
+  }, []);
 
   useEffect(() => {
     const svg = svgRef.current;
@@ -134,8 +137,6 @@ export const usePanZoom = (svgRef: RefObject<SVGSVGElement | null>) => {
       setViewport((current) => zoomedAt(current, center, factor));
     },
     /** Shows `content` whole and centred in the view box. */
-    fit: (viewBox: Bounds, content: Bounds) => {
-      setViewport(fittedTo(viewBox, content));
-    },
+    fit,
   };
 };

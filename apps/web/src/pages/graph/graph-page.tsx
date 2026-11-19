@@ -97,13 +97,14 @@ const GraphSearch = ({
         }}
       />
     </div>
-    {matches === undefined ? null : (
-      <p role="status" className="text-sm text-muted-foreground">
-        {matches === 0
+    {/* Mounted while empty, so that a screen reader announces the text when it comes. */}
+    <p role="status" className="text-sm text-muted-foreground">
+      {matches === undefined
+        ? null
+        : matches === 0
           ? 'No node matches.'
           : `${plural(matches, 'node')} ${matches === 1 ? 'matches' : 'match'}, shown with their neighbors.`}
-      </p>
-    )}
+    </p>
   </div>
 );
 

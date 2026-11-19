@@ -1,11 +1,14 @@
+import type { Body } from './graph-simulation.ts';
+
 /** The size of a label on screen, in pixels, whatever the zoom. */
 export const LABEL_FONT_SIZE = 11;
 /** The space between a circle and its label, on screen. */
 export const LABEL_GAP = 3;
 
 const LABEL_LENGTH = 32;
-// No layout to measure text against before it is drawn: an average glyph is about
-// 0.6 em wide in a sans-serif face, which errs towards hiding a label rather than overlap.
+// No layout to measure text against before it is drawn: an average Latin glyph is about
+// 0.6 em wide in a sans-serif face. A wide script (CJK, full-width forms, about 1 em a
+// glyph) is underestimated, so its labels can overlap a little.
 const GLYPH_WIDTH = 0.6;
 const MARGIN = 2;
 const CELL = 64;
@@ -23,6 +26,31 @@ export interface LabelCandidate {
   /** Shown even where it overlaps another label. */
   readonly forced: boolean;
 }
+
+/**
+ * The labels of `bodies` where they stand, in the order they are placed: the nodes a
+ * search matched first, then the larger ones (a type, a subject or an entity before a
+ * document, and the most connected first among them).
+ */
+export const labelCandidates = (
+  bodies: readonly Body[],
+  forced: ReadonlySet<string> | undefined,
+  preferred: ReadonlySet<string> | undefined,
+): readonly LabelCandidate[] =>
+  bodies
+    .toSorted(
+      (a, b) =>
+        Number(preferred?.has(b.node.id) === true) - Number(preferred?.has(a.node.id) === true) ||
+        b.radius - a.radius,
+    )
+    .map((body) => ({
+      id: body.node.id,
+      x: body.x ?? 0,
+      y: body.y ?? 0,
+      radius: body.radius,
+      text: shortened(body.node.label),
+      forced: forced?.has(body.node.id) === true,
+    }));
 
 interface Box {
   readonly left: number;

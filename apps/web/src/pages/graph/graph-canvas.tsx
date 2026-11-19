@@ -57,6 +57,13 @@ export const GraphCanvas = ({ live, selectedId, matchedIds, onSelect }: GraphCan
     preferred: matchedIds,
   });
   const { bounds } = live;
+  // A new search, or its end, brings what it shows into view; the first paint keeps its view.
+  const searched = useRef(matchedIds);
+  useEffect(() => {
+    if (searched.current === matchedIds) return;
+    searched.current = matchedIds;
+    fit(bounds, boundsOf(live.bodies));
+  }, [matchedIds, bounds, live.bodies, fit]);
   const center = { x: bounds.x + bounds.width / 2, y: bounds.y + bounds.height / 2 };
 
   // Each step of the simulation moves the elements in place: React renders them once,
