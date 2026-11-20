@@ -1,5 +1,5 @@
 import { AUTH_BASE_PATH } from '@liasse/contract';
-import { createLiasseClient, type LiasseClient } from '@liasse/sdk';
+import { createLiasseClient } from '@liasse/sdk';
 import { describe, expect, it } from 'vitest';
 import viteConfig from '../vite.config.ts';
 
@@ -33,12 +33,14 @@ const ARGUMENT_SETS: readonly (readonly unknown[])[] = [
   [{ file: new Blob(['synthetic']), filename: 'synthetic.pdf' }],
 ];
 
-const pathsSentBy = async (name: keyof LiasseClient): Promise<readonly string[]> => {
+const pathsSentBy = async (name: string): Promise<readonly string[]> => {
   const paths: string[] = [];
   for (const argumentSet of ARGUMENT_SETS) {
     const client = recordingClient(paths);
+    const method: unknown = Reflect.get(client, name);
+    if (typeof method !== 'function') return paths;
     try {
-      await Reflect.apply(client[name], client, argumentSet);
+      await Reflect.apply(method, client, argumentSet);
     } catch {
       // Every call that sends fails on the recording fetch.
     }
@@ -48,8 +50,7 @@ const pathsSentBy = async (name: keyof LiasseClient): Promise<readonly string[]>
 
 // Every method of the SDK, with the paths it sends.
 const sdkPaths = async (): Promise<ReadonlyMap<string, readonly string[]>> => {
-  const client = recordingClient([]);
-  const names = Object.keys(client).filter((name): name is keyof LiasseClient => name in client);
+  const names = Object.keys(recordingClient([]));
   const sent = await Promise.all(names.map(pathsSentBy));
   return new Map(names.map((name, index) => [name, sent[index] ?? []]));
 };
@@ -75,5 +76,6 @@ describe('the proxy of the Vite dev server', () => {
 
     expect(local.filter(proxied)).toEqual([]);
     expect(proxied(base.slice(0, -1))).toBe(false);
+    expect(proxied(`${base.slice(0, -1)}?page=1`)).toBe(false);
   });
 });
