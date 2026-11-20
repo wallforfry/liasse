@@ -3,8 +3,14 @@ import react from '@vitejs/plugin-react';
 import { defaultClientConditions, defineConfig } from 'vite';
 import { sonnerStylesheet } from './sonner-stylesheet.ts';
 
+const UI_BASE = '/ui/';
+const escapedForRegExp = (text: string): string => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+// Vite serves the UI and its own paths (`@vite/client`, `@fs`, the HMR socket) under the base;
+// every other path belongs to the server. A key that starts with `^` is a regular expression.
+const SERVER_PATHS = `^(?!${escapedForRegExp(UI_BASE.slice(0, -1))}(?:[/?]|$))`;
+
 export default defineConfig({
-  base: '/ui/',
+  base: UI_BASE,
   plugins: [react(), tailwindcss(), sonnerStylesheet()],
   // The workspace packages are read from their TypeScript sources, as the tests do.
   resolve: { conditions: ['@liasse/source', ...defaultClientConditions] },
@@ -16,12 +22,6 @@ export default defineConfig({
   },
   server: {
     // `pnpm --filter @liasse/web dev` against a server started from source.
-    proxy: Object.fromEntries(
-      // `/api` holds the auth server. Node loads this file before any workspace package is
-      // built, so it cannot import `AUTH_BASE_PATH` from the contract.
-      ['/documents', '/search', '/types', '/changes', '/settings', '/api', '/.well-known'].map(
-        (path) => [path, 'http://127.0.0.1:8080'],
-      ),
-    ),
+    proxy: { [SERVER_PATHS]: 'http://127.0.0.1:8080' },
   },
 });
