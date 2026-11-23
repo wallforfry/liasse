@@ -180,7 +180,7 @@
     "ai": "^7.0.173",
     "aws4fetch": "^1.0.20",
     "better-auth": "1.7.18",
-    "better-call": "1.4.5",
+    "better-call": "2.0.6",
     "drizzle-orm": "^0.45.4",
     "heic-decode": "^2.1.0",
     "imapflow": "2.10.2",
