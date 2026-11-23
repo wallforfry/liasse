@@ -64,7 +64,7 @@ services:
 
   # S3-compatible server for the tests of the s3 storage driver.
   s3:
-    image: rustfs/rustfs:1.0.5
+    image: rustfs/rustfs:1.0.6
     environment:
       RUSTFS_ACCESS_KEY: liasse
       RUSTFS_SECRET_KEY: liasse-secret
@@ -81,7 +81,7 @@ services:
   # IMAP server for the tests of the IMAP connector. Plain IMAP on 3143; its REST API creates
   # one throwaway account per test (`createTestMailbox` of `@liasse/core/testing`).
   imap:
-    image: greenmail/standalone:2.1.3
+    image: greenmail/standalone:2.1.15
     environment:
       GREENMAIL_OPTS: >-
         -Dgreenmail.setup.test.imap -Dgreenmail.hostname=0.0.0.0
