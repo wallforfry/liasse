@@ -61,14 +61,15 @@ export const CONSENT_URL = 'https://accounts.google.example.test/o/oauth2/v2/aut
 export const isList = ({ method, path }: Request) => method === 'GET' && path === '/sources';
 export const isCreate = ({ method, path }: Request) => method === 'POST' && path === '/sources';
 // Any one source: the fake server answers its read and its save with the first it holds.
-const ONE_SOURCE = /^\/sources\/src_\w+$/u;
+const SOURCE_PATH = String.raw`/sources/src_\w+`;
+const ONE_SOURCE = new RegExp(`^${SOURCE_PATH}$`, 'u');
+const ONE_CHECK = new RegExp(`^${SOURCE_PATH}/check$`, 'u');
 
 export const isRead = ({ method, path }: Request) => method === 'GET' && ONE_SOURCE.test(path);
 export const isPatch = ({ method, path }: Request) => method === 'PATCH' && ONE_SOURCE.test(path);
 export const isDelete = ({ method, path }: Request) =>
   method === 'DELETE' && path === `/sources/${SOURCE.id}`;
-export const isCheck = ({ method, path }: Request) =>
-  method === 'POST' && /^\/sources\/src_\w+\/check$/u.test(path);
+export const isCheck = ({ method, path }: Request) => method === 'POST' && ONE_CHECK.test(path);
 export const isRun = ({ method, path }: Request) =>
   method === 'POST' && path === `/sources/${SOURCE.id}/run`;
 export const isAuthorize = ({ method, path }: Request) =>

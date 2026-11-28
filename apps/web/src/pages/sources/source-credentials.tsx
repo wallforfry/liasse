@@ -105,7 +105,7 @@ const ConnectGoogle = ({ source, again }: { readonly source: Source; readonly ag
 
 interface SourceCredentialsProps {
   readonly source: Source;
-  /** A check of the card found the stored credentials refused; no run has flagged them. */
+  /** A check of this version of the source found its stored credentials refused. */
   readonly checkRefused: boolean;
 }
 
@@ -115,7 +115,9 @@ interface SourceCredentialsProps {
  */
 export const SourceCredentials = ({ source, checkRefused }: SourceCredentialsProps) => {
   const notice = noticeOf(source);
-  const refused = source.needs_attention || source.secret === 'unreadable' || checkRefused;
+  // A source never connected also fails its check on credentials: it is not refused.
+  const refusedByCheck = source.kind === 'gdrive' && source.secret === 'set' && checkRefused;
+  const again = source.needs_attention || source.secret === 'unreadable' || refusedByCheck;
   return (
     <>
       {notice === undefined ? null : (
@@ -125,8 +127,8 @@ export const SourceCredentials = ({ source, checkRefused }: SourceCredentialsPro
           <AlertDescription>{notice.description}</AlertDescription>
         </Alert>
       )}
-      {needsGoogleConsent(source) || (source.kind === 'gdrive' && checkRefused) ? (
-        <ConnectGoogle source={source} again={refused} />
+      {needsGoogleConsent(source) || refusedByCheck ? (
+        <ConnectGoogle source={source} again={again} />
       ) : null}
     </>
   );

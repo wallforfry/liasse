@@ -75,7 +75,11 @@ export const SourceCard = ({ source }: { readonly source: Source }) => {
         )}
         <SourceCredentials
           source={source}
-          checkRefused={check.data?.ok === false && check.data.error.kind === 'credentials'}
+          checkRefused={
+            check.variables === source.updated_at &&
+            check.data?.ok === false &&
+            check.data.error.kind === 'credentials'
+          }
         />
         <SourceLastRun run={source.last_run} kind={source.kind} />
         <SourceCheckResult data={check.data} error={check.error} />
@@ -98,7 +102,7 @@ export const SourceCard = ({ source }: { readonly source: Source }) => {
           size="sm"
           disabled={check.isPending}
           onClick={() => {
-            check.mutate();
+            check.mutate(source.updated_at);
           }}
         >
           <PlugZapIcon />

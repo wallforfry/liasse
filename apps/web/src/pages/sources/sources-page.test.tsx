@@ -148,6 +148,17 @@ describe('the sources page', () => {
     expect(await source.findByText('Check failed: Connection timed out.')).toBeInTheDocument();
   });
 
+  it('offers no Google consent to a mailbox whose check found its password refused', async () => {
+    const check = { ok: false, error: { kind: 'credentials', message: 'Login refused.' } };
+    renderApp('/sources', fakeServer(sourcesServer({ check })).fetch);
+
+    const source = await card();
+    await userEvent.setup().click(source.getByRole('button', { name: 'Check' }));
+
+    expect(await source.findByText('Check failed: Login refused.')).toBeInTheDocument();
+    expect(source.queryByRole('button', { name: /^Connect/u })).not.toBeInTheDocument();
+  });
+
   it('disables a source with its switch', async () => {
     const server = fakeServer(sourcesServer());
     renderApp('/sources', server.fetch);

@@ -1,12 +1,25 @@
 import { screen, waitFor, within } from '@testing-library/react';
 import { userEvent } from '@testing-library/user-event';
 import { describe, expect, it } from 'vitest';
-import { errorBody, fakeServer, renderApp } from '../../test/render.test-helper.tsx';
-import { CONSENT_URL, DRIVE_SOURCE, isAuthorize, sourcesServer } from './sources.test-helper.ts';
+import { errorBody, fakeServer, json, renderApp } from '../../test/render.test-helper.tsx';
+import {
+  CONSENT_URL,
+  DRIVE_SOURCE,
+  isAuthorize,
+  isList,
+  isPatch,
+  sourcesServer,
+} from './sources.test-helper.ts';
 
 const card = async () => within(await screen.findByRole('region', { name: DRIVE_SOURCE.name }));
 
 const showing = (source: unknown) => fakeServer(sourcesServer({ sources: [source] }));
+
+const CONNECTED = { ...DRIVE_SOURCE, secret: 'set' } as const;
+const REFUSED_CHECK = {
+  ok: false,
+  error: { kind: 'credentials', message: 'Google refused the authorization (invalid_grant).' },
+} as const;
 
 describe('the card of a Drive source', () => {
   it('says which folder it reads and that it waits for Google, never a password', async () => {
@@ -114,13 +127,7 @@ describe('the card of a Drive source', () => {
   });
 
   it('offers to connect again once a check finds the authorization refused', async () => {
-    const check = {
-      ok: false,
-      error: { kind: 'credentials', message: 'Google refused the authorization (invalid_grant).' },
-    };
-    const server = fakeServer(
-      sourcesServer({ sources: [{ ...DRIVE_SOURCE, secret: 'set' }], check }),
-    );
+    const server = fakeServer(sourcesServer({ sources: [CONNECTED], check: REFUSED_CHECK }));
     const { navigateAway } = renderApp('/sources', server.fetch);
     const user = userEvent.setup();
 
@@ -136,15 +143,56 @@ describe('the card of a Drive source', () => {
 
   it('offers no new consent when a check fails for another reason', async () => {
     const check = { ok: false, error: { kind: 'transient', message: 'Drive answered 503.' } };
-    renderApp(
-      '/sources',
-      fakeServer(sourcesServer({ sources: [{ ...DRIVE_SOURCE, secret: 'set' }], check })).fetch,
-    );
+    renderApp('/sources', fakeServer(sourcesServer({ sources: [CONNECTED], check })).fetch);
     const source = await card();
     await userEvent.setup().click(source.getByRole('button', { name: 'Check' }));
 
     expect(await source.findByText('Check failed: Drive answered 503.')).toBeInTheDocument();
     expect(source.queryByRole('button', { name: /^Connect/u })).not.toBeInTheDocument();
+  });
+
+  it('keeps the first consent of a source never connected after its check', async () => {
+    const check = {
+      ok: false,
+      error: { kind: 'credentials', message: 'The source is not connected to Google yet.' },
+    };
+    renderApp('/sources', fakeServer(sourcesServer({ sources: [DRIVE_SOURCE], check })).fetch);
+    const source = await card();
+    await userEvent.setup().click(source.getByRole('button', { name: 'Check' }));
+
+    expect(
+      await source.findByText('Check failed: The source is not connected to Google yet.'),
+    ).toBeInTheDocument();
+    expect(source.getByRole('button', { name: 'Connect with Google' })).toBeEnabled();
+    expect(source.queryByRole('button', { name: 'Connect again' })).not.toBeInTheDocument();
+  });
+
+  it('drops the offer of a refused check once the source is saved again', async () => {
+    const saved = { ...CONNECTED, enabled: false, updated_at: '2026-11-02T08:00:00.000Z' };
+    let current: unknown = CONNECTED;
+    const server = fakeServer(
+      (request) => (isList(request) ? json({ sources: [current] }) : undefined),
+      sourcesServer({
+        sources: [CONNECTED],
+        check: REFUSED_CHECK,
+        saved: (request) => {
+          current = saved;
+          return isPatch(request) ? json(saved) : undefined;
+        },
+      }),
+    );
+    renderApp('/sources', server.fetch);
+    const user = userEvent.setup();
+
+    const source = await card();
+    await user.click(source.getByRole('button', { name: 'Check' }));
+    expect(await source.findByRole('button', { name: 'Connect again' })).toBeEnabled();
+    await user.click(source.getByRole('switch', { name: 'Enabled' }));
+
+    await waitFor(() => {
+      expect(source.queryByRole('button', { name: 'Connect again' })).not.toBeInTheDocument();
+    });
+    expect(source.getByRole('switch', { name: 'Enabled' })).not.toBeChecked();
   });
 
   it('offers no consent to a connected source, and runs it', async () => {

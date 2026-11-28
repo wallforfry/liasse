@@ -44,9 +44,13 @@ export const useRunSource = (id: string) => {
   });
 };
 
+/**
+ * Checks a source. The variable is the `updated_at` of the source checked: a result only
+ * describes that version, not one saved or connected again since.
+ */
 export const useCheckSource = (id: string) => {
   const client = useClient();
-  return useMutation({ mutationFn: async () => client.checkSource(id) });
+  return useMutation({ mutationFn: async (_checked: string) => client.checkSource(id) });
 };
 
 export const useDeleteSource = (id: string) => {
