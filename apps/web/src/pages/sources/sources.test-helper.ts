@@ -68,7 +68,7 @@ export const isPatch = ({ method, path }: Request) => method === 'PATCH' && ONE_
 export const isDelete = ({ method, path }: Request) =>
   method === 'DELETE' && path === `/sources/${SOURCE.id}`;
 export const isCheck = ({ method, path }: Request) =>
-  method === 'POST' && path === `/sources/${SOURCE.id}/check`;
+  method === 'POST' && /^\/sources\/src_\w+\/check$/u.test(path);
 export const isRun = ({ method, path }: Request) =>
   method === 'POST' && path === `/sources/${SOURCE.id}/run`;
 export const isAuthorize = ({ method, path }: Request) =>

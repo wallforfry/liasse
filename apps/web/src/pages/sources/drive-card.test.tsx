@@ -113,6 +113,40 @@ describe('the card of a Drive source', () => {
     expect(source.queryByText(/password/iu)).not.toBeInTheDocument();
   });
 
+  it('offers to connect again once a check finds the authorization refused', async () => {
+    const check = {
+      ok: false,
+      error: { kind: 'credentials', message: 'Google refused the authorization (invalid_grant).' },
+    };
+    const server = fakeServer(
+      sourcesServer({ sources: [{ ...DRIVE_SOURCE, secret: 'set' }], check }),
+    );
+    const { navigateAway } = renderApp('/sources', server.fetch);
+    const user = userEvent.setup();
+
+    const source = await card();
+    expect(source.queryByRole('button', { name: /^Connect/u })).not.toBeInTheDocument();
+    await user.click(source.getByRole('button', { name: 'Check' }));
+    await user.click(await source.findByRole('button', { name: 'Connect again' }));
+
+    await waitFor(() => {
+      expect(navigateAway).toHaveBeenCalledWith(CONSENT_URL);
+    });
+  });
+
+  it('offers no new consent when a check fails for another reason', async () => {
+    const check = { ok: false, error: { kind: 'transient', message: 'Drive answered 503.' } };
+    renderApp(
+      '/sources',
+      fakeServer(sourcesServer({ sources: [{ ...DRIVE_SOURCE, secret: 'set' }], check })).fetch,
+    );
+    const source = await card();
+    await userEvent.setup().click(source.getByRole('button', { name: 'Check' }));
+
+    expect(await source.findByText('Check failed: Drive answered 503.')).toBeInTheDocument();
+    expect(source.queryByRole('button', { name: /^Connect/u })).not.toBeInTheDocument();
+  });
+
   it('offers no consent to a connected source, and runs it', async () => {
     renderApp('/sources', showing({ ...DRIVE_SOURCE, secret: 'set' }).fetch);
 

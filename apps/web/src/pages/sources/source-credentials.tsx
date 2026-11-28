@@ -83,9 +83,8 @@ const ConnectError = ({ error }: { readonly error: Error | null }) => {
   return <ErrorAlert error={error} title="Not connected" />;
 };
 
-const ConnectGoogle = ({ source }: { readonly source: Source }) => {
+const ConnectGoogle = ({ source, again }: { readonly source: Source; readonly again: boolean }) => {
   const connect = useConnectGoogle(source.id);
-  const again = source.needs_attention || source.secret === 'unreadable';
   return (
     <div className="flex flex-col gap-2">
       <Button
@@ -104,12 +103,19 @@ const ConnectGoogle = ({ source }: { readonly source: Source }) => {
   );
 };
 
+interface SourceCredentialsProps {
+  readonly source: Source;
+  /** A check of the card found the stored credentials refused; no run has flagged them. */
+  readonly checkRefused: boolean;
+}
+
 /**
  * Whether the credentials of a source were refused or no longer open, and for a Drive
- * source not connected yet, the way to its consent.
+ * source not connected yet or refused, the way to its consent.
  */
-export const SourceCredentials = ({ source }: { readonly source: Source }) => {
+export const SourceCredentials = ({ source, checkRefused }: SourceCredentialsProps) => {
   const notice = noticeOf(source);
+  const refused = source.needs_attention || source.secret === 'unreadable' || checkRefused;
   return (
     <>
       {notice === undefined ? null : (
@@ -119,7 +125,9 @@ export const SourceCredentials = ({ source }: { readonly source: Source }) => {
           <AlertDescription>{notice.description}</AlertDescription>
         </Alert>
       )}
-      {needsGoogleConsent(source) ? <ConnectGoogle source={source} /> : null}
+      {needsGoogleConsent(source) || (source.kind === 'gdrive' && checkRefused) ? (
+        <ConnectGoogle source={source} again={refused} />
+      ) : null}
     </>
   );
 };

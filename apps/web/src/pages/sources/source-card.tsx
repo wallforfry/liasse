@@ -73,7 +73,10 @@ export const SourceCard = ({ source }: { readonly source: Source }) => {
             <span className="font-medium">Hint:</span> {source.hint}
           </p>
         )}
-        <SourceCredentials source={source} />
+        <SourceCredentials
+          source={source}
+          checkRefused={check.data?.ok === false && check.data.error.kind === 'credentials'}
+        />
         <SourceLastRun run={source.last_run} kind={source.kind} />
         <SourceCheckResult data={check.data} error={check.error} />
       </CardContent>
