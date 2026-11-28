@@ -36,6 +36,8 @@ export const SourceCard = ({ source }: { readonly source: Source }) => {
   const toggle = useToggleSource(source);
   const run = useRunSource(source.id);
   const check = useCheckSource(source.id);
+  // A check describes the version it read: a save or a new consent since makes it stale.
+  const checkCurrent = check.variables === source.updated_at;
   const titleId = `source-${source.id}-title`;
   const switchId = `source-${source.id}-enabled`;
   return (
@@ -73,9 +75,17 @@ export const SourceCard = ({ source }: { readonly source: Source }) => {
             <span className="font-medium">Hint:</span> {source.hint}
           </p>
         )}
-        <SourceCredentials source={source} />
+        <SourceCredentials
+          source={source}
+          checkRefused={
+            checkCurrent && check.data?.ok === false && check.data.error.kind === 'credentials'
+          }
+        />
         <SourceLastRun run={source.last_run} kind={source.kind} />
-        <SourceCheckResult data={check.data} error={check.error} />
+        <SourceCheckResult
+          data={checkCurrent ? check.data : undefined}
+          error={checkCurrent ? check.error : null}
+        />
       </CardContent>
       <CardFooter className="flex flex-wrap gap-2">
         <Button
@@ -95,7 +105,7 @@ export const SourceCard = ({ source }: { readonly source: Source }) => {
           size="sm"
           disabled={check.isPending}
           onClick={() => {
-            check.mutate();
+            check.mutate(source.updated_at);
           }}
         >
           <PlugZapIcon />
