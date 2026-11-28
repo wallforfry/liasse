@@ -1,5 +1,33 @@
 # @liasse/mcp
 
+## 0.3.0
+
+### Minor Changes
+
+- e9f55f6: The documents flagged for review because of how their type was decided can have it decided again in one action: `POST /documents/reclassify` with `reason` (`type_untyped` or `type_fallback`, `TYPE_REVIEW_REASONS` of `@liasse/contract/domain`) and an optional `limit` (100 at most, and by default), the MCP tool `reclassify_flagged_documents` and `reclassifyFlaggedDocuments` of the SDK, all over the use case `reclassifyFlaggedDocuments` of `@liasse/core/api`. The oldest `needs_review` documents with that reason, private ones included, are each queued as `reclassify_document` queues one, under the row lock of the document; one with a processing, re-extraction or reclassification pending is skipped, and so is one that no longer has the reason once locked. One whose last reclassification was refused with a type refusal (`private_document`, `invalid_proposal`) is left out, so that repeated requests reach the documents never tried. With `type_fallback`, the closest type of each document joins its rejected types. The answer is 202 with the counts `queued`, `skipped`, `refused` and `remaining` (left beyond `limit`). The review queue of the web UI has a button, "Analyse untyped documents again", that asks for it after a confirmation: it is the way to file the documents a daily quota of new types, since removed, left untyped (`quota_exceeded`). `requestReclassification` of `@liasse/core/pipeline` takes `onlyIf`, what the document must still be under its row lock.
+
+### Patch Changes
+
+- f9a21b9: The error codes of the API are one enumeration of `@liasse/contract`: `API_ERROR_CODES`, with `ApiErrorCode`, and the kind of each code (`apiErrorKindOf`, `API_ERROR_KINDS`), which decides its HTTP status. The codes of the type registry (`REGISTRY_ERROR_CODES`, from `@liasse/contract/registry`) are among them, and the codes `invalid_correction` lists its refused values with are `CORRECTION_ERROR_CODES`. The error body schema takes no other code, so its `code` is typed, and so is `code` of `LiasseApiError`; the SDK exports `API_ERROR_CODES` and `ApiErrorCode`. An error body with a code the contract does not list now rejects with `LiasseResponseError`, as an answer of a server of another version, whose message names the code and the request id and whose `cause` is the validation error. In `@liasse/core/api`, `ApiError` takes its code first and derives its kind from it, and `API_ERROR_KINDS` and `ApiErrorKind` moved to the contract. `CORRECTION_ERROR_CODES` is no longer exported by `@liasse/core/pipeline` and `RegistryErrorCode` no longer by `@liasse/core/registry`: import them from `@liasse/contract` and `@liasse/contract/registry`. The code `invalid_file` is gone: no refusal of ingestion answered it, every one has its own code. `IngestError` of `@liasse/core/ingest` is now abstract: every refusal is one of its subclasses.
+- 0c7ca6e: A Google Drive source reads one folder and its subfolders through the operator's own Google OAuth client, its files kept by reference: Liasse stores their text and knowledge, Drive their bytes. The settings gain a `google` section (`client_id`, `client_secret`, sealed in a slot of its own). `POST /sources/:id/google/authorize` answers the consent page of Google (`drive.readonly`, offline, PKCE, `state` bound to the session) `GET /sources/google/callback` hands Google's answer to the page `/ui/sources/google`, and `POST /sources/google/complete` (session cookie) seals the refresh token in the source; deleting the last Drive source revokes its token. Runs list the tree, then read `changes.list` from a saved page token, with shared drives; native Google files are left out and shortcuts are followed once. `documents.storage_key` may be null (`file_at_source`), and `document_origins` gain `checksum` and `removed_at`. `GET /documents/:id/file` and the signed URLs of MCP stream such a file from Drive once its `md5Checksum` matches, and answer the new codes `file_changed` (409) and `file_unavailable` (410, of the new kind `gone`). A changed file becomes a new document and the old one is deleted, and brought back if the file returns to its bytes (`replaced_by_source`); a file trashed, deleted or moved out keeps its document, marked removed, until it is restored. A stored copy always wins over a reference. The summary of a run counts `removed` and `replaced`, and a source without credentials is not run until it has some. `SourceChange` of the connector port may carry `removed`, a `SourceItem` a `reference`, and a connector `openFile` and `forget`; `SOURCE_CONNECTORS` is replaced by `createSourceRuntime`, and `ApiContext` and `PipelineDeps` take `sourceFiles`.
+- a11e836: `reclassify_document` (`POST /documents/:id/reclassify`) remembers every type a person rejected for a document: the type of each request joins those of the earlier ones, and none of them is offered again, so two requests in a row no longer bounce between two wrong types. The list is emptied when a person sets the type by hand (`update_document`, `PATCH /documents/:id` with a type), and a type merge carries a rejected source over to its target. Migration `0021` adds the column `documents.rejected_type_ids`. A reclassification queued before the upgrade and still pending runs with no remembered rejection.
+- a0b4beb: The pipeline no longer bounds the new document types it creates per day. A first import on an empty registry used to create five types, then leave every other document without a type, in `needs_review`. A new type starts `provisional`, and consolidation promotes or merges it.
+  
+  Breaking: the setting `pipeline.max_new_types_per_day` is removed, and `PUT /settings` refuses it. Migration `0024` removes it from the saved settings. The registry no longer refuses with `quota_exceeded`, so `POST /types` never answers it. `MAX_NEW_TYPES_PER_DAY` is no longer refused at startup: it has no effect. The refusal `quota_exceeded` stays in `review.type.refusal` and the `type_refusal` of `classification` events for documents classified before, and nothing assigns it any more. `reclassify_document` (`POST /documents/:id/reclassify`) files such a document, one at a time.
+- Updated dependencies [f9a21b9]
+- Updated dependencies [5044a53]
+- Updated dependencies [9ef56a7]
+- Updated dependencies [a5151ed]
+- Updated dependencies [0c7ca6e]
+- Updated dependencies [74124b6]
+- Updated dependencies [b57ee4b]
+- Updated dependencies [e9f55f6]
+- Updated dependencies [a11e836]
+- Updated dependencies [a0b4beb]
+- Updated dependencies [e4cbd7a]
+  - @liasse/contract@0.3.0
+  - @liasse/core@0.3.0
+
 ## 0.2.0
 
 ### Minor Changes
