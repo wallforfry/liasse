@@ -255,7 +255,9 @@ export const requestSourceRun = async (
   if (source.needsAttention) {
     throw new ApiError(
       'source_needs_attention',
-      'The credentials were refused: save the source with working ones first.',
+      source.kind === 'gdrive'
+        ? 'Google refused the authorization: connect the source with Google again first.'
+        : 'The credentials were refused: save the source with working ones first.',
     );
   }
   return { queued: await db.transaction((tx) => queuePollNow(tx, id)) };

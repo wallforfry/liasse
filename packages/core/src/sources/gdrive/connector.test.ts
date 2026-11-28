@@ -1,11 +1,11 @@
 import { createHash } from 'node:crypto';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { requestSourceRun, updateSource } from '../../api/sources.ts';
 import { deleteDocument } from '../../ingest/delete-document.ts';
 import { SourceFileUnavailableError } from '../../ingest/document-file.ts';
 import { ingestFile } from '../../ingest/ingest-file.ts';
 import { syntheticPdf } from '../../testing/synthetic-files.ts';
 import { openSourceSecret } from '../secret.ts';
-import { updateSource } from '../../api/sources.ts';
 import { queuedPolls, storedSource, TEST_SECRETS } from '../sources.test-helper.ts';
 import { createDriveHarness, type DriveHarness } from './gdrive.test-helper.ts';
 
@@ -352,5 +352,8 @@ describe('a Drive source whose authorization was revoked', () => {
     });
     expect(saved).toMatchObject({ name: 'Renamed', needs_attention: true });
     expect(await queuedPolls(harness.ingest.database.db)).toEqual([]);
+    await expect(requestSourceRun(harness.context(), source)).rejects.toThrow(
+      'Google refused the authorization: connect the source with Google again first.',
+    );
   });
 });
