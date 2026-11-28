@@ -1,5 +1,35 @@
 # @liasse/sdk
 
+## 0.3.0
+
+### Minor Changes
+
+- f9a21b9: The error codes of the API are one enumeration of `@liasse/contract`: `API_ERROR_CODES`, with `ApiErrorCode`, and the kind of each code (`apiErrorKindOf`, `API_ERROR_KINDS`), which decides its HTTP status. The codes of the type registry (`REGISTRY_ERROR_CODES`, from `@liasse/contract/registry`) are among them, and the codes `invalid_correction` lists its refused values with are `CORRECTION_ERROR_CODES`. The error body schema takes no other code, so its `code` is typed, and so is `code` of `LiasseApiError`; the SDK exports `API_ERROR_CODES` and `ApiErrorCode`. An error body with a code the contract does not list now rejects with `LiasseResponseError`, as an answer of a server of another version, whose message names the code and the request id and whose `cause` is the validation error. In `@liasse/core/api`, `ApiError` takes its code first and derives its kind from it, and `API_ERROR_KINDS` and `ApiErrorKind` moved to the contract. `CORRECTION_ERROR_CODES` is no longer exported by `@liasse/core/pipeline` and `RegistryErrorCode` no longer by `@liasse/core/registry`: import them from `@liasse/contract` and `@liasse/contract/registry`. The code `invalid_file` is gone: no refusal of ingestion answered it, every one has its own code. `IngestError` of `@liasse/core/ingest` is now abstract: every refusal is one of its subclasses.
+- a5151ed: `GET /entities/:id` reads one entity as `GET /entities` lists it, with `include_private` for its document count, and answers `entity_not_found` (404) for an id no entity has, such as the source of a merge. The SDK reads it with `getEntity`. The document list of the web UI uses it: an address whose entity filter names an id no entity has, merged into another or never there, now says so with a button that clears the filter, instead of an empty list under the old name.
+- 74124b6: The web UI connects a Google Drive source. "Add a source" offers an IMAP mailbox or a Google Drive folder; the Drive form takes the address of the folder in Drive, its id or `root`, and the edit page of a Drive source sends only the fields it changed, as the IMAP form does. The card of a Drive source shows the folder it reads, offers "Connect with Google" until a first consent and "Connect again" once Google refused the authorization or it no longer opens, and points to the settings while no Google client is saved. The page `/ui/sources/google` completes the consent once, takes Google's answer out of the address and says how it ended. The settings gain a Google section: the client id, the client secret, and the redirect URI to register. The SDK adds `startGoogleConsent` and `completeGoogleConsent`, and exports `GoogleConsent`, `GoogleConsentAnswer` and `GoogleConsentResult`. The contract exports `GOOGLE_CALLBACK_PATH` and `GOOGLE_CONSENT_UI_PATH`, the paths the server and the web UI share.
+- e9f55f6: The documents flagged for review because of how their type was decided can have it decided again in one action: `POST /documents/reclassify` with `reason` (`type_untyped` or `type_fallback`, `TYPE_REVIEW_REASONS` of `@liasse/contract/domain`) and an optional `limit` (100 at most, and by default), the MCP tool `reclassify_flagged_documents` and `reclassifyFlaggedDocuments` of the SDK, all over the use case `reclassifyFlaggedDocuments` of `@liasse/core/api`. The oldest `needs_review` documents with that reason, private ones included, are each queued as `reclassify_document` queues one, under the row lock of the document; one with a processing, re-extraction or reclassification pending is skipped, and so is one that no longer has the reason once locked. One whose last reclassification was refused with a type refusal (`private_document`, `invalid_proposal`) is left out, so that repeated requests reach the documents never tried. With `type_fallback`, the closest type of each document joins its rejected types. The answer is 202 with the counts `queued`, `skipped`, `refused` and `remaining` (left beyond `limit`). The review queue of the web UI has a button, "Analyse untyped documents again", that asks for it after a confirmation: it is the way to file the documents a daily quota of new types, since removed, left untyped (`quota_exceeded`). `requestReclassification` of `@liasse/core/pipeline` takes `onlyIf`, what the document must still be under its row lock.
+- a0b4beb: The pipeline no longer bounds the new document types it creates per day. A first import on an empty registry used to create five types, then leave every other document without a type, in `needs_review`. A new type starts `provisional`, and consolidation promotes or merges it.
+  
+  Breaking: the setting `pipeline.max_new_types_per_day` is removed, and `PUT /settings` refuses it. Migration `0024` removes it from the saved settings. The registry no longer refuses with `quota_exceeded`, so `POST /types` never answers it. `MAX_NEW_TYPES_PER_DAY` is no longer refused at startup: it has no effect. The refusal `quota_exceeded` stays in `review.type.refusal` and the `type_refusal` of `classification` events for documents classified before, and nothing assigns it any more. `reclassify_document` (`POST /documents/:id/reclassify`) files such a document, one at a time.
+- 3acde19: A Sources page in the web UI: one card per ingestion source with its last run (counts, skipped items and why, the error that stopped it), whether its password was refused or no longer opens, a switch to enable it, and buttons to run it now, check it, edit it and delete it. The form of an IMAP source is validated with the schemas of the contract, keeps the stored password unless it is replaced, warns when the connection has no encryption, and explains how to read Gmail through an app password.
+  
+  The SDK gains `listSources`, `createSource`, `getSource`, `updateSource`, `deleteSource`, `checkSource` and `runSource`, which take the session of the web UI like the settings.
+
+### Patch Changes
+
+- e4cbd7a: An enabled source needs a password that opens: `POST` and `PATCH /sources` refuse one left without a password, cleared or never set, or with a stored one sealed under another `AUTH_SECRET` (400 `source_secret_required`). The switch of the Sources page shows that refusal, and the form says it before saving.
+  
+  `checkSource` of the SDK waits longer than the server bounds a check (`SOURCE_CHECK_TIMEOUT_MS` of `@liasse/contract/domain`), so it receives the answer of a check that ran out of time instead of aborting first; the IMAP connector stays under that bound while it logs out. The form of a source sends only the fields it changed: a save in another tab to the other fields stays.
+- Updated dependencies [f9a21b9]
+- Updated dependencies [a5151ed]
+- Updated dependencies [0c7ca6e]
+- Updated dependencies [74124b6]
+- Updated dependencies [b57ee4b]
+- Updated dependencies [e9f55f6]
+- Updated dependencies [a0b4beb]
+- Updated dependencies [e4cbd7a]
+  - @liasse/contract@0.3.0
+
 ## 0.2.0
 
 ### Minor Changes

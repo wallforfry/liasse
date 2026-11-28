@@ -1,6 +1,6 @@
 {
   "name": "@liasse/core",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Liasse core: configuration, database, domain and model ports",
   "license": "AGPL-3.0-only",
   "repository": {
