@@ -115,9 +115,14 @@ interface SourceCredentialsProps {
  */
 export const SourceCredentials = ({ source, checkRefused }: SourceCredentialsProps) => {
   const notice = noticeOf(source);
-  // A source never connected also fails its check on credentials: it is not refused.
-  const refusedByCheck = source.kind === 'gdrive' && source.secret === 'set' && checkRefused;
-  const again = source.needs_attention || source.secret === 'unreadable' || refusedByCheck;
+  // A save clears the flag of a refused run without giving Google a new consent, so the
+  // last run and a check count too. A source never connected also fails them on
+  // credentials: it is not refused.
+  const refusedUnflagged =
+    source.kind === 'gdrive' &&
+    source.secret === 'set' &&
+    (checkRefused || source.last_run?.error?.kind === 'credentials');
+  const again = source.needs_attention || source.secret === 'unreadable' || refusedUnflagged;
   return (
     <>
       {notice === undefined ? null : (
@@ -127,7 +132,7 @@ export const SourceCredentials = ({ source, checkRefused }: SourceCredentialsPro
           <AlertDescription>{notice.description}</AlertDescription>
         </Alert>
       )}
-      {needsGoogleConsent(source) || refusedByCheck ? (
+      {needsGoogleConsent(source) || refusedUnflagged ? (
         <ConnectGoogle source={source} again={again} />
       ) : null}
     </>
