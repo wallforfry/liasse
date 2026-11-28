@@ -167,7 +167,7 @@ describe('the card of a Drive source', () => {
     expect(source.queryByRole('button', { name: 'Connect again' })).not.toBeInTheDocument();
   });
 
-  it('drops the offer of a refused check once the source is saved again', async () => {
+  it('drops a refused check and its offer once the source is saved again', async () => {
     const saved = { ...CONNECTED, enabled: false, updated_at: '2026-11-02T08:00:00.000Z' };
     let current: unknown = CONNECTED;
     const server = fakeServer(
@@ -192,6 +192,7 @@ describe('the card of a Drive source', () => {
     await waitFor(() => {
       expect(source.queryByRole('button', { name: 'Connect again' })).not.toBeInTheDocument();
     });
+    expect(source.queryByText(/^Check failed/u)).not.toBeInTheDocument();
     expect(source.getByRole('switch', { name: 'Enabled' })).not.toBeChecked();
   });
 
