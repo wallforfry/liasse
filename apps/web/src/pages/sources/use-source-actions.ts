@@ -12,7 +12,7 @@ const useRefreshSources = () => {
   };
 };
 
-/** Turns a source on or off; like any save, it clears the flag of refused credentials. */
+/** Turns a source on or off; like any save of a mailbox, it clears the flag of refused credentials. */
 export const useToggleSource = (source: Source) => {
   const client = useClient();
   const refresh = useRefreshSources();

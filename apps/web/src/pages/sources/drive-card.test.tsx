@@ -126,32 +126,6 @@ describe('the card of a Drive source', () => {
     expect(source.queryByText(/password/iu)).not.toBeInTheDocument();
   });
 
-  it('offers to connect again after a refused run, even with the flag cleared', async () => {
-    const refusedRun = {
-      ...CONNECTED,
-      last_run: {
-        started_at: '2026-11-18T08:00:00.000Z',
-        finished_at: '2026-11-18T08:01:00.000Z',
-        ingested: 0,
-        duplicates: 0,
-        skipped: 0,
-        skipped_items: [],
-        error: {
-          kind: 'credentials',
-          message: 'Google refused the authorization (invalid_grant).',
-        },
-      },
-    };
-    const { navigateAway } = renderApp('/sources', showing(refusedRun).fetch);
-
-    const source = await card();
-    await userEvent.setup().click(source.getByRole('button', { name: 'Connect again' }));
-
-    await waitFor(() => {
-      expect(navigateAway).toHaveBeenCalledWith(CONSENT_URL);
-    });
-  });
-
   it('offers to connect again once a check finds the authorization refused', async () => {
     const server = fakeServer(sourcesServer({ sources: [CONNECTED], check: REFUSED_CHECK }));
     const { navigateAway } = renderApp('/sources', server.fetch);

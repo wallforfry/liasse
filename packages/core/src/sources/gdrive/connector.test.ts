@@ -5,7 +5,8 @@ import { SourceFileUnavailableError } from '../../ingest/document-file.ts';
 import { ingestFile } from '../../ingest/ingest-file.ts';
 import { syntheticPdf } from '../../testing/synthetic-files.ts';
 import { openSourceSecret } from '../secret.ts';
-import { storedSource, TEST_SECRETS } from '../sources.test-helper.ts';
+import { updateSource } from '../../api/sources.ts';
+import { queuedPolls, storedSource, TEST_SECRETS } from '../sources.test-helper.ts';
 import { createDriveHarness, type DriveHarness } from './gdrive.test-helper.ts';
 
 const sha256Of = (bytes: Uint8Array) => createHash('sha256').update(bytes).digest('hex');
@@ -342,5 +343,14 @@ describe('a Drive source whose authorization was revoked', () => {
       needsAttention: true,
     });
     expect(await harness.lastRun(source)).toMatchObject({ error: { kind: 'credentials' } });
+
+    // Only a new consent replaces the authorization: a save keeps the source stopped.
+    const saved = await updateSource(harness.context(), source, {
+      kind: 'gdrive',
+      name: 'Renamed',
+      enabled: true,
+    });
+    expect(saved).toMatchObject({ name: 'Renamed', needs_attention: true });
+    expect(await queuedPolls(harness.ingest.database.db)).toEqual([]);
   });
 });

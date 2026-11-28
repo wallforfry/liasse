@@ -191,7 +191,8 @@ const runLocked = async (
  * Reads what a source holds since its cursor and ingests it, unless another run of the
  * same source is in progress, in which case it returns at once. A transient failure is
  * recorded and rethrown, for the retries of the queue; a refusal of the credentials
- * stops the polling of the source until a person saves it.
+ * stops the polling of the source until a person saves it, or for a Drive source, until a
+ * new consent at Google.
  */
 export const pollSource = async (
   deps: SourcePollDeps,
