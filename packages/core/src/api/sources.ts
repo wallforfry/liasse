@@ -152,10 +152,11 @@ const configAfter = (stored: StoredSource, patch: SourcePatch): StoredSource['co
 };
 
 /**
- * Saves a source. A save is a person acting on it: it clears the flag of refused
- * credentials, and an enabled source with credentials runs at once with what was saved. A
- * Drive source keeps its authorization, which only a consent at Google replaces. The cursor stays:
- * a mailbox added starts from the start date, the others where they were.
+ * Saves a source. A save is a person acting on it: for a mailbox, it clears the flag of
+ * refused credentials, and an enabled source with credentials runs at once with what was
+ * saved. A Drive source keeps its authorization, which only a consent at Google replaces,
+ * and so keeps its flag too. The cursor stays: a mailbox added starts from the start date,
+ * the others where they were.
  */
 export const updateSource = async (
   context: SourcesContext,
@@ -185,6 +186,7 @@ export const updateSource = async (
       secretStateAfter(context.secrets, id, stored.secret, update),
     );
     const secret = updateSourceSecret(context.secrets, id, stored.secret, update);
+    const needsAttention = stored.kind === 'gdrive' && stored.needsAttention;
     await tx
       .update(ingestionSources)
       .set({
@@ -195,7 +197,7 @@ export const updateSource = async (
         private: patch.private ?? stored.private,
         config,
         secret,
-        needsAttention: false,
+        needsAttention,
         updatedAt: new Date(),
       })
       .where(eq(ingestionSources.id, id));
@@ -206,7 +208,7 @@ export const updateSource = async (
         .where(and(eq(documentOrigins.sourceId, id), isNull(documentOrigins.removedAt)));
     }
     await cancelPolls(tx, id);
-    if (enabled && secret !== null) await queuePollNow(tx, id);
+    if (enabled && secret !== null && !needsAttention) await queuePollNow(tx, id);
   });
   return getSource(context, id);
 };
@@ -253,7 +255,9 @@ export const requestSourceRun = async (
   if (source.needsAttention) {
     throw new ApiError(
       'source_needs_attention',
-      'The credentials were refused: save the source with working ones first.',
+      source.kind === 'gdrive'
+        ? 'Google refused the authorization: connect the source with Google again first.'
+        : 'The credentials were refused: save the source with working ones first.',
     );
   }
   return { queued: await db.transaction((tx) => queuePollNow(tx, id)) };

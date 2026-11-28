@@ -1,5 +1,8 @@
+import { eq } from 'drizzle-orm';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { jobs } from '../db/schema/jobs.ts';
 import { settings as settingsTable } from '../db/schema/settings.ts';
+import { ingestionSources } from '../db/schema/sources.ts';
 import { createDriveHarness, type DriveHarness } from '../sources/gdrive/gdrive.test-helper.ts';
 import { openSourceSecret } from '../sources/secret.ts';
 import {
@@ -78,6 +81,27 @@ describe('the consent of Google for a Drive source', () => {
 
     expect(result).toEqual({ outcome: 'connected', source_id: id });
     expect((await tokenOf(id)).state).toBe('set');
+    expect(await queuedPolls(db())).toHaveLength(1);
+  });
+
+  it('clears the flag of a refused authorization, the one way out of it, and runs the source', async () => {
+    const id = await unconnected();
+    const connect = async () =>
+      completeGoogleConsent(
+        harness.context(),
+        harness.google.consent((await startGoogleConsent(harness.context(), id, SESSION)).url),
+        SESSION,
+      );
+    expect(await connect()).toEqual({ outcome: 'connected', source_id: id });
+    await db()
+      .update(ingestionSources)
+      .set({ needsAttention: true })
+      .where(eq(ingestionSources.id, id));
+    await db().delete(jobs);
+
+    expect(await connect()).toEqual({ outcome: 'connected', source_id: id });
+
+    expect(await storedSource(db(), id)).toMatchObject({ needsAttention: false });
     expect(await queuedPolls(db())).toHaveLength(1);
   });
 
