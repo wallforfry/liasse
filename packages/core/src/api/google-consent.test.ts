@@ -1,5 +1,5 @@
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { eq } from 'drizzle-orm';
+import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { jobs } from '../db/schema/jobs.ts';
 import { settings as settingsTable } from '../db/schema/settings.ts';
 import { ingestionSources } from '../db/schema/sources.ts';
