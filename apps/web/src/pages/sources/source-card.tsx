@@ -82,7 +82,10 @@ export const SourceCard = ({ source }: { readonly source: Source }) => {
           }
         />
         <SourceLastRun run={source.last_run} kind={source.kind} />
-        {checkCurrent ? <SourceCheckResult data={check.data} error={check.error} /> : null}
+        <SourceCheckResult
+          data={checkCurrent ? check.data : undefined}
+          error={checkCurrent ? check.error : null}
+        />
       </CardContent>
       <CardFooter className="flex flex-wrap gap-2">
         <Button
